@@ -87,7 +87,7 @@
         },
         {
           "name": "support.constant.builtin.effective",
-          "match": "\\b(?:Some|None|some|none)\\b"
+          "match": "\\b(?:Some|None)\\b"
         }
       ]
     },

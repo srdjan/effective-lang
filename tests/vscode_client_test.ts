@@ -131,8 +131,9 @@ Deno.test("the grammar names the scope and every lexer keyword", () => {
     "retry",
     "provide",
     "fail",
-    "some",
-    "none",
+    "Some",
+    "None",
+    "unbrand",
   ];
   const matchers = collectMatches(grammar).map((match) => new RegExp(match));
   for (const token of [...words, "|>", "=>"]) {
