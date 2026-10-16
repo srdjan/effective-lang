@@ -34,6 +34,10 @@ const server = new LanguageServer({
     return () => clearTimeout(handle);
   },
   exit: (code) => Deno.exit(code),
+  memory: () => {
+    const { rss, heapUsed } = Deno.memoryUsage();
+    return { rss, heapUsed };
+  },
   stderr: (text) => {
     writeAll(Deno.stderr, textEncoder.encode(text));
   },

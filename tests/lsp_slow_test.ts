@@ -1,8 +1,8 @@
-// Slow test of the language server (plan L3a). It starts the real server as a
-// subprocess on a copy of `fixtures/examples` and talks to it over stdio.
-// Nothing is written under fixtures/.
+// Slow tests of the language server (plan L3a and L3b). They start the real
+// server as a subprocess on a copy of `fixtures/examples` and talk to it over
+// stdio. Nothing is written under fixtures/.
 
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import { FrameDecoder, type FrameError } from "../src/lsp/jsonrpc.ts";
 import type { Result } from "../src/core/source.ts";
 import { FIXTURES } from "./helpers.ts";
@@ -110,7 +110,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-Deno.test("the server initializes, publishes empty diagnostics for main.eff, and exits 0", async () => {
+Deno.test("the server answers hover, definition, and save, and exits 0", async () => {
   const dir = Deno.makeTempDirSync({ prefix: "effective-lsp-" });
   let client: Client | undefined;
   try {
@@ -140,8 +140,59 @@ Deno.test("the server initializes, publishes empty diagnostics for main.eff, and
     );
     assert(isRecord(published));
     assertEquals(published.params, { uri, version: 1, diagnostics: [] });
-    await client.send({ jsonrpc: "2.0", id: 2, method: "shutdown" });
-    const shutdown = await client.waitFor((m) => isRecord(m) && m.id === 2);
+    const positionOf = (needle: string, within: number) => {
+      const before = text.slice(0, text.indexOf(needle)).split("\n");
+      return {
+        line: before.length - 1,
+        character: before[before.length - 1].length + within,
+      };
+    };
+    // Hover on the name `main`: the contract text.
+    const name = positionOf("main = ", 1);
+    await client.send({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "textDocument/hover",
+      params: { textDocument: { uri }, position: name },
+    });
+    const hover = await client.waitFor((m) => isRecord(m) && m.id === 2);
+    assert(isRecord(hover) && isRecord(hover.result));
+    assert(isRecord(hover.result.contents));
+    assertStringIncludes(
+      String(hover.result.contents.value),
+      "main(): string fails StoreUnavailable",
+    );
+    // Definition of the call of `displayName`: it lands in `users.eff`.
+    const call = positionOf('displayName("u1")', 2);
+    await client.send({
+      jsonrpc: "2.0",
+      id: 3,
+      method: "textDocument/definition",
+      params: { textDocument: { uri }, position: call },
+    });
+    const definition = await client.waitFor((m) => isRecord(m) && m.id === 3);
+    assert(isRecord(definition) && isRecord(definition.result));
+    assertEquals(
+      definition.result.uri,
+      new URL(`file://${dir}/users.eff`).href,
+    );
+    // A save writes `main.ts`. The stats request is a barrier: the server
+    // answers it after it handled the save.
+    await client.send({
+      jsonrpc: "2.0",
+      method: "textDocument/didSave",
+      params: { textDocument: { uri } },
+    });
+    await client.send({
+      jsonrpc: "2.0",
+      id: 4,
+      method: "effective/stats",
+      params: { textDocument: { uri } },
+    });
+    await client.waitFor((m) => isRecord(m) && m.id === 4);
+    assert(Deno.statSync(`${dir}/main.ts`).isFile);
+    await client.send({ jsonrpc: "2.0", id: 5, method: "shutdown" });
+    const shutdown = await client.waitFor((m) => isRecord(m) && m.id === 5);
     assert(isRecord(shutdown));
     assertEquals(shutdown.result, null);
     await client.send({ jsonrpc: "2.0", method: "exit" });

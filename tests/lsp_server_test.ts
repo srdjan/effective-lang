@@ -149,7 +149,7 @@ Deno.test("an unknown request gets -32601; an unknown notification is ignored", 
   assertEquals(h.sent.length, 1);
 });
 
-Deno.test("the requests of part L3b answer -32601 for now", () => {
+Deno.test("the feature requests are known and check their params", () => {
   const h = started();
   const methods = [
     "textDocument/hover",
@@ -160,7 +160,7 @@ Deno.test("the requests of part L3b answer -32601 for now", () => {
   ];
   methods.forEach((method, i) => h.deliver(request(i + 1, method, {})));
   methods.forEach((_, i) =>
-    assertEquals(errorCode(h.responses(i + 1)[0]), ErrorCodes.methodNotFound)
+    assertEquals(errorCode(h.responses(i + 1)[0]), ErrorCodes.invalidParams)
   );
 });
 

@@ -172,6 +172,27 @@ export interface GeneratedChangedParams {
   readonly uri: string;
 }
 
+/** The result of `effective/stats` (plan 5.11). */
+export interface StatsResult {
+  /** The number of the newest good revision, or 0 before the first one. */
+  readonly revision: number;
+  /** The modules that the newest good revision checked again. */
+  readonly rechecked: string[];
+  /** The cumulative query counts of the project. */
+  readonly counts: {
+    readonly parses: number;
+    readonly checks: number;
+    readonly lowerings: number;
+    readonly emits: number;
+  };
+  /** The delta of the newest good flush. */
+  readonly delta: {
+    readonly interfaceChanged: string[];
+    readonly modeChanged: string[];
+  };
+  readonly memory: { readonly rss: number; readonly heapUsed: number };
+}
+
 // `shutdown` takes no params and returns null. `exit` takes no params.
 
 // ---- Incoming params, narrowed --------------------------------------------

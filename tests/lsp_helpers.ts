@@ -23,6 +23,9 @@ import {
 import { memoryIo } from "./cli_helpers.ts";
 import { FIXTURES } from "./helpers.ts";
 
+/** The numbers that the harness returns from the `memory` port. */
+export const HARNESS_MEMORY = { rss: 123_456, heapUsed: 78_901 } as const;
+
 /** Where the harness puts the example project. */
 export const ROOT = "/work/examples";
 
@@ -76,6 +79,8 @@ export interface Harness {
   readonly files: Map<string, string>;
   /** Paths whose read throws. */
   readonly throwOnRead: Set<string>;
+  /** Paths whose write fails. */
+  readonly unwritable: Set<string>;
   /** Frames the messages, decodes them, calls `handle` for each, then `afterBatch`. */
   deliver(...messages: readonly unknown[]): void;
   /** Runs each timer that is not cancelled and not yet fired. */
@@ -154,6 +159,7 @@ export function makeHarness(options: HarnessOptions = {}): Harness {
     stderr: (text) => {
       stderr.push(text);
     },
+    memory: () => HARNESS_MEMORY,
   };
   const server = new LanguageServer(
     ports,
@@ -169,6 +175,7 @@ export function makeHarness(options: HarnessOptions = {}): Harness {
     timers,
     files: memory.files,
     throwOnRead,
+    unwritable: memory.unwritable,
     deliver(...messages) {
       const decoder = new FrameDecoder();
       for (const message of messages) {

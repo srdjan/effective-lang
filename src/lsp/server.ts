@@ -6,13 +6,20 @@
 // `afterBatch` flushes after the messages of one read. A request flushes the
 // project of its document first, through `ProjectSet.forRequest`.
 //
-// Seams for part L3b:
-// - Add request handlers to `REQUEST_HANDLERS`. Each calls `ctx.projects.forRequest`.
-// - Send `effective/generatedChanged` in `#flushed`.
-// - Write the generated files in the `textDocument/didSave` notification handler.
+// The feature handlers are in `features.ts`. This file wires them to the method
+// names and sends `effective/generatedChanged` after a flush.
 
 import type { CliFs } from "../cli/io.ts";
 import type { Result } from "../core/source.ts";
+import {
+  definitionRequest,
+  didSave,
+  documentSymbolRequest,
+  GeneratedTexts,
+  generatedTypeScriptRequest,
+  hoverRequest,
+  statsRequest,
+} from "./features.ts";
 import {
   classifyMessage,
   ErrorCodes,
@@ -32,10 +39,12 @@ import {
   narrowDidOpen,
   type Narrowed,
   narrowInitializeParams,
+  narrowPositionParams,
   narrowTextDocumentParams,
   type PublishDiagnosticsParams,
   SERVER_CAPABILITIES,
 } from "./protocol.ts";
+import { GENERATED_TYPESCRIPT_METHOD, STATS_METHOD } from "./methods.ts";
 import {
   type FlushOutcome,
   type LogType,
@@ -54,11 +63,18 @@ export interface ServerPorts {
   exit(code: number): void;
   /** Writes text to stderr as given. */
   stderr(text: string): void;
+  /** The memory use of the process, in bytes. */
+  memory(): { readonly rss: number; readonly heapUsed: number };
 }
 
 /** What a handler can read and do. */
 export interface ServerContext {
   readonly projects: ProjectSet;
+  readonly fs: CliFs;
+  /** The generated TypeScript of the subscribed modules. */
+  readonly generated: GeneratedTexts;
+  /** The memory use of the process, in bytes. */
+  memory(): { readonly rss: number; readonly heapUsed: number };
   /** The options from `initialize`. */
   readonly options: InitializationOptions;
   log(type: LogType, message: string): void;
@@ -112,12 +128,28 @@ function withNotificationParams<T>(
 }
 
 /**
- * The request table. L3a answers no request here: `textDocument/hover`,
- * `textDocument/definition`, `textDocument/documentSymbol`,
- * `effective/generatedTypeScript`, and `effective/stats` get -32601 until L3b
- * adds them. `initialize` and `shutdown` have their own code in the lifecycle.
+ * The request table. `initialize` and `shutdown` have their own code in the
+ * lifecycle.
  */
-const REQUEST_HANDLERS: ReadonlyMap<string, RequestHandler> = new Map();
+const REQUEST_HANDLERS: ReadonlyMap<string, RequestHandler> = new Map<
+  string,
+  RequestHandler
+>([
+  ["textDocument/hover", withParams(narrowPositionParams, hoverRequest)],
+  [
+    "textDocument/definition",
+    withParams(narrowPositionParams, definitionRequest),
+  ],
+  [
+    "textDocument/documentSymbol",
+    withParams(narrowTextDocumentParams, documentSymbolRequest),
+  ],
+  [
+    GENERATED_TYPESCRIPT_METHOD,
+    withParams(narrowTextDocumentParams, generatedTypeScriptRequest),
+  ],
+  [STATS_METHOD, withParams(narrowTextDocumentParams, statsRequest)],
+]);
 
 const NOTIFICATION_HANDLERS: ReadonlyMap<string, NotificationHandler> = new Map<
   string,
@@ -144,13 +176,9 @@ const NOTIFICATION_HANDLERS: ReadonlyMap<string, NotificationHandler> = new Map<
       (params, ctx) => ctx.projects.didClose(params.textDocument.uri),
     ),
   ],
-  // L3b writes the generated files here when `options.writeOnSave` is true.
   [
     "textDocument/didSave",
-    withNotificationParams(
-      narrowTextDocumentParams,
-      () => {},
-    ),
+    withNotificationParams(narrowTextDocumentParams, didSave),
   ],
   [
     "workspace/didChangeWatchedFiles",
@@ -174,7 +202,7 @@ function messageOf(error: unknown): string {
 }
 
 export interface ServerOptions {
-  /** Request handlers added to the table. A test hook; L3b may use it too. */
+  /** Request handlers added to the table. A test hook. */
   readonly extraRequests?: ReadonlyMap<string, RequestHandler>;
 }
 
@@ -183,6 +211,7 @@ export class LanguageServer {
   #options: InitializationOptions = DEFAULT_INITIALIZATION_OPTIONS;
   #cancelFlush: (() => void) | undefined;
   readonly #projects: ProjectSet;
+  readonly #generated = new GeneratedTexts();
   readonly #requests: ReadonlyMap<string, RequestHandler>;
   readonly #context: ServerContext;
 
@@ -205,6 +234,9 @@ export class LanguageServer {
     const currentOptions = (): InitializationOptions => this.#options;
     this.#context = {
       projects: this.#projects,
+      fs: ports.fs,
+      generated: this.#generated,
+      memory: () => ports.memory(),
       get options() {
         return currentOptions();
       },
@@ -218,7 +250,7 @@ export class LanguageServer {
     return this.#phase === "shutdown";
   }
 
-  /** The projects, for tests and for L3b. */
+  /** The projects, for tests. */
   get projects(): ProjectSet {
     return this.#projects;
   }
@@ -377,8 +409,14 @@ export class LanguageServer {
     this.#cancelFlush = undefined;
   }
 
-  /** L3b sends `effective/generatedChanged` here. */
-  #flushed(_project: ProjectState, _outcome: FlushOutcome): void {}
+  /** Sends `effective/generatedChanged` for the subscribed modules that changed. */
+  #flushed(project: ProjectState, outcome: FlushOutcome): void {
+    this.#generated.afterFlush(
+      project,
+      outcome,
+      (method, params) => this.#notify(method, params),
+    );
+  }
 
   #notify(method: string, params: unknown): void {
     this.ports.send(notificationMessage(method, params));
