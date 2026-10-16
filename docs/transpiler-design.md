@@ -1,7 +1,7 @@
 # Effective transpiler: design for discussion
 
 Status: design accepted, 2026-10-16. Phase A and the LSP phase are implemented.
-Phase B is not started and waits for the D9 latency budget. The user settled all
+Phase B is not started. The D9 budget does not require it now. The user settled all
 nineteen decisions and accepted the suggested answers to the open spec
 questions. The decision record below lists each choice.
 
@@ -19,7 +19,7 @@ Decided by the user on 2026-10-16. Each entry took the recommended option.
 | D6 Output location (Q7) | (a) `users.ts` next to `users.eff`. Import specifiers become `./users.ts`. A `.js` switch can come later. |
 | D7 Identity encoding | (b) Module-qualified strings such as `users#UserMissing`. The spec requires this: "A backend must encode resolved declaration identities in error tags, service keys, and brand tokens." |
 | D8 Mode firewall hole (I1) | (a) Source purity assertions stay deferred. The incremental model invalidates dependents on a mode change. M3 informs a later review. |
-| D9 Latency budget | (a) Set the budget after M1 and M6 give a baseline. |
+| D9 Latency budget | (a) Set the budget after M1 and M6 give a baseline. Set on 2026-10-16: 100 ms at p90 from `didChange` to `publishDiagnostics` on the large synthetic size. Phase B is not needed while M1 meets this budget. Evidence below the table. |
 | D10 Host registry format | (a) Effective-syntax declaration file with a `provider` form, plus a `host:` map in `effective.json`. |
 | D11 IR validator | (a) Independent validator in the first version, used as a differential oracle for the checker. |
 | D12 Output formatting | (a) Own printer with one fixed style. A test confirms that `deno fmt --check` accepts the output unchanged. |
@@ -32,6 +32,12 @@ Decided by the user on 2026-10-16. Each entry took the recommended option.
 | D19 Measurements (2026-10-16) | This phase adds the M1, M3, and M4 harness. It replays an edit script against the real server process. |
 
 Open: none.
+
+Evidence for the D9 budget: one quick run of `deno task bench m1` on
+2026-10-16. Each row had 60 samples from two server processes. On the large
+synthetic size, a body edit had a p90 of 11.4 ms (floor 10.4%). A header, alias,
+or mode-flip edit had a p90 of 47 to 49 ms (floors 4.9% to 9.0%). The maximum of
+those rows was 66 to 80 ms. Measure again with `--full` when the core changes.
 
 The user also accepted the suggested answers in section 9 for Q1, Q5, Q8, Q9,
 and Q10. Q2, Q3, Q4, Q6, and Q7 follow from D7, D10, D13, D14, and D6.
