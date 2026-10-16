@@ -204,7 +204,7 @@ An import of another module becomes a relative `.ts` specifier. A host import be
 
 The emitter adds `export` to each declaration that the source exports and to each declaration that an exported interface reaches. It never renames a source name. It gives its own names, such as `$t0`, `$int`, and `Option$1`, only when no source name is taken.
 
-The printer has one fixed style, and `deno fmt` leaves its output unchanged (decision D12). Two slow tests check this: one runs `deno fmt --check` on `fixtures/golden/`, and one runs it on the emitted programs of `fixtures/emit/forms/`. The printer does not yet break a binary expression that is longer than 80 columns. `deno fmt` would change such a line.
+The printer has one fixed style, and `deno fmt` leaves its output unchanged (decision D12). Two slow tests check this: one runs `deno fmt --check` on `fixtures/golden/`, and one runs it on the emitted programs of `fixtures/emit/forms/`. The printer breaks a long binary expression and an arrow chain with a broken head as `deno fmt` does. The ledger in `docs/phase-a-rules.md` lists the layouts and the two forms that are not yet at a fixed point.
 
 The slow tests copy a fixture project to a temporary directory and build there. They check the emitted code with `deno check` under `effect@4.0.5` with strict settings. They run the emitted code with `deno run`. They need the npm package in the Deno cache, so the first run needs network access.
 

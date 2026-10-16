@@ -6,6 +6,7 @@ import {
   braces,
   bracketed,
   type Doc,
+  fill,
   group,
   hard,
   ifBreak,
@@ -16,7 +17,9 @@ import {
   marked,
   render,
   soft,
+  spanEnds,
   spanned,
+  through,
 } from "../src/core/emit/doc.ts";
 
 const span = (start: number, end: number) => ({ source: "m.eff", start, end });
@@ -104,4 +107,60 @@ Deno.test("mark tags record the generated range of their content", () => {
   const result = render(doc);
   assertEquals(result.text, "a b\nc d");
   assertEquals(result.marks, [{ key: "k", start: 2, end: 5 }]);
+});
+
+// ------------------------------------------------------------------ fill and through (A6c)
+
+Deno.test("fill puts each part on the current line while it fits, and indents the breaks", () => {
+  const parts: Doc[] = ["aaa +", line, "bbb +", line, "ccc +", line, "ddd"];
+  assertEquals(render(fill(parts, 1), 80).text, "aaa + bbb + ccc + ddd");
+  assertEquals(render(fill(parts, 1), 13).text, "aaa + bbb +\n  ccc + ddd");
+  assertEquals(render(fill(parts, 0), 13).text, "aaa + bbb +\nccc + ddd");
+  assertEquals(
+    render(["x = ", indent(fill(parts, 1))], 9).text,
+    "x = aaa +\n    bbb +\n    ccc +\n    ddd",
+  );
+});
+
+Deno.test("fill counts the text after the last part", () => {
+  const parts: Doc[] = ["aaa +", line, "bbb"];
+  assertEquals(render([fill(parts, 1), ";"], 10).text, "aaa + bbb;");
+  assertEquals(render([fill(parts, 1), ";"], 9).text, "aaa +\n  bbb;");
+});
+
+Deno.test("fill breaks a nested fill only when its part does not fit on a line", () => {
+  const inner: Doc = fill(["bb >", line, "cc"], 1);
+  const doc: Doc = fill(["aa &&", line, [inner, " &&"], line, "dd"], 1);
+  assertEquals(render(doc, 80).text, "aa && bb > cc && dd");
+  assertEquals(render(doc, 12).text, "aa &&\n  bb > cc &&\n  dd");
+  assertEquals(render(doc, 6).text, "aa &&\n  bb >\n    cc &&\n  dd");
+});
+
+Deno.test("span ends record a range that crosses the parts of a fill", () => {
+  const prefix = spanEnds(span(0, 5));
+  const doc: Doc = spanned(
+    span(0, 9),
+    fill(
+      [[prefix.open, "a", " +"], line, ["b", prefix.close, " +"], line, "c"],
+      1,
+    ),
+  );
+  const result = render(doc, 80);
+  assertEquals(result.text, "a + b + c");
+  assertEquals(
+    result.spans.map((r) => [r.start, r.end, r.span.start, r.span.end]),
+    [[0, 5, 0, 5], [0, 9, 0, 9]],
+  );
+});
+
+Deno.test("an alt option with a through line must fit on every line it measures", () => {
+  const layout = (second: string): Doc =>
+    alt([
+      ["head ", second],
+      ["head =", indent([through, second])],
+      "fallback",
+    ]);
+  assertEquals(render(layout("body"), 10).text, "head body");
+  assertEquals(render(layout("bodybody"), 10).text, "head =\n  bodybody");
+  assertEquals(render(layout("bodybodybody"), 10).text, "fallback");
 });

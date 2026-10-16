@@ -270,6 +270,76 @@ Deno.test("a match with three arms prints one flat chain of conditionals", () =>
   );
 });
 
+Deno.test("a long binary expression breaks after an operator, and a short one stays on one line", () => {
+  const forms = emitFiles(projectFiles("emit/forms"), ["forms.eff"]).get(
+    "forms",
+  );
+  assert(forms !== undefined);
+  // An arrow body: the lines after the first keep the indentation of the first.
+  assertStringIncludes(
+    forms.text,
+    "): boolean =>\n  alphaValueNumberOne > betaValueNumberTwo &&\n  betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 &&\n  alphaValueNumberOne < 1000;",
+  );
+  // A conditional test: the lines after the first sit one level deeper than `?`.
+  assertStringIncludes(
+    forms.text,
+    '): string =>\n  alphaValueNumberOne > betaValueNumberTwo &&\n    betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 &&\n    alphaValueNumberOne < 1000\n    ? "a"\n    : "b";',
+  );
+  // After `return`, the lines after the first sit one level deeper.
+  assertStringIncludes(
+    forms.text,
+    "  return first && alphaValueNumberOne > betaValueNumberTwo &&\n    betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 &&\n    alphaValueNumberOne < 1000;",
+  );
+  // A sum of int values: each `$int` call breaks its argument list.
+  assertStringIncludes(
+    forms.text,
+    "          $int(alphaValueNumberOne + betaValueNumberTwo) +\n            gammaValueNumberThree,\n        ) + alphaValueNumberOne,",
+  );
+  // A short expression is unchanged.
+  assertStringIncludes(forms.text, "export const arith = ");
+  assertStringIncludes(
+    forms.text,
+    "$int($int($int(a * b) + a) - b)",
+  );
+});
+
+Deno.test("an arrow chain whose first parameter list breaks puts each next head on a line of its own", () => {
+  const forms = emitFiles(projectFiles("emit/forms"), ["forms.eff"]).get(
+    "forms",
+  );
+  assert(forms !== undefined);
+  assertStringIncludes(
+    forms.text,
+    "  gammaValueNumberThree: number,\n): WideG =>\n(gammaValueNumberThree: number, delta: number) =>\n  Effect.succeed(alphaValueNumberOne);",
+  );
+  // A later head that breaks does the same, and the body stays on its line.
+  assertStringIncludes(
+    forms.text,
+    "export const wideChainLate = (z: number): WideH =>\n(\n  alphaValueNumberOne: number,",
+  );
+  // In a call argument the arguments break, and the heads align with the first.
+  assertStringIncludes(
+    forms.text,
+    "    ) =>\n    (q: number) =>\n      $int(",
+  );
+  // A chain that fits below the equals sign keeps its heads on one line.
+  assertStringIncludes(
+    forms.text,
+    "export const adder =\n  (n: number): (a: number) => Effect.Effect<number> => (x: number) =>\n    Effect.succeed($int(x + n));",
+  );
+});
+
+Deno.test("an else-if chain prints every ? and : at one indentation level", () => {
+  const forms = emitFiles(projectFiles("emit/forms"), ["forms.eff"]).get(
+    "forms",
+  );
+  assert(forms !== undefined);
+  assertStringIncludes(
+    forms.text,
+    '    : betaValueNumberTwo > gammaValueNumberThree\n    ? "bbbbbbbbbbbbbbbbbbbbbbb"\n    : gammaValueNumberThree > 100000 && alphaValueNumberOne < 10000000 &&\n        betaValueNumberTwo > 100\n    ? "c"\n    : "d";',
+  );
+});
+
 // ------------------------------------------------------------------ spans and results
 
 Deno.test("span records lie inside the text and cover each declaration", () => {
@@ -284,6 +354,30 @@ Deno.test("span records lie inside the text and cover each declaration", () => {
     module.text.slice(r.start, r.end).startsWith("export const pay =")
   );
   assertEquals(functionSpans.length, 1);
+});
+
+Deno.test("a flattened run of binary operations keeps one span record for each operation", () => {
+  const source =
+    'export const f = (a: string, b: string, c: string): string => a + "-" + b + "-" + c\n';
+  const files = { "effective.json": "{}", "m.eff": source };
+  const module = emitFiles(files, ["m.eff"]).get("m");
+  assert(module !== undefined);
+  const pairs = module.spans
+    .filter((r) => module.text.slice(r.start, r.end).includes(" + "))
+    .map((r) => [
+      module.text.slice(r.start, r.end),
+      source.slice(r.span.start, r.span.end),
+    ]);
+  assertEquals(pairs, [
+    ['a + "-"', 'a + "-"'],
+    ['a + "-" + b', 'a + "-" + b'],
+    ['a + "-" + b + "-"', 'a + "-" + b + "-"'],
+    ['a + "-" + b + "-" + c', 'a + "-" + b + "-" + c'],
+    [
+      'export const f = (a: string, b: string, c: string): string =>\n  a + "-" + b + "-" + c;',
+      source.trimEnd(),
+    ],
+  ]);
 });
 
 Deno.test("emitProject reports a module that did not lower", () => {

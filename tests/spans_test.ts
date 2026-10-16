@@ -146,7 +146,9 @@ Deno.test("the innermost record wins at every offset of every example and form",
 });
 
 Deno.test("records nest: two records are disjoint or one contains the other", () => {
-  for (const module of examples.emitted.values()) {
+  for (
+    const module of [...examples.emitted.values(), ...forms.emitted.values()]
+  ) {
     const records = buildSpanTable(module).records;
     for (let i = 0; i < records.length; i++) {
       for (let j = i + 1; j < records.length; j++) {

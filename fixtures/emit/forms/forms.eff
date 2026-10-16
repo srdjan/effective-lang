@@ -192,3 +192,99 @@ export const shapeEff = (s: Shape): int
     { kind: "circle", ...c } => Store.count() + 1,
     { kind: "square", ...q } => Store.count() + 2
   }
+
+// Long expressions and broken arrow chains (A6c). The printer lays out each of
+// them as `deno fmt` does, so that the emitted file is a fixed point of it.
+type WideF = (z: int) => int
+type WideG = (gammaValueNumberThree: int, delta: int) => int
+type WideH = (zzzz: int, yyyyy: int, xxxxxx: int) => int
+
+export const wideCond = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): boolean =>
+  alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 && alphaValueNumberOne < 1000
+
+export const wideCondBlock = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): boolean => {
+  const first: boolean = alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0
+  first && alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 && alphaValueNumberOne < 1000
+}
+
+export const wideOr = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): boolean =>
+  alphaValueNumberOne > betaValueNumberTwo || betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 || alphaValueNumberOne < 1000 && betaValueNumberTwo > 0
+
+export const wideParens = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): boolean => {
+  const grouped: boolean = (alphaValueNumberOne > betaValueNumberTwo || betaValueNumberTwo > gammaValueNumberThree || gammaValueNumberThree > 0 || alphaValueNumberOne < 1000) && (alphaValueNumberOne > betaValueNumberTwo || betaValueNumberTwo > gammaValueNumberThree)
+  grouped
+}
+
+export const wideIf = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): string =>
+  if (alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 && alphaValueNumberOne < 1000) { "a" } else { "b" }
+
+export const wideIfBlock = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): string => {
+  const picked: string = if (alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 && alphaValueNumberOne < 1000) { "a" } else { "b" }
+  if (alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 && alphaValueNumberOne < 1000) { picked } else { "b" }
+}
+
+export const wideBranches = (alphaValueNumberOne: string, betaValueNumberTwo: string, flag: boolean): string =>
+  if (flag) { alphaValueNumberOne + "-" + betaValueNumberTwo + "-" + alphaValueNumberOne + "-" + betaValueNumberTwo + "-" + alphaValueNumberOne } else { betaValueNumberTwo + "-" + alphaValueNumberOne + "-" + betaValueNumberTwo + "-" + alphaValueNumberOne + "-" + betaValueNumberTwo }
+
+export const wideSum = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): int =>
+  alphaValueNumberOne + betaValueNumberTwo + gammaValueNumberThree + alphaValueNumberOne + betaValueNumberTwo + gammaValueNumberThree
+
+export const wideMixed = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): int =>
+  (alphaValueNumberOne + betaValueNumberTwo * gammaValueNumberThree + alphaValueNumberOne * betaValueNumberTwo + gammaValueNumberThree * 10) * 2
+
+export const wideSub = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): int =>
+  alphaValueNumberOne - (betaValueNumberTwo - gammaValueNumberThree - alphaValueNumberOne - betaValueNumberTwo - gammaValueNumberThree - alphaValueNumberOne)
+
+export const wideStr = (alphaValueNumberOne: string, betaValueNumberTwo: string, gammaValueNumberThree: string): string =>
+  alphaValueNumberOne + "-" + betaValueNumberTwo + "-" + gammaValueNumberThree + "-" + alphaValueNumberOne + "-" + betaValueNumberTwo
+
+export const wideStrBlock = (alphaValueNumberOne: string, betaValueNumberTwo: string, gammaValueNumberThree: string): string => {
+  const joined: string = alphaValueNumberOne + "-" + betaValueNumberTwo + "-" + gammaValueNumberThree + "-" + alphaValueNumberOne + "-" + betaValueNumberTwo
+  joined + "-" + alphaValueNumberOne + "-" + betaValueNumberTwo + "-" + gammaValueNumberThree + "-" + alphaValueNumberOne + "-" + betaValueNumberTwo
+}
+
+export const wideRecord = (alphaValueNumberOne: string, betaValueNumberTwo: string, gammaValueNumberThree: string): Acc =>
+  ({ n: 1, label: alphaValueNumberOne + "-" + betaValueNumberTwo + "-" + gammaValueNumberThree + "-" + alphaValueNumberOne + "-" + betaValueNumberTwo })
+
+export const wideFilter = (xs: int[]): int[] =>
+  xs |> filter((aVeryLongParameterNameThatFillsTheWholeLineXXX) => aVeryLongParameterNameThatFillsTheWholeLineXXX > 10 && aVeryLongParameterNameThatFillsTheWholeLineXXX < 2000)
+
+export const wideMap = (xs: int[]): string[] =>
+  xs |> map((aVeryLongParameterNameThatFillsTheWholeLineXXX) => if (aVeryLongParameterNameThatFillsTheWholeLineXXX > 10 && aVeryLongParameterNameThatFillsTheWholeLineXXX < 2000) { "big" } else { "small" })
+
+export const wideFold = (xs: int[]): int =>
+  xs |> fold(0, (accumulatorValueNumberOne, currentValueNumberTwo) => accumulatorValueNumberOne + currentValueNumberTwo + accumulatorValueNumberOne + currentValueNumberTwo + 1)
+
+export const wideGenIf = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): string
+  uses Store.count =>
+  if (alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > Store.count()) { "a" } else { "b" }
+
+export const wideGenAnd = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): boolean
+  uses Store.count =>
+  alphaValueNumberOne > betaValueNumberTwo && Store.count() > 1 && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > Store.count() && alphaValueNumberOne < 1000
+
+export const wideGenSum = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): int
+  uses Store.count =>
+  alphaValueNumberOne + betaValueNumberTwo + gammaValueNumberThree + Store.count() + alphaValueNumberOne + betaValueNumberTwo
+
+export const wideChain = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): WideG => (gammaValueNumberThree, delta) => alphaValueNumberOne
+export const wideChainLate = (z: int): WideH => (alphaValueNumberOne, betaValueNumberTwo, gammaValueNumberThree) => alphaValueNumberOne
+export const wideChainBlock = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): WideG => (gammaValueNumberThree, delta) => {
+  const q = alphaValueNumberOne + delta
+  q
+}
+export const wideChainBody = (alphaValueNumberOne: int, betaValueNumberTwo: int): WideG => (gammaValueNumberThree, delta) => alphaValueNumberOne + betaValueNumberTwo + gammaValueNumberThree
+
+export const wideLocalChain = (n: int): int => {
+  const adder = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int) => (z: int) => alphaValueNumberOne + betaValueNumberTwo + gammaValueNumberThree + z
+  adder(n, n, n)(n)
+}
+
+const wideArgChain = (xs: int[]) => xs |> map((aVeryLongParameterNameThatFillsTheWholeLineXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) => (q: int) => aVeryLongParameterNameThatFillsTheWholeLineXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX + q)
+
+export const wideElseIf = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): string => {
+  const picked: string = if (alphaValueNumberOne > betaValueNumberTwo) { "aaaaaaaaaaaaaaaaaaaaaa" } else if (betaValueNumberTwo > gammaValueNumberThree) { "bbbbbbbbbbbbbbbbbbbbbbb" } else if (gammaValueNumberThree > 100000 && alphaValueNumberOne < 10000000 && betaValueNumberTwo > 100) { "c" } else { "d" }
+  if (alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0) { picked } else if (alphaValueNumberOne < betaValueNumberTwo && betaValueNumberTwo < gammaValueNumberThree && gammaValueNumberThree < 0) { "b" } else { "c" }
+}
+
+const wideFoldChain = (xs: int[]) => xs |> fold((q: int) => q, (accumulatorValueNumberOneXXXXXXXXXXXXXXXXX, currentValueNumberTwoXXXXXXXXXXXXXXXXXXXXXX) => (q: int) => q + 1)

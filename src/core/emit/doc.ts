@@ -12,7 +12,13 @@ import type { Span } from "../ir.ts";
 export type Doc =
   | string
   | readonly Doc[]
-  | { readonly k: "line"; readonly soft: boolean; readonly hard: boolean }
+  | {
+    readonly k: "line";
+    readonly soft: boolean;
+    readonly hard: boolean;
+    /** A hard line that a fit test passes: it measures the next line as well. */
+    readonly through: boolean;
+  }
   | {
     readonly k: "group";
     readonly d: Doc;
@@ -31,17 +37,43 @@ export type Doc =
   | { readonly k: "span"; readonly span: Span; readonly d: Doc }
   | { readonly k: "endspan"; readonly span: Span; readonly start: number }
   | { readonly k: "mark"; readonly key: string; readonly d: Doc }
-  | { readonly k: "endmark"; readonly key: string; readonly start: number };
+  | { readonly k: "endmark"; readonly key: string; readonly start: number }
+  | {
+    readonly k: "fill";
+    readonly parts: readonly Doc[];
+    readonly tail: number;
+  }
+  | { readonly k: "fillstep"; readonly fill: FillDoc; readonly i: number }
+  | { readonly k: "spanopen"; readonly span: Span; readonly id: GroupId }
+  | { readonly k: "spanclose"; readonly span: Span; readonly id: GroupId };
+
+/** The `fill` node of the `Doc` type. */
+export type FillDoc = Extract<Doc, { readonly k: "fill" }>;
 
 /** Names a group, so that a later `ifBroke` can ask whether the group broke. */
 export type GroupId = object;
 
 /** A space when flat and a newline when broken. */
-export const line: Doc = { k: "line", soft: false, hard: false };
+export const line: Doc = {
+  k: "line",
+  soft: false,
+  hard: false,
+  through: false,
+};
 /** Nothing when flat and a newline when broken. */
-export const soft: Doc = { k: "line", soft: true, hard: false };
+export const soft: Doc = { k: "line", soft: true, hard: false, through: false };
 /** Always a newline. A group that contains it always breaks. */
-export const hard: Doc = { k: "line", soft: false, hard: true };
+export const hard: Doc = { k: "line", soft: false, hard: true, through: false };
+/**
+ * Always a newline, like `hard`. A fit test of an `alt` option does not stop
+ * at it. The test goes on with the next line, at its indentation.
+ */
+export const through: Doc = {
+  k: "line",
+  soft: false,
+  hard: true,
+  through: true,
+};
 
 export function group(d: Doc, brk = false, id?: GroupId): Doc {
   return { k: "group", d, brk, id };
@@ -75,6 +107,29 @@ export function ifBreak(broken: Doc, flat: Doc = ""): Doc {
  */
 export function alt(options: readonly Doc[]): Doc {
   return { k: "alt", options };
+}
+
+/**
+ * A greedy fill: `parts` alternate content, separator, content, and so on. The
+ * printer puts the next content on the current line when the separator and the
+ * content fit there, else it breaks the separator. The first content stays on
+ * the current line. The separators and the contents after the first sit
+ * `tail` indentation levels deeper.
+ */
+export function fill(parts: readonly Doc[], tail: number): Doc {
+  return { k: "fill", parts, tail };
+}
+
+/**
+ * The two ends of a span that covers a part of a `fill` and no whole node.
+ * The opening end comes first in the output, the closing end after it.
+ */
+export function spanEnds(span: Span): { open: Doc; close: Doc } {
+  const id: GroupId = {};
+  return {
+    open: { k: "spanopen", span, id },
+    close: { k: "spanclose", span, id },
+  };
 }
 
 /** Tags the output of `d` with a source span. */
@@ -186,8 +241,14 @@ function makeHardCheck(): (doc: Doc) => boolean {
           // A hard line inside an option does not force the group to break.
           result = false;
           break;
+        case "fill":
+          result = doc.parts.some(check);
+          break;
         case "endspan":
         case "endmark":
+        case "fillstep":
+        case "spanopen":
+        case "spanclose":
           result = false;
           break;
       }
@@ -209,6 +270,8 @@ export function render(doc: Doc, width = 80): Rendered {
   let column = 0;
   let offset = 0;
   let remeasure = false;
+  /** The output offsets at which the open ends of fill spans were printed. */
+  const openSpans = new Map<GroupId, number>();
   const stack: Cmd[] = [{ indent: 0, mode: "break", doc }];
 
   const fits = (next: Cmd, rest: readonly Cmd[], room: number): boolean => {
@@ -233,6 +296,10 @@ export function render(doc: Doc, width = 80): Rendered {
       } else {
         switch (d.k) {
           case "line":
+            if (d.through && cmd.mode === "flat") {
+              left = width - cmd.indent;
+              break;
+            }
             if (cmd.mode === "break" || d.hard) return true;
             if (!d.soft) left -= 1;
             break;
@@ -242,9 +309,33 @@ export function render(doc: Doc, width = 80): Rendered {
             break;
           }
           case "indent":
+            cmds.push({
+              indent: cmd.indent + INDENT_WIDTH,
+              mode: cmd.mode,
+              doc: d.d,
+            });
+            break;
           case "span":
           case "mark":
             cmds.push({ indent: cmd.indent, mode: cmd.mode, doc: d.d });
+            break;
+          case "fill":
+            for (let i = d.parts.length - 1; i >= 0; i--) {
+              cmds.push({
+                indent: i === 0
+                  ? cmd.indent
+                  : cmd.indent + INDENT_WIDTH * d.tail,
+                mode: cmd.mode,
+                doc: d.parts[i],
+              });
+            }
+            break;
+          case "fillstep":
+            // A later separator of the fill may break here.
+            if (d.i < d.fill.parts.length) return true;
+            break;
+          case "spanopen":
+          case "spanclose":
             break;
           case "ifbroke":
             cmds.push({
@@ -342,6 +433,61 @@ export function render(doc: Doc, width = 80): Rendered {
           indent: cmd.indent + INDENT_WIDTH,
           mode: cmd.mode,
           doc: d.d,
+        });
+        break;
+      case "fill": {
+        if (cmd.mode === "flat" && !remeasure) {
+          stack.push({ indent: cmd.indent, mode: "flat", doc: d.parts });
+          break;
+        }
+        remeasure = false;
+        if (d.parts.length === 0) break;
+        stack.push({
+          indent: cmd.indent,
+          mode: cmd.mode,
+          doc: { k: "fillstep", fill: d, i: 1 },
+        });
+        stack.push({
+          indent: cmd.indent,
+          mode: cmd.mode,
+          doc: group(d.parts[0]),
+        });
+        break;
+      }
+      case "fillstep": {
+        const parts = d.fill.parts;
+        if (d.i >= parts.length) break;
+        const separator = parts[d.i];
+        const content = parts[d.i + 1];
+        const lastContent = d.i + 1 === parts.length - 1;
+        const deeper = cmd.indent + INDENT_WIDTH * d.fill.tail;
+        const flatPair: Cmd = {
+          indent: deeper,
+          mode: "flat",
+          doc: [separator, content],
+        };
+        const onLine = fits(flatPair, lastContent ? stack : [], width - column);
+        stack.push({
+          indent: cmd.indent,
+          mode: cmd.mode,
+          doc: { k: "fillstep", fill: d.fill, i: d.i + 2 },
+        });
+        stack.push({ indent: deeper, mode: "break", doc: group(content) });
+        stack.push({
+          indent: deeper,
+          mode: onLine ? "flat" : "break",
+          doc: separator,
+        });
+        break;
+      }
+      case "spanopen":
+        openSpans.set(d.id, offset);
+        break;
+      case "spanclose":
+        spans.push({
+          start: openSpans.get(d.id) ?? offset,
+          end: offset,
+          span: d.span,
         });
         break;
       case "ifbreak":

@@ -113,7 +113,16 @@ the implementer picks the stricter rule and records it here.
 | Layout of a selector call | When the body of the selector arrow moves down, the arguments of the call get one more indent level |
 | Layout of a conditional chain | A match with several arms prints `a ? x : b ? y : z` with every `?` and `:` at one indent level |
 | Function type parameters | A broken parameter list of a function type ends with a comma |
-| Not at a fixed point | A binary expression that is longer than 80 columns, and an arrow chain whose first parameter list must break. The printer does not break them yet |
+| Layout of a binary run | A chain of one precedence level, such as `a && b && c` or `a + b + c`, is one unit. The operator ends the line. A break comes only where the next operand with its operator does not fit |
+| Indent of a binary run | The lines after the first sit one level deeper. The body of an arrow and an element of an array add no level. A parenthesized operand breaks one level deeper than the line where it starts |
+| Binary run in a conditional test | The lines of a broken test sit two levels deeper than the line of the test, so one level deeper than `?`. As the body of an arrow they sit one level deeper |
+| Int arithmetic | Each `$int` call has one argument. The argument list breaks first. The operation inside the argument breaks after that |
+| Layout of an else-if chain | A conditional in the else branch joins the chain. Every `?` and `:` of the chain sits at one indent level. The test of a later link sits two levels deeper than its `:` line |
+| Last arrow argument with a moved body | When the body of the last argument arrow moves down, the closing parenthesis moves down with it |
+| Heads of a chain that do not fit | When the heads do not fit after `const name =` on one line, the chain moves below the `=`. When they do not fit there, each head gets a line of its own |
+| Head with a broken parameter list | When a head cannot fit on a line, each head after the first starts a line at the indent of the chain. The first head stays after the `=`. The body stays on the last head line when it fits, else it moves down one level |
+| Chain as a call argument | The call hugs a chain only when the heads fit on the line of the call. Else the arguments break, and the heads align as in a declaration |
+| Not at a fixed point | The selector test of a match arm, for example `$t0 === "..."`, when it is longer than 80 columns. `deno fmt` breaks after `===`, and the printer does not. A chain as the last of several arguments, when its second head fits on a line. `deno fmt` breaks that head, but Effective source cannot produce this form, because function types have the effect mode |
 
 ## Program and CLI (A7)
 

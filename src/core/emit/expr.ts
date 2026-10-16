@@ -21,6 +21,7 @@ import {
   braces,
   bracketed,
   type Doc,
+  fill,
   group,
   type GroupId,
   hard,
@@ -30,7 +31,9 @@ import {
   join,
   line,
   soft,
+  spanEnds,
   spanned,
+  through,
 } from "./doc.ts";
 import {
   internal,
@@ -109,6 +112,18 @@ export interface Emitted {
   readonly huggable: boolean;
   /** Present when the expression is an arrow function. */
   readonly chain?: Chain;
+  /** Present when the expression is a binary operation. A larger run can take its operands. */
+  readonly run?: Run;
+  /** Present when the expression is an arrow with an expression body. Names the group of the body. */
+  readonly bodyGroup?: GroupId;
+  /** Present when the expression is a conditional. A conditional in its else branch joins it. */
+  readonly condChain?: CondChain;
+  /**
+   * The doc for a position that starts on a line of its own at the indentation
+   * of the expression, as the body of an arrow or an array element. Present
+   * only when it differs from `doc`.
+   */
+  readonly flush?: Doc;
 }
 
 function emitted(
@@ -118,6 +133,10 @@ function emitted(
     readonly brace?: boolean;
     readonly huggable?: boolean;
     readonly chain?: Chain;
+    readonly run?: Run;
+    readonly flush?: Doc;
+    readonly bodyGroup?: GroupId;
+    readonly condChain?: CondChain;
   } = {},
 ): Emitted {
   const base = {
@@ -126,55 +145,171 @@ function emitted(
     brace: flags.brace ?? false,
     huggable: flags.huggable ?? false,
   };
-  return flags.chain === undefined ? base : { ...base, chain: flags.chain };
+  return {
+    ...base,
+    ...(flags.chain === undefined ? {} : { chain: flags.chain }),
+    ...(flags.run === undefined ? {} : { run: flags.run }),
+    ...(flags.flush === undefined ? {} : { flush: flags.flush }),
+    ...(flags.bodyGroup === undefined ? {} : { bodyGroup: flags.bodyGroup }),
+    ...(flags.condChain === undefined ? {} : { condChain: flags.condChain }),
+  };
 }
 
-/** The arrows `heads[i..]` followed by `last` after the final `=>`. Each arrow carries its span. */
+/** The doc of `e` for a position that starts on a line of its own. */
+function flush(e: Emitted): Doc {
+  return e.flush ?? e.doc;
+}
+
+// ------------------------------------------------------------------ conditionals
+
+/**
+ * A chain `t0 ? a0 : t1 ? a1 : last`. `deno fmt` prints every `?` and `:` of
+ * the chain at one indentation level.
+ */
+interface CondChain {
+  readonly tests: readonly Emitted[];
+  readonly arms: readonly Doc[];
+  readonly last: Doc;
+  /** The span of the conditional that starts at `tests[j + 1]`, for each `j`. */
+  readonly nested: readonly Span[];
+  /** The span of the whole chain. Set when the conditional is tagged. */
+  readonly self: Span | undefined;
+}
+
+/** The test of a conditional. `tail` is the depth of the lines after the first, if the test breaks. */
+function testDoc(test: Emitted, tail: number): Doc {
+  return test.run === undefined ? at(test, PREC.or) : runDoc(test.run, tail);
+}
+
+function condDoc(chain: CondChain, tail: number): Doc {
+  const ends = chain.nested.map(spanEnds);
+  const parts: Doc[] = [line, "? ", chain.arms[0]];
+  for (let i = 1; i < chain.tests.length; i++) {
+    parts.push(
+      line,
+      ": ",
+      ends[i - 1].open,
+      testDoc(chain.tests[i], 2),
+      line,
+      "? ",
+      chain.arms[i],
+    );
+  }
+  parts.push(line, ": ", chain.last);
+  for (let j = ends.length - 1; j >= 0; j--) parts.push(ends[j].close);
+  return group([testDoc(chain.tests[0], tail), indent(parts)]);
+}
+
+// ------------------------------------------------------------------ binary runs
+
+/**
+ * A chain of binary operations of one precedence level, such as
+ * `a && b && c`. `deno fmt` flattens it and puts the operator at the end of
+ * the line. It breaks after an operator only where the next operand does not
+ * fit. A break indents the lines after the first by one level, except for an
+ * arrow body and an array element.
+ */
+interface Run {
+  readonly operands: readonly Doc[];
+  /** `operators[i]` stands between `operands[i]` and `operands[i + 1]`. */
+  readonly operators: readonly string[];
+  /**
+   * The spans of the operations inside the chain: `inner[j]` covers the
+   * operands `0` to `j + 1`. The span of the whole chain is `top`.
+   */
+  readonly inner: readonly Span[];
+  readonly top: Span | undefined;
+}
+
+/** The doc of a run. `tail` is the indentation depth of the lines after the first. */
+function runDoc(run: Run, tail: number): Doc {
+  const ends = run.inner.map(spanEnds);
+  const last = run.operands.length - 1;
+  const parts: Doc[] = [];
+  run.operands.forEach((operand, k) => {
+    if (k > 0) parts.push(line);
+    const chunk: Doc[] = [];
+    if (k === 0) {
+      for (let j = ends.length - 1; j >= 0; j--) chunk.push(ends[j].open);
+    }
+    chunk.push(operand);
+    if (k >= 1 && k - 1 < ends.length) chunk.push(ends[k - 1].close);
+    if (k < last) chunk.push(` ${run.operators[k]}`);
+    parts.push(chunk);
+  });
+  const filled = fill(parts, tail);
+  return run.top === undefined ? filled : spanned(run.top, filled);
+}
+
+/**
+ * The arrows `heads[i..]` followed by `last` after the final `=>`. Each arrow
+ * carries its span. `separator` comes after each `=>` that is not the last.
+ */
 function nestHeads(
   heads: readonly ChainHead[],
   last: Doc,
+  separator: Doc = " ",
   i: number = 0,
 ): Doc {
   const head = heads[i];
   const inner: Doc = i === heads.length - 1
     ? [head.doc, " =>", last]
-    : [head.doc, " => ", nestHeads(heads, last, i + 1)];
+    : [head.doc, " =>", separator, nestHeads(heads, last, separator, i + 1)];
   return head.span === undefined ? inner : spanned(head.span, inner);
 }
 
 /**
- * The layouts of an arrow chain, in the order that `deno fmt` prefers them.
- * `deno fmt` keeps a chain on one line when it fits. Otherwise it keeps all
- * heads on the first line and moves the body down. When the heads do not fit
- * after `const name =`, it moves the whole chain to the next line.
+ * The layouts of an arrow chain. `deno fmt` keeps a chain on one line when it
+ * fits. Otherwise it keeps all heads on the first line and moves the body
+ * down. When the heads do not fit after `const name =`, it moves the whole
+ * chain below the `=`. When the heads do not fit on one line, each head gets
+ * a line of its own at the indentation of the chain, after the first. A head
+ * whose parameter list does not fit on its line breaks the list.
  */
-function chainOptions(chain: Chain): {
+interface ChainOptions {
   readonly oneLine: Doc;
+  /** Heads on the first line and the body below. Absent for a block or object body. */
   readonly bodyDown: Doc | undefined;
-  readonly chainDown: Doc;
-} {
+  /** One head for each line, the body after the last head. */
+  readonly split: (separator: Doc) => Doc;
+  /** One head for each line, the body below the last head. Absent like `bodyDown`. */
+  readonly splitDown: ((separator: Doc) => Doc) | undefined;
+  /** One head for each line, the body on the last line when it fits, else below it. */
+  readonly splitAdaptive: (separator: Doc) => Doc;
+}
+
+function chainOptions(chain: Chain): ChainOptions {
   const { heads, tail } = chain;
-  if (tail.kind === "block") {
-    const last: Doc = [" ", braces(tail.statements)];
+  if (tail.kind === "block" || tail.body.brace) {
+    const last: Doc = tail.kind === "block"
+      ? [" ", braces(tail.statements)]
+      : [" (", tail.body.doc, ")"];
     return {
       oneLine: nestHeads(heads, last),
       bodyDown: undefined,
-      chainDown: nestHeads(heads, last),
+      split: (separator) => nestHeads(heads, last, separator),
+      splitDown: undefined,
+      splitAdaptive: (separator) => nestHeads(heads, last, separator),
     };
   }
-  if (tail.body.brace) {
-    const last: Doc = [" (", tail.body.doc, ")"];
-    return {
-      oneLine: nestHeads(heads, last),
-      bodyDown: undefined,
-      chainDown: nestHeads(heads, last),
-    };
-  }
+  const body = tail.body;
+  const down: Doc = indent([hard, flush(body)]);
   return {
-    oneLine: nestHeads(heads, [" ", tail.body.doc]),
-    bodyDown: nestHeads(heads, indent([hard, tail.body.doc])),
-    chainDown: nestHeads(heads, indent([hard, tail.body.doc])),
+    oneLine: nestHeads(heads, [" ", body.doc]),
+    bodyDown: nestHeads(heads, down),
+    split: (separator) => nestHeads(heads, [" ", body.doc], separator),
+    splitDown: (separator) => nestHeads(heads, down, separator),
+    splitAdaptive: (separator) =>
+      nestHeads(heads, group(indent([line, flush(body)])), separator),
   };
+}
+
+/** A chain of arrows that is not a declaration: on a line, body down, or one head for each line. */
+function chainDocOf(chain: Chain): Doc {
+  const options = chainOptions(chain);
+  const split = options.splitAdaptive(hard);
+  if (options.bodyDown === undefined) return alt([options.oneLine, split]);
+  return alt([options.oneLine, options.bodyDown, split]);
 }
 
 /** The doc of `e`, in parentheses when `e` binds weaker than `min`. */
@@ -210,9 +345,18 @@ function callArguments(args: readonly Emitted[]): Doc {
   if (!last.huggable || others.some((o) => o.huggable)) return expanded(false);
   const head = others.flatMap((o) => [free(o), ", "]);
   const lastDoc = free(last);
+  // A chain stays on the line of the call only when its heads fit there. Else
+  // the arguments break, and each head gets a line of its own.
+  if (last.chain !== undefined && last.chain.heads.length > 1) {
+    return alt([["(", ...head, lastDoc, ")"], expanded(true)]);
+  }
+  // When the body of the last arrow moves down, `)` moves down with it.
+  const close: Doc = last.bodyGroup === undefined
+    ? ")"
+    : [ifBroke(last.bodyGroup, hard), ")"];
   return alt([
     ["(", ...head, lastDoc, ")"],
-    ["(", ...head, group(lastDoc, true), ")"],
+    ["(", ...head, group(lastDoc, true), close],
     expanded(true),
   ]);
 }
@@ -294,14 +438,14 @@ export class ExprEmitter {
    */
   arrow(parameters: Doc, body: Emitted, bodyGroup?: GroupId): Doc {
     if (body.chain !== undefined) {
-      return this.chainDoc(this.chainOf(parameters, { kind: "expr", body }));
+      return chainDocOf(this.chainOf(parameters, { kind: "expr", body }));
     }
     // An object literal body stays on the line of the arrow: `=> ({`.
     if (body.brace) return [parameters, " => (", body.doc, ")"];
     return [
       parameters,
       " =>",
-      group(indent([line, body.doc]), false, bodyGroup),
+      group(indent([line, flush(body)]), false, bodyGroup),
     ];
   }
 
@@ -325,24 +469,25 @@ export class ExprEmitter {
   /** An arrow function as an expression. A chain keeps its parts for the parent. */
   private arrowEmitted(parameters: Doc, tail: ChainTail): Emitted {
     const chain = this.chainOf(parameters, tail);
+    const bodyGroup: GroupId = {};
+    const single = chain.heads.length === 1 && tail.kind === "expr" &&
+      !tail.body.brace;
     const doc = chain.heads.length > 1
-      ? this.chainDoc(chain)
+      ? chainDocOf(chain)
       : tail.kind === "block"
       ? this.arrowBlock(parameters, tail.statements)
-      : this.arrow(parameters, tail.body);
-    return emitted(doc, PREC.yield, { huggable: true, chain });
-  }
-
-  /** A chain of two or more arrows, or one arrow, as a document. */
-  private chainDoc(chain: Chain): Doc {
-    const options = chainOptions(chain);
-    if (options.bodyDown === undefined) return options.oneLine;
-    return alt([options.oneLine, options.bodyDown]);
+      : this.arrow(parameters, tail.body, bodyGroup);
+    return emitted(doc, PREC.yield, {
+      huggable: true,
+      chain,
+      ...(single ? { bodyGroup } : {}),
+    });
   }
 
   /**
    * `const name = <arrow>;` without the semicolon. The caller gives the text
-   * before the `=`. An arrow chain that is too long moves below the `=`.
+   * before the `=`. A chain that does not fit moves below the `=`. When some
+   * head does not fit there, each head gets a line of its own.
    */
   arrowDeclaration(prefix: Doc, parameters: Doc, body: Emitted): Doc {
     if (body.chain === undefined) {
@@ -353,21 +498,45 @@ export class ExprEmitter {
     );
     const choices: Doc[] = [[" ", options.oneLine]];
     if (options.bodyDown !== undefined) choices.push([" ", options.bodyDown]);
-    choices.push(indent([hard, options.chainDown]));
+    choices.push(indent([through, options.oneLine]));
+    if (options.bodyDown !== undefined) {
+      choices.push(indent([through, options.bodyDown]));
+    }
+    choices.push(indent([through, options.split(through)]));
+    if (options.splitDown !== undefined) {
+      choices.push(indent([through, options.splitDown(through)]));
+    }
+    choices.push([" ", options.splitAdaptive(hard)]);
     return [prefix, " =", alt(choices)];
   }
 
   // -------------------------------------------------------------- spans
 
   private tag(e: Expr, result: Emitted): Emitted {
+    if (result.run !== undefined) {
+      const run: Run = { ...result.run, top: e.span };
+      return {
+        ...result,
+        run,
+        doc: runDoc(run, 1),
+        flush: runDoc(run, 0),
+      };
+    }
     const doc = spanned(e.span, result.doc);
-    if (result.chain === undefined) return { ...result, doc };
+    const withFlush = result.flush === undefined
+      ? {}
+      : { flush: spanned(e.span, result.flush) };
+    if (result.condChain !== undefined) {
+      const condChain: CondChain = { ...result.condChain, self: e.span };
+      return { ...result, ...withFlush, doc, condChain };
+    }
+    if (result.chain === undefined) return { ...result, ...withFlush, doc };
     const [first, ...rest] = result.chain.heads;
     const chain: Chain = {
       heads: [{ doc: first.doc, span: e.span }, ...rest],
       tail: result.chain.tail,
     };
-    return { ...result, doc, chain };
+    return { ...result, ...withFlush, doc, chain };
   }
 
   // -------------------------------------------------------------- shared forms
@@ -435,7 +604,7 @@ export class ExprEmitter {
       case "array":
       case "tuple":
         return emitted(
-          bracketed("[", "]", e.elements.map((x) => free(kid(x))), false),
+          bracketed("[", "]", e.elements.map((x) => flush(kid(x))), false),
           PREC.member,
           { huggable: true },
         );
@@ -602,17 +771,32 @@ export class ExprEmitter {
   ): Emitted {
     const prec = binaryPrecedence(e.operator);
     const left = kid(e.left);
-    const body: Doc = [
-      at(left, prec),
-      ` ${e.operator} `,
-      at(kid(e.right), prec + 1),
-    ];
+    const right = at(kid(e.right), prec + 1);
+    // A left operand of the same level joins the run; `at` adds no parentheses.
+    const run: Run = left.run !== undefined && left.prec === prec &&
+        left.run.top !== undefined
+      ? {
+        operands: [...left.run.operands, right],
+        operators: [...left.run.operators, e.operator],
+        inner: [...left.run.inner, left.run.top],
+        top: undefined,
+      }
+      : {
+        operands: [at(left, prec), right],
+        operators: [e.operator],
+        inner: [],
+        top: undefined,
+      };
     const arithmetic = e.operator === "+" || e.operator === "-" ||
       e.operator === "*";
     if (arithmetic && isIntType(e.type)) {
-      return emitted([this.scope.intFunction(), "(", body, ")"]);
+      const body = emitted(runDoc(run, 1), prec);
+      return emitted([this.scope.intFunction(), callArguments([body])]);
     }
-    return emitted(body, prec, { brace: leadingBrace(left, prec) });
+    return emitted(runDoc(run, 1), prec, {
+      brace: leadingBrace(left, prec),
+      run,
+    });
   }
 
   private conditional(
@@ -620,21 +804,36 @@ export class ExprEmitter {
     kid: Kid,
   ): Emitted {
     const condition = kid(e.condition);
-    return emitted(
-      group([
-        at(condition, PREC.or),
-        indent([
-          line,
-          "? ",
-          at(kid(e.then, e.type), PREC.conditional),
-          line,
-          ": ",
-          at(kid(e.else, e.type), PREC.conditional),
-        ]),
-      ]),
-      PREC.conditional,
-      { brace: leadingBrace(condition, PREC.or) },
-    );
+    const then = at(kid(e.then, e.type), PREC.conditional);
+    const otherwise = kid(e.else, e.type);
+    const rest = otherwise.condChain;
+    // A test that breaks keeps its lines one level deeper than the `?` line.
+    // After a `return` or `=` that is two levels, as the body of an arrow one.
+    const chain: CondChain = rest === undefined
+      ? {
+        tests: [condition],
+        arms: [then],
+        last: at(otherwise, PREC.conditional),
+        nested: [],
+        self: undefined,
+      }
+      : {
+        tests: [condition, ...rest.tests],
+        arms: [then, ...rest.arms],
+        last: rest.last,
+        nested: rest.self === undefined
+          ? rest.nested
+          : [rest.self, ...rest.nested],
+        self: undefined,
+      };
+    const brace = { brace: leadingBrace(condition, PREC.or), condChain: chain };
+    if (condition.run === undefined) {
+      return emitted(condDoc(chain, 2), PREC.conditional, brace);
+    }
+    return emitted(condDoc(chain, 2), PREC.conditional, {
+      ...brace,
+      flush: condDoc(chain, 1),
+    });
   }
 
   // -------------------------------------------------------------- closures
