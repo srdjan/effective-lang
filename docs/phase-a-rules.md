@@ -51,3 +51,13 @@ the implementer picks the stricter rule and records it here.
 | `retry` form | The second argument must be the literal record `{ times: N }` |
 | Broken declarations | Checked for side tables; their body diagnostics are suppressed until the syntax is fixed |
 | Effect type order | Sorted identity order everywhere, including `typeAt` |
+
+## Lowering (A4)
+
+| Rule | Choice |
+| --- | --- |
+| Error construction | The argument must be a record literal without a spread (`type-mismatch/010`), because the IR `error` node lists its fields |
+| Pipeline stage sets | A stage call carries its arguments and its invocation only; the left value's sets sit on its `$p` binding |
+| Known limit | A `retry` or `provide` stage whose left value is effectful keeps the checker's sets, so the validator may report it |
+| Prelude value names | `$builtin/<name>/<hash>`, the text after `#` in the id |
+| Declaration order in IR | Source order by span start |
