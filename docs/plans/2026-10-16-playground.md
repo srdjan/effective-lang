@@ -5,6 +5,10 @@ sections 3.1 and 3.3 (the playground is step 3). Fable validated the first
 draft and reported 16 findings. Opus accepted all 16 and resolved them in this
 revision. Section 11 maps each finding to its resolution.
 
+Progress, 2026-10-16: G1 to G4 are done. Acceptance checks 1 to 4 pass.
+Check 5 waits for the user. The G3 review found one defect: a badge label
+widened the page at 375 pixels. Commit 886b34b fixes it.
+
 ## 1. Decisions for this phase
 
 The user settled four decisions on 2026-10-16. Each took the recommended option.
