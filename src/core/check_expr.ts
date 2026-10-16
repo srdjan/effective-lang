@@ -131,7 +131,7 @@ interface ArrowContext {
   readonly result: TypeRef | undefined;
 }
 
-type BinaryOperator =
+export type BinaryOperator =
   | "+"
   | "-"
   | "*"
@@ -190,7 +190,10 @@ function names(ids: readonly string[]): string {
   return ids.map(shortName).join(", ");
 }
 
-function literalOf(tree: SyntaxTree, node: NodeId): LiteralValue | undefined {
+export function literalOf(
+  tree: SyntaxTree,
+  node: NodeId,
+): LiteralValue | undefined {
   for (const child of childrenOf(tree, node)) {
     if (kindOf(tree, child) !== SyntaxKind.Token) continue;
     const kind = tree.lexed.kinds[tree.tokens[child]] as TokenKind;
@@ -206,7 +209,7 @@ function literalOf(tree: SyntaxTree, node: NodeId): LiteralValue | undefined {
   return undefined;
 }
 
-function operatorOf(
+export function operatorOf(
   tree: SyntaxTree,
   node: NodeId,
 ): BinaryOperator | undefined {
