@@ -132,7 +132,14 @@ Deno.test("the bench arguments select the profile, the measurements, and the opt
   const defaults = parseOptions([]);
   assert(defaults.ok);
   assertEquals(defaults.value.profile, "quick");
-  assertEquals(defaults.value.measurements, ["m2", "m5", "m6"]);
+  assertEquals(defaults.value.measurements, [
+    "m1",
+    "m2",
+    "m3",
+    "m4",
+    "m5",
+    "m6",
+  ]);
   assertEquals(defaults.value.variants, true);
   const full = parseOptions([
     "--full",

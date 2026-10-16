@@ -27,7 +27,7 @@ export const SIZE_NAMES: readonly SizeName[] = ["small", "medium", "large"];
 export const DECLARATIONS_PER_MODULE = 60;
 
 export interface GenerateOptions {
-  /** The number of declarations in the feature modules. At least 5. */
+  /** The number of declarations in the feature modules. At least 8. */
   readonly declarations: number;
   /** The seed of the random choices. */
   readonly seed: number;
@@ -319,8 +319,11 @@ function moduleName(index: number): string {
   return `m${String(index).padStart(2, "0")}`;
 }
 
-/** The feature declarations in the project. At least 5, because of the module prologue. */
-export const MIN_DECLARATIONS = 5;
+/**
+ * The feature declarations in the project. At least 8, because the prologue of
+ * the edited module holds eight declarations and the edit functions need them.
+ */
+export const MIN_DECLARATIONS = 8;
 
 /**
  * The first declarations of every feature module. They give the later
@@ -353,6 +356,9 @@ function prologue(
     declarations.push(
       `export const bump = (n: int): int => n + 1`,
       `export const extra: int = 1`,
+      `export const flip = (n: int): int => n + 1`,
+      `export type Amount = int`,
+      `export const scale = (a: Amount): Amount => a`,
     );
   }
   return { names, declarations };
@@ -489,6 +495,48 @@ export function applyInterfaceEdit(text: string): string {
     /export const extra: (int|number) = 1/,
     (_match, type: string) =>
       `export const extra: ${type === "int" ? "number" : "int"} = 1`,
+  );
+}
+
+/**
+ * A mode flip edit: toggles the body of `flip` between `n + 1` and
+ * `retry(() => n + 1, { times: 1 })`. Both forms check with no diagnostic. The
+ * second has the mode `effect`, so each call changes the mode map and, because
+ * the interface payload holds the mode, the interface hash of the module.
+ */
+export function applyModeFlipEdit(text: string): string {
+  return text.replace(
+    /(export const flip = \(n: int\): int => )(n \+ 1|retry\(\(\) => n \+ 1, \{ times: 1 \}\))/,
+    (_match, head: string, body: string) =>
+      `${head}${
+        body === "n + 1" ? "retry(() => n + 1, { times: 1 })" : "n + 1"
+      }`,
+  );
+}
+
+/**
+ * An alias edit: toggles the alias `Amount` between `int` and `number`. The
+ * exported function `scale` names the alias in its parameter and its result, so
+ * each call changes the interface hash of the module. Both states check with
+ * no diagnostic, and no importer names the alias.
+ */
+export function applyAliasEdit(text: string): string {
+  return text.replace(
+    /export type Amount = (int|number)\n/,
+    (_match, type: string) =>
+      `export type Amount = ${type === "int" ? "number" : "int"}\n`,
+  );
+}
+
+/**
+ * The body edit for the five examples: changes the string literal of the
+ * `UserMissing` handler in the body of `displayName` in `users.eff`. Revision
+ * `k` writes `"Guest<k>"`. The interface of the module does not change.
+ */
+export function applyExamplesBodyEdit(text: string, revision: number): string {
+  return text.replace(
+    /(UserMissing\(error\) => "Guest)\d*"/,
+    `$1${revision}"`,
   );
 }
 
