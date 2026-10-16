@@ -1,0 +1,5 @@
+// error: declaration/010
+type User = { id: string, name: string, id: int }
+
+// error: declaration/010
+error Failed = { reason: string, reason: string }

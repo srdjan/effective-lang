@@ -1,0 +1,14 @@
+// error: declaration/005
+export const noResult = (x: int) => x
+
+// error: declaration/005
+export const noParameter = (x): int => 1
+
+// error: declaration/005
+export const neither = (x) => x
+
+export const complete = (x: int): int => x
+
+export const viaBinding: (x: int) => int = (x) => x
+
+const privateInferred = (x: int) => x

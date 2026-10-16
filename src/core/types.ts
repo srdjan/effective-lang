@@ -1,0 +1,683 @@
+// Interned types and type compatibility. Equal structural types share one
+// integer id (a `TypeRef`), so type equality is id equality. Aliases keep their
+// name: a `named` type points at the alias `TypeId`, and compatibility unfolds
+// the alias on demand. Brands and errors are nominal by identity.
+//
+// The table is mutable and deterministic. A project owns one table. The ids
+// depend on the order of interning, so no output may depend on a raw id. The
+// serialization functions below sort by canonical text, not by id.
+
+import type {
+  CapabilityId,
+  ErrorId,
+  Execution,
+  Field,
+  FunctionType,
+  Type,
+  TypeId,
+} from "./ir.ts";
+
+declare const typeRefBrand: unique symbol;
+
+/** An interned type. Equal structural types have equal refs. */
+export type TypeRef = number & { readonly [typeRefBrand]: true };
+
+export type PrimitiveName =
+  | "string"
+  | "boolean"
+  | "int"
+  | "number"
+  | "unit"
+  | "never"
+  | "unknown";
+
+export interface RecordField {
+  readonly name: string;
+  readonly type: TypeRef;
+  readonly optional: boolean;
+}
+
+/** The interned form. Records are sorted by field name, unions by ref. */
+export type TypeNode =
+  | { readonly kind: "primitive"; readonly name: PrimitiveName }
+  | {
+    readonly kind: "literal";
+    readonly value: string | number | boolean;
+  }
+  | { readonly kind: "named"; readonly id: TypeId | ErrorId }
+  | { readonly kind: "record"; readonly fields: readonly RecordField[] }
+  | { readonly kind: "array"; readonly element: TypeRef }
+  | { readonly kind: "tuple"; readonly elements: readonly TypeRef[] }
+  | { readonly kind: "union"; readonly members: readonly TypeRef[] }
+  | { readonly kind: "option"; readonly element: TypeRef }
+  | {
+    readonly kind: "function";
+    readonly execution: Execution;
+    readonly parameters: readonly TypeRef[];
+    readonly result: TypeRef;
+    /** Sorted and unique. */
+    readonly failures: readonly ErrorId[];
+    /** Sorted and unique. */
+    readonly requirements: readonly CapabilityId[];
+  }
+  | {
+    readonly kind: "provider";
+    /** Sorted and unique. */
+    readonly provides: readonly CapabilityId[];
+    readonly execution: Execution;
+    readonly failures: readonly ErrorId[];
+    readonly requirements: readonly CapabilityId[];
+  }
+  /** The recovery type. It is compatible with every type in both directions. */
+  | { readonly kind: "error" };
+
+export interface FunctionSpec {
+  readonly execution: Execution;
+  readonly parameters: readonly TypeRef[];
+  readonly result: TypeRef;
+  readonly failures: readonly ErrorId[];
+  readonly requirements: readonly CapabilityId[];
+}
+
+export interface ProviderSpec {
+  readonly provides: readonly CapabilityId[];
+  readonly execution: Execution;
+  readonly failures: readonly ErrorId[];
+  readonly requirements: readonly CapabilityId[];
+}
+
+function compareText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** Sorted copy without duplicates. */
+export function sortedUnique<T extends string>(items: readonly T[]): T[] {
+  return [...new Set(items)].sort(compareText);
+}
+
+function isSubset(
+  small: readonly string[],
+  large: readonly string[],
+): boolean {
+  const set = new Set(large);
+  return small.every((item) => set.has(item));
+}
+
+function sameList(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((item, i) => item === b[i]);
+}
+
+// ------------------------------------------------------------------ canonical JSON
+
+/**
+ * JSON text with object keys in sorted order. Arrays keep their order. A key
+ * with an `undefined` value is left out. Use it to hash a value.
+ */
+export function canonicalJson(value: unknown): string {
+  if (value === undefined) return "null";
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
+  }
+  const record = value as Readonly<Record<string, unknown>>;
+  const parts: string[] = [];
+  for (const key of Object.keys(record).sort(compareText)) {
+    const item = record[key];
+    if (item === undefined) continue;
+    parts.push(`${JSON.stringify(key)}:${canonicalJson(item)}`);
+  }
+  return `{${parts.join(",")}}`;
+}
+
+// ------------------------------------------------------------------ the table
+
+/** What a graph of imported declarations supplies to the table. */
+export interface DefinitionSource {
+  readonly types: readonly {
+    readonly id: TypeId;
+    readonly definition:
+      | { readonly kind: "alias"; readonly type: Type }
+      | { readonly kind: "brand"; readonly base: Type };
+  }[];
+  readonly errors: readonly {
+    readonly id: ErrorId;
+    readonly fields: readonly Field[];
+  }[];
+}
+
+const MAX_DEPTH = 256;
+
+export class TypeTable {
+  private readonly nodes: TypeNode[] = [];
+  private readonly byKey = new Map<string, TypeRef>();
+  private readonly aliases = new Map<TypeId, TypeRef>();
+  private readonly brands = new Map<TypeId, TypeRef>();
+  private readonly errorRecords = new Map<ErrorId, TypeRef>();
+
+  /** The recovery type. */
+  readonly error: TypeRef;
+  readonly string: TypeRef;
+  readonly boolean: TypeRef;
+  readonly int: TypeRef;
+  readonly number: TypeRef;
+  readonly unit: TypeRef;
+  readonly never: TypeRef;
+  readonly unknown: TypeRef;
+
+  constructor() {
+    this.error = this.intern({ kind: "error" });
+    this.string = this.primitive("string");
+    this.boolean = this.primitive("boolean");
+    this.int = this.primitive("int");
+    this.number = this.primitive("number");
+    this.unit = this.primitive("unit");
+    this.never = this.primitive("never");
+    this.unknown = this.primitive("unknown");
+  }
+
+  /** Number of interned types. */
+  get size(): number {
+    return this.nodes.length;
+  }
+
+  node(ref: TypeRef): TypeNode {
+    const node = this.nodes[ref];
+    if (node === undefined) throw new Error(`unknown type ref ${ref}`);
+    return node;
+  }
+
+  // -------------------------------------------------------------- interning
+
+  private keyOf(node: TypeNode): string {
+    switch (node.kind) {
+      case "primitive":
+        return `p:${node.name}`;
+      case "literal":
+        return `l:${JSON.stringify(node.value)}`;
+      case "named":
+        return `n:${node.id}`;
+      case "record":
+        return `r:${
+          JSON.stringify(node.fields.map((f) => [f.name, f.optional, f.type]))
+        }`;
+      case "array":
+        return `a:${node.element}`;
+      case "tuple":
+        return `t:${JSON.stringify(node.elements)}`;
+      case "union":
+        return `u:${JSON.stringify(node.members)}`;
+      case "option":
+        return `o:${node.element}`;
+      case "function":
+        return `f:${
+          JSON.stringify([
+            node.execution,
+            node.parameters,
+            node.result,
+            node.failures,
+            node.requirements,
+          ])
+        }`;
+      case "provider":
+        return `v:${
+          JSON.stringify([
+            node.provides,
+            node.execution,
+            node.failures,
+            node.requirements,
+          ])
+        }`;
+      case "error":
+        return "e";
+    }
+  }
+
+  /** Interns a node that is already in normal form. */
+  private intern(node: TypeNode): TypeRef {
+    const key = this.keyOf(node);
+    const existing = this.byKey.get(key);
+    if (existing !== undefined) return existing;
+    const ref = this.nodes.length as TypeRef;
+    this.nodes.push(node);
+    this.byKey.set(key, ref);
+    return ref;
+  }
+
+  primitive(name: PrimitiveName): TypeRef {
+    return this.intern({ kind: "primitive", name });
+  }
+
+  literal(value: string | number | boolean): TypeRef {
+    return this.intern({ kind: "literal", value });
+  }
+
+  named(id: TypeId | ErrorId): TypeRef {
+    return this.intern({ kind: "named", id });
+  }
+
+  /** Sorts the fields by name. Duplicate names keep the first field. */
+  record(fields: readonly RecordField[]): TypeRef {
+    const seen = new Set<string>();
+    const unique: RecordField[] = [];
+    for (const field of fields) {
+      if (seen.has(field.name)) continue;
+      seen.add(field.name);
+      unique.push(field);
+    }
+    unique.sort((a, b) => compareText(a.name, b.name));
+    return this.intern({ kind: "record", fields: unique });
+  }
+
+  array(element: TypeRef): TypeRef {
+    return this.intern({ kind: "array", element });
+  }
+
+  tuple(elements: readonly TypeRef[]): TypeRef {
+    return this.intern({ kind: "tuple", elements: [...elements] });
+  }
+
+  option(element: TypeRef): TypeRef {
+    return this.intern({ kind: "option", element });
+  }
+
+  /**
+   * Flattens nested unions, removes duplicates, and sorts by ref. A union of one
+   * member is that member. An empty union is `never`. A union with the error type
+   * is the error type.
+   */
+  union(members: readonly TypeRef[]): TypeRef {
+    const flat = new Set<TypeRef>();
+    for (const member of members) {
+      const node = this.node(member);
+      if (node.kind === "error") return this.error;
+      if (node.kind === "union") {
+        for (const inner of node.members) flat.add(inner);
+      } else {
+        flat.add(member);
+      }
+    }
+    if (flat.size === 0) return this.never;
+    const sorted = [...flat].sort((a, b) => a - b);
+    if (sorted.length === 1) return sorted[0];
+    return this.intern({ kind: "union", members: sorted });
+  }
+
+  /** Sorts and deduplicates the failure and requirement sets. */
+  function(spec: FunctionSpec): TypeRef {
+    return this.intern({
+      kind: "function",
+      execution: spec.execution,
+      parameters: [...spec.parameters],
+      result: spec.result,
+      failures: sortedUnique(spec.failures),
+      requirements: sortedUnique(spec.requirements),
+    });
+  }
+
+  provider(spec: ProviderSpec): TypeRef {
+    return this.intern({
+      kind: "provider",
+      provides: sortedUnique(spec.provides),
+      execution: spec.execution,
+      failures: sortedUnique(spec.failures),
+      requirements: sortedUnique(spec.requirements),
+    });
+  }
+
+  // -------------------------------------------------------------- definitions
+
+  /** Registers the definition of an alias. The last definition wins. */
+  defineAlias(id: TypeId, target: TypeRef): void {
+    this.aliases.set(id, target);
+  }
+
+  defineBrand(id: TypeId, base: TypeRef): void {
+    this.brands.set(id, base);
+  }
+
+  /** Registers the field record of an error declaration. */
+  defineError(id: ErrorId, record: TypeRef): void {
+    this.errorRecords.set(id, record);
+  }
+
+  aliasOf(id: TypeId): TypeRef | undefined {
+    return this.aliases.get(id);
+  }
+
+  brandBaseOf(id: TypeId): TypeRef | undefined {
+    return this.brands.get(id);
+  }
+
+  errorRecordOf(id: ErrorId): TypeRef | undefined {
+    return this.errorRecords.get(id);
+  }
+
+  /** True when a definition for the id exists. */
+  isDefined(id: TypeId | ErrorId): boolean {
+    return id.startsWith("error:")
+      ? this.errorRecords.has(id as ErrorId)
+      : this.aliases.has(id as TypeId) || this.brands.has(id as TypeId);
+  }
+
+  /**
+   * Registers the declarations of an imported module graph. A definition that
+   * the table already has stays as it is.
+   */
+  load(source: DefinitionSource): void {
+    for (const decl of source.types) {
+      if (this.isDefined(decl.id)) continue;
+      if (decl.definition.kind === "alias") {
+        this.defineAlias(decl.id, this.fromIr(decl.definition.type));
+      } else {
+        this.defineBrand(decl.id, this.fromIr(decl.definition.base));
+      }
+    }
+    for (const decl of source.errors) {
+      if (this.isDefined(decl.id)) continue;
+      this.defineError(
+        decl.id,
+        this.record(decl.fields.map((f) => ({
+          name: f.name,
+          type: this.fromIr(f.type),
+          optional: f.optional,
+        }))),
+      );
+    }
+  }
+
+  /** Follows alias definitions until the type is not a defined alias. */
+  unfold(ref: TypeRef): TypeRef {
+    let current = ref;
+    for (let steps = 0; steps <= this.aliases.size; steps++) {
+      const node = this.node(current);
+      if (node.kind !== "named") return current;
+      const target = this.aliases.get(node.id as TypeId);
+      if (target === undefined) return current;
+      current = target;
+    }
+    return this.error;
+  }
+
+  // -------------------------------------------------------------- IR conversion
+
+  /** Interns an IR type tree. Unions flatten and sort, records sort. */
+  fromIr(type: Type): TypeRef {
+    switch (type.kind) {
+      case "primitive":
+        return this.primitive(type.name);
+      case "literal":
+        return this.literal(type.value);
+      case "named":
+        return this.named(type.id);
+      case "record":
+        return this.record(type.fields.map((f) => ({
+          name: f.name,
+          type: this.fromIr(f.type),
+          optional: f.optional,
+        })));
+      case "array":
+        return this.array(this.fromIr(type.element));
+      case "tuple":
+        return this.tuple(type.elements.map((e) => this.fromIr(e)));
+      case "union":
+        return this.union(type.members.map((m) => this.fromIr(m)));
+      case "option":
+        return this.option(this.fromIr(type.element));
+      case "function":
+        return this.fromIrFunction(type);
+      case "provider":
+        return this.provider({
+          provides: type.provides,
+          execution: type.acquisition.execution,
+          failures: type.acquisition.effects.failures,
+          requirements: type.acquisition.effects.requirements,
+        });
+    }
+  }
+
+  fromIrFunction(type: FunctionType): TypeRef {
+    return this.function({
+      execution: type.execution,
+      parameters: type.parameters.map((p) => this.fromIr(p)),
+      result: this.fromIr(type.result),
+      failures: type.effects.failures,
+      requirements: type.effects.requirements,
+    });
+  }
+
+  /**
+   * The IR tree of an interned type. Records list fields by name. Union members
+   * sort by their canonical text, so the result does not depend on ref numbers.
+   * The error type becomes `unknown`.
+   */
+  toIr(ref: TypeRef): Type {
+    const node = this.node(ref);
+    switch (node.kind) {
+      case "primitive":
+        return { kind: "primitive", name: node.name };
+      case "literal":
+        return { kind: "literal", value: node.value };
+      case "named":
+        return { kind: "named", id: node.id };
+      case "record":
+        return {
+          kind: "record",
+          fields: node.fields.map((f) => ({
+            name: f.name,
+            type: this.toIr(f.type),
+            optional: f.optional,
+          })),
+        };
+      case "array":
+        return { kind: "array", element: this.toIr(node.element) };
+      case "tuple":
+        return {
+          kind: "tuple",
+          elements: node.elements.map((e) => this.toIr(e)),
+        };
+      case "union": {
+        const members = node.members.map((m) => {
+          const ir = this.toIr(m);
+          return { ir, text: canonicalJson(ir) };
+        });
+        members.sort((a, b) => compareText(a.text, b.text));
+        return { kind: "union", members: members.map((m) => m.ir) };
+      }
+      case "option":
+        return { kind: "option", element: this.toIr(node.element) };
+      case "function":
+        return this.toIrFunction(ref);
+      case "provider":
+        return {
+          kind: "provider",
+          provides: node.provides,
+          acquisition: {
+            execution: node.execution,
+            effects: {
+              failures: node.failures,
+              requirements: node.requirements,
+            },
+          },
+        };
+      case "error":
+        return { kind: "primitive", name: "unknown" };
+    }
+  }
+
+  /** The IR function type of a ref that must be a function type. */
+  toIrFunction(ref: TypeRef): FunctionType {
+    const node = this.node(ref);
+    if (node.kind !== "function") {
+      throw new Error(`type ref ${ref} is not a function type`);
+    }
+    return {
+      kind: "function",
+      execution: node.execution,
+      parameters: node.parameters.map((p) => this.toIr(p)),
+      result: this.toIr(node.result),
+      effects: { failures: node.failures, requirements: node.requirements },
+    };
+  }
+
+  // -------------------------------------------------------------- compatibility
+
+  /** True when a value of type `source` may be used where `target` is expected. */
+  isAssignable(source: TypeRef, target: TypeRef): boolean {
+    return this.assignable(source, target, 0);
+  }
+
+  private assignable(s: TypeRef, t: TypeRef, depth: number): boolean {
+    if (s === t) return true;
+    if (depth > MAX_DEPTH) return false;
+    const sn = this.node(s);
+    const tn = this.node(t);
+    if (sn.kind === "error" || tn.kind === "error") return true;
+    if (sn.kind === "primitive" && sn.name === "never") return true;
+    if (sn.kind === "named") {
+      const alias = this.aliases.get(sn.id as TypeId);
+      if (alias !== undefined) return this.assignable(alias, t, depth + 1);
+    }
+    if (tn.kind === "named") {
+      const alias = this.aliases.get(tn.id as TypeId);
+      if (alias !== undefined) return this.assignable(s, alias, depth + 1);
+    }
+    if (sn.kind === "union") {
+      return sn.members.every((m) => this.assignable(m, t, depth + 1));
+    }
+    if (tn.kind === "union") {
+      return tn.members.some((m) => this.assignable(s, m, depth + 1));
+    }
+    switch (tn.kind) {
+      case "primitive":
+        if (sn.kind === "primitive") {
+          return sn.name === tn.name ||
+            (sn.name === "int" && tn.name === "number");
+        }
+        if (sn.kind === "literal") {
+          return literalFitsPrimitive(sn.value, tn.name);
+        }
+        return false;
+      case "literal":
+        return sn.kind === "literal" && sn.value === tn.value;
+      case "named":
+        // Brands and errors are nominal. Equal ids have equal refs.
+        return false;
+      case "record":
+        if (sn.kind !== "record") return false;
+        if (sn.fields.length !== tn.fields.length) return false;
+        return sn.fields.every((field, i) => {
+          const other = tn.fields[i];
+          return field.name === other.name &&
+            field.optional === other.optional &&
+            this.assignable(field.type, other.type, depth + 1);
+        });
+      case "array":
+        return sn.kind === "array" &&
+          this.assignable(sn.element, tn.element, depth + 1);
+      case "option":
+        return sn.kind === "option" &&
+          this.assignable(sn.element, tn.element, depth + 1);
+      case "tuple":
+        return sn.kind === "tuple" &&
+          sn.elements.length === tn.elements.length &&
+          sn.elements.every((e, i) =>
+            this.assignable(e, tn.elements[i], depth + 1)
+          );
+      case "function":
+        if (sn.kind !== "function") return false;
+        if (sn.parameters.length !== tn.parameters.length) return false;
+        if (!executionFits(sn.execution, tn.execution)) return false;
+        if (!isSubset(sn.failures, tn.failures)) return false;
+        if (!isSubset(sn.requirements, tn.requirements)) return false;
+        if (!this.assignable(sn.result, tn.result, depth + 1)) return false;
+        return tn.parameters.every((p, i) =>
+          this.assignable(p, sn.parameters[i], depth + 1)
+        );
+      case "provider":
+        return sn.kind === "provider" &&
+          sameList(sn.provides, tn.provides) &&
+          executionFits(sn.execution, tn.execution) &&
+          isSubset(sn.failures, tn.failures) &&
+          isSubset(sn.requirements, tn.requirements);
+    }
+  }
+
+  // -------------------------------------------------------------- printing
+
+  /** A readable form for messages. It is not a serialization format. */
+  show(ref: TypeRef): string {
+    const node = this.node(ref);
+    switch (node.kind) {
+      case "primitive":
+        return node.name === "unit" ? "void" : node.name;
+      case "literal":
+        return JSON.stringify(node.value);
+      case "named": {
+        const hash = node.id.indexOf("#");
+        return hash < 0 ? node.id : node.id.slice(hash + 1);
+      }
+      case "record":
+        return node.fields.length === 0
+          ? "{}"
+          : `{ ${
+            node.fields.map((f) =>
+              `${f.name}${f.optional ? "?" : ""}: ${this.show(f.type)}`
+            ).join(", ")
+          } }`;
+      case "array": {
+        const inner = this.node(node.element).kind;
+        const text = this.show(node.element);
+        return inner === "union" || inner === "function"
+          ? `(${text})[]`
+          : `${text}[]`;
+      }
+      case "tuple":
+        return `[${node.elements.map((e) => this.show(e)).join(", ")}]`;
+      case "union":
+        return node.members.map((m) => this.show(m)).join(" | ");
+      case "option":
+        return `Option<${this.show(node.element)}>`;
+      case "function": {
+        const parameters = node.parameters.map((p) => this.show(p)).join(", ");
+        const fails = node.failures.length === 0
+          ? ""
+          : ` fails ${node.failures.map(idName).join(" | ")}`;
+        const uses = node.requirements.length === 0
+          ? ""
+          : ` uses ${node.requirements.map(idName).join(" | ")}`;
+        return `(${parameters}) => ${this.show(node.result)}${fails}${uses}`;
+      }
+      case "provider":
+        return `provider provides ${node.provides.map(idName).join(" | ")}`;
+      case "error":
+        return "<error>";
+    }
+  }
+}
+
+function idName(id: string): string {
+  const hash = id.indexOf("#");
+  return hash < 0 ? id : id.slice(hash + 1);
+}
+
+function literalFitsPrimitive(
+  value: string | number | boolean,
+  name: PrimitiveName,
+): boolean {
+  switch (typeof value) {
+    case "string":
+      return name === "string";
+    case "boolean":
+      return name === "boolean";
+    case "number":
+      return name === "number" ||
+        (name === "int" && Number.isSafeInteger(value));
+  }
+}
+
+/** A pure function fits an effect target. An effect function does not fit a pure target. */
+function executionFits(source: Execution, target: Execution): boolean {
+  return source === target || (source === "pure" && target === "effect");
+}

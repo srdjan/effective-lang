@@ -1,0 +1,13 @@
+// error: declaration/011
+const helper = (x): int => 1
+
+// error: declaration/011
+const inferred = (x) => x
+
+service Store {
+  // error: declaration/011
+  save(item): void
+}
+
+// error: declaration/011
+type Callback = (value) => int

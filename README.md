@@ -6,9 +6,11 @@ The design is in `docs/transpiler-design.md`. The Phase A plan is in `docs/plans
 
 ## Status
 
-Parts A1 and A2 exist. Part A1 adds the project skeleton, the lexer, a lossless parser with error recovery, and the `syntax` diagnostics. The parser reads `.eff` source files and `.effi` host interface files.
+Parts A1, A2, and A3a exist. Part A1 adds the project skeleton, the lexer, a lossless parser with error recovery, and the `syntax` diagnostics. The parser reads `.eff` source files and `.effi` host interface files.
 
-Part A2 adds the declaration index, the project loader, the module graph, and the name resolver. It adds the diagnostic codes `unknown-name`, `module`, and `declaration`. The checker, the emitter, and the command-line tool do not exist yet.
+Part A2 adds the declaration index, the project loader, the module graph, and the name resolver. It adds the diagnostic codes `unknown-name`, `module`, and `declaration`.
+
+Part A3a adds the declaration level of the checker. It adds the type intern table, the compatibility rules, function and provider signatures, and module interfaces with hashes. It adds the codes `type-mismatch/001`, `type-mismatch/002`, and `declaration/005` to `declaration/011`. Expression checking, effects, and execution modes are part A3b. The emitter and the command-line tool do not exist yet.
 
 ## Requirements
 
@@ -42,6 +44,9 @@ src/core/      The core library. It is synchronous and pure.
   index.ts       Declaration index of one file: names, kinds, spans, hashes.
   project.ts     effective.json, module identity, module graph, cycles, order.
   resolve.ts     Names to identities, scopes, prelude, side table of targets.
+  types.ts       Interned types, compatibility, IR conversion, canonical JSON.
+  check.ts       Declaration checker: type lowering, signatures, providers.
+  interface.ts   Module interfaces, their hashes, and the project driver.
   analyze.ts     Public entry: load a project, resolve it, collect diagnostics.
 tests/         Deno tests and test helpers.
 fixtures/      Input files for the tests.
@@ -69,6 +74,16 @@ The function reads `effective.json` in the root. A missing or malformed file giv
 The result holds the project, one resolution table for each module, and the sorted diagnostics. The project holds the parse trees, the module graph, and the topological order. A resolution table maps a syntax node id to its target. The target is a declaration identity, a local identity, a prelude builtin, or a builtin type.
 
 A diagnostic span names its file by the root-relative path, for example `users.eff`.
+
+## Using the declaration checker
+
+`checkDeclarations(analysis, modes)` checks the declarations of every module in topological order. The `analysis` value comes from `analyzeProject`. The `modes` value maps a `ValueId` to `"pure"` or `"effect"`. It is optional.
+
+The result holds one shared type table and one entry for each module. A module entry holds the declarations, the signatures, the interface, and the sorted declaration diagnostics. The result also holds all diagnostics of the project, sorted and without duplicates.
+
+A function with a nonempty `fails` or `uses` set always has effect mode. A function with empty sets needs an entry in `modes`, because its body decides the mode. Without the entry, the `interface` field of the module is an error value. The diagnostics do not depend on `modes`.
+
+A module interface holds `exports`, `values`, `types`, `errors`, and `services`. It also holds each private declaration that an export reaches. Part A3b builds interfaces with `buildInterface` after it knows the modes. The hash covers the content without source spans.
 
 ## Error fixture convention
 

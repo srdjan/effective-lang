@@ -1,0 +1,13 @@
+type UserId = Brand<string>
+
+// error: declaration/008
+type Ids = Brand<string>[]
+
+// error: declaration/008
+type Wrapped = (Brand<string>)
+
+// error: declaration/008
+type Pair = { id: Brand<int> }
+
+// error: declaration/008
+export const make: (id: Brand<string>) => int = (id) => 1

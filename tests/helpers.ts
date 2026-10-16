@@ -13,6 +13,9 @@ import {
   type SourceHost,
 } from "../src/core/source.ts";
 import { analyzeProject } from "../src/core/analyze.ts";
+import { checkDeclarations } from "../src/core/interface.ts";
+import type { ModeMap } from "../src/core/check.ts";
+import type { Execution, ValueId } from "../src/core/ir.ts";
 import {
   childrenOf,
   hasProblem,
@@ -375,8 +378,9 @@ export function listErrorCases(): ErrorCase[] {
 
 /**
  * The diagnostics that a case produces. A single file whose name starts with
- * `syntax-` is only parsed. Every other case goes through the project loader and
- * the resolver. A single file runs as a one-file project with an empty `effective.json`.
+ * `syntax-` is only parsed. Every other case goes through the project loader, the
+ * resolver, and the declaration checker. A single file runs as a one-file
+ * project with an empty `effective.json`.
  */
 export function diagnosticsOfCase(c: ErrorCase): Diagnostic[] {
   if (c.kind === "file" && c.name.startsWith("syntax-")) {
@@ -387,14 +391,14 @@ export function diagnosticsOfCase(c: ErrorCase): Diagnostic[] {
     const host = memoryHost({ "effective.json": "{}", [file.path]: file.text });
     const result = analyzeProject(host, "", [file.path]);
     if (!result.ok) throw new Error(JSON.stringify(result.error));
-    return [...result.value.diagnostics];
+    return [...checkDeclarations(result.value).diagnostics];
   }
   const entries = c.files.filter((f) => f.path.endsWith(".eff")).map((f) =>
     f.path
   );
   const result = analyzeProject(diskHost(), c.path, entries);
   if (!result.ok) throw new Error(JSON.stringify(result.error));
-  return [...result.value.diagnostics];
+  return [...checkDeclarations(result.value).diagnostics];
 }
 
 /** `path:line code` for each diagnostic, sorted. The path is the diagnostic's source. */
@@ -421,3 +425,48 @@ export function caseExpected(c: ErrorCase): string[] {
   }
   return result.sort();
 }
+
+/** The text of every file of `fixtures/examples/`, keyed by its root-relative path. */
+export function exampleFiles(): Record<string, string> {
+  const files: Record<string, string> = {};
+  for (
+    const path of [
+      "effective.json",
+      "collections.eff",
+      "log.eff",
+      "main.eff",
+      "pay.eff",
+      "users.eff",
+      "host/providers.effi",
+    ]
+  ) {
+    files[path] = Deno.readTextFileSync(new URL(`examples/${path}`, FIXTURES));
+  }
+  return files;
+}
+
+/** Entry files of the examples: every `.eff` file. */
+export const EXAMPLE_ENTRIES: readonly string[] = [
+  "collections.eff",
+  "log.eff",
+  "main.eff",
+  "pay.eff",
+  "users.eff",
+];
+
+/** The modes that the plan names for the five examples, for the functions with empty sets. */
+export const EXAMPLE_MODES: ModeMap = new Map<ValueId, Execution>([
+  ["value:log#log", "effect"],
+  ["value:collections#activeNames", "pure"],
+  ["value:collections#total", "pure"],
+  ["value:users#getUser", "effect"],
+  ["value:users#rename", "effect"],
+  ["value:users#displayName", "effect"],
+  ["value:users#activeNames", "effect"],
+  ["value:pay#findOrder", "effect"],
+  ["value:pay#chargeOrder", "effect"],
+  ["value:pay#markPaid", "pure"],
+  ["value:pay#saveOrder", "effect"],
+  ["value:pay#pay", "effect"],
+  ["value:main#main", "effect"],
+]);

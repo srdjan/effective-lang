@@ -106,6 +106,16 @@ export const DIAGNOSTIC_CODES = {
     description:
       "A name resolves to a declaration of the wrong kind for its position, or a builtin appears outside a call.",
   },
+  "type-mismatch/001": {
+    category: "type-mismatch",
+    description:
+      "A type has the wrong number of type arguments, or a name that takes no type arguments has some.",
+  },
+  "type-mismatch/002": {
+    category: "type-mismatch",
+    description:
+      "void appears as a record field, an array element, or a tuple element.",
+  },
   "declaration/001": {
     category: "declaration",
     description:
@@ -125,6 +135,40 @@ export const DIAGNOSTIC_CODES = {
     category: "declaration",
     description:
       "A block binding has the name of an outer binding that the block already used before the binding.",
+  },
+  "declaration/005": {
+    category: "declaration",
+    description:
+      "An exported function lacks a parameter annotation or a result annotation, and no binding type annotation supplies them.",
+  },
+  "declaration/006": {
+    category: "declaration",
+    description:
+      "An exported constant that is not a function has no binding type annotation.",
+  },
+  "declaration/007": {
+    category: "declaration",
+    description:
+      "A type definition refers to itself, directly or through other aliases, brands, or errors.",
+  },
+  "declaration/008": {
+    category: "declaration",
+    description:
+      "Brand<T> appears somewhere other than as the whole body of a type declaration.",
+  },
+  "declaration/009": {
+    category: "declaration",
+    description:
+      "An error declaration has a field named _tag, which generated error tags reserve.",
+  },
+  "declaration/010": {
+    category: "declaration",
+    description: "A record type has two fields with the same name.",
+  },
+  "declaration/011": {
+    category: "declaration",
+    description:
+      "A parameter of a module-level function, a service method, or a function type has no type annotation.",
   },
   "module/001": {
     category: "module",

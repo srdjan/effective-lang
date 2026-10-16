@@ -1,0 +1,16 @@
+type Count = int
+
+// error: type-mismatch/001
+type A = Option<string, int>
+
+// error: type-mismatch/001
+type B = Option
+
+// error: type-mismatch/001
+type C = int<string>
+
+// error: type-mismatch/001
+type D = Count<int>
+
+// error: type-mismatch/001
+type E = Brand<string, int>

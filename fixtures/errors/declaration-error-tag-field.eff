@@ -1,0 +1,4 @@
+// error: declaration/009
+error Broken = { _tag: string, message: string }
+
+type Fine = { _tag: string }

@@ -1,0 +1,10 @@
+// error: type-mismatch/002
+type Field = { value: void }
+
+// error: type-mismatch/002
+type Items = void[]
+
+// error: type-mismatch/002
+type Pair = [int, void]
+
+type Fine = Option<void>

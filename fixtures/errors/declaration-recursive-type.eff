@@ -1,0 +1,17 @@
+// error: declaration/007
+type Tree = { value: int, children: Tree[] }
+
+// error: declaration/007
+type Ping = { next: Pong }
+
+type Pong = Option<Ping>
+
+// error: declaration/007
+type Loop = Loop
+
+// error: declaration/007
+error Chain = { cause: Option<Chain> }
+
+type Fine = { items: Other[] }
+
+type Other = { value: int }

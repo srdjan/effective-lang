@@ -1,0 +1,7 @@
+// error: declaration/006
+export const answer = 42
+
+// error: declaration/006
+export const label = "ready"
+
+export const typed: int = 42
