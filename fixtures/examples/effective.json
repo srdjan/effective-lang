@@ -1,0 +1,8 @@
+{
+  "host": {
+    "providers": {
+      "interface": "./host/providers.effi",
+      "module": "./users-live.ts"
+    }
+  }
+}

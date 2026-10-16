@@ -87,6 +87,59 @@ export const DIAGNOSTIC_CODES = {
     description:
       "A record expression has a spread that is not the first and only spread.",
   },
+  "unknown-name/001": {
+    category: "unknown-name",
+    description:
+      "A name in an expression, a type, or a clause has no declaration or binding in scope.",
+  },
+  "unknown-name/002": {
+    category: "unknown-name",
+    description:
+      "An import names a declaration that the module does not have, or one that it does not export.",
+  },
+  "unknown-name/003": {
+    category: "unknown-name",
+    description: "A service has no method with the given name.",
+  },
+  "unknown-name/004": {
+    category: "unknown-name",
+    description:
+      "A name resolves to a declaration of the wrong kind for its position, or a builtin appears outside a call.",
+  },
+  "declaration/001": {
+    category: "declaration",
+    description:
+      "Two declarations or bindings use the same name in one namespace or scope.",
+  },
+  "declaration/002": {
+    category: "declaration",
+    description:
+      "A declaration or binding uses a name that the prelude or the builtin types reserve.",
+  },
+  "declaration/003": {
+    category: "declaration",
+    description:
+      "A provider declaration names a service method or a non-service in its provides clause.",
+  },
+  "declaration/004": {
+    category: "declaration",
+    description:
+      "A block binding has the name of an outer binding that the block already used before the binding.",
+  },
+  "module/001": {
+    category: "module",
+    description:
+      "A module reference is not valid: the import specifier or a project file entry breaks the module rules, or two files share one module name.",
+  },
+  "module/002": {
+    category: "module",
+    description:
+      "An import names a file or a host module that does not exist, is not registered, or cannot be read.",
+  },
+  "module/003": {
+    category: "module",
+    description: "Modules import each other in a cycle.",
+  },
 } as const satisfies Readonly<Record<string, CodeInfo>>;
 
 export type DiagnosticCode = keyof typeof DIAGNOSTIC_CODES;

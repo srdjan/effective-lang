@@ -1,0 +1,3 @@
+import { Prov } from "host:x"
+
+export const main = (): int => 1

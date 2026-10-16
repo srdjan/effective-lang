@@ -1,0 +1,8 @@
+// error: declaration/002
+const map = (): int => 1
+
+// error: declaration/002
+type string = { x: int }
+
+// error: declaration/002
+const h = (filter: int): int => filter

@@ -19,9 +19,10 @@ Deno.test("every code has the form category/NNN and matches its category", () =>
   }
 });
 
-Deno.test("A1 registers only syntax codes", () => {
+Deno.test("A1 and A2 register only the codes of their own categories", () => {
+  const categories = ["syntax", "unknown-name", "module", "declaration"];
   for (const code of registeredCodes()) {
-    assertEquals(code.startsWith("syntax/"), true, code);
+    assertEquals(categories.includes(categoryOf(code)), true, code);
   }
   assertEquals(Object.keys(DIAGNOSTIC_CODES).length > 0, true);
 });

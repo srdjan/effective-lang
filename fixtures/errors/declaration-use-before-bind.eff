@@ -1,0 +1,8 @@
+const outer = (): int => 1
+
+const f = (): int => {
+  outer()
+  // error: declaration/004
+  const outer = 2
+  outer
+}

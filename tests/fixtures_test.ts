@@ -10,10 +10,15 @@ import { parse } from "../src/core/parse.ts";
 import { printTree } from "../src/core/syntax.ts";
 import {
   actualMarkers,
+  caseActual,
+  caseExpected,
   declSummaries,
   type DeclSummary,
+  diagnosticsOfCase,
   expectedMarkers,
   type FixtureFile,
+  FIXTURES,
+  listErrorCases,
   listFixtures,
   modeOfFixture,
   parseFixture,
@@ -27,9 +32,21 @@ const VALID = [
   ...listFixtures("ir", /\.effi?$/),
   ...listFixtures("parse", /^ok-.*\.effi?$/),
 ];
-const ERRORS = listFixtures("errors", /\.effi?$/);
+const CASES = listErrorCases();
+/** Marked files of every case, for the registry checks. */
+const ERROR_FILES: FixtureFile[] = CASES.flatMap((c) =>
+  c.files.map((f) => ({
+    path: c.kind === "project" ? `${c.path}/${f.path}` : c.path,
+    text: f.text,
+  }))
+);
+/** Single files in `fixtures/errors/` whose diagnostics come from the parser alone. */
+const ERRORS = listFixtures("errors", /\.effi?$/).filter((f) =>
+  f.path.split("/").length === 2 &&
+  f.path.startsWith("errors/syntax-")
+);
 const RECOVERY = listFixtures("parse", /^recovery-.*\.eff$/);
-const EVERYTHING = [...VALID, ...ERRORS, ...RECOVERY];
+const EVERYTHING = [...VALID, ...ERROR_FILES, ...RECOVERY];
 
 Deno.test("fixtures exist in every group", () => {
   assert(VALID.length >= 8, `valid fixtures: ${VALID.length}`);
@@ -108,7 +125,7 @@ for (const code of syntaxCodes()) {
 
 Deno.test("every registered code has at least one error fixture", () => {
   const marked = new Set<string>();
-  for (const f of ERRORS) {
+  for (const f of ERROR_FILES) {
     for (const m of readMarkers(f.text)) marked.add(m.code);
   }
   for (const code of registeredCodes()) {
@@ -117,7 +134,7 @@ Deno.test("every registered code has at least one error fixture", () => {
 });
 
 Deno.test("every marker in an error fixture names a registered code", () => {
-  for (const f of ERRORS) {
+  for (const f of ERROR_FILES) {
     for (const m of readMarkers(f.text)) {
       assert(
         m.code in DIAGNOSTIC_CODES,
@@ -127,11 +144,50 @@ Deno.test("every marker in an error fixture names a registered code", () => {
   }
 });
 
-Deno.test("error fixtures are named syntax-*.eff, or .effi for host-file errors", () => {
-  for (const f of ERRORS) {
-    assert(/^errors\/syntax-[a-z-]+\.effi?$/.test(f.path), f.path);
+const CATEGORIES = [
+  "syntax",
+  "unknown-name",
+  "type-mismatch",
+  "failure-contract",
+  "requirement-contract",
+  "execution-mode",
+  "pattern",
+  "declaration",
+  "module",
+  "host-boundary",
+];
+
+Deno.test("error fixtures are named <category>-<topic>, as a file or as a project directory", () => {
+  assert(CASES.length > 0);
+  for (const c of CASES) {
+    const category = CATEGORIES.find((x) => c.name.startsWith(`${x}-`));
+    assert(category !== undefined, `${c.path} has no category prefix`);
+    const topic = c.name.slice(category.length + 1);
+    assert(/^[a-z]+(-[a-z]+)*$/.test(topic), `${c.path}: bad topic`);
+    if (c.kind === "project") {
+      assert(
+        Deno.statSync(new URL(`${c.path}/effective.json`, FIXTURES)).isFile,
+        `${c.path} has no effective.json`,
+      );
+    } else {
+      assert(/\.effi?$/.test(c.files[0].path), c.path);
+    }
   }
 });
+
+for (const c of CASES) {
+  if (c.kind === "file" && c.name.startsWith("syntax-")) continue;
+  Deno.test(`project diagnostics match the markers exactly: ${c.path}`, () => {
+    const diagnostics = diagnosticsOfCase(c);
+    assertEquals(
+      caseActual(c, diagnostics),
+      caseExpected(c),
+      diagnostics.map((d) =>
+        `${d.span.source}:${d.span.start} ${d.code} ${d.message}`
+      ).join("\n"),
+    );
+  });
+}
 
 function summary(kind: string, name: string, broken: boolean): DeclSummary {
   return { kind, name, broken };

@@ -1,0 +1,25 @@
+service Store {
+  get(id: int): int
+}
+
+// error: unknown-name/001
+type Box = { value: Nope }
+
+// error: unknown-name/001
+const a = (): int => missing(1)
+
+const b = (): int
+  // error: unknown-name/001
+  fails Nope => 1
+
+// error: unknown-name/001
+const c = (): int uses Ghost => 1
+
+const d = (): int => {
+  // error: unknown-name/001
+  const x = x
+  x
+}
+
+// error: unknown-name/001
+const e = (n: Absent): int => 1

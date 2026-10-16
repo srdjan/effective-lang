@@ -6,7 +6,13 @@ import {
   type DiagnosticCode,
 } from "../src/core/diagnostics.ts";
 import { parse } from "../src/core/parse.ts";
-import { lineStarts, positionOf } from "../src/core/source.ts";
+import {
+  lineStarts,
+  memoryHost,
+  positionOf,
+  type SourceHost,
+} from "../src/core/source.ts";
+import { analyzeProject } from "../src/core/analyze.ts";
 import {
   childrenOf,
   hasProblem,
@@ -293,4 +299,125 @@ export function constInitializer(tree: SyntaxTree, name: string): NodeId {
     return initializer;
   }
   throw new Error(`no const named ${name}`);
+}
+
+/** A host that reads files under `fixtures/`. Paths are relative to that directory. */
+export function diskHost(): SourceHost {
+  return {
+    readText(path: string) {
+      try {
+        return {
+          ok: true,
+          value: Deno.readTextFileSync(new URL(path, FIXTURES)),
+        };
+      } catch (e) {
+        if (e instanceof Deno.errors.NotFound) {
+          return { ok: false, error: { tag: "not-found", path } };
+        }
+        return {
+          ok: false,
+          error: {
+            tag: "unreadable",
+            path,
+            message: e instanceof Error ? e.message : String(e),
+          },
+        };
+      }
+    },
+  };
+}
+
+/** Root-relative paths of every `.eff` file under a fixtures directory, sorted. */
+export function listEffFiles(root: string): string[] {
+  return listFixtures(root, /\.eff$/).map((f) => f.path.slice(root.length + 1));
+}
+
+/**
+ * One error fixture case. A single file in `fixtures/errors/` is a case with one
+ * file. A directory `fixtures/errors/<category>-<topic>/` with its own
+ * `effective.json` is a project case.
+ */
+export interface ErrorCase {
+  /** `errors/<name>` without a trailing slash. */
+  readonly path: string;
+  readonly kind: "file" | "project";
+  /** The name without the directory and without the extension of a single file. */
+  readonly name: string;
+  /** Marked files, with paths relative to the project root (or the file name itself). */
+  readonly files: readonly FixtureFile[];
+}
+
+export function listErrorCases(): ErrorCase[] {
+  const cases: ErrorCase[] = [];
+  const dir = new URL("errors/", FIXTURES);
+  for (const entry of Deno.readDirSync(dir)) {
+    const path = `errors/${entry.name}`;
+    if (entry.isDirectory) {
+      const files = listFixtures(path, /\.effi?$/).map((f) => ({
+        path: f.path.slice(path.length + 1),
+        text: f.text,
+      }));
+      cases.push({ path, kind: "project", name: entry.name, files });
+    } else if (/\.effi?$/.test(entry.name)) {
+      cases.push({
+        path,
+        kind: "file",
+        name: entry.name.replace(/\.effi?$/, ""),
+        files: [{
+          path: entry.name,
+          text: Deno.readTextFileSync(new URL(path, FIXTURES)),
+        }],
+      });
+    }
+  }
+  return cases.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+/**
+ * The diagnostics that a case produces. A single file whose name starts with
+ * `syntax-` is only parsed. Every other case goes through the project loader and
+ * the resolver. A single file runs as a one-file project with an empty `effective.json`.
+ */
+export function diagnosticsOfCase(c: ErrorCase): Diagnostic[] {
+  if (c.kind === "file" && c.name.startsWith("syntax-")) {
+    return [...parseFixture(c.files[0]).diagnostics];
+  }
+  if (c.kind === "file") {
+    const file = c.files[0];
+    const host = memoryHost({ "effective.json": "{}", [file.path]: file.text });
+    const result = analyzeProject(host, "", [file.path]);
+    if (!result.ok) throw new Error(JSON.stringify(result.error));
+    return [...result.value.diagnostics];
+  }
+  const entries = c.files.filter((f) => f.path.endsWith(".eff")).map((f) =>
+    f.path
+  );
+  const result = analyzeProject(diskHost(), c.path, entries);
+  if (!result.ok) throw new Error(JSON.stringify(result.error));
+  return [...result.value.diagnostics];
+}
+
+/** `path:line code` for each diagnostic, sorted. The path is the diagnostic's source. */
+export function caseActual(
+  c: ErrorCase,
+  diagnostics: readonly Diagnostic[],
+): string[] {
+  const texts = new Map(c.files.map((f) => [f.path, f.text]));
+  return diagnostics
+    .map((d) => {
+      const text = texts.get(d.span.source) ?? "";
+      const line = positionOf(lineStarts(text), text, d.span.start).line;
+      return `${d.span.source}:${line} ${d.code}`;
+    })
+    .sort();
+}
+
+export function caseExpected(c: ErrorCase): string[] {
+  const result: string[] = [];
+  for (const f of c.files) {
+    for (const m of readMarkers(f.text)) {
+      result.push(`${f.path}:${m.line} ${m.code}`);
+    }
+  }
+  return result.sort();
 }

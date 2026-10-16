@@ -1,0 +1,26 @@
+type A = { x: int }
+
+// error: declaration/001
+type A = { y: int }
+
+// error: declaration/001
+const A = (): int => 1
+
+service S {
+  m(): int
+  // error: declaration/001
+  m(): int
+}
+
+const f = (
+  p: int,
+  // error: declaration/001
+  p: int
+): int => p
+
+const g = (): int => {
+  const v = 1
+  // error: declaration/001
+  const v = 2
+  v
+}

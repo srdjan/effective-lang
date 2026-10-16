@@ -1,0 +1,4 @@
+// error: module/003
+import { b } from "./b.eff"
+
+export const a = (): int => 1

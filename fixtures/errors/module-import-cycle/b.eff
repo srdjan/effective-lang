@@ -1,0 +1,3 @@
+import { a } from "./a.eff"
+
+export const b = (): int => 2

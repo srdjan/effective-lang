@@ -1,0 +1,6 @@
+// error: module/002
+import { a } from "./nothere.eff"
+// error: module/002
+import { b } from "host:nothing"
+
+export const main = (): int => 1

@@ -1,0 +1,8 @@
+// error: module/001
+import { a } from "./lib"
+// error: module/001
+import { b } from "lodash"
+// error: module/001
+import { c } from "../outside.eff"
+
+export const main = (): int => 1

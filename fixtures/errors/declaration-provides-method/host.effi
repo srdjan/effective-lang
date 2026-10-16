@@ -1,0 +1,4 @@
+import { Users } from "./users.eff"
+
+// error: declaration/003
+export provider Prov provides Users.find

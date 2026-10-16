@@ -1,0 +1,20 @@
+type User = { name: string }
+
+service Store {
+  get(id: int): int
+}
+
+// error: unknown-name/004
+const a = (): int => User
+
+// error: unknown-name/004
+const b = (): int => map
+
+// error: unknown-name/004
+const c = (): int uses User => 1
+
+// error: unknown-name/004
+type Bad = { s: Store }
+
+// error: unknown-name/004
+const d = (): int fails User => 1
