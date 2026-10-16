@@ -1,0 +1,14 @@
+error Missing = { id: string }
+
+service Store {
+  find(id: string): string fails Missing
+}
+
+const lookup = (id: string): string
+  fails Missing
+  uses Store.find => Store.find(id)
+
+const broken = (id: string): string
+  uses Store.find =>
+  // error: failure-contract/001
+  lookup(id)

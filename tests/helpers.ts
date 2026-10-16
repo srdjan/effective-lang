@@ -13,7 +13,7 @@ import {
   type SourceHost,
 } from "../src/core/source.ts";
 import { analyzeProject } from "../src/core/analyze.ts";
-import { checkDeclarations } from "../src/core/interface.ts";
+import { checkAnalysis } from "../src/core/check_project.ts";
 import type { ModeMap } from "../src/core/check.ts";
 import type { Execution, ValueId } from "../src/core/ir.ts";
 import {
@@ -391,14 +391,14 @@ export function diagnosticsOfCase(c: ErrorCase): Diagnostic[] {
     const host = memoryHost({ "effective.json": "{}", [file.path]: file.text });
     const result = analyzeProject(host, "", [file.path]);
     if (!result.ok) throw new Error(JSON.stringify(result.error));
-    return [...checkDeclarations(result.value).diagnostics];
+    return [...checkAnalysis(result.value).diagnostics];
   }
   const entries = c.files.filter((f) => f.path.endsWith(".eff")).map((f) =>
     f.path
   );
   const result = analyzeProject(diskHost(), c.path, entries);
   if (!result.ok) throw new Error(JSON.stringify(result.error));
-  return [...checkDeclarations(result.value).diagnostics];
+  return [...checkAnalysis(result.value).diagnostics];
 }
 
 /** `path:line code` for each diagnostic, sorted. The path is the diagnostic's source. */

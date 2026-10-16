@@ -2,18 +2,19 @@
 // syntax node to an interned type and builds the declarations of a module:
 // types, errors, services, providers, and the signatures of module-level consts.
 // It reports the declaration diagnostics. It does not look at expression
-// bodies. Part A3b extends this file with expression checking.
+// bodies. Part A3b checks the bodies in check_expr.ts and drives the whole
+// project in check_project.ts.
 //
-// Seams for A3b.
-// - `TypeLowerer` lowers any type syntax node of a module. A3b uses it for the
-//   annotations inside bodies.
+// Seams that A3b uses.
+// - `TypeLowerer` lowers any type syntax node of a module. The body checker uses
+//   it for the annotations inside bodies.
 // - `ModuleDeclarations.values` holds one signature for each module-level const
-//   and provider. A3b checks each body against its signature.
+//   and provider. The body checker checks each body against its signature.
 // - A function signature with `contract: "inferred"` has no result and empty
-//   sets. A3b fills it.
+//   sets. The body checker infers them.
 // - The execution mode of a function with empty sets comes from a `ModeMap`
-//   that A3b supplies. `executionOf` and `signatureType` take the map and return
-//   a Result error when an entry is missing.
+//   that the body checker supplies. `executionOf` and `signatureType` take the
+//   map and return a Result error when an entry is missing.
 
 import type { Analysis } from "./analyze.ts";
 import {
@@ -696,7 +697,7 @@ function toIrField(field: LoweredField): Field {
 }
 
 /** Decodes a string token. The lexer accepts only strings that JSON accepts. */
-function decodeString(text: string): string | undefined {
+export function decodeString(text: string): string | undefined {
   try {
     const value: unknown = JSON.parse(text);
     return typeof value === "string" ? value : undefined;

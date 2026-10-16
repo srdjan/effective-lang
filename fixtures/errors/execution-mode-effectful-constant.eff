@@ -1,0 +1,6 @@
+service Clock {
+  now(): int
+}
+
+// error: execution-mode/002
+const startedAt: int = Clock.now()

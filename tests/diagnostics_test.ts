@@ -19,13 +19,17 @@ Deno.test("every code has the form category/NNN and matches its category", () =>
   }
 });
 
-Deno.test("A1 to A3a register only the codes of their own categories", () => {
+Deno.test("A1 to A3b register only the codes of their own categories", () => {
   const categories = [
     "syntax",
     "unknown-name",
     "module",
     "declaration",
     "type-mismatch",
+    "failure-contract",
+    "requirement-contract",
+    "execution-mode",
+    "pattern",
   ];
   for (const code of registeredCodes()) {
     assertEquals(categories.includes(categoryOf(code)), true, code);

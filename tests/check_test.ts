@@ -16,6 +16,7 @@ import {
   type ModuleInterface,
   type ProjectCheck,
 } from "../src/core/interface.ts";
+import { checkAnalysis } from "../src/core/check_project.ts";
 import { memoryHost } from "../src/core/source.ts";
 import { stripSpans } from "../src/core/interface.ts";
 import { TypeTable } from "../src/core/types.ts";
@@ -35,13 +36,24 @@ function analyzeFiles(
   return result.value;
 }
 
+/** The modes that the body checker computes for every function of the project. */
+function computedModes(analysis: Analysis): ModeMap {
+  const modes = new Map<ValueId, Execution>();
+  for (const module of checkAnalysis(analysis).modules.values()) {
+    for (const [id, mode] of module.modes) modes.set(id, mode);
+  }
+  return modes;
+}
+
+/** Checks the examples with the modes that the body checker computes, unless `modes` is given. */
 function checkExamples(
   edit: (files: Record<string, string>) => void = () => {},
-  modes: ModeMap = EXAMPLE_MODES,
+  modes?: ModeMap,
 ): ProjectCheck {
   const files = exampleFiles();
   edit(files);
-  return checkDeclarations(analyzeFiles(files, EXAMPLE_ENTRIES), modes);
+  const analysis = analyzeFiles(files, EXAMPLE_ENTRIES);
+  return checkDeclarations(analysis, modes ?? computedModes(analysis));
 }
 
 function checkText(
@@ -421,7 +433,8 @@ Deno.test("buildInterface can be called again after the modes arrive", () => {
   const project = checkExamples(() => {}, new Map());
   const declarations = project.modules.get("collections")!.declarations;
   assert(!buildInterface(declarations, new Map()).ok);
-  const built = buildInterface(declarations, EXAMPLE_MODES);
+  const analysis = analyzeFiles(exampleFiles(), EXAMPLE_ENTRIES);
+  const built = buildInterface(declarations, computedModes(analysis));
   assert(built.ok);
 });
 

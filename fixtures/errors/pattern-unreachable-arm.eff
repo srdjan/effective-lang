@@ -1,0 +1,7 @@
+const label = (flag: boolean): string =>
+  match flag {
+    true => "yes",
+    _ => "other",
+    // error: pattern/002
+    false => "no"
+  }

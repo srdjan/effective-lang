@@ -6,11 +6,13 @@ The design is in `docs/transpiler-design.md`. The Phase A plan is in `docs/plans
 
 ## Status
 
-Parts A1, A2, and A3a exist. Part A1 adds the project skeleton, the lexer, a lossless parser with error recovery, and the `syntax` diagnostics. The parser reads `.eff` source files and `.effi` host interface files.
+Parts A1, A2, A3a, and A3b exist. Part A1 adds the project skeleton, the lexer, a lossless parser with error recovery, and the `syntax` diagnostics. The parser reads `.eff` source files and `.effi` host interface files.
 
 Part A2 adds the declaration index, the project loader, the module graph, and the name resolver. It adds the diagnostic codes `unknown-name`, `module`, and `declaration`.
 
-Part A3a adds the declaration level of the checker. It adds the type intern table, the compatibility rules, function and provider signatures, and module interfaces with hashes. It adds the codes `type-mismatch/001`, `type-mismatch/002`, and `declaration/005` to `declaration/011`. Expression checking, effects, and execution modes are part A3b. The emitter and the command-line tool do not exist yet.
+Part A3a adds the declaration level of the checker. It adds the type intern table, the compatibility rules, function and provider signatures, and module interfaces with hashes. It adds the codes `type-mismatch/001`, `type-mismatch/002`, and `declaration/005` to `declaration/011`.
+
+Part A3b adds body checking. It checks every function and constant body, infers effects and execution modes, and checks contracts, patterns, `try` and `catch`, `retry`, and `provide`. It builds the module initialization graph and the `typeAt` query. It adds the codes `type-mismatch/003` to `type-mismatch/011`, `failure-contract/001` to `/003`, `requirement-contract/001`, `execution-mode/001` to `/004`, `pattern/001` to `/004`, and `module/004`. The lowering to IR, the emitter, and the command-line tool do not exist yet.
 
 ## Requirements
 
@@ -46,7 +48,13 @@ src/core/      The core library. It is synchronous and pure.
   resolve.ts     Names to identities, scopes, prelude, side table of targets.
   types.ts       Interned types, compatibility, IR conversion, canonical JSON.
   check.ts       Declaration checker: type lowering, signatures, providers.
-  interface.ts   Module interfaces, their hashes, and the project driver.
+  check_expr.ts  Body checker: expressions, calls, patterns, contracts.
+  check_project.ts Project driver: bodies, modes, interfaces, and typeAt.
+  tables.ts      Side tables of a body: node info and lowering facts.
+  patterns.ts    Pattern domains of match subjects.
+  modes.ts       Strongly connected components and the mode fixed point.
+  initialization.ts Eager dependency graph of module constants.
+  interface.ts   Module interfaces, their hashes, and the declaration driver.
   analyze.ts     Public entry: load a project, resolve it, collect diagnostics.
 tests/         Deno tests and test helpers.
 fixtures/      Input files for the tests.
@@ -84,6 +92,22 @@ The result holds one shared type table and one entry for each module. A module e
 A function with a nonempty `fails` or `uses` set always has effect mode. A function with empty sets needs an entry in `modes`, because its body decides the mode. Without the entry, the `interface` field of the module is an error value. The diagnostics do not depend on `modes`.
 
 A module interface holds `exports`, `values`, `types`, `errors`, and `services`. It also holds each private declaration that an export reaches. Part A3b builds interfaces with `buildInterface` after it knows the modes. The hash covers the content without source spans.
+
+## Using the body checker
+
+`checkProject(host, root, entries)` loads and resolves a project, then checks every module in topological order. It returns an error value only for a bad project file. Every other problem is a diagnostic. `checkAnalysis(analysis)` does the same for an analysis that exists already.
+
+For each module, the result holds `declarations`, `functions`, `constants`, `modes`, `initialization`, `interface`, `hash`, and `diagnostics`. A module sees the finished interfaces of the modules that it imports. These interfaces carry the computed execution modes. The `modes` map holds the invocation mode of every function.
+
+Each function and constant has a body table. The table maps a syntax node id to `{ type, failures, requirements, mode }`. The failure and requirement sets are sorted. The table maps each local identity to its type.
+
+The table also maps a node id to a fact that lowering needs. A call node has the fact `call`, `perform`, `error-construction`, `brand-construction`, `unbrand`, `some`, `fail`, `retry`, `provide`, or `builtin`. A `builtin` fact carries the closed function type of the `map`, `filter`, or `fold` use. A field read, an arrow, a block binding, a pattern, and a catch handler have facts too.
+
+A module constant needs a pure initializer with empty sets. The `initialization` value lists the constants in a safe order. It also lists the dependencies of each constant and every dependency cycle.
+
+`typeAt(check, path, offset)` returns text for the innermost checked node at an offset. A function name gives its signature, for example `getUser(id): User fails StoreUnavailable | UserMissing uses Users.find`. Any other node gives its type and its sets. Sets print in sorted identity order.
+
+A declaration with a syntax error is checked, but its body diagnostics are not published. The parser has reported the syntax error already. This rule prevents cascades from a half-parsed body.
 
 ## Error fixture convention
 

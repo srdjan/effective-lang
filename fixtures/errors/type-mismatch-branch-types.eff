@@ -1,0 +1,2 @@
+// error: type-mismatch/009
+const bad = (flag: boolean) => if (flag) { 1 } else { "one" }

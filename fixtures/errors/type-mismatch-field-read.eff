@@ -1,0 +1,5 @@
+type User = { name: string }
+
+const bad = (user: User): string =>
+  // error: type-mismatch/006
+  user.nickname

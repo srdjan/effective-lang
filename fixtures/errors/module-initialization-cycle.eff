@@ -1,0 +1,4 @@
+// error: module/004
+const first: int = second
+
+const second: int = first

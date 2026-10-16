@@ -1,0 +1,5 @@
+const id = (x: int): int => x
+
+const bad = (): int =>
+  // error: type-mismatch/003
+  id("one")

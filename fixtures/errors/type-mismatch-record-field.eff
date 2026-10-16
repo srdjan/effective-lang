@@ -1,0 +1,5 @@
+type User = { name: string, active: boolean }
+
+const bad = (): User =>
+  // error: type-mismatch/005
+  ({ name: "Ada" })

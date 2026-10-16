@@ -258,7 +258,7 @@ export interface ProjectCheck {
 }
 
 /** The names of the modules that `module` reaches through imports, directly or not. */
-function reachableModules(analysis: Analysis, module: string): string[] {
+export function reachableModules(analysis: Analysis, module: string): string[] {
   const seen = new Set<string>();
   const stack = [...(analysis.project.graph.get(module) ?? [])];
   while (stack.length > 0) {

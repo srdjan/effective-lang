@@ -1,0 +1,7 @@
+service Clock {
+  now(): int
+}
+
+const bad = (): int =>
+  // error: requirement-contract/001
+  Clock.now()

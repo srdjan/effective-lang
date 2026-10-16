@@ -116,6 +116,110 @@ export const DIAGNOSTIC_CODES = {
     description:
       "void appears as a record field, an array element, or a tuple element.",
   },
+  "type-mismatch/003": {
+    category: "type-mismatch",
+    description:
+      "A value has a type that does not fit the type that its context expects: an argument, a result, a binding annotation, a field, or a branch.",
+  },
+  "type-mismatch/004": {
+    category: "type-mismatch",
+    description:
+      "A call, a constructor, or a prelude function gets the wrong number of arguments.",
+  },
+  "type-mismatch/005": {
+    category: "type-mismatch",
+    description:
+      "A record construction or update has a missing, duplicate, or unknown field, or an update has a base that is not a record.",
+  },
+  "type-mismatch/006": {
+    category: "type-mismatch",
+    description:
+      "A field read names a field that the record type does not have, or reads a field of a value that is not a record.",
+  },
+  "type-mismatch/007": {
+    category: "type-mismatch",
+    description:
+      "An operator or a condition gets an operand of the wrong type. Conditions must be boolean.",
+  },
+  "type-mismatch/008": {
+    category: "type-mismatch",
+    description:
+      "A call names a value that is not a function, or a service method appears where it is not called.",
+  },
+  "type-mismatch/009": {
+    category: "type-mismatch",
+    description:
+      "The branches of an if, a match, or a try have no common result type.",
+  },
+  "type-mismatch/010": {
+    category: "type-mismatch",
+    description:
+      "A prelude function or constructor gets an argument that it does not accept: fail, unbrand, retry, provide, a brand constructor, or a collection builtin.",
+  },
+  "type-mismatch/011": {
+    category: "type-mismatch",
+    description:
+      "A parameter of a local function has no type annotation, and the context gives no function type for it.",
+  },
+  "failure-contract/001": {
+    category: "failure-contract",
+    description:
+      "The body of a function with a result annotation can fail with errors that its fails clause does not list.",
+  },
+  "failure-contract/002": {
+    category: "failure-contract",
+    description:
+      "A catch handler names an error that the protected block cannot fail with.",
+  },
+  "failure-contract/003": {
+    category: "failure-contract",
+    description: "A catch clause has two handlers for the same error.",
+  },
+  "requirement-contract/001": {
+    category: "requirement-contract",
+    description:
+      "The body of a function with a result annotation needs service methods that its uses clause does not list.",
+  },
+  "execution-mode/001": {
+    category: "execution-mode",
+    description:
+      "A callback of map, filter, or fold is not pure, or has failures or requirements.",
+  },
+  "execution-mode/002": {
+    category: "execution-mode",
+    description:
+      "A module constant has an initializer that is not pure or has nonempty failure or requirement sets.",
+  },
+  "execution-mode/003": {
+    category: "execution-mode",
+    description:
+      "A function calls itself, directly or through other functions, without an explicit signature, or a local function refers to itself.",
+  },
+  "execution-mode/004": {
+    category: "execution-mode",
+    description:
+      "The execution modes of a recursive group did not settle within the round cap.",
+  },
+  "pattern/001": {
+    category: "pattern",
+    description:
+      "A match does not cover every value of its subject. Unbounded primitives need a final wildcard.",
+  },
+  "pattern/002": {
+    category: "pattern",
+    description:
+      "A match arm can never run, because an earlier arm or a wildcard already matches its values.",
+  },
+  "pattern/003": {
+    category: "pattern",
+    description:
+      "A pattern names a constructor, a literal, or a tag that does not belong to the type of the subject.",
+  },
+  "pattern/004": {
+    category: "pattern",
+    description:
+      "A pattern is malformed for its use, or the subject has a type that version 0 cannot match.",
+  },
   "declaration/001": {
     category: "declaration",
     description:
@@ -183,6 +287,11 @@ export const DIAGNOSTIC_CODES = {
   "module/003": {
     category: "module",
     description: "Modules import each other in a cycle.",
+  },
+  "module/004": {
+    category: "module",
+    description:
+      "Module constants depend on each other in a cycle, directly or through functions, so the module cannot initialize.",
   },
 } as const satisfies Readonly<Record<string, CodeInfo>>;
 

@@ -1,0 +1,3 @@
+const bad = (n: int): never =>
+  // error: type-mismatch/010
+  fail(n)

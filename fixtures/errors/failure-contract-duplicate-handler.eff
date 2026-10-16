@@ -1,0 +1,13 @@
+error Missing = { id: string }
+
+const find = (id: string): string
+  fails Missing => fail(Missing({ id }))
+
+const bad = (id: string): string =>
+  try {
+    find(id)
+  } catch {
+    Missing(first) => "a",
+    // error: failure-contract/003
+    Missing(second) => "b"
+  }

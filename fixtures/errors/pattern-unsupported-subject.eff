@@ -1,0 +1,5 @@
+const label = (items: int[]): string =>
+  // error: pattern/004
+  match items {
+    _ => "any"
+  }

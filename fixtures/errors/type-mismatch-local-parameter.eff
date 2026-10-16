@@ -1,0 +1,5 @@
+const bad = (): int => {
+  // error: type-mismatch/011
+  const f = (x) => 1
+  f(2)
+}

@@ -1,0 +1,3 @@
+const bad = (): int =>
+  // error: type-mismatch/007
+  1 + "two"
