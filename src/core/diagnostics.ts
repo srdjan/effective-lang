@@ -36,7 +36,7 @@ export const DIAGNOSTIC_CODES = {
   "syntax/003": {
     category: "syntax",
     description:
-      "A string literal contains an escape sequence that JSON does not allow.",
+      "A string literal contains an escape sequence or a raw control character that JSON does not allow.",
   },
   "syntax/004": {
     category: "syntax",

@@ -387,6 +387,18 @@ export function lex(source: string, text: string): Lexed {
           break;
         }
         if (d === 0x0a || d === 0x0d) break;
+        if (d < 0x20 || d === 0x7f) {
+          report(
+            "syntax/003",
+            `string literal contains the control character ${
+              describeChar(text, j)
+            }; use an escape sequence`,
+            j,
+            j + 1,
+          );
+          j++;
+          continue;
+        }
         if (d === 0x5c) {
           const e = j + 1 < n ? text.charCodeAt(j + 1) : -1;
           if (

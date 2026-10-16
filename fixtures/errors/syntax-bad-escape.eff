@@ -5,4 +5,6 @@ const b = "short \u12 escape"
 // error: syntax/002
 // error: syntax/003
 const c = "trailing \
+// error: syntax/003
+const tab = "raw	tab"
 const good = "fine \u00e9 \" \\ \/ \b \f \n \r \t"
