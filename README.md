@@ -6,7 +6,7 @@ The design is in `docs/transpiler-design.md`. The Phase A plan is in `docs/plans
 
 ## Status
 
-Parts A1, A2, A3a, A3b, A4, and A6a exist. Part A1 adds the project skeleton, the lexer, a lossless parser with error recovery, and the `syntax` diagnostics. The parser reads `.eff` source files and `.effi` host interface files.
+Parts A1, A2, A3a, A3b, A4, A5, and A6a exist. Part A1 adds the project skeleton, the lexer, a lossless parser with error recovery, and the `syntax` diagnostics. The parser reads `.eff` source files and `.effi` host interface files.
 
 Part A2 adds the declaration index, the project loader, the module graph, and the name resolver. It adds the diagnostic codes `unknown-name`, `module`, and `declaration`.
 
@@ -16,7 +16,9 @@ Part A3b adds body checking. It checks every function and constant body, infers 
 
 Part A4 lowers a checked module to typed IR and serializes it. It adds a synchronous SHA-256 for builtin identities.
 
-Part A6a adds the Effect-TS emitter. It turns the IR of each module into the text of one TypeScript module. It adds the five golden files, the host module `users-live.ts`, and the slow tests that check and run the emitted code. The span table, the source map, and the `deno fmt` check of the golden files belong to part A6b. The IR validator and the command-line tool do not exist yet.
+Part A6a adds the Effect-TS emitter. It turns the IR of each module into the text of one TypeScript module. It adds the five golden files, the host module `users-live.ts`, and the slow tests that check and run the emitted code. The span table, the source map, and the `deno fmt` check of the golden files belong to part A6b. The command-line tool does not exist yet.
+
+Part A5 adds the independent IR validator. It recomputes every annotation of a module from the IR and the source texts, and it reports each disagreement with its validation area. It adds the category `validation` with the codes `validation/001` to `validation/008`, and the mutation fixtures in `fixtures/validate/`.
 
 ## Requirements
 
@@ -26,14 +28,15 @@ The project needs Deno 2.9.7. The first test run downloads `@std/assert` from js
 
 Run every command from the repository root.
 
-| Command                   | What it does                                                                         |
-| ------------------------- | ------------------------------------------------------------------------------------ |
-| `deno task check`         | Runs the format check, the lint, the type check, the fast tests, and the slow tests. |
-| `deno task test`          | Runs the fast tests. It skips files named `*_slow_test.ts`.                          |
-| `deno task test:slow`     | Runs only files named `*_slow_test.ts`. They run `deno check` and `deno run`.        |
-| `deno task golden:update` | Writes `fixtures/golden/<module>.ts` again from `fixtures/examples`.                 |
-| `deno task fmt`           | Formats the source files.                                                            |
-| `deno task lint`          | Runs the linter.                                                                     |
+| Command                     | What it does                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------- |
+| `deno task check`           | Runs the format check, the lint, the type check, the fast tests, and the slow tests.  |
+| `deno task test`            | Runs the fast tests. It skips files named `*_slow_test.ts`.                           |
+| `deno task test:slow`       | Runs only files named `*_slow_test.ts`. They run `deno check` and `deno run`.         |
+| `deno task golden:update`   | Writes `fixtures/golden/<module>.ts` again from `fixtures/examples`.                  |
+| `deno task validate:update` | Writes the mutation fixtures in `fixtures/validate/` again from the current lowering. |
+| `deno task fmt`             | Formats the source files.                                                             |
+| `deno task lint`            | Runs the linter.                                                                      |
 
 The tasks `effective` and `bench` do not exist yet. Later parts add them.
 
@@ -64,6 +67,15 @@ src/core/      The core library. It is synchronous and pure.
   sha256.ts      Synchronous SHA-256 over the UTF-8 bytes of a string.
   lower.ts       Checked modules to typed IR: pipelines, builtin specialization, imports.
   serialize.ts   Canonical JSON of a module IR, with the set and number checks.
+  validate/      The independent IR validator. It imports only ir.ts, source.ts, and diagnostics.ts.
+    index.ts       validateModule: the public entry.
+    world.ts       Identities in scope, imports, declaration headers, recursive types.
+    expr.ts        Bottom-up recomputation of types, sets, and modes of each body.
+    typing.ts      Type compatibility, including the lift rule.
+    sets.ts        Sorted effect sets and the combine rule.
+    serialization.ts Sorted sets, finite numbers, and spans against the source texts.
+    report.ts      The eight area codes and the diagnostic collector.
+  validate_project.ts validateProject: validates the output of lowerProject.
   emit/          The Effect-TS emitter.
     emit.ts        emitModule and emitProject: the public entries.
     doc.ts         The printer: documents, layout at 80 columns, span tags.
@@ -73,12 +85,14 @@ src/core/      The core library. It is synchronous and pure.
     decls.ts       Declarations, their order, and the export rule.
     walk.ts        Traversals of the IR.
 scripts/       Scripts that the tasks run. golden_update.ts writes the golden files.
+               validate_fixtures.ts writes the mutation fixtures.
 tests/         Deno tests and test helpers.
 fixtures/      Input files for the tests.
   examples/      The five example programs, the host interface file, and users-live.ts.
   golden/        The expected emitted TypeScript of each example.
   emit/forms/    Extra programs for the emitter tests. They are not golden examples.
   ir/example/    The log example and its IR fixture.
+  validate/      Mutated copies of lowered IR and manifest.json, which names the expected code of each.
   parse/         Valid syntax forms (ok-*) and recovery inputs (recovery-*).
   errors/        One file or one project directory for each error case, with markers.
 docs/          Design and plans.
@@ -137,6 +151,20 @@ The IR holds the declarations in source order, the sorted export identities, and
 Each distinct closed instance of a builtin gets the identity `value:<module>#$builtin/<name>/<hash>`. The hash is the first 12 hex digits of the SHA-256 of the canonical JSON of the closed function type. A pipeline lowers to a block with the generated bindings `$p1`, `$p2`, and so on. A generated binding and each reference to it carry the span of the left expression. Each call carries the span of its stage.
 
 `serializeModule(ir)` returns the canonical JSON text: sorted object keys, two-space indentation, and a trailing newline. It returns an error value when an effect set is not sorted and unique or when a number literal is not finite.
+
+## Using the validator
+
+`validateModule(ir, sources)` returns the validation diagnostics of one module. The `sources` value maps each source identifier to its text. An empty list means that the module is valid. The diagnostics are sorted and carry the IR path of the node, for example `declarations[2].body.arguments[0]`.
+
+`validateProject(project, lowered)` validates each module in the map that `lowerProject` returns. It reads the source texts from the parse trees of the project. A module that did not lower has no entry in the result. Part A7 wires this function to `build --validate`.
+
+The validator recomputes types, failure sets, requirement sets, and execution modes from the children of each node, with the equations of the spec. It compares the result with the recorded annotation. After a disagreement it continues with the recomputed value, so one fault gives one diagnostic. It reimplements type compatibility and does not call the checker. A test checks that `src/core/validate/` imports only `ir.ts`, `source.ts`, and `diagnostics.ts`.
+
+Each code names a validation area. `validation/001` is Identity, `002` is Types, `003` is Contracts, `004` is Execution, `005` is Recovery, `006` is Control, `007` is Initialization, and `008` is Serialization. The registry in `src/core/diagnostics.ts` describes each code.
+
+A mutation fixture in `fixtures/validate/` is a lowered example IR with one change. `manifest.json` names the expected code, the IR path, and the source texts of each fixture. Run `deno task validate:update` to write them again. A test compares the files on disk with the regenerated files.
+
+Known limit: a `retry` or `provide` pipeline stage with an effectful left value keeps the checker sets in the lowered IR. The validator reports it. No example uses that form.
 
 ## Using the emitter
 

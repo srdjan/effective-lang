@@ -25,6 +25,7 @@ import {
   readMarkers,
   syntaxCodes,
   treeProblems,
+  validationManifest,
 } from "./helpers.ts";
 
 const VALID = [
@@ -128,6 +129,9 @@ Deno.test("every registered code has at least one error fixture", () => {
   for (const f of ERROR_FILES) {
     for (const m of readMarkers(f.text)) marked.add(m.code);
   }
+  // A validation code has a mutation fixture in fixtures/validate/ instead of
+  // a marked source file, because the validator reads IR and not source.
+  for (const f of validationManifest()) marked.add(f.code);
   for (const code of registeredCodes()) {
     assert(marked.has(code), `${code} has no error fixture`);
   }

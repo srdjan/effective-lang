@@ -1,0 +1,556 @@
+{
+  "declarations": [
+    {
+      "body": {
+        "effects": {
+          "failures": [
+            "error:users#StoreUnavailable"
+          ],
+          "requirements": []
+        },
+        "execution": "effect",
+        "job": {
+          "body": {
+            "arguments": [
+              {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "literal",
+                "span": {
+                  "end": 206,
+                  "source": "main.eff",
+                  "start": 202
+                },
+                "type": {
+                  "kind": "primitive",
+                  "name": "string"
+                },
+                "value": "u1"
+              }
+            ],
+            "callee": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "reference",
+              "span": {
+                "end": 201,
+                "source": "main.eff",
+                "start": 190
+              },
+              "target": "value:users#displayName",
+              "type": {
+                "effects": {
+                  "failures": [
+                    "error:users#StoreUnavailable"
+                  ],
+                  "requirements": [
+                    "cap:users#Users.find"
+                  ]
+                },
+                "execution": "effect",
+                "kind": "function",
+                "parameters": [
+                  {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                ],
+                "result": {
+                  "kind": "primitive",
+                  "name": "string"
+                }
+              }
+            },
+            "effects": {
+              "failures": [
+                "error:users#StoreUnavailable"
+              ],
+              "requirements": [
+                "cap:users#Users.find"
+              ]
+            },
+            "execution": "effect",
+            "kind": "call",
+            "span": {
+              "end": 207,
+              "source": "main.eff",
+              "start": 190
+            },
+            "type": {
+              "kind": "primitive",
+              "name": "string"
+            }
+          },
+          "effects": {
+            "failures": [],
+            "requirements": []
+          },
+          "execution": "pure",
+          "kind": "closure",
+          "parameters": [],
+          "span": {
+            "end": 207,
+            "source": "main.eff",
+            "start": 184
+          },
+          "type": {
+            "effects": {
+              "failures": [
+                "error:users#StoreUnavailable"
+              ],
+              "requirements": [
+                "cap:users#Users.find"
+              ]
+            },
+            "execution": "effect",
+            "kind": "function",
+            "parameters": [],
+            "result": {
+              "kind": "primitive",
+              "name": "string"
+            }
+          }
+        },
+        "kind": "provide",
+        "provider": {
+          "effects": {
+            "failures": [],
+            "requirements": []
+          },
+          "execution": "pure",
+          "kind": "reference",
+          "span": {
+            "end": 182,
+            "source": "main.eff",
+            "start": 173
+          },
+          "target": "value:host/providers#UsersLive",
+          "type": {
+            "acquisition": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "effect"
+            },
+            "kind": "provider",
+            "provides": [
+              "cap:users#Users.all",
+              "cap:users#Users.find",
+              "cap:users#Users.save"
+            ]
+          }
+        },
+        "span": {
+          "end": 208,
+          "source": "main.eff",
+          "start": 165
+        },
+        "type": {
+          "kind": "primitive",
+          "name": "string"
+        }
+      },
+      "contract": "explicit",
+      "id": "value:main#main",
+      "kind": "function",
+      "name": "main",
+      "parameters": [],
+      "span": {
+        "end": 208,
+        "source": "main.eff",
+        "start": 104
+      },
+      "type": {
+        "effects": {
+          "failures": [
+            "error:users#StoreUnavailable"
+          ],
+          "requirements": []
+        },
+        "execution": "effect",
+        "kind": "function",
+        "parameters": [],
+        "result": {
+          "kind": "primitive",
+          "name": "string"
+        }
+      }
+    }
+  ],
+  "exports": [
+    "value:main#main"
+  ],
+  "format": "light-functional-ir",
+  "imports": [
+    {
+      "bindings": [
+        {
+          "name": "displayName",
+          "target": "value:users#displayName"
+        },
+        {
+          "name": "StoreUnavailable",
+          "target": "error:users#StoreUnavailable"
+        }
+      ],
+      "errors": [
+        {
+          "fields": [
+            {
+              "name": "message",
+              "optional": false,
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            }
+          ],
+          "id": "error:users#StoreUnavailable",
+          "kind": "error",
+          "name": "StoreUnavailable",
+          "span": {
+            "end": 165,
+            "source": "users.eff",
+            "start": 114
+          }
+        },
+        {
+          "fields": [
+            {
+              "name": "id",
+              "optional": false,
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            }
+          ],
+          "id": "error:users#UserMissing",
+          "kind": "error",
+          "name": "UserMissing",
+          "span": {
+            "end": 113,
+            "source": "users.eff",
+            "start": 72
+          }
+        }
+      ],
+      "exports": [
+        "error:users#StoreUnavailable",
+        "error:users#UserMissing",
+        "service:users#Users",
+        "type:users#User",
+        "value:users#activeNames",
+        "value:users#displayName",
+        "value:users#getUser",
+        "value:users#rename"
+      ],
+      "module": "users",
+      "services": [
+        {
+          "id": "service:users#Users",
+          "kind": "service",
+          "methods": [
+            {
+              "id": "cap:users#Users.find",
+              "name": "find",
+              "span": {
+                "end": 245,
+                "source": "users.eff",
+                "start": 192
+              },
+              "type": {
+                "effects": {
+                  "failures": [
+                    "error:users#StoreUnavailable"
+                  ],
+                  "requirements": []
+                },
+                "execution": "effect",
+                "kind": "function",
+                "parameters": [
+                  {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                ],
+                "result": {
+                  "element": {
+                    "id": "type:users#User",
+                    "kind": "named"
+                  },
+                  "kind": "option"
+                }
+              }
+            },
+            {
+              "id": "cap:users#Users.save",
+              "name": "save",
+              "span": {
+                "end": 293,
+                "source": "users.eff",
+                "start": 248
+              },
+              "type": {
+                "effects": {
+                  "failures": [
+                    "error:users#StoreUnavailable"
+                  ],
+                  "requirements": []
+                },
+                "execution": "effect",
+                "kind": "function",
+                "parameters": [
+                  {
+                    "id": "type:users#User",
+                    "kind": "named"
+                  }
+                ],
+                "result": {
+                  "kind": "primitive",
+                  "name": "unit"
+                }
+              }
+            },
+            {
+              "id": "cap:users#Users.all",
+              "name": "all",
+              "span": {
+                "end": 332,
+                "source": "users.eff",
+                "start": 296
+              },
+              "type": {
+                "effects": {
+                  "failures": [
+                    "error:users#StoreUnavailable"
+                  ],
+                  "requirements": []
+                },
+                "execution": "effect",
+                "kind": "function",
+                "parameters": [],
+                "result": {
+                  "element": {
+                    "id": "type:users#User",
+                    "kind": "named"
+                  },
+                  "kind": "array"
+                }
+              }
+            }
+          ],
+          "name": "Users",
+          "span": {
+            "end": 334,
+            "source": "users.eff",
+            "start": 167
+          }
+        }
+      ],
+      "types": [
+        {
+          "definition": {
+            "kind": "alias",
+            "type": {
+              "fields": [
+                {
+                  "name": "id",
+                  "optional": false,
+                  "type": {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                },
+                {
+                  "name": "name",
+                  "optional": false,
+                  "type": {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                },
+                {
+                  "name": "active",
+                  "optional": false,
+                  "type": {
+                    "kind": "primitive",
+                    "name": "boolean"
+                  }
+                }
+              ],
+              "kind": "record"
+            }
+          },
+          "id": "type:users#User",
+          "kind": "type",
+          "name": "User",
+          "span": {
+            "end": 70,
+            "source": "users.eff",
+            "start": 0
+          }
+        }
+      ],
+      "values": [
+        {
+          "id": "value:users#activeNames",
+          "name": "activeNames",
+          "type": {
+            "effects": {
+              "failures": [
+                "error:users#StoreUnavailable"
+              ],
+              "requirements": [
+                "cap:users#Users.all"
+              ]
+            },
+            "execution": "effect",
+            "kind": "function",
+            "parameters": [],
+            "result": {
+              "element": {
+                "kind": "primitive",
+                "name": "string"
+              },
+              "kind": "array"
+            }
+          }
+        },
+        {
+          "id": "value:users#displayName",
+          "name": "displayName",
+          "type": {
+            "effects": {
+              "failures": [
+                "error:users#StoreUnavailable"
+              ],
+              "requirements": [
+                "cap:users#Users.find"
+              ]
+            },
+            "execution": "effect",
+            "kind": "function",
+            "parameters": [
+              {
+                "kind": "primitive",
+                "name": "string"
+              }
+            ],
+            "result": {
+              "kind": "primitive",
+              "name": "string"
+            }
+          }
+        },
+        {
+          "id": "value:users#getUser",
+          "name": "getUser",
+          "type": {
+            "effects": {
+              "failures": [
+                "error:users#UserMissing",
+                "error:users#StoreUnavailable"
+              ],
+              "requirements": [
+                "cap:users#Users.find"
+              ]
+            },
+            "execution": "effect",
+            "kind": "function",
+            "parameters": [
+              {
+                "kind": "primitive",
+                "name": "string"
+              }
+            ],
+            "result": {
+              "id": "type:users#User",
+              "kind": "named"
+            }
+          }
+        },
+        {
+          "id": "value:users#rename",
+          "name": "rename",
+          "type": {
+            "effects": {
+              "failures": [
+                "error:users#StoreUnavailable",
+                "error:users#UserMissing"
+              ],
+              "requirements": [
+                "cap:users#Users.find",
+                "cap:users#Users.save"
+              ]
+            },
+            "execution": "effect",
+            "kind": "function",
+            "parameters": [
+              {
+                "kind": "primitive",
+                "name": "string"
+              },
+              {
+                "kind": "primitive",
+                "name": "string"
+              }
+            ],
+            "result": {
+              "id": "type:users#User",
+              "kind": "named"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "bindings": [
+        {
+          "name": "UsersLive",
+          "target": "value:host/providers#UsersLive"
+        }
+      ],
+      "errors": [],
+      "exports": [
+        "value:host/providers#UsersLive"
+      ],
+      "module": "host:providers",
+      "services": [],
+      "types": [],
+      "values": [
+        {
+          "id": "value:host/providers#UsersLive",
+          "name": "UsersLive",
+          "type": {
+            "acquisition": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "effect"
+            },
+            "kind": "provider",
+            "provides": [
+              "cap:users#Users.all",
+              "cap:users#Users.find",
+              "cap:users#Users.save"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "module": "main",
+  "sources": [
+    "main.eff"
+  ],
+  "version": 1
+}

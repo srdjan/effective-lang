@@ -1,0 +1,1631 @@
+{
+  "declarations": [
+    {
+      "fields": [],
+      "id": "error:users#Absent",
+      "kind": "error",
+      "name": "Absent",
+      "span": {
+        "end": 1,
+        "source": "users.eff",
+        "start": 0
+      }
+    },
+    {
+      "definition": {
+        "kind": "alias",
+        "type": {
+          "fields": [
+            {
+              "name": "id",
+              "optional": false,
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            },
+            {
+              "name": "name",
+              "optional": false,
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            },
+            {
+              "name": "active",
+              "optional": false,
+              "type": {
+                "kind": "primitive",
+                "name": "boolean"
+              }
+            }
+          ],
+          "kind": "record"
+        }
+      },
+      "id": "type:users#User",
+      "kind": "type",
+      "name": "User",
+      "span": {
+        "end": 70,
+        "source": "users.eff",
+        "start": 0
+      }
+    },
+    {
+      "fields": [
+        {
+          "name": "id",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "name": "string"
+          }
+        }
+      ],
+      "id": "error:users#UserMissing",
+      "kind": "error",
+      "name": "UserMissing",
+      "span": {
+        "end": 113,
+        "source": "users.eff",
+        "start": 72
+      }
+    },
+    {
+      "fields": [
+        {
+          "name": "message",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "name": "string"
+          }
+        }
+      ],
+      "id": "error:users#StoreUnavailable",
+      "kind": "error",
+      "name": "StoreUnavailable",
+      "span": {
+        "end": 165,
+        "source": "users.eff",
+        "start": 114
+      }
+    },
+    {
+      "id": "service:users#Users",
+      "kind": "service",
+      "methods": [
+        {
+          "id": "cap:users#Users.find",
+          "name": "find",
+          "span": {
+            "end": 245,
+            "source": "users.eff",
+            "start": 192
+          },
+          "type": {
+            "effects": {
+              "failures": [
+                "error:users#StoreUnavailable"
+              ],
+              "requirements": []
+            },
+            "execution": "effect",
+            "kind": "function",
+            "parameters": [
+              {
+                "kind": "primitive",
+                "name": "string"
+              }
+            ],
+            "result": {
+              "element": {
+                "id": "type:users#User",
+                "kind": "named"
+              },
+              "kind": "option"
+            }
+          }
+        },
+        {
+          "id": "cap:users#Users.save",
+          "name": "save",
+          "span": {
+            "end": 293,
+            "source": "users.eff",
+            "start": 248
+          },
+          "type": {
+            "effects": {
+              "failures": [
+                "error:users#StoreUnavailable"
+              ],
+              "requirements": []
+            },
+            "execution": "effect",
+            "kind": "function",
+            "parameters": [
+              {
+                "id": "type:users#User",
+                "kind": "named"
+              }
+            ],
+            "result": {
+              "kind": "primitive",
+              "name": "unit"
+            }
+          }
+        },
+        {
+          "id": "cap:users#Users.all",
+          "name": "all",
+          "span": {
+            "end": 332,
+            "source": "users.eff",
+            "start": 296
+          },
+          "type": {
+            "effects": {
+              "failures": [
+                "error:users#StoreUnavailable"
+              ],
+              "requirements": []
+            },
+            "execution": "effect",
+            "kind": "function",
+            "parameters": [],
+            "result": {
+              "element": {
+                "id": "type:users#User",
+                "kind": "named"
+              },
+              "kind": "array"
+            }
+          }
+        }
+      ],
+      "name": "Users",
+      "span": {
+        "end": 334,
+        "source": "users.eff",
+        "start": 167
+      }
+    },
+    {
+      "body": {
+        "arms": [
+          {
+            "body": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "reference",
+              "span": {
+                "end": 485,
+                "source": "users.eff",
+                "start": 481
+              },
+              "target": "local:users#getUser/user",
+              "type": {
+                "id": "type:users#User",
+                "kind": "named"
+              }
+            },
+            "pattern": {
+              "binding": {
+                "id": "local:users#getUser/user",
+                "name": "user",
+                "span": {
+                  "end": 476,
+                  "source": "users.eff",
+                  "start": 472
+                },
+                "type": {
+                  "id": "type:users#User",
+                  "kind": "named"
+                }
+              },
+              "kind": "some",
+              "span": {
+                "end": 477,
+                "source": "users.eff",
+                "start": 467
+              }
+            }
+          },
+          {
+            "body": {
+              "effects": {
+                "failures": [
+                  "error:users#UserMissing"
+                ],
+                "requirements": []
+              },
+              "error": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "error": "error:users#UserMissing",
+                "execution": "pure",
+                "fields": [
+                  {
+                    "name": "id",
+                    "value": {
+                      "effects": {
+                        "failures": [],
+                        "requirements": []
+                      },
+                      "execution": "pure",
+                      "kind": "reference",
+                      "span": {
+                        "end": 520,
+                        "source": "users.eff",
+                        "start": 518
+                      },
+                      "target": "local:users#getUser/id",
+                      "type": {
+                        "kind": "primitive",
+                        "name": "string"
+                      }
+                    }
+                  }
+                ],
+                "kind": "error",
+                "span": {
+                  "end": 523,
+                  "source": "users.eff",
+                  "start": 504
+                },
+                "type": {
+                  "id": "error:users#UserMissing",
+                  "kind": "named"
+                }
+              },
+              "execution": "effect",
+              "kind": "fail",
+              "span": {
+                "end": 524,
+                "source": "users.eff",
+                "start": 499
+              },
+              "type": {
+                "kind": "primitive",
+                "name": "never"
+              }
+            },
+            "pattern": {
+              "kind": "none",
+              "span": {
+                "end": 495,
+                "source": "users.eff",
+                "start": 491
+              }
+            }
+          }
+        ],
+        "effects": {
+          "failures": [
+            "error:users#StoreUnavailable",
+            "error:users#UserMissing"
+          ],
+          "requirements": [
+            "cap:users#Users.find"
+          ]
+        },
+        "execution": "effect",
+        "kind": "match",
+        "span": {
+          "end": 528,
+          "source": "users.eff",
+          "start": 440
+        },
+        "subject": {
+          "arguments": [
+            {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "reference",
+              "span": {
+                "end": 459,
+                "source": "users.eff",
+                "start": 457
+              },
+              "target": "local:users#getUser/id",
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            }
+          ],
+          "capability": "cap:users#Users.find",
+          "effects": {
+            "failures": [
+              "error:users#StoreUnavailable"
+            ],
+            "requirements": [
+              "cap:users#Users.find"
+            ]
+          },
+          "execution": "effect",
+          "kind": "perform",
+          "span": {
+            "end": 460,
+            "source": "users.eff",
+            "start": 446
+          },
+          "type": {
+            "element": {
+              "id": "type:users#User",
+              "kind": "named"
+            },
+            "kind": "option"
+          }
+        },
+        "type": {
+          "id": "type:users#User",
+          "kind": "named"
+        }
+      },
+      "contract": "explicit",
+      "id": "value:users#getUser",
+      "kind": "function",
+      "name": "getUser",
+      "parameters": [
+        {
+          "id": "local:users#getUser/id",
+          "name": "id",
+          "span": {
+            "end": 370,
+            "source": "users.eff",
+            "start": 360
+          },
+          "type": {
+            "kind": "primitive",
+            "name": "string"
+          }
+        }
+      ],
+      "span": {
+        "end": 528,
+        "source": "users.eff",
+        "start": 336
+      },
+      "type": {
+        "effects": {
+          "failures": [
+            "error:users#StoreUnavailable",
+            "error:users#UserMissing"
+          ],
+          "requirements": [
+            "cap:users#Users.find"
+          ]
+        },
+        "execution": "effect",
+        "kind": "function",
+        "parameters": [
+          {
+            "kind": "primitive",
+            "name": "string"
+          }
+        ],
+        "result": {
+          "id": "type:users#User",
+          "kind": "named"
+        }
+      }
+    },
+    {
+      "body": {
+        "effects": {
+          "failures": [
+            "error:users#StoreUnavailable",
+            "error:users#UserMissing"
+          ],
+          "requirements": [
+            "cap:users#Users.find",
+            "cap:users#Users.save"
+          ]
+        },
+        "execution": "effect",
+        "kind": "block",
+        "result": {
+          "effects": {
+            "failures": [],
+            "requirements": []
+          },
+          "execution": "pure",
+          "kind": "reference",
+          "span": {
+            "end": 760,
+            "source": "users.eff",
+            "start": 753
+          },
+          "target": "local:users#rename/renamed",
+          "type": {
+            "id": "type:users#User",
+            "kind": "named"
+          }
+        },
+        "span": {
+          "end": 762,
+          "source": "users.eff",
+          "start": 658
+        },
+        "steps": [
+          {
+            "binding": {
+              "id": "local:users#rename/user",
+              "name": "user",
+              "span": {
+                "end": 672,
+                "source": "users.eff",
+                "start": 668
+              },
+              "type": {
+                "id": "type:users#User",
+                "kind": "named"
+              }
+            },
+            "kind": "bind",
+            "value": {
+              "arguments": [
+                {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "reference",
+                  "span": {
+                    "end": 685,
+                    "source": "users.eff",
+                    "start": 683
+                  },
+                  "target": "local:users#rename/id",
+                  "type": {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                }
+              ],
+              "callee": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "reference",
+                "span": {
+                  "end": 682,
+                  "source": "users.eff",
+                  "start": 675
+                },
+                "target": "value:users#getUser",
+                "type": {
+                  "effects": {
+                    "failures": [
+                      "error:users#StoreUnavailable",
+                      "error:users#UserMissing"
+                    ],
+                    "requirements": [
+                      "cap:users#Users.find"
+                    ]
+                  },
+                  "execution": "effect",
+                  "kind": "function",
+                  "parameters": [
+                    {
+                      "kind": "primitive",
+                      "name": "string"
+                    }
+                  ],
+                  "result": {
+                    "id": "type:users#User",
+                    "kind": "named"
+                  }
+                }
+              },
+              "effects": {
+                "failures": [
+                  "error:users#StoreUnavailable",
+                  "error:users#UserMissing"
+                ],
+                "requirements": [
+                  "cap:users#Users.find"
+                ]
+              },
+              "execution": "effect",
+              "kind": "call",
+              "span": {
+                "end": 686,
+                "source": "users.eff",
+                "start": 675
+              },
+              "type": {
+                "id": "type:users#User",
+                "kind": "named"
+              }
+            }
+          },
+          {
+            "binding": {
+              "id": "local:users#rename/renamed",
+              "name": "renamed",
+              "span": {
+                "end": 708,
+                "source": "users.eff",
+                "start": 695
+              },
+              "type": {
+                "id": "type:users#User",
+                "kind": "named"
+              }
+            },
+            "kind": "bind",
+            "value": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "fields": [
+                {
+                  "name": "name",
+                  "value": {
+                    "effects": {
+                      "failures": [],
+                      "requirements": []
+                    },
+                    "execution": "pure",
+                    "kind": "reference",
+                    "span": {
+                      "end": 726,
+                      "source": "users.eff",
+                      "start": 722
+                    },
+                    "target": "local:users#rename/name",
+                    "type": {
+                      "kind": "primitive",
+                      "name": "string"
+                    }
+                  }
+                }
+              ],
+              "kind": "update",
+              "record": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "reference",
+                "span": {
+                  "end": 720,
+                  "source": "users.eff",
+                  "start": 716
+                },
+                "target": "local:users#rename/user",
+                "type": {
+                  "id": "type:users#User",
+                  "kind": "named"
+                }
+              },
+              "span": {
+                "end": 728,
+                "source": "users.eff",
+                "start": 711
+              },
+              "type": {
+                "id": "type:users#User",
+                "kind": "named"
+              }
+            }
+          },
+          {
+            "kind": "evaluate",
+            "value": {
+              "arguments": [
+                {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "reference",
+                  "span": {
+                    "end": 749,
+                    "source": "users.eff",
+                    "start": 742
+                  },
+                  "target": "local:users#rename/renamed",
+                  "type": {
+                    "id": "type:users#User",
+                    "kind": "named"
+                  }
+                }
+              ],
+              "capability": "cap:users#Users.save",
+              "effects": {
+                "failures": [
+                  "error:users#StoreUnavailable"
+                ],
+                "requirements": [
+                  "cap:users#Users.save"
+                ]
+              },
+              "execution": "effect",
+              "kind": "perform",
+              "span": {
+                "end": 750,
+                "source": "users.eff",
+                "start": 731
+              },
+              "type": {
+                "kind": "primitive",
+                "name": "unit"
+              }
+            }
+          }
+        ],
+        "type": {
+          "id": "type:users#User",
+          "kind": "named"
+        }
+      },
+      "contract": "explicit",
+      "id": "value:users#rename",
+      "kind": "function",
+      "name": "rename",
+      "parameters": [
+        {
+          "id": "local:users#rename/id",
+          "name": "id",
+          "span": {
+            "end": 563,
+            "source": "users.eff",
+            "start": 553
+          },
+          "type": {
+            "kind": "primitive",
+            "name": "string"
+          }
+        },
+        {
+          "id": "local:users#rename/name",
+          "name": "name",
+          "span": {
+            "end": 577,
+            "source": "users.eff",
+            "start": 565
+          },
+          "type": {
+            "kind": "primitive",
+            "name": "string"
+          }
+        }
+      ],
+      "span": {
+        "end": 762,
+        "source": "users.eff",
+        "start": 530
+      },
+      "type": {
+        "effects": {
+          "failures": [
+            "error:users#StoreUnavailable",
+            "error:users#UserMissing"
+          ],
+          "requirements": [
+            "cap:users#Users.find",
+            "cap:users#Users.save"
+          ]
+        },
+        "execution": "effect",
+        "kind": "function",
+        "parameters": [
+          {
+            "kind": "primitive",
+            "name": "string"
+          },
+          {
+            "kind": "primitive",
+            "name": "string"
+          }
+        ],
+        "result": {
+          "id": "type:users#User",
+          "kind": "named"
+        }
+      }
+    },
+    {
+      "body": {
+        "body": {
+          "effects": {
+            "failures": [
+              "error:users#StoreUnavailable",
+              "error:users#UserMissing"
+            ],
+            "requirements": [
+              "cap:users#Users.find"
+            ]
+          },
+          "execution": "effect",
+          "kind": "block",
+          "result": {
+            "effects": {
+              "failures": [
+                "error:users#StoreUnavailable",
+                "error:users#UserMissing"
+              ],
+              "requirements": [
+                "cap:users#Users.find"
+              ]
+            },
+            "execution": "effect",
+            "field": "name",
+            "kind": "get",
+            "record": {
+              "arguments": [
+                {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "reference",
+                  "span": {
+                    "end": 880,
+                    "source": "users.eff",
+                    "start": 878
+                  },
+                  "target": "local:users#displayName/id",
+                  "type": {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                }
+              ],
+              "callee": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "reference",
+                "span": {
+                  "end": 877,
+                  "source": "users.eff",
+                  "start": 870
+                },
+                "target": "value:users#getUser",
+                "type": {
+                  "effects": {
+                    "failures": [
+                      "error:users#StoreUnavailable",
+                      "error:users#UserMissing"
+                    ],
+                    "requirements": [
+                      "cap:users#Users.find"
+                    ]
+                  },
+                  "execution": "effect",
+                  "kind": "function",
+                  "parameters": [
+                    {
+                      "kind": "primitive",
+                      "name": "string"
+                    }
+                  ],
+                  "result": {
+                    "id": "type:users#User",
+                    "kind": "named"
+                  }
+                }
+              },
+              "effects": {
+                "failures": [
+                  "error:users#StoreUnavailable",
+                  "error:users#UserMissing"
+                ],
+                "requirements": [
+                  "cap:users#Users.find"
+                ]
+              },
+              "execution": "effect",
+              "kind": "call",
+              "span": {
+                "end": 881,
+                "source": "users.eff",
+                "start": 870
+              },
+              "type": {
+                "id": "type:users#User",
+                "kind": "named"
+              }
+            },
+            "span": {
+              "end": 886,
+              "source": "users.eff",
+              "start": 870
+            },
+            "type": {
+              "kind": "primitive",
+              "name": "string"
+            }
+          },
+          "span": {
+            "end": 890,
+            "source": "users.eff",
+            "start": 864
+          },
+          "steps": [],
+          "type": {
+            "kind": "primitive",
+            "name": "string"
+          }
+        },
+        "effects": {
+          "failures": [
+            "error:users#StoreUnavailable"
+          ],
+          "requirements": [
+            "cap:users#Users.find"
+          ]
+        },
+        "execution": "effect",
+        "handlers": [
+          {
+            "binding": {
+              "id": "local:users#displayName/error",
+              "name": "error",
+              "span": {
+                "end": 920,
+                "source": "users.eff",
+                "start": 915
+              },
+              "type": {
+                "id": "error:users#UserMissing",
+                "kind": "named"
+              }
+            },
+            "body": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "literal",
+              "span": {
+                "end": 932,
+                "source": "users.eff",
+                "start": 925
+              },
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              },
+              "value": "Guest"
+            },
+            "error": "error:users#UserMissing",
+            "span": {
+              "end": 932,
+              "source": "users.eff",
+              "start": 903
+            }
+          },
+          {
+            "binding": {
+              "id": "local:users#displayName/absent",
+              "name": "absent",
+              "span": {
+                "end": 1,
+                "source": "users.eff",
+                "start": 0
+              },
+              "type": {
+                "id": "error:users#Absent",
+                "kind": "named"
+              }
+            },
+            "body": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "literal",
+              "span": {
+                "end": 932,
+                "source": "users.eff",
+                "start": 925
+              },
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              },
+              "value": "Guest"
+            },
+            "error": "error:users#Absent",
+            "span": {
+              "end": 1,
+              "source": "users.eff",
+              "start": 0
+            }
+          }
+        ],
+        "kind": "catch",
+        "span": {
+          "end": 936,
+          "source": "users.eff",
+          "start": 860
+        },
+        "type": {
+          "kind": "primitive",
+          "name": "string"
+        }
+      },
+      "contract": "explicit",
+      "id": "value:users#displayName",
+      "kind": "function",
+      "name": "displayName",
+      "parameters": [
+        {
+          "id": "local:users#displayName/id",
+          "name": "id",
+          "span": {
+            "end": 802,
+            "source": "users.eff",
+            "start": 792
+          },
+          "type": {
+            "kind": "primitive",
+            "name": "string"
+          }
+        }
+      ],
+      "span": {
+        "end": 936,
+        "source": "users.eff",
+        "start": 764
+      },
+      "type": {
+        "effects": {
+          "failures": [
+            "error:users#StoreUnavailable"
+          ],
+          "requirements": [
+            "cap:users#Users.find"
+          ]
+        },
+        "execution": "effect",
+        "kind": "function",
+        "parameters": [
+          {
+            "kind": "primitive",
+            "name": "string"
+          }
+        ],
+        "result": {
+          "kind": "primitive",
+          "name": "string"
+        }
+      }
+    },
+    {
+      "body": {
+        "effects": {
+          "failures": [
+            "error:users#StoreUnavailable"
+          ],
+          "requirements": [
+            "cap:users#Users.all"
+          ]
+        },
+        "execution": "effect",
+        "kind": "block",
+        "result": {
+          "arguments": [
+            {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "reference",
+              "span": {
+                "end": 1073,
+                "source": "users.eff",
+                "start": 1025
+              },
+              "target": "local:users#activeNames/$p2",
+              "type": {
+                "element": {
+                  "id": "type:users#User",
+                  "kind": "named"
+                },
+                "kind": "array"
+              }
+            },
+            {
+              "body": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "field": "name",
+                "kind": "get",
+                "record": {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "reference",
+                  "span": {
+                    "end": 1099,
+                    "source": "users.eff",
+                    "start": 1095
+                  },
+                  "target": "local:users#activeNames/user/2",
+                  "type": {
+                    "id": "type:users#User",
+                    "kind": "named"
+                  }
+                },
+                "span": {
+                  "end": 1104,
+                  "source": "users.eff",
+                  "start": 1095
+                },
+                "type": {
+                  "kind": "primitive",
+                  "name": "string"
+                }
+              },
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "closure",
+              "parameters": [
+                {
+                  "id": "local:users#activeNames/user/2",
+                  "name": "user",
+                  "span": {
+                    "end": 1090,
+                    "source": "users.eff",
+                    "start": 1086
+                  },
+                  "type": {
+                    "id": "type:users#User",
+                    "kind": "named"
+                  }
+                }
+              ],
+              "span": {
+                "end": 1104,
+                "source": "users.eff",
+                "start": 1085
+              },
+              "type": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "function",
+                "parameters": [
+                  {
+                    "id": "type:users#User",
+                    "kind": "named"
+                  }
+                ],
+                "result": {
+                  "kind": "primitive",
+                  "name": "string"
+                }
+              }
+            }
+          ],
+          "callee": {
+            "effects": {
+              "failures": [],
+              "requirements": []
+            },
+            "execution": "pure",
+            "kind": "reference",
+            "span": {
+              "end": 1084,
+              "source": "users.eff",
+              "start": 1081
+            },
+            "target": "value:users#$builtin/map/ddf01438b97c",
+            "type": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "function",
+              "parameters": [
+                {
+                  "element": {
+                    "id": "type:users#User",
+                    "kind": "named"
+                  },
+                  "kind": "array"
+                },
+                {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "function",
+                  "parameters": [
+                    {
+                      "id": "type:users#User",
+                      "kind": "named"
+                    }
+                  ],
+                  "result": {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                }
+              ],
+              "result": {
+                "element": {
+                  "kind": "primitive",
+                  "name": "string"
+                },
+                "kind": "array"
+              }
+            }
+          },
+          "effects": {
+            "failures": [],
+            "requirements": []
+          },
+          "execution": "pure",
+          "kind": "call",
+          "span": {
+            "end": 1105,
+            "source": "users.eff",
+            "start": 1081
+          },
+          "type": {
+            "element": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "kind": "array"
+          }
+        },
+        "span": {
+          "end": 1105,
+          "source": "users.eff",
+          "start": 1025
+        },
+        "steps": [
+          {
+            "binding": {
+              "id": "local:users#activeNames/$p1",
+              "name": "$p1",
+              "span": {
+                "end": 1036,
+                "source": "users.eff",
+                "start": 1025
+              },
+              "type": {
+                "element": {
+                  "id": "type:users#User",
+                  "kind": "named"
+                },
+                "kind": "array"
+              }
+            },
+            "kind": "bind",
+            "value": {
+              "arguments": [],
+              "capability": "cap:users#Users.all",
+              "effects": {
+                "failures": [
+                  "error:users#StoreUnavailable"
+                ],
+                "requirements": [
+                  "cap:users#Users.all"
+                ]
+              },
+              "execution": "effect",
+              "kind": "perform",
+              "span": {
+                "end": 1036,
+                "source": "users.eff",
+                "start": 1025
+              },
+              "type": {
+                "element": {
+                  "id": "type:users#User",
+                  "kind": "named"
+                },
+                "kind": "array"
+              }
+            }
+          },
+          {
+            "binding": {
+              "id": "local:users#activeNames/$p2",
+              "name": "$p2",
+              "span": {
+                "end": 1073,
+                "source": "users.eff",
+                "start": 1025
+              },
+              "type": {
+                "element": {
+                  "id": "type:users#User",
+                  "kind": "named"
+                },
+                "kind": "array"
+              }
+            },
+            "kind": "bind",
+            "value": {
+              "arguments": [
+                {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "reference",
+                  "span": {
+                    "end": 1036,
+                    "source": "users.eff",
+                    "start": 1025
+                  },
+                  "target": "local:users#activeNames/$p1",
+                  "type": {
+                    "element": {
+                      "id": "type:users#User",
+                      "kind": "named"
+                    },
+                    "kind": "array"
+                  }
+                },
+                {
+                  "body": {
+                    "effects": {
+                      "failures": [],
+                      "requirements": []
+                    },
+                    "execution": "pure",
+                    "field": "active",
+                    "kind": "get",
+                    "record": {
+                      "effects": {
+                        "failures": [],
+                        "requirements": []
+                      },
+                      "execution": "pure",
+                      "kind": "reference",
+                      "span": {
+                        "end": 1065,
+                        "source": "users.eff",
+                        "start": 1061
+                      },
+                      "target": "local:users#activeNames/user",
+                      "type": {
+                        "id": "type:users#User",
+                        "kind": "named"
+                      }
+                    },
+                    "span": {
+                      "end": 1072,
+                      "source": "users.eff",
+                      "start": 1061
+                    },
+                    "type": {
+                      "kind": "primitive",
+                      "name": "boolean"
+                    }
+                  },
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "closure",
+                  "parameters": [
+                    {
+                      "id": "local:users#activeNames/user",
+                      "name": "user",
+                      "span": {
+                        "end": 1056,
+                        "source": "users.eff",
+                        "start": 1052
+                      },
+                      "type": {
+                        "id": "type:users#User",
+                        "kind": "named"
+                      }
+                    }
+                  ],
+                  "span": {
+                    "end": 1072,
+                    "source": "users.eff",
+                    "start": 1051
+                  },
+                  "type": {
+                    "effects": {
+                      "failures": [],
+                      "requirements": []
+                    },
+                    "execution": "pure",
+                    "kind": "function",
+                    "parameters": [
+                      {
+                        "id": "type:users#User",
+                        "kind": "named"
+                      }
+                    ],
+                    "result": {
+                      "kind": "primitive",
+                      "name": "boolean"
+                    }
+                  }
+                }
+              ],
+              "callee": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "reference",
+                "span": {
+                  "end": 1050,
+                  "source": "users.eff",
+                  "start": 1044
+                },
+                "target": "value:users#$builtin/filter/226f72cb20f0",
+                "type": {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "function",
+                  "parameters": [
+                    {
+                      "element": {
+                        "id": "type:users#User",
+                        "kind": "named"
+                      },
+                      "kind": "array"
+                    },
+                    {
+                      "effects": {
+                        "failures": [],
+                        "requirements": []
+                      },
+                      "execution": "pure",
+                      "kind": "function",
+                      "parameters": [
+                        {
+                          "id": "type:users#User",
+                          "kind": "named"
+                        }
+                      ],
+                      "result": {
+                        "kind": "primitive",
+                        "name": "boolean"
+                      }
+                    }
+                  ],
+                  "result": {
+                    "element": {
+                      "id": "type:users#User",
+                      "kind": "named"
+                    },
+                    "kind": "array"
+                  }
+                }
+              },
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "call",
+              "span": {
+                "end": 1073,
+                "source": "users.eff",
+                "start": 1044
+              },
+              "type": {
+                "element": {
+                  "id": "type:users#User",
+                  "kind": "named"
+                },
+                "kind": "array"
+              }
+            }
+          }
+        ],
+        "type": {
+          "element": {
+            "kind": "primitive",
+            "name": "string"
+          },
+          "kind": "array"
+        }
+      },
+      "contract": "explicit",
+      "id": "value:users#activeNames",
+      "kind": "function",
+      "name": "activeNames",
+      "parameters": [],
+      "span": {
+        "end": 1105,
+        "source": "users.eff",
+        "start": 938
+      },
+      "type": {
+        "effects": {
+          "failures": [
+            "error:users#StoreUnavailable"
+          ],
+          "requirements": [
+            "cap:users#Users.all"
+          ]
+        },
+        "execution": "effect",
+        "kind": "function",
+        "parameters": [],
+        "result": {
+          "element": {
+            "kind": "primitive",
+            "name": "string"
+          },
+          "kind": "array"
+        }
+      }
+    }
+  ],
+  "exports": [
+    "error:users#StoreUnavailable",
+    "error:users#UserMissing",
+    "service:users#Users",
+    "type:users#User",
+    "value:users#activeNames",
+    "value:users#displayName",
+    "value:users#getUser",
+    "value:users#rename"
+  ],
+  "format": "light-functional-ir",
+  "imports": [
+    {
+      "bindings": [],
+      "errors": [],
+      "exports": [
+        "value:users#$builtin/filter/226f72cb20f0",
+        "value:users#$builtin/map/ddf01438b97c"
+      ],
+      "module": "effective:prelude",
+      "services": [],
+      "types": [],
+      "values": [
+        {
+          "id": "value:users#$builtin/filter/226f72cb20f0",
+          "name": "$builtin/filter/226f72cb20f0",
+          "type": {
+            "effects": {
+              "failures": [],
+              "requirements": []
+            },
+            "execution": "pure",
+            "kind": "function",
+            "parameters": [
+              {
+                "element": {
+                  "id": "type:users#User",
+                  "kind": "named"
+                },
+                "kind": "array"
+              },
+              {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "function",
+                "parameters": [
+                  {
+                    "id": "type:users#User",
+                    "kind": "named"
+                  }
+                ],
+                "result": {
+                  "kind": "primitive",
+                  "name": "boolean"
+                }
+              }
+            ],
+            "result": {
+              "element": {
+                "id": "type:users#User",
+                "kind": "named"
+              },
+              "kind": "array"
+            }
+          }
+        },
+        {
+          "id": "value:users#$builtin/map/ddf01438b97c",
+          "name": "$builtin/map/ddf01438b97c",
+          "type": {
+            "effects": {
+              "failures": [],
+              "requirements": []
+            },
+            "execution": "pure",
+            "kind": "function",
+            "parameters": [
+              {
+                "element": {
+                  "id": "type:users#User",
+                  "kind": "named"
+                },
+                "kind": "array"
+              },
+              {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "function",
+                "parameters": [
+                  {
+                    "id": "type:users#User",
+                    "kind": "named"
+                  }
+                ],
+                "result": {
+                  "kind": "primitive",
+                  "name": "string"
+                }
+              }
+            ],
+            "result": {
+              "element": {
+                "kind": "primitive",
+                "name": "string"
+              },
+              "kind": "array"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "module": "users",
+  "sources": [
+    "users.eff"
+  ],
+  "version": 1
+}

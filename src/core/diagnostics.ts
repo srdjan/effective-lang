@@ -13,7 +13,8 @@ export type Category =
   | "pattern"
   | "declaration"
   | "module"
-  | "host-boundary";
+  | "host-boundary"
+  | "validation";
 
 export type Severity = "error" | "warning";
 
@@ -292,6 +293,46 @@ export const DIAGNOSTIC_CODES = {
     category: "module",
     description:
       "Module constants depend on each other in a cycle, directly or through functions, so the module cannot initialize.",
+  },
+  "validation/001": {
+    category: "validation",
+    description:
+      "Identity: a reference, a capability, an import, an export, a type name, or a declaration identity does not resolve in its scope, or an identity is declared twice.",
+  },
+  "validation/002": {
+    category: "validation",
+    description:
+      "Types: a recorded type differs from the type that the validator recomputes, or an argument, a field, a branch, a pattern, or a function result does not fit its type.",
+  },
+  "validation/003": {
+    category: "validation",
+    description:
+      "Contracts: a recorded failure set or requirement set differs from the recomputed set, or a function body exceeds the sets that its signature declares.",
+  },
+  "validation/004": {
+    category: "validation",
+    description:
+      "Execution: a recorded execution mode differs from the recomputed mode, or a builtin callback is not pure with empty sets.",
+  },
+  "validation/005": {
+    category: "validation",
+    description:
+      "Recovery: a catch handler names a tag that the protected block cannot fail with, a tag has two handlers, or the branches of a catch have no common type.",
+  },
+  "validation/006": {
+    category: "validation",
+    description:
+      "Control: a retry job or a provide job is not a zero-argument function, a retry count is not a finite nonnegative safe integer, or a provider expression has no provider type.",
+  },
+  "validation/007": {
+    category: "validation",
+    description:
+      "Initialization: a module constant has an initializer that is not pure or that has nonempty failure or requirement sets.",
+  },
+  "validation/008": {
+    category: "validation",
+    description:
+      "Serialization: an effect set is not sorted and unique, a literal is not finite, a span names a source that is not supplied or lies outside its text, or the IR has an unexpected shape.",
   },
 } as const satisfies Readonly<Record<string, CodeInfo>>;
 

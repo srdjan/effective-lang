@@ -1,0 +1,176 @@
+{
+  "fixtures": [
+    {
+      "area": "identity",
+      "code": "validation/001",
+      "file": "identity-unknown-reference.json",
+      "mutation": "The reference to the parameter message targets an unknown local.",
+      "path": "declarations[2].body.arguments[0].target",
+      "sources": {
+        "log.eff": "examples/log.eff"
+      }
+    },
+    {
+      "area": "identity",
+      "code": "validation/001",
+      "file": "identity-unknown-capability.json",
+      "mutation": "The perform node names a capability that no service declares.",
+      "path": "declarations[2].body.capability",
+      "sources": {
+        "log.eff": "examples/log.eff"
+      }
+    },
+    {
+      "area": "identity",
+      "code": "validation/001",
+      "file": "identity-undeclared-export.json",
+      "mutation": "The module exports an identity that it does not declare.",
+      "path": "exports[1]",
+      "sources": {
+        "log.eff": "examples/log.eff"
+      }
+    },
+    {
+      "area": "identity",
+      "code": "validation/001",
+      "file": "identity-duplicate-declaration.json",
+      "mutation": "The error declaration appears twice.",
+      "path": "declarations[3].id",
+      "sources": {
+        "log.eff": "examples/log.eff"
+      }
+    },
+    {
+      "area": "types",
+      "code": "validation/002",
+      "file": "types-recorded-string.json",
+      "mutation": "The recorded type of the perform node is string instead of void.",
+      "path": "declarations[2].body.type",
+      "sources": {
+        "log.eff": "examples/log.eff"
+      }
+    },
+    {
+      "area": "types",
+      "code": "validation/002",
+      "file": "types-literal-as-int.json",
+      "mutation": "The literal \"paid\" in markPaid is recorded as int.",
+      "path": "declarations[8].body.fields[0].value.type",
+      "sources": {
+        "pay.eff": "examples/pay.eff"
+      }
+    },
+    {
+      "area": "contracts",
+      "code": "validation/003",
+      "file": "contracts-dropped-failure.json",
+      "mutation": "The recorded failure set of the perform node is empty.",
+      "path": "declarations[2].body.effects.failures",
+      "sources": {
+        "log.eff": "examples/log.eff"
+      }
+    },
+    {
+      "area": "contracts",
+      "code": "validation/003",
+      "file": "contracts-body-exceeds-declaration.json",
+      "mutation": "The declared failure set of log is empty, but its body can fail.",
+      "path": "declarations[2].body",
+      "sources": {
+        "log.eff": "examples/log.eff"
+      }
+    },
+    {
+      "area": "execution",
+      "code": "validation/004",
+      "file": "execution-node-pure.json",
+      "mutation": "The perform node is recorded as pure.",
+      "path": "declarations[2].body.execution",
+      "sources": {
+        "log.eff": "examples/log.eff"
+      }
+    },
+    {
+      "area": "execution",
+      "code": "validation/004",
+      "file": "execution-function-pure.json",
+      "mutation": "The function log has declared sets but a pure execution.",
+      "path": "declarations[2].type.execution",
+      "sources": {
+        "log.eff": "examples/log.eff"
+      }
+    },
+    {
+      "area": "recovery",
+      "code": "validation/005",
+      "file": "recovery-absent-handler.json",
+      "mutation": "The catch of displayName gets a handler for an error that the protected block cannot raise.",
+      "path": "declarations[7].body.handlers[1].error",
+      "sources": {
+        "users.eff": "examples/users.eff"
+      }
+    },
+    {
+      "area": "control",
+      "code": "validation/006",
+      "file": "control-retry-negative.json",
+      "mutation": "The retry count is -1.",
+      "path": "declarations[7].body.steps[0].value.times",
+      "sources": {
+        "pay.eff": "examples/pay.eff"
+      }
+    },
+    {
+      "area": "control",
+      "code": "validation/006",
+      "file": "control-provide-job-with-parameter.json",
+      "mutation": "The provide job takes one parameter.",
+      "path": "declarations[0].body.job",
+      "sources": {
+        "main.eff": "examples/main.eff",
+        "users.eff": "examples/users.eff"
+      }
+    },
+    {
+      "area": "initialization",
+      "code": "validation/007",
+      "file": "initialization-constant-perform.json",
+      "mutation": "A module constant has a perform node as its initializer.",
+      "path": "declarations[3].value",
+      "sources": {
+        "log.eff": "examples/log.eff"
+      }
+    },
+    {
+      "area": "serialization",
+      "code": "validation/008",
+      "file": "serialization-unsorted-set.json",
+      "mutation": "A failure set in an import payload is not sorted.",
+      "path": "imports[0].values[2].type.effects.failures",
+      "sources": {
+        "main.eff": "examples/main.eff",
+        "users.eff": "examples/users.eff"
+      }
+    },
+    {
+      "area": "serialization",
+      "code": "validation/008",
+      "file": "serialization-span-past-end.json",
+      "mutation": "The span of the function body ends after the end of the source.",
+      "path": "declarations[2].body.span",
+      "sources": {
+        "log.eff": "examples/log.eff"
+      }
+    },
+    {
+      "area": "serialization",
+      "code": "validation/008",
+      "file": "serialization-unknown-source.json",
+      "mutation": "A span names a source that the module does not list.",
+      "path": "declarations[2].body.arguments[0].span",
+      "sources": {
+        "log.eff": "examples/log.eff"
+      }
+    }
+  ]
+}

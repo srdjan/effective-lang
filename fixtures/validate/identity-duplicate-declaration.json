@@ -1,0 +1,185 @@
+{
+  "declarations": [
+    {
+      "fields": [
+        {
+          "name": "message",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "name": "string"
+          }
+        }
+      ],
+      "id": "error:log#ConsoleUnavailable",
+      "kind": "error",
+      "name": "ConsoleUnavailable",
+      "span": {
+        "end": 46,
+        "source": "log.eff",
+        "start": 0
+      }
+    },
+    {
+      "id": "service:log#Console",
+      "kind": "service",
+      "methods": [
+        {
+          "id": "cap:log#Console.print",
+          "name": "print",
+          "span": {
+            "end": 121,
+            "source": "log.eff",
+            "start": 68
+          },
+          "type": {
+            "effects": {
+              "failures": [
+                "error:log#ConsoleUnavailable"
+              ],
+              "requirements": []
+            },
+            "execution": "effect",
+            "kind": "function",
+            "parameters": [
+              {
+                "kind": "primitive",
+                "name": "string"
+              }
+            ],
+            "result": {
+              "kind": "primitive",
+              "name": "unit"
+            }
+          }
+        }
+      ],
+      "name": "Console",
+      "span": {
+        "end": 123,
+        "source": "log.eff",
+        "start": 48
+      }
+    },
+    {
+      "body": {
+        "arguments": [
+          {
+            "effects": {
+              "failures": [],
+              "requirements": []
+            },
+            "execution": "pure",
+            "kind": "reference",
+            "span": {
+              "end": 240,
+              "source": "log.eff",
+              "start": 233
+            },
+            "target": "local:log#log/message",
+            "type": {
+              "kind": "primitive",
+              "name": "string"
+            }
+          }
+        ],
+        "capability": "cap:log#Console.print",
+        "effects": {
+          "failures": [
+            "error:log#ConsoleUnavailable"
+          ],
+          "requirements": [
+            "cap:log#Console.print"
+          ]
+        },
+        "execution": "effect",
+        "kind": "perform",
+        "span": {
+          "end": 241,
+          "source": "log.eff",
+          "start": 219
+        },
+        "type": {
+          "kind": "primitive",
+          "name": "unit"
+        }
+      },
+      "contract": "explicit",
+      "id": "value:log#log",
+      "kind": "function",
+      "name": "log",
+      "parameters": [
+        {
+          "id": "local:log#log/message",
+          "name": "message",
+          "span": {
+            "end": 160,
+            "source": "log.eff",
+            "start": 145
+          },
+          "type": {
+            "kind": "primitive",
+            "name": "string"
+          }
+        }
+      ],
+      "span": {
+        "end": 241,
+        "source": "log.eff",
+        "start": 125
+      },
+      "type": {
+        "effects": {
+          "failures": [
+            "error:log#ConsoleUnavailable"
+          ],
+          "requirements": [
+            "cap:log#Console.print"
+          ]
+        },
+        "execution": "effect",
+        "kind": "function",
+        "parameters": [
+          {
+            "kind": "primitive",
+            "name": "string"
+          }
+        ],
+        "result": {
+          "kind": "primitive",
+          "name": "unit"
+        }
+      }
+    },
+    {
+      "fields": [
+        {
+          "name": "message",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "name": "string"
+          }
+        }
+      ],
+      "id": "error:log#ConsoleUnavailable",
+      "kind": "error",
+      "name": "ConsoleUnavailable",
+      "span": {
+        "end": 46,
+        "source": "log.eff",
+        "start": 0
+      }
+    }
+  ],
+  "exports": [
+    "value:log#log"
+  ],
+  "format": "light-functional-ir",
+  "imports": [],
+  "module": "log",
+  "sources": [
+    "log.eff"
+  ],
+  "version": 1
+}

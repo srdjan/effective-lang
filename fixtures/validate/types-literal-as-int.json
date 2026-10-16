@@ -1,0 +1,1347 @@
+{
+  "declarations": [
+    {
+      "definition": {
+        "base": {
+          "kind": "primitive",
+          "name": "string"
+        },
+        "kind": "brand"
+      },
+      "id": "type:pay#OrderId",
+      "kind": "type",
+      "name": "OrderId",
+      "span": {
+        "end": 28,
+        "source": "pay.eff",
+        "start": 0
+      }
+    },
+    {
+      "definition": {
+        "kind": "alias",
+        "type": {
+          "fields": [
+            {
+              "name": "id",
+              "optional": false,
+              "type": {
+                "id": "type:pay#OrderId",
+                "kind": "named"
+              }
+            },
+            {
+              "name": "totalCents",
+              "optional": false,
+              "type": {
+                "kind": "primitive",
+                "name": "int"
+              }
+            },
+            {
+              "name": "status",
+              "optional": false,
+              "type": {
+                "kind": "union",
+                "members": [
+                  {
+                    "kind": "literal",
+                    "value": "pending"
+                  },
+                  {
+                    "kind": "literal",
+                    "value": "paid"
+                  }
+                ]
+              }
+            }
+          ],
+          "kind": "record"
+        }
+      },
+      "id": "type:pay#Order",
+      "kind": "type",
+      "name": "Order",
+      "span": {
+        "end": 108,
+        "source": "pay.eff",
+        "start": 29
+      }
+    },
+    {
+      "fields": [
+        {
+          "name": "id",
+          "optional": false,
+          "type": {
+            "id": "type:pay#OrderId",
+            "kind": "named"
+          }
+        }
+      ],
+      "id": "error:pay#OrderNotFound",
+      "kind": "error",
+      "name": "OrderNotFound",
+      "span": {
+        "end": 147,
+        "source": "pay.eff",
+        "start": 110
+      }
+    },
+    {
+      "fields": [
+        {
+          "name": "reason",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "name": "string"
+          }
+        }
+      ],
+      "id": "error:pay#PaymentDeclined",
+      "kind": "error",
+      "name": "PaymentDeclined",
+      "span": {
+        "end": 190,
+        "source": "pay.eff",
+        "start": 148
+      }
+    },
+    {
+      "id": "service:pay#Orders",
+      "kind": "service",
+      "methods": [
+        {
+          "id": "cap:pay#Orders.find",
+          "name": "find",
+          "span": {
+            "end": 243,
+            "source": "pay.eff",
+            "start": 211
+          },
+          "type": {
+            "effects": {
+              "failures": [],
+              "requirements": []
+            },
+            "execution": "effect",
+            "kind": "function",
+            "parameters": [
+              {
+                "id": "type:pay#OrderId",
+                "kind": "named"
+              }
+            ],
+            "result": {
+              "element": {
+                "id": "type:pay#Order",
+                "kind": "named"
+              },
+              "kind": "option"
+            }
+          }
+        },
+        {
+          "id": "cap:pay#Orders.save",
+          "name": "save",
+          "span": {
+            "end": 270,
+            "source": "pay.eff",
+            "start": 246
+          },
+          "type": {
+            "effects": {
+              "failures": [],
+              "requirements": []
+            },
+            "execution": "effect",
+            "kind": "function",
+            "parameters": [
+              {
+                "id": "type:pay#Order",
+                "kind": "named"
+              }
+            ],
+            "result": {
+              "kind": "primitive",
+              "name": "unit"
+            }
+          }
+        }
+      ],
+      "name": "Orders",
+      "span": {
+        "end": 272,
+        "source": "pay.eff",
+        "start": 192
+      }
+    },
+    {
+      "id": "service:pay#Payments",
+      "kind": "service",
+      "methods": [
+        {
+          "id": "cap:pay#Payments.charge",
+          "name": "charge",
+          "span": {
+            "end": 344,
+            "source": "pay.eff",
+            "start": 295
+          },
+          "type": {
+            "effects": {
+              "failures": [
+                "error:pay#PaymentDeclined"
+              ],
+              "requirements": []
+            },
+            "execution": "effect",
+            "kind": "function",
+            "parameters": [
+              {
+                "kind": "primitive",
+                "name": "int"
+              }
+            ],
+            "result": {
+              "kind": "primitive",
+              "name": "string"
+            }
+          }
+        }
+      ],
+      "name": "Payments",
+      "span": {
+        "end": 346,
+        "source": "pay.eff",
+        "start": 274
+      }
+    },
+    {
+      "body": {
+        "arms": [
+          {
+            "body": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "reference",
+              "span": {
+                "end": 481,
+                "source": "pay.eff",
+                "start": 476
+              },
+              "target": "local:pay#findOrder/order",
+              "type": {
+                "id": "type:pay#Order",
+                "kind": "named"
+              }
+            },
+            "pattern": {
+              "binding": {
+                "id": "local:pay#findOrder/order",
+                "name": "order",
+                "span": {
+                  "end": 471,
+                  "source": "pay.eff",
+                  "start": 466
+                },
+                "type": {
+                  "id": "type:pay#Order",
+                  "kind": "named"
+                }
+              },
+              "kind": "some",
+              "span": {
+                "end": 472,
+                "source": "pay.eff",
+                "start": 461
+              }
+            }
+          },
+          {
+            "body": {
+              "effects": {
+                "failures": [
+                  "error:pay#OrderNotFound"
+                ],
+                "requirements": []
+              },
+              "error": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "error": "error:pay#OrderNotFound",
+                "execution": "pure",
+                "fields": [
+                  {
+                    "name": "id",
+                    "value": {
+                      "effects": {
+                        "failures": [],
+                        "requirements": []
+                      },
+                      "execution": "pure",
+                      "kind": "reference",
+                      "span": {
+                        "end": 518,
+                        "source": "pay.eff",
+                        "start": 516
+                      },
+                      "target": "local:pay#findOrder/id",
+                      "type": {
+                        "id": "type:pay#OrderId",
+                        "kind": "named"
+                      }
+                    }
+                  }
+                ],
+                "kind": "error",
+                "span": {
+                  "end": 521,
+                  "source": "pay.eff",
+                  "start": 500
+                },
+                "type": {
+                  "id": "error:pay#OrderNotFound",
+                  "kind": "named"
+                }
+              },
+              "execution": "effect",
+              "kind": "fail",
+              "span": {
+                "end": 522,
+                "source": "pay.eff",
+                "start": 495
+              },
+              "type": {
+                "kind": "primitive",
+                "name": "never"
+              }
+            },
+            "pattern": {
+              "kind": "none",
+              "span": {
+                "end": 491,
+                "source": "pay.eff",
+                "start": 487
+              }
+            }
+          }
+        ],
+        "effects": {
+          "failures": [
+            "error:pay#OrderNotFound"
+          ],
+          "requirements": [
+            "cap:pay#Orders.find"
+          ]
+        },
+        "execution": "effect",
+        "kind": "match",
+        "span": {
+          "end": 526,
+          "source": "pay.eff",
+          "start": 433
+        },
+        "subject": {
+          "arguments": [
+            {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "reference",
+              "span": {
+                "end": 453,
+                "source": "pay.eff",
+                "start": 451
+              },
+              "target": "local:pay#findOrder/id",
+              "type": {
+                "id": "type:pay#OrderId",
+                "kind": "named"
+              }
+            }
+          ],
+          "capability": "cap:pay#Orders.find",
+          "effects": {
+            "failures": [],
+            "requirements": [
+              "cap:pay#Orders.find"
+            ]
+          },
+          "execution": "effect",
+          "kind": "perform",
+          "span": {
+            "end": 454,
+            "source": "pay.eff",
+            "start": 439
+          },
+          "type": {
+            "element": {
+              "id": "type:pay#Order",
+              "kind": "named"
+            },
+            "kind": "option"
+          }
+        },
+        "type": {
+          "id": "type:pay#Order",
+          "kind": "named"
+        }
+      },
+      "contract": "explicit",
+      "id": "value:pay#findOrder",
+      "kind": "function",
+      "name": "findOrder",
+      "parameters": [
+        {
+          "id": "local:pay#findOrder/id",
+          "name": "id",
+          "span": {
+            "end": 378,
+            "source": "pay.eff",
+            "start": 367
+          },
+          "type": {
+            "id": "type:pay#OrderId",
+            "kind": "named"
+          }
+        }
+      ],
+      "span": {
+        "end": 526,
+        "source": "pay.eff",
+        "start": 348
+      },
+      "type": {
+        "effects": {
+          "failures": [
+            "error:pay#OrderNotFound"
+          ],
+          "requirements": [
+            "cap:pay#Orders.find"
+          ]
+        },
+        "execution": "effect",
+        "kind": "function",
+        "parameters": [
+          {
+            "id": "type:pay#OrderId",
+            "kind": "named"
+          }
+        ],
+        "result": {
+          "id": "type:pay#Order",
+          "kind": "named"
+        }
+      }
+    },
+    {
+      "body": {
+        "effects": {
+          "failures": [
+            "error:pay#PaymentDeclined"
+          ],
+          "requirements": [
+            "cap:pay#Payments.charge"
+          ]
+        },
+        "execution": "effect",
+        "kind": "block",
+        "result": {
+          "effects": {
+            "failures": [],
+            "requirements": []
+          },
+          "execution": "pure",
+          "kind": "reference",
+          "span": {
+            "end": 692,
+            "source": "pay.eff",
+            "start": 687
+          },
+          "target": "local:pay#chargeOrder/order",
+          "type": {
+            "id": "type:pay#Order",
+            "kind": "named"
+          }
+        },
+        "span": {
+          "end": 694,
+          "source": "pay.eff",
+          "start": 620
+        },
+        "steps": [
+          {
+            "kind": "evaluate",
+            "value": {
+              "effects": {
+                "failures": [
+                  "error:pay#PaymentDeclined"
+                ],
+                "requirements": [
+                  "cap:pay#Payments.charge"
+                ]
+              },
+              "execution": "effect",
+              "job": {
+                "body": {
+                  "arguments": [
+                    {
+                      "effects": {
+                        "failures": [],
+                        "requirements": []
+                      },
+                      "execution": "pure",
+                      "field": "totalCents",
+                      "kind": "get",
+                      "record": {
+                        "effects": {
+                          "failures": [],
+                          "requirements": []
+                        },
+                        "execution": "pure",
+                        "kind": "reference",
+                        "span": {
+                          "end": 657,
+                          "source": "pay.eff",
+                          "start": 652
+                        },
+                        "target": "local:pay#chargeOrder/order",
+                        "type": {
+                          "id": "type:pay#Order",
+                          "kind": "named"
+                        }
+                      },
+                      "span": {
+                        "end": 668,
+                        "source": "pay.eff",
+                        "start": 652
+                      },
+                      "type": {
+                        "kind": "primitive",
+                        "name": "int"
+                      }
+                    }
+                  ],
+                  "capability": "cap:pay#Payments.charge",
+                  "effects": {
+                    "failures": [
+                      "error:pay#PaymentDeclined"
+                    ],
+                    "requirements": [
+                      "cap:pay#Payments.charge"
+                    ]
+                  },
+                  "execution": "effect",
+                  "kind": "perform",
+                  "span": {
+                    "end": 669,
+                    "source": "pay.eff",
+                    "start": 636
+                  },
+                  "type": {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                },
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "closure",
+                "parameters": [],
+                "span": {
+                  "end": 669,
+                  "source": "pay.eff",
+                  "start": 630
+                },
+                "type": {
+                  "effects": {
+                    "failures": [
+                      "error:pay#PaymentDeclined"
+                    ],
+                    "requirements": [
+                      "cap:pay#Payments.charge"
+                    ]
+                  },
+                  "execution": "effect",
+                  "kind": "function",
+                  "parameters": [],
+                  "result": {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                }
+              },
+              "kind": "retry",
+              "span": {
+                "end": 684,
+                "source": "pay.eff",
+                "start": 624
+              },
+              "times": 2,
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            }
+          }
+        ],
+        "type": {
+          "id": "type:pay#Order",
+          "kind": "named"
+        }
+      },
+      "contract": "explicit",
+      "id": "value:pay#chargeOrder",
+      "kind": "function",
+      "name": "chargeOrder",
+      "parameters": [
+        {
+          "id": "local:pay#chargeOrder/order",
+          "name": "order",
+          "span": {
+            "end": 561,
+            "source": "pay.eff",
+            "start": 549
+          },
+          "type": {
+            "id": "type:pay#Order",
+            "kind": "named"
+          }
+        }
+      ],
+      "span": {
+        "end": 694,
+        "source": "pay.eff",
+        "start": 528
+      },
+      "type": {
+        "effects": {
+          "failures": [
+            "error:pay#PaymentDeclined"
+          ],
+          "requirements": [
+            "cap:pay#Payments.charge"
+          ]
+        },
+        "execution": "effect",
+        "kind": "function",
+        "parameters": [
+          {
+            "id": "type:pay#Order",
+            "kind": "named"
+          }
+        ],
+        "result": {
+          "id": "type:pay#Order",
+          "kind": "named"
+        }
+      }
+    },
+    {
+      "body": {
+        "effects": {
+          "failures": [],
+          "requirements": []
+        },
+        "execution": "pure",
+        "fields": [
+          {
+            "name": "status",
+            "value": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "literal",
+              "span": {
+                "end": 767,
+                "source": "pay.eff",
+                "start": 761
+              },
+              "type": {
+                "kind": "primitive",
+                "name": "int"
+              },
+              "value": "paid"
+            }
+          }
+        ],
+        "kind": "update",
+        "record": {
+          "effects": {
+            "failures": [],
+            "requirements": []
+          },
+          "execution": "pure",
+          "kind": "reference",
+          "span": {
+            "end": 751,
+            "source": "pay.eff",
+            "start": 746
+          },
+          "target": "local:pay#markPaid/order",
+          "type": {
+            "id": "type:pay#Order",
+            "kind": "named"
+          }
+        },
+        "span": {
+          "end": 769,
+          "source": "pay.eff",
+          "start": 741
+        },
+        "type": {
+          "id": "type:pay#Order",
+          "kind": "named"
+        }
+      },
+      "contract": "explicit",
+      "id": "value:pay#markPaid",
+      "kind": "function",
+      "name": "markPaid",
+      "parameters": [
+        {
+          "id": "local:pay#markPaid/order",
+          "name": "order",
+          "span": {
+            "end": 726,
+            "source": "pay.eff",
+            "start": 714
+          },
+          "type": {
+            "id": "type:pay#Order",
+            "kind": "named"
+          }
+        }
+      ],
+      "span": {
+        "end": 770,
+        "source": "pay.eff",
+        "start": 696
+      },
+      "type": {
+        "effects": {
+          "failures": [],
+          "requirements": []
+        },
+        "execution": "pure",
+        "kind": "function",
+        "parameters": [
+          {
+            "id": "type:pay#Order",
+            "kind": "named"
+          }
+        ],
+        "result": {
+          "id": "type:pay#Order",
+          "kind": "named"
+        }
+      }
+    },
+    {
+      "body": {
+        "effects": {
+          "failures": [],
+          "requirements": [
+            "cap:pay#Orders.save"
+          ]
+        },
+        "execution": "effect",
+        "kind": "block",
+        "result": {
+          "effects": {
+            "failures": [],
+            "requirements": []
+          },
+          "execution": "pure",
+          "kind": "reference",
+          "span": {
+            "end": 864,
+            "source": "pay.eff",
+            "start": 859
+          },
+          "target": "local:pay#saveOrder/order",
+          "type": {
+            "id": "type:pay#Order",
+            "kind": "named"
+          }
+        },
+        "span": {
+          "end": 866,
+          "source": "pay.eff",
+          "start": 834
+        },
+        "steps": [
+          {
+            "kind": "evaluate",
+            "value": {
+              "arguments": [
+                {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "reference",
+                  "span": {
+                    "end": 855,
+                    "source": "pay.eff",
+                    "start": 850
+                  },
+                  "target": "local:pay#saveOrder/order",
+                  "type": {
+                    "id": "type:pay#Order",
+                    "kind": "named"
+                  }
+                }
+              ],
+              "capability": "cap:pay#Orders.save",
+              "effects": {
+                "failures": [],
+                "requirements": [
+                  "cap:pay#Orders.save"
+                ]
+              },
+              "execution": "effect",
+              "kind": "perform",
+              "span": {
+                "end": 856,
+                "source": "pay.eff",
+                "start": 838
+              },
+              "type": {
+                "kind": "primitive",
+                "name": "unit"
+              }
+            }
+          }
+        ],
+        "type": {
+          "id": "type:pay#Order",
+          "kind": "named"
+        }
+      },
+      "contract": "explicit",
+      "id": "value:pay#saveOrder",
+      "kind": "function",
+      "name": "saveOrder",
+      "parameters": [
+        {
+          "id": "local:pay#saveOrder/order",
+          "name": "order",
+          "span": {
+            "end": 803,
+            "source": "pay.eff",
+            "start": 791
+          },
+          "type": {
+            "id": "type:pay#Order",
+            "kind": "named"
+          }
+        }
+      ],
+      "span": {
+        "end": 866,
+        "source": "pay.eff",
+        "start": 772
+      },
+      "type": {
+        "effects": {
+          "failures": [],
+          "requirements": [
+            "cap:pay#Orders.save"
+          ]
+        },
+        "execution": "effect",
+        "kind": "function",
+        "parameters": [
+          {
+            "id": "type:pay#Order",
+            "kind": "named"
+          }
+        ],
+        "result": {
+          "id": "type:pay#Order",
+          "kind": "named"
+        }
+      }
+    },
+    {
+      "body": {
+        "effects": {
+          "failures": [
+            "error:pay#OrderNotFound",
+            "error:pay#PaymentDeclined"
+          ],
+          "requirements": [
+            "cap:pay#Orders.find",
+            "cap:pay#Orders.save",
+            "cap:pay#Payments.charge"
+          ]
+        },
+        "execution": "effect",
+        "kind": "block",
+        "result": {
+          "arguments": [
+            {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "reference",
+              "span": {
+                "end": 1039,
+                "source": "pay.eff",
+                "start": 985
+              },
+              "target": "local:pay#pay/$p4",
+              "type": {
+                "id": "type:pay#Order",
+                "kind": "named"
+              }
+            }
+          ],
+          "callee": {
+            "effects": {
+              "failures": [],
+              "requirements": []
+            },
+            "execution": "pure",
+            "kind": "reference",
+            "span": {
+              "end": 1056,
+              "source": "pay.eff",
+              "start": 1047
+            },
+            "target": "value:pay#saveOrder",
+            "type": {
+              "effects": {
+                "failures": [],
+                "requirements": [
+                  "cap:pay#Orders.save"
+                ]
+              },
+              "execution": "effect",
+              "kind": "function",
+              "parameters": [
+                {
+                  "id": "type:pay#Order",
+                  "kind": "named"
+                }
+              ],
+              "result": {
+                "id": "type:pay#Order",
+                "kind": "named"
+              }
+            }
+          },
+          "effects": {
+            "failures": [],
+            "requirements": [
+              "cap:pay#Orders.save"
+            ]
+          },
+          "execution": "effect",
+          "kind": "call",
+          "span": {
+            "end": 1056,
+            "source": "pay.eff",
+            "start": 1047
+          },
+          "type": {
+            "id": "type:pay#Order",
+            "kind": "named"
+          }
+        },
+        "span": {
+          "end": 1056,
+          "source": "pay.eff",
+          "start": 985
+        },
+        "steps": [
+          {
+            "binding": {
+              "id": "local:pay#pay/$p1",
+              "name": "$p1",
+              "span": {
+                "end": 987,
+                "source": "pay.eff",
+                "start": 985
+              },
+              "type": {
+                "id": "type:pay#OrderId",
+                "kind": "named"
+              }
+            },
+            "kind": "bind",
+            "value": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "reference",
+              "span": {
+                "end": 987,
+                "source": "pay.eff",
+                "start": 985
+              },
+              "target": "local:pay#pay/id",
+              "type": {
+                "id": "type:pay#OrderId",
+                "kind": "named"
+              }
+            }
+          },
+          {
+            "binding": {
+              "id": "local:pay#pay/$p2",
+              "name": "$p2",
+              "span": {
+                "end": 1004,
+                "source": "pay.eff",
+                "start": 985
+              },
+              "type": {
+                "id": "type:pay#Order",
+                "kind": "named"
+              }
+            },
+            "kind": "bind",
+            "value": {
+              "arguments": [
+                {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "reference",
+                  "span": {
+                    "end": 987,
+                    "source": "pay.eff",
+                    "start": 985
+                  },
+                  "target": "local:pay#pay/$p1",
+                  "type": {
+                    "id": "type:pay#OrderId",
+                    "kind": "named"
+                  }
+                }
+              ],
+              "callee": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "reference",
+                "span": {
+                  "end": 1004,
+                  "source": "pay.eff",
+                  "start": 995
+                },
+                "target": "value:pay#findOrder",
+                "type": {
+                  "effects": {
+                    "failures": [
+                      "error:pay#OrderNotFound"
+                    ],
+                    "requirements": [
+                      "cap:pay#Orders.find"
+                    ]
+                  },
+                  "execution": "effect",
+                  "kind": "function",
+                  "parameters": [
+                    {
+                      "id": "type:pay#OrderId",
+                      "kind": "named"
+                    }
+                  ],
+                  "result": {
+                    "id": "type:pay#Order",
+                    "kind": "named"
+                  }
+                }
+              },
+              "effects": {
+                "failures": [
+                  "error:pay#OrderNotFound"
+                ],
+                "requirements": [
+                  "cap:pay#Orders.find"
+                ]
+              },
+              "execution": "effect",
+              "kind": "call",
+              "span": {
+                "end": 1004,
+                "source": "pay.eff",
+                "start": 995
+              },
+              "type": {
+                "id": "type:pay#Order",
+                "kind": "named"
+              }
+            }
+          },
+          {
+            "binding": {
+              "id": "local:pay#pay/$p3",
+              "name": "$p3",
+              "span": {
+                "end": 1023,
+                "source": "pay.eff",
+                "start": 985
+              },
+              "type": {
+                "id": "type:pay#Order",
+                "kind": "named"
+              }
+            },
+            "kind": "bind",
+            "value": {
+              "arguments": [
+                {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "reference",
+                  "span": {
+                    "end": 1004,
+                    "source": "pay.eff",
+                    "start": 985
+                  },
+                  "target": "local:pay#pay/$p2",
+                  "type": {
+                    "id": "type:pay#Order",
+                    "kind": "named"
+                  }
+                }
+              ],
+              "callee": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "reference",
+                "span": {
+                  "end": 1023,
+                  "source": "pay.eff",
+                  "start": 1012
+                },
+                "target": "value:pay#chargeOrder",
+                "type": {
+                  "effects": {
+                    "failures": [
+                      "error:pay#PaymentDeclined"
+                    ],
+                    "requirements": [
+                      "cap:pay#Payments.charge"
+                    ]
+                  },
+                  "execution": "effect",
+                  "kind": "function",
+                  "parameters": [
+                    {
+                      "id": "type:pay#Order",
+                      "kind": "named"
+                    }
+                  ],
+                  "result": {
+                    "id": "type:pay#Order",
+                    "kind": "named"
+                  }
+                }
+              },
+              "effects": {
+                "failures": [
+                  "error:pay#PaymentDeclined"
+                ],
+                "requirements": [
+                  "cap:pay#Payments.charge"
+                ]
+              },
+              "execution": "effect",
+              "kind": "call",
+              "span": {
+                "end": 1023,
+                "source": "pay.eff",
+                "start": 1012
+              },
+              "type": {
+                "id": "type:pay#Order",
+                "kind": "named"
+              }
+            }
+          },
+          {
+            "binding": {
+              "id": "local:pay#pay/$p4",
+              "name": "$p4",
+              "span": {
+                "end": 1039,
+                "source": "pay.eff",
+                "start": 985
+              },
+              "type": {
+                "id": "type:pay#Order",
+                "kind": "named"
+              }
+            },
+            "kind": "bind",
+            "value": {
+              "arguments": [
+                {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "reference",
+                  "span": {
+                    "end": 1023,
+                    "source": "pay.eff",
+                    "start": 985
+                  },
+                  "target": "local:pay#pay/$p3",
+                  "type": {
+                    "id": "type:pay#Order",
+                    "kind": "named"
+                  }
+                }
+              ],
+              "callee": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "reference",
+                "span": {
+                  "end": 1039,
+                  "source": "pay.eff",
+                  "start": 1031
+                },
+                "target": "value:pay#markPaid",
+                "type": {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "function",
+                  "parameters": [
+                    {
+                      "id": "type:pay#Order",
+                      "kind": "named"
+                    }
+                  ],
+                  "result": {
+                    "id": "type:pay#Order",
+                    "kind": "named"
+                  }
+                }
+              },
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "call",
+              "span": {
+                "end": 1039,
+                "source": "pay.eff",
+                "start": 1031
+              },
+              "type": {
+                "id": "type:pay#Order",
+                "kind": "named"
+              }
+            }
+          }
+        ],
+        "type": {
+          "id": "type:pay#Order",
+          "kind": "named"
+        }
+      },
+      "contract": "explicit",
+      "id": "value:pay#pay",
+      "kind": "function",
+      "name": "pay",
+      "parameters": [
+        {
+          "id": "local:pay#pay/id",
+          "name": "id",
+          "span": {
+            "end": 899,
+            "source": "pay.eff",
+            "start": 888
+          },
+          "type": {
+            "id": "type:pay#OrderId",
+            "kind": "named"
+          }
+        }
+      ],
+      "span": {
+        "end": 1056,
+        "source": "pay.eff",
+        "start": 868
+      },
+      "type": {
+        "effects": {
+          "failures": [
+            "error:pay#OrderNotFound",
+            "error:pay#PaymentDeclined"
+          ],
+          "requirements": [
+            "cap:pay#Orders.find",
+            "cap:pay#Orders.save",
+            "cap:pay#Payments.charge"
+          ]
+        },
+        "execution": "effect",
+        "kind": "function",
+        "parameters": [
+          {
+            "id": "type:pay#OrderId",
+            "kind": "named"
+          }
+        ],
+        "result": {
+          "id": "type:pay#Order",
+          "kind": "named"
+        }
+      }
+    }
+  ],
+  "exports": [
+    "value:pay#pay"
+  ],
+  "format": "light-functional-ir",
+  "imports": [],
+  "module": "pay",
+  "sources": [
+    "pay.eff"
+  ],
+  "version": 1
+}

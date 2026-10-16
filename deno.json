@@ -4,6 +4,7 @@
     "test": "deno test --allow-read --ignore='**/*_slow_test.ts' tests/",
     "test:slow": "deno test --allow-all --permit-no-files 'tests/**/*_slow_test.ts'",
     "golden:update": "deno run --allow-read --allow-write scripts/golden_update.ts",
+    "validate:update": "deno run --allow-read --allow-write scripts/validate_fixtures.ts",
     "fmt": "deno fmt",
     "lint": "deno lint"
   },
