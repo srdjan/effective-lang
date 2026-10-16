@@ -425,7 +425,7 @@ M1, M3, and M4 run the real language server as a subprocess. All three replay th
 
 M1 times the path from an edit to its diagnostics. The time runs from just before the write of `textDocument/didChange` to the receipt of the matching `publishDiagnostics`. Then M1 times one hover on a fixed function name. Two server processes, A and B, run the same script, and the side that goes first alternates. M1 reports a distribution and the noise floor for each row.
 
-M1 decides the debounce time and whether the server needs a worker thread or can stay on the main thread. It also gives the baseline for the latency budget D9. The design needs this baseline before it sets the budget.
+M1 decides the debounce time and whether the server needs a worker thread or can stay on the main thread. It also checks the latency budget D9: 100 ms at p90 from `didChange` to `publishDiagnostics` on the large synthetic size. The decision record of the design has the evidence.
 
 M3 counts the work that one edit causes. After each step, the client sends `effective/stats`. M3 reports the median and the maximum of the per-step change in the counts `parses`, `checks`, `lowerings`, and `emits`. It also reports the fraction of steps with an interface change and with a mode change.
 
