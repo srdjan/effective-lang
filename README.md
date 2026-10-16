@@ -6,7 +6,7 @@ The design is in `docs/transpiler-design.md`. The Phase A plan is in `docs/plans
 
 ## Status
 
-Parts A1, A2, A3a, A3b, A4, A5, A6a, and A6b exist. Part A1 adds the project skeleton, the lexer, a lossless parser with error recovery, and the `syntax` diagnostics. The parser reads `.eff` source files and `.effi` host interface files.
+Parts A1, A2, A3a, A3b, A4, A5, A6a, A6b, and A7 exist. Part A1 adds the project skeleton, the lexer, a lossless parser with error recovery, and the `syntax` diagnostics. The parser reads `.eff` source files and `.effi` host interface files.
 
 Part A2 adds the declaration index, the project loader, the module graph, and the name resolver. It adds the diagnostic codes `unknown-name`, `module`, and `declaration`.
 
@@ -16,11 +16,13 @@ Part A3b adds body checking. It checks every function and constant body, infers 
 
 Part A4 lowers a checked module to typed IR and serializes it. It adds a synchronous SHA-256 for builtin identities.
 
-Part A6a adds the Effect-TS emitter. It turns the IR of each module into the text of one TypeScript module. It adds the five golden files, the host module `users-live.ts`, and the slow tests that check and run the emitted code. The command-line tool does not exist yet.
+Part A6a adds the Effect-TS emitter. It turns the IR of each module into the text of one TypeScript module. It adds the five golden files, the host module `users-live.ts`, and the slow tests that check and run the emitted code. Part A7 adds the command-line tool.
 
 Part A6b adds the span table, version 3 source maps, and the mapping of `deno check` errors to Effective spans. It adds the diagnostic code `host-boundary/001`, a parser for `deno check` output, and the fixtures in `fixtures/host-boundary/`. It also makes the printer a fixed point of `deno fmt` for the golden files and for the programs in `fixtures/emit/forms/`. The golden files are no longer excluded from `deno fmt`.
 
 Part A5 adds the independent IR validator. It recomputes every annotation of a module from the IR and the source texts, and it reports each disagreement with its validation area. It adds the category `validation` with the codes `validation/001` to `validation/008`, and the mutation fixtures in `fixtures/validate/`.
+
+Part A7 adds the program with module cutoff (`src/core/db.ts`), the public API (`src/core/mod.ts`), and the command-line tool (`src/cli/main.ts`). The tool has the commands `check`, `build`, and `watch`, and the flags `--tsc` and `--validate`. It also adds the line `//# sourceMappingURL=<file>.map` to each emitted file.
 
 ## Requirements
 
@@ -37,10 +39,11 @@ Run every command from the repository root.
 | `deno task test:slow`       | Runs only files named `*_slow_test.ts`. They run `deno check`, `deno fmt`, and `deno run`. |
 | `deno task golden:update`   | Writes `fixtures/golden/<module>.ts` again from `fixtures/examples`.                       |
 | `deno task validate:update` | Writes the mutation fixtures in `fixtures/validate/` again from the current lowering.      |
+| `deno task effective`       | Runs the command-line tool. See "Using the command line".                                  |
 | `deno task fmt`             | Formats the source files.                                                                  |
 | `deno task lint`            | Runs the linter.                                                                           |
 
-The tasks `effective` and `bench` do not exist yet. Later parts add them.
+The task `bench` does not exist yet. Part A8 adds it.
 
 ## Layout
 
@@ -66,6 +69,8 @@ src/core/      The core library. It is synchronous and pure.
   initialization.ts Eager dependency graph of module constants.
   interface.ts   Module interfaces, their hashes, and the declaration driver.
   analyze.ts     Public entry: load a project, resolve it, collect diagnostics.
+  db.ts          Program: revisions, parse memo, check memo with module cutoff, lazy IR, text, and maps.
+  mod.ts         The public API of the core: a list of re-exports.
   sha256.ts      Synchronous SHA-256 over the UTF-8 bytes of a string.
   lower.ts       Checked modules to typed IR: pipelines, builtin specialization, imports.
   serialize.ts   Canonical JSON of a module IR, with the set and number checks.
@@ -89,6 +94,19 @@ src/core/      The core library. It is synchronous and pure.
     expr.ts        The expression scheme: pure, inGen, asEffect.
     decls.ts       Declarations, their order, and the export rule.
     walk.ts        Traversals of the IR.
+src/cli/       The command-line tool. Only this directory calls Deno APIs, besides the scripts and the slow tests.
+  main.ts        main(args, io) returns the exit code. The last lines wire the real io.
+  args.ts        The command line: commands, root, and flags.
+  io.ts          The ports: file system, deno check runner, and watch source.
+  deno_io.ts     The real ports: Deno file system, subprocess, and Deno.watchFs.
+  workspace.ts   The walk over the root: .eff and .effi files and effective.json.
+  session.ts     One project directory and one program: sync, then build.
+  build.ts       One build: validate, write the files, run deno check.
+  tsc.ts         The generated deno check configuration and the mapping of its output.
+  format.ts      The output line of a diagnostic.
+  report.ts      Printing of a build outcome: diagnostics on stdout, the rest on stderr.
+  watch.ts       The watch loop over an injected event source.
+  events.ts      Debouncing of file system events.
 scripts/       Scripts that the tasks run. golden_update.ts writes the golden files.
                validate_fixtures.ts writes the mutation fixtures.
 tests/         Deno tests and test helpers.
@@ -164,7 +182,7 @@ Each distinct closed instance of a builtin gets the identity `value:<module>#$bu
 
 `validateModule(ir, sources)` returns the validation diagnostics of one module. The `sources` value maps each source identifier to its text. An empty list means that the module is valid. The diagnostics are sorted and carry the IR path of the node, for example `declarations[2].body.arguments[0]`.
 
-`validateProject(project, lowered)` validates each module in the map that `lowerProject` returns. It reads the source texts from the parse trees of the project. A module that did not lower has no entry in the result. Part A7 wires this function to `build --validate`.
+`validateProject(project, lowered)` validates each module in the map that `lowerProject` returns. It reads the source texts from the parse trees of the project. A module that did not lower has no entry in the result. The command `build --validate` calls this function.
 
 The validator recomputes types, failure sets, requirement sets, and execution modes from the children of each node, with the equations of the spec. It compares the result with the recorded annotation. After a disagreement it continues with the recomputed value, so one fault gives one diagnostic. It reimplements type compatibility and does not call the checker. A test checks that `src/core/validate/` imports only `ir.ts`, `source.ts`, and `diagnostics.ts`.
 
@@ -209,11 +227,67 @@ To change the output on purpose, edit the emitter and run `deno task golden:upda
 | Tag             | Meaning                                                                                                                                                 |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `host-boundary` | The position lies on a host assertion constant. The diagnostic has the code `host-boundary/001` and the span of the imported name in the `.eff` import. |
-| `host-module`   | The position lies in a registered host module. Part A7 prints it with the code `host-boundary/001` at that position.                                    |
+| `host-module`   | The position lies in a registered host module. The CLI prints it with the code `host-boundary/001` at that position.                                    |
 | `source`        | The position lies inside a printed node. The result has the innermost source span. This probably means a defect of the emitter.                         |
 | `generated`     | The file has no span table and is not a host module, or the position lies outside every record. The result keeps the generated position.                |
 
 The fixture `fixtures/host-boundary/users-live-missing-method/` holds a wrong `users-live.ts`. A slow test copies the examples to a temporary directory, replaces `users-live.ts`, and runs `deno check`. It requires exactly one diagnostic: `host-boundary/001` on `UsersLive` in the import of `main.eff`. The directory also holds two captured outputs of `deno check` for the parser tests.
+
+## Using the program
+
+`new Program(root)` holds the state of one project across revisions. `program.update({ set, remove })` applies file changes and starts a revision. The `set` value maps root-relative paths to texts. The `remove` value lists deleted paths.
+
+The program reads its files only from these calls, so it needs no `SourceHost`. Every `.eff` file in the set is an entry. The call returns a `Result`. A missing or invalid `effective.json` is an error value, and no revision starts.
+
+A `Revision` answers one query for each module name: `checkedModule`, `lowered`, `emitted`, `spanTable`, and `sourceMap`. It also holds `diagnostics`, `interfaceHash`, and `rechecked`. The `rechecked` list names the modules that this revision checked again, in topological order. It includes the host interface modules.
+
+The IR, the emitted text, the span table, and the source map are computed on first use. A module that is not checked again returns the same objects as in the revision before.
+
+The program has three memos. The parse memo keeps the syntax tree of a file whose text is equal. The check memo keeps a checked module when its key is equal. The lazy queries store their values on the memo entry of the module.
+
+The key holds five items: the text of the module, its path, the project configuration, and the analysis diagnostics of its file. The fifth item is a signature of each module that it reaches. The program calls the same per-module steps as `checkAnalysis`, in the same order. A revision therefore equals a run from scratch. The test `tests/db_test.ts` compares both after each edit of a sequence.
+
+The signature of a reached module is the hash of its full interface payload, not the interface hash of design I8. The IR import of a module carries the payload of each module it imports, and the payload carries source spans. An edit that moves an exported type, error, or service of an imported module therefore checks the importers again.
+
+A body edit below the last exported type, error, or service keeps the signature. An edit that keeps the length of the text above them keeps it too. The interface hash is still available through `interfaceHash(name)`.
+
+One `TypeTable` lives as long as the program, so reused modules keep valid type references. The table only grows. Its memory growth in a long watch session is measurement M4.
+
+`src/core/mod.ts` re-exports the program and the pipeline functions. It also re-exports the span table and source map builders, the `deno check` parser and mapper, and the diagnostic types with `describeCode`. The IR types are in the list too.
+
+## Using the command line
+
+Run `deno task effective <command> [root] [flags]` from the repository root. The task runs in the repository directory, so pass an explicit root, for example `fixtures/examples`. The default root is the current directory.
+
+| Command                                       | What it does                                                                                              |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `deno task effective check [root]`            | Prints the diagnostics of the project.                                                                    |
+| `deno task effective build [root]`            | Also writes `<module>.ts` and `<module>.ts.map` next to each source for every module without an error.    |
+| `deno task effective build [root] --validate` | Also runs the IR validator and prints its diagnostics.                                                    |
+| `deno task effective build [root] --tsc`      | Also runs `deno check` over the written files and the host modules, and maps each error to the source.    |
+| `deno task effective watch [root] [--tsc]`    | Builds once, then builds again after each change of a source file. It prints the modules that it checked. |
+
+The root is the project directory with `effective.json`. The modules are the `.eff` files under the root, found by a recursive walk. The walk skips directories whose names start with `.` and directories named `node_modules`. The `.effi` files come from `effective.json`.
+
+A diagnostic prints as `path:line:column: error code: message`. The path is relative to the root. The line and the column are one-based, and the column counts UTF-16 code units. The tool sorts the lines by path, position, and code.
+
+The message is one line. Stdout holds only diagnostics. A summary line and all other messages go to stderr.
+
+The exit code is 0 when there is no diagnostic, 1 when there is at least one, and 2 for a usage or configuration error. A usage error is an unknown command or flag, an extra argument, or a missing root directory. A configuration error is a missing or invalid `effective.json`.
+
+`build` writes a module only when it has no error. A module with an error keeps its last good `.ts` and `.ts.map` files. The tool writes a file only when its text changes. `--validate` runs `validateProject` on the lowered IR. A module with a validation diagnostic is not written.
+
+`--tsc` runs `deno check` with a generated configuration. The configuration sets strict mode, `exactOptionalPropertyTypes`, and `noUncheckedIndexedAccess`. It maps `effect` to `npm:effect@4.0.5`. The tool writes the configuration to a temporary directory and removes it after the run. It passes `--no-lock`, so the project directory gets no new file.
+
+The tool skips `deno check` when the build has an error. A `host-boundary` result prints as a normal diagnostic. A host-module error prints as `<hostfile>:<line>:<column>: error host-boundary/001: <message>`. A source error prints at the `.eff` position. A generated error prints at the generated position. Both use the code `TS<number>`.
+
+A line that belongs to no diagnostic goes to stderr. Any `deno check` diagnostic gives exit code 1.
+
+`watch` reads the root again after each batch of file events. It gives the program the files that changed. When no file changed, it prints nothing. A batch joins the events that arrive within 100 milliseconds of the previous event.
+
+After each build, `watch` prints `rechecked: <modules>` to stderr, then the diagnostics. A broken `effective.json` prints an error, and the loop goes on. At start, a broken `effective.json` gives exit code 2. The loop takes its event source as a parameter, so a fast test drives it with a fake source.
+
+`main(args, io)` in `src/cli/main.ts` returns the exit code. The `io` value gives the stdout and stderr writers, the file system, the `deno check` runner, and the watch source. The fast tests in `tests/cli_test.ts` run `main` with in-memory doubles from `tests/cli_helpers.ts`. The slow tests in `tests/cli_slow_test.ts` run the real tool.
 
 ## Error fixture convention
 

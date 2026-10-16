@@ -282,6 +282,24 @@ function emptySpan(source: string): Span {
   return { source, start: 0, end: 0 };
 }
 
+/** The parse tree, parse diagnostics, and declaration index of one file. */
+export interface ParsedFile {
+  readonly parsed: ParseResult;
+  readonly index: FileIndex;
+}
+
+/**
+ * Turns the text of a file into its parse result. The default parses every time.
+ * A memoizing caller returns the earlier result when the text is equal, so that
+ * an unchanged file keeps its syntax tree object.
+ */
+export type FileParser = (path: string, text: string) => ParsedFile;
+
+export const parseFileFresh: FileParser = (path, text) => {
+  const parsed = parse(path, text);
+  return { parsed, index: buildIndex(parsed.tree) };
+};
+
 class Loader {
   readonly modules = new Map<string, ModuleInfo>();
   readonly diagnostics: Diagnostic[] = [];
@@ -298,6 +316,7 @@ class Loader {
     private readonly host: SourceHost,
     private readonly root: string,
     private readonly config: ProjectConfig,
+    private readonly parseFile: FileParser,
   ) {}
 
   /** Loads a file once. Returns the failure when the file cannot be used. */
@@ -323,14 +342,9 @@ class Loader {
       this.failures.set(path, failure);
       return failure;
     }
-    const parsed = parse(path, read.value);
+    const { parsed, index } = this.parseFile(path, read.value);
     this.pathOfName.set(name, path);
-    this.loaded.set(path, {
-      tree: parsed.tree,
-      parsed,
-      index: buildIndex(parsed.tree),
-      name,
-    });
+    this.loaded.set(path, { tree: parsed.tree, parsed, index, name });
     this.queue.push(path);
     return undefined;
   }
@@ -564,17 +578,19 @@ function cycleDiagnostic(
  * Reads the project file, loads the entry files and every module they import,
  * builds the module graph, and orders the modules. Entry paths are relative to
  * the root. A missing or malformed project file is an error value. Other
- * problems are diagnostics in the project.
+ * problems are diagnostics in the project. The optional `parseFile` replaces
+ * the parser, for memoization (part A7).
  */
 export function loadProject(
   host: SourceHost,
   root: string,
   entries: readonly string[],
+  parseFile: FileParser = parseFileFresh,
 ): Result<Project, ConfigError> {
   const configResult = readConfig(host, root);
   if (!configResult.ok) return configResult;
   const { config } = configResult.value;
-  const loader = new Loader(host, root, config);
+  const loader = new Loader(host, root, config, parseFile);
   for (const entry of entries) loader.addEntry(entry);
   loader.run();
   const linked = linkModules(loader.modules);

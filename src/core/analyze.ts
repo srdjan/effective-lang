@@ -2,7 +2,12 @@
 // collect all diagnostics. Expected failures are values; nothing throws.
 
 import { type Diagnostic, normalizeDiagnostics } from "./diagnostics.ts";
-import { type ConfigError, loadProject, type Project } from "./project.ts";
+import {
+  type ConfigError,
+  type FileParser,
+  loadProject,
+  type Project,
+} from "./project.ts";
 import { type ModuleResolution, resolveProject } from "./resolve.ts";
 import type { Result, SourceHost } from "./source.ts";
 
@@ -24,8 +29,9 @@ export function analyzeProject(
   host: SourceHost,
   root: string,
   entries: readonly string[],
+  parseFile?: FileParser,
 ): Result<Analysis, ConfigError> {
-  const loaded = loadProject(host, root, entries);
+  const loaded = loadProject(host, root, entries, parseFile);
   if (!loaded.ok) return loaded;
   const project = loaded.value;
   const resolutions = resolveProject(project);

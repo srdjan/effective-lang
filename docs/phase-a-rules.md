@@ -114,3 +114,39 @@ the implementer picks the stricter rule and records it here.
 | Layout of a conditional chain | A match with several arms prints `a ? x : b ? y : z` with every `?` and `:` at one indent level |
 | Function type parameters | A broken parameter list of a function type ends with a comma |
 | Not at a fixed point | A binary expression that is longer than 80 columns, and an arrow chain whose first parameter list must break. The printer does not break them yet |
+
+## Program and CLI (A7)
+
+| Rule | Choice |
+| --- | --- |
+| Check memo key | The key holds the module text, its path, the project configuration, the analysis diagnostics of its file, and the signature of each reached module |
+| Signature of a reached module | The hash of its full interface payload with spans, not the interface hash. IR imports carry the spans of foreign declarations, so a span change must recheck importers. A test shows that the interface hash alone breaks equality with a run from scratch |
+| Signature without an interface | A module whose interface is an error value uses its own key as signature |
+| Reached module not yet checked | In an import cycle, a reached module that comes later in the order counts as absent, as in `checkAnalysis` |
+| Project configuration in the key | Every key holds the configuration, so a change of the host registry rechecks all modules |
+| Intern table | One `TypeTable` for the life of the program. It only grows. The memory growth is measurement M4 |
+| Rechecked list | It names every module that was checked again, in topological order, and it includes `.effi` modules |
+| Lazy queries | IR, emitted text, span table, and source map are computed on first use and stored on the memo entry |
+| Config error in the program | `update` returns the error value and starts no revision. The files stay changed, and a later fix returns to the old memo |
+| Modules of a project | Every `.eff` file under the root. The walk skips directories that start with `.` and `node_modules`. `.effi` files come from `effective.json` |
+| Exit codes | 0 without diagnostics, 1 with a diagnostic or a failed build step, 2 for a usage or configuration error. A missing `effective.json` is a configuration error |
+| Help | `--help` prints the usage on stdout and exits 0 |
+| Output line | `path:line:column: error code: message`. A message with several lines prints as one line. Related spans are not printed |
+| Sort order | Path, then line, then column, then code, then message |
+| Summary line | The tool prints `N modules, M diagnostics` to stderr. N counts `.eff` modules. A build adds the number of files that it wrote |
+| Written files | The tool writes a file only when its text differs from the file on disk |
+| Validation failure | A module with a `validation` diagnostic is not written |
+| Lowering or emit failure | A failure that is not a diagnostic of the module prints `error: ...` on stderr and gives exit code 1 |
+| `--tsc` after an error | The tool skips `deno check` when the build has a diagnostic or a failure, because the set of written files is incomplete |
+| `--tsc` files | The files that this build produced, plus the host modules of `effective.json` |
+| `--tsc` configuration | A temporary directory with `deno.json`, removed after the run. The command has `--no-lock`. The project directory gets no new file |
+| `--tsc` without a parsed diagnostic | If `deno check` exits nonzero and prints no diagnostic, the tool prints a note and exits 1 |
+| Permissions of the task | `--allow-read --allow-write --allow-run=deno`. The tool needs no environment access |
+| Task directory | `deno task` runs in the repository root, so the default root `.` is the repository. Users pass a root |
+| Watch events | The real source debounces events for 100 ms and keeps only `.eff`, `.effi`, and `effective.json` paths |
+| Watch rebuild | Each batch rereads the root and gives the program the files that changed. A batch with no change prints nothing |
+| Watch output | `rechecked: <modules>` and the summary go to stderr. Diagnostics go to stdout. Only a changed file starts a build |
+| Watch errors | A broken project file at start gives exit code 2. A broken project file later prints an error and the loop goes on |
+| Watch and `--tsc` | `watch --tsc` runs `deno check` after each build without errors |
+| Public API | `mod.ts` re-exports the IR types with `export type *`. The explicit `Diagnostic` of the core wins over the one in `ir.ts` |
+| Error path in messages | A malformed `effective.json` is named `effective.json`, as `parseConfig` reports it. A missing one is named with the root |
