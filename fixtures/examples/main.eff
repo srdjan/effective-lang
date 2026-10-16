@@ -1,0 +1,6 @@
+import { displayName, StoreUnavailable } from "./users.eff"
+import { UsersLive } from "host:providers"
+
+export const main = (): string
+  fails StoreUnavailable =>
+  provide(UsersLive, () => displayName("u1"))

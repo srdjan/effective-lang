@@ -1,0 +1,20 @@
+const first = 1
+// error: syntax/008
+const unfinished = 1 +
+const second = 2
+// error: syntax/008
+const unclosedCall = foo(1,
+const third = 3
+// error: syntax/008
+type NoType =
+type Fourth = { a: int }
+// error: syntax/009
+garbage tokens here
+export const fifth = (x: int): int => x
+// error: syntax/008
+import { a, b
+const sixth = 6
+service Broken {
+  // error: syntax/008
+  f(x: int
+const seventh = 7

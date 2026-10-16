@@ -1,0 +1,5 @@
+const big = 1e308
+// error: syntax/005
+const tooBig = 1e999
+// error: syntax/005
+const alsoTooBig = 2.5e400

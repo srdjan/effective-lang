@@ -1,0 +1,10 @@
+const f = (x: int): int => {
+  const a = 1
+  // error: syntax/008
+  const b = 1 +
+  const c = 3
+  // error: syntax/008
+  x y z
+  c
+}
+const next = 1

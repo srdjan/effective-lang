@@ -1,0 +1,5 @@
+import { Users } from "./users.eff"
+// error: syntax/013
+provider UsersLive provides Users
+// error: syntax/013
+export provider Other provides Users

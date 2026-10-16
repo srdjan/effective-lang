@@ -1,0 +1,125 @@
+// Every form of the grammar. This file parses with no diagnostics.
+import { a, b, } from "./other.eff"
+import { Users } from "host:providers"
+
+/* A block comment
+   over two lines. */
+type Id = Brand<string>
+type Status = "pending" | "paid"
+type Count = 1 | 2
+type Maybe = Option<Id>
+type Pair = [int, string]
+type Pairs = Pair[]
+type Profile = { name: string, nickname?: string, tags: string[], }
+type Shape = { kind: "circle", radius: number } | { kind: "square", side: number }
+type Callback = (id: Id, n: int) => string fails E | F uses S.m | T
+type Grouped = (A | B)[]
+type Nested = Option<Option<int>>
+type Flag = true | false
+export type Exported = { x: int }
+
+error NotFound = { id: Id }
+error Empty = {}
+export error Exported2 = { reason: string, }
+
+service Store {
+  find(id: Id): Option<Profile> fails NotFound
+  save(p: Profile): void; list(): Profile[] fails NotFound | Empty
+
+  fails(x: int): int
+  uses(): int
+}
+
+const one = 1
+const text = "hi\n\u00e9\"q"
+const flag = true
+const sci = 1.5e10
+const sci2 = 2E-3
+const arith = 1 + 2 * 3 - 4 / 2
+const logic = a && b || c
+const cmp = a < b && c >= d || e === f && g !== h || i <= j && k > l
+const chain = a.b.c(1, 2).d
+const rec = { a: 1, b, c: { d: 2 }, }
+const emptyRec = {}
+const sum = (a: int, b: int): int => a + b
+const noParams = () => 1
+const untyped = (x, y) => x
+export const withUpdate = (base: Profile): Profile => ({ ...base, name: "x" })
+const asBlock = (x: int): int => {
+  const y = x + 1
+  const z: int = y * 2 // trailing comment
+  z
+}
+const semi = (): int => { const a = 1; a }
+const emptyBlock = (): void => {}
+const multiline = (x: int): int
+  fails NotFound
+  uses Store.find | Store.save
+  => x
+const arrowNl = (x: int): int =>
+  x + 1
+const cond = (b: boolean): string =>
+  if (b) { "a" } else if (b === false) { "b" } else { "c" }
+const condNl = (b: boolean): string =>
+  if (b) { "a" }
+  else { "b" }
+const matched = (o: Option<int>): int =>
+  match o {
+    Some(v) => v,
+    None => 0,
+  }
+const matchLit = (s: string): int =>
+  match s { "a" => 1, "b" => 2, _ => 3 }
+const matchNum = (n: int): string => match n { 1 => "one", _ => "many" }
+const matchBool = (b: boolean): int => match b { true => 1, false => 0 }
+const matchTag = (s: Shape): number =>
+  match s {
+    { kind: "circle", ...c } => c.radius,
+    { kind: "square" } => 1
+  }
+const matchErr = (e: NotFound | Empty): string =>
+  match e {
+    NotFound(x) => x.id,
+    Empty(y) => "empty",
+    _ => "other"
+  }
+const matchBlock = (o: Option<int>): int =>
+  match o {
+    Some(v) => {
+      const w = v + 1
+      w
+    },
+    None => 0
+  }
+const tried = (id: Id): string =>
+  try {
+    get(id).name
+  } catch {
+    NotFound(e) => "missing",
+    Empty(e) => { "empty" },
+  }
+const triedNl = (id: Id): string =>
+  try { get(id).name }
+  catch { NotFound(e) => "x" }
+const piped = (xs: int[]): int =>
+  xs
+    |> filter((x) => x === 1)
+    |> map((x) => x + 1)
+    |> Store.thing
+    |> fold(0, (s, x) => s + x)
+const pipeInline = xs |> f |> g(1, 2)
+const pipeTrailing = xs |>
+  f
+const callNl = f(
+  1,
+  2
+)
+const parens = (1 + 2) * 3
+const lambdaArg = f((x) => x, (y: int): int => y)
+const retried = (): int => retry(() => work(), { times: 2 })
+const provided = (): int => provide(Live, () => work())
+const nested = (): int => {
+  const inner = (z: int): int => { z }
+  inner(1)
+}
+const typedConst: (x: int) => int = (x) => x

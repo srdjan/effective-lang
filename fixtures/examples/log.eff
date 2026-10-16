@@ -1,0 +1,9 @@
+error ConsoleUnavailable = { message: string }
+
+service Console {
+  print(message: string): void fails ConsoleUnavailable
+}
+
+export const log = (message: string): void
+  fails ConsoleUnavailable
+  uses Console.print => Console.print(message)

@@ -1,0 +1,9 @@
+// error: syntax/007
+const class = 1
+// error: syntax/007
+const void = 2
+// error: syntax/007
+const f = (function: int): int => 1
+// error: syntax/007
+const g = (): int => this
+const typeVoid = (): void => 1

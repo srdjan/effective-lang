@@ -1,0 +1,4 @@
+const before = 1
+// error: syntax/002
+const s = "never closed
+const after = 2

@@ -1,0 +1,8 @@
+const outer = (x: int): int => {
+  const inner = (y: int): int => {
+    // error: syntax/008
+    y +
+const after = 1
+const alsoAfter = (z: int): int => {
+  z
+}

@@ -1,0 +1,24 @@
+const nested = (o: Option<Option<int>>): int =>
+  match o {
+    // error: syntax/011
+    Some(Some(x)) => 1,
+    None => 0
+  }
+const field = (s: Shape): int =>
+  match s {
+    // error: syntax/011
+    { kind: other } => 1,
+    _ => 0
+  }
+const none = (o: Option<int>): int =>
+  match o {
+    // error: syntax/011
+    => 1,
+    None => 0
+  }
+const literal = (o: Option<int>): int =>
+  match o {
+    // error: syntax/011
+    Some(1) => 1,
+    None => 0
+  }

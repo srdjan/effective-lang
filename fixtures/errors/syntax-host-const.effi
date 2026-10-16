@@ -1,0 +1,6 @@
+import { Users } from "../users.eff"
+// error: syntax/012
+const value = 1
+// error: syntax/012
+export const double = (a: int): int => a * 2
+export provider UsersLive provides Users

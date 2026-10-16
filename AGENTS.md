@@ -2,11 +2,11 @@
 
 ## Project Structure & Module Organization
 
-This repository is currently empty apart from this guide. There is no established source tree, test suite, or asset directory. When adding the first implementation, keep source code, tests, and supporting assets in clearly named directories, and document the resulting layout in the README. Keep examples close to the feature they demonstrate or in a dedicated `examples/` directory.
+Source code is in `src/core/`. Tests and test helpers are in `tests/`. Test inputs are in `fixtures/`. Design and plans are in `docs/`. The README describes each directory and the fixture conventions.
 
 ## Build, Test, and Development Commands
 
-No build system, package manager, or runnable commands are configured yet. Add a README with the exact install, run, build, and test commands when introducing tooling. Prefer a small set of repeatable commands that work from the repository root; avoid instructions that depend on an unrecorded local setup.
+The README lists the exact commands. Run `deno task check` from the repository root before each commit. It runs the format check, the lint, the type check, and all tests. Use Deno 2.9.7.
 
 ## Coding Style & Naming Conventions
 
@@ -14,7 +14,7 @@ Follow the formatter and linter selected for the implementation language, and co
 
 ## Testing Guidelines
 
-No testing framework or coverage threshold has been established. Add focused tests alongside new behavior and include the test command in the README. Use names that describe the behavior under test, and cover normal inputs, boundary cases, and failure paths where applicable. Do not claim a coverage target until the project adopts one.
+Tests use `Deno.test` and `@std/assert`. A fast test runs in under one second. A test that starts a subprocess goes in a file named `*_slow_test.ts`. Error fixtures follow the marker convention in the README. Do not claim a coverage target until the project adopts one.
 
 ## Commit & Pull Request Guidelines
 

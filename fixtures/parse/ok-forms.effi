@@ -1,0 +1,16 @@
+// A host interface file with every form that it allows.
+import { Users, Orders } from "../users.eff"
+import { UserMissing } from "../users.eff"
+
+type Config = { url: string }
+error Boom = { message: string }
+
+service Clock {
+  now(): int
+}
+
+export provider UsersLive provides Users
+provider Both provides Users | Orders fails Boom | UserMissing uses Clock.now
+provider Split provides Users
+  fails Boom
+  uses Clock

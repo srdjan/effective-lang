@@ -1,0 +1,6 @@
+const base = { a: 1 }
+// error: syntax/014
+const late = { a: 1, ...base }
+// error: syntax/014
+const twice = { ...base, ...base }
+const fine = { ...base, a: 2 }

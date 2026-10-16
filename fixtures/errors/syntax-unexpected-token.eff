@@ -1,0 +1,9 @@
+// error: syntax/009
+foo bar
+const ok = 1
+// error: syntax/009
+}
+const ok2 = 2
+// error: syntax/009
+) 1 2
+const ok3 = 3

@@ -1,0 +1,165 @@
+{
+  "format": "light-functional-ir",
+  "version": 1,
+  "module": "example/log",
+  "sources": [
+    "log.lft"
+  ],
+  "imports": [],
+  "declarations": [
+    {
+      "kind": "error",
+      "id": "error:example/log#ConsoleUnavailable",
+      "name": "ConsoleUnavailable",
+      "fields": [
+        {
+          "name": "message",
+          "type": {
+            "kind": "primitive",
+            "name": "string"
+          },
+          "optional": false
+        }
+      ],
+      "span": {
+        "source": "log.lft",
+        "start": 0,
+        "end": 46
+      }
+    },
+    {
+      "kind": "service",
+      "id": "service:example/log#Console",
+      "name": "Console",
+      "methods": [
+        {
+          "id": "cap:example/log#Console.print",
+          "name": "print",
+          "type": {
+            "kind": "function",
+            "execution": "effect",
+            "parameters": [
+              {
+                "kind": "primitive",
+                "name": "string"
+              }
+            ],
+            "result": {
+              "kind": "primitive",
+              "name": "unit"
+            },
+            "effects": {
+              "failures": [
+                "error:example/log#ConsoleUnavailable"
+              ],
+              "requirements": []
+            }
+          },
+          "span": {
+            "source": "log.lft",
+            "start": 68,
+            "end": 121
+          }
+        }
+      ],
+      "span": {
+        "source": "log.lft",
+        "start": 48,
+        "end": 123
+      }
+    },
+    {
+      "kind": "function",
+      "id": "value:example/log#log",
+      "name": "log",
+      "contract": "explicit",
+      "parameters": [
+        {
+          "id": "local:example/log#log/message",
+          "name": "message",
+          "type": {
+            "kind": "primitive",
+            "name": "string"
+          },
+          "span": {
+            "source": "log.lft",
+            "start": 145,
+            "end": 160
+          }
+        }
+      ],
+      "type": {
+        "kind": "function",
+        "execution": "effect",
+        "parameters": [
+          {
+            "kind": "primitive",
+            "name": "string"
+          }
+        ],
+        "result": {
+          "kind": "primitive",
+          "name": "unit"
+        },
+        "effects": {
+          "failures": [
+            "error:example/log#ConsoleUnavailable"
+          ],
+          "requirements": [
+            "cap:example/log#Console.print"
+          ]
+        }
+      },
+      "body": {
+        "kind": "perform",
+        "execution": "effect",
+        "capability": "cap:example/log#Console.print",
+        "type": {
+          "kind": "primitive",
+          "name": "unit"
+        },
+        "effects": {
+          "failures": [
+            "error:example/log#ConsoleUnavailable"
+          ],
+          "requirements": [
+            "cap:example/log#Console.print"
+          ]
+        },
+        "span": {
+          "source": "log.lft",
+          "start": 219,
+          "end": 241
+        },
+        "arguments": [
+          {
+            "kind": "reference",
+            "execution": "pure",
+            "target": "local:example/log#log/message",
+            "type": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "effects": {
+              "failures": [],
+              "requirements": []
+            },
+            "span": {
+              "source": "log.lft",
+              "start": 233,
+              "end": 240
+            }
+          }
+        ]
+      },
+      "span": {
+        "source": "log.lft",
+        "start": 125,
+        "end": 241
+      }
+    }
+  ],
+  "exports": [
+    "value:example/log#log"
+  ]
+}

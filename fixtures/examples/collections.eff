@@ -1,0 +1,9 @@
+type User = { name: string, active: boolean }
+
+export const activeNames = (users: User[]): string[] =>
+  users
+    |> filter((user) => user.active)
+    |> map((user) => user.name)
+
+export const total = (amounts: int[]): int =>
+  amounts |> fold(0, (sum, amount) => sum + amount)

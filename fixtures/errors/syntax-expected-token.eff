@@ -1,0 +1,21 @@
+// error: syntax/008
+const missingOperand = 1 +
+// error: syntax/008
+type MissingType =
+// error: syntax/008
+const missingElse = if (true) { 1 }
+// error: syntax/008
+import { a } "./x.eff"
+service S {
+  // error: syntax/008
+  f(x: int) int
+}
+// error: syntax/008
+const missingComma = foo(1 2)
+// error: syntax/008
+const missingArrow = match x { Some(v) 1 }
+// error: syntax/008
+export 5
+// error: syntax/008
+const unclosedCall = foo(1,
+const fine = 1

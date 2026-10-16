@@ -1,0 +1,19 @@
+const m = (o: Option<int>): int =>
+  match o {
+    // error: syntax/011
+    Some(Some(x)) => 1,
+    Some(y) => y,
+    None => 0
+  }
+const r = {
+  // error: syntax/008
+  a: ,
+  b: 2
+}
+const call = foo(
+  1,
+  // error: syntax/008
+  2 3,
+  4
+)
+const after = 1

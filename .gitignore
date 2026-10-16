@@ -1,2 +1,5 @@
 demos/
 .DS_Store
+fixtures/**/*.ts
+!fixtures/golden/**
+!fixtures/examples/users-live.ts

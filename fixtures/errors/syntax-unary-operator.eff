@@ -1,0 +1,9 @@
+// error: syntax/010
+const negative = -1
+// error: syntax/010
+const negated = !true
+// error: syntax/010
+const plus = +1
+// error: syntax/010
+const inner = 2 - -3
+const fine = 0 - 1

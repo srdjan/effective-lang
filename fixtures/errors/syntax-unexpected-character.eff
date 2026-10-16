@@ -1,0 +1,17 @@
+const ok = 1
+// error: syntax/001
+const bad = 2 @ 3
+// error: syntax/001
+const alsoBad = ok == 1
+// error: syntax/001
+const hash = # 4
+// error: syntax/001
+const accent = é
+// error: syntax/001
+// error: syntax/001
+const single = 'a'
+// error: syntax/001
+const rest = ok & 1
+// error: syntax/001
+const same = ok != 1
+const fine = 2

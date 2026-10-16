@@ -1,0 +1,8 @@
+// error: syntax/003
+const a = "bad \q escape"
+// error: syntax/003
+const b = "short \u12 escape"
+// error: syntax/002
+// error: syntax/003
+const c = "trailing \
+const good = "fine \u00e9 \" \\ \/ \b \f \n \r \t"

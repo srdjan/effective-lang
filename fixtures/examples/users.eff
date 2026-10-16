@@ -1,0 +1,48 @@
+export type User = {
+  id: string,
+  name: string,
+  active: boolean
+}
+
+export error UserMissing = { id: string }
+export error StoreUnavailable = { message: string }
+
+export service Users {
+  find(id: string): Option<User> fails StoreUnavailable
+  save(user: User): void fails StoreUnavailable
+  all(): User[] fails StoreUnavailable
+}
+
+export const getUser = (id: string): User
+  fails UserMissing | StoreUnavailable
+  uses Users.find =>
+  match Users.find(id) {
+    Some(user) => user,
+    None => fail(UserMissing({ id }))
+  }
+
+export const rename = (id: string, name: string): User
+  fails UserMissing | StoreUnavailable
+  uses Users.find | Users.save => {
+  const user = getUser(id)
+  const renamed: User = { ...user, name }
+  Users.save(renamed)
+  renamed
+}
+
+export const displayName = (id: string): string
+  fails StoreUnavailable
+  uses Users.find =>
+  try {
+    getUser(id).name
+  } catch {
+    UserMissing(error) => "Guest"
+  }
+
+export const activeNames = (): string[]
+  fails StoreUnavailable
+  uses Users.all =>
+  Users.all()
+    |> filter((user) => user.active)
+    |> map((user) => user.name)
+

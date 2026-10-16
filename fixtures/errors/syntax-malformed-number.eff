@@ -1,0 +1,9 @@
+// error: syntax/006
+const leadingZero = 01
+// error: syntax/006
+const noExponentDigits = 1e
+// error: syntax/006
+const noExponentDigitsSign = 1e+
+// error: syntax/006
+const trailingLetters = 12abc
+const fine = 0.5
