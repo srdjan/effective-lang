@@ -191,7 +191,10 @@ nav {
   scrollbar-width: thin;
 }
 
+/* `position: relative` keeps the `.sr-only` badge label inside the scrolling
+   tablist. Without it, the label widens the document at 375 pixels. */
 [role="tab"] {
+  position: relative;
   display: inline-flex;
   flex: none;
   align-items: center;
