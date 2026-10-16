@@ -1,22 +1,52 @@
-/* Walking skeleton styles. G2b replaces most of this file. */
+/*
+  The playground page. The base rules are the narrow layout. The rules inside
+  `@media (min-width: 960px)` add the wide layout. `src/app.ts` uses the same
+  query through `matchMedia`.
+
+  Orange is never text or an outline on white (contrast 2.3:1). It is a fill
+  under navy text, or an outline on the navy panes. The focus outline on white
+  is navy.
+*/
 
 @font-face {
   font-family: "Bricolage Grotesque";
   src: url("fonts/bricolage-grotesque-latin.woff2") format("woff2");
   font-weight: 200 800;
+  font-style: normal;
   font-display: swap;
 }
 
 :root {
+  color-scheme: light;
   --bg: #ffffff;
+  --surface: #f4f4f2;
   --ink: #1f2b4d;
   --muted: #5b6275;
   --accent: #f7941d;
   --accent-ink: #1f2b4d;
+  --field-light: #e3e1dc;
   --code-bg: #141d34;
   --code-ink: #f4f4f2;
+  --code-keyword: #b6c9f0;
+  --code-string: #d4dfbc;
+  --code-comment: #aab3c6;
+  /* Tokens of this page. Each reaches 4.5:1 against --code-bg. */
+  --code-builtin: #f7b267;
+  --code-type: #8fd3c8;
+  --code-number: #f4a6b7;
+  --code-operator: #d6dcec;
+  /* The error underline. It reaches 3:1 against --code-bg. */
+  --code-error: #ff8a8a;
+  --code-raised: #1f2b4d;
+  --code-border: #5b6275;
+  --code-selection: #2b3a62;
+  --code-active-line: rgba(244, 244, 242, 0.06);
   --font: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
   --font-code: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 html,
@@ -29,28 +59,184 @@ body {
   display: flex;
   flex-direction: column;
   height: 100dvh;
+  overflow: hidden;
   background: var(--bg);
   color: var(--ink);
   font: 400 16px/1.5 var(--font);
+  font-optical-sizing: auto;
 }
 
-header {
+[hidden] {
+  display: none !important;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-underline-offset: 0.22em;
+}
+
+:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+::selection {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+noscript {
+  display: block;
+  padding: 1rem;
+  background: var(--code-bg);
+  color: var(--code-ink);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Header */
+
+.topbar {
   display: flex;
+  flex: none;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 1rem;
-  padding: 0.5rem 1rem;
+  align-items: center;
+  gap: 0 1.25rem;
+  padding: 0.25rem 1rem;
 }
 
-h1 {
+.topbar h1 {
   margin: 0;
   font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.book-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 0.9375rem;
 }
 
 #status {
+  margin: 0 0 0 auto;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+#loading {
   margin: 0;
+  padding: 1rem;
   color: var(--muted);
 }
+
+/* Error region: navy panel with an orange bar. The bar is a fill. */
+
+.error-region {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
+  margin: 0 1rem 0.5rem;
+  padding: 0.5rem 1rem;
+  border-left: 6px solid var(--accent);
+  background: var(--code-bg);
+  color: var(--code-ink);
+}
+
+.error-region p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.error-region a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.error-region :focus-visible {
+  outline-color: var(--accent);
+}
+
+/* Tabs: the file tabs and the view switch */
+
+nav {
+  flex: none;
+  border-bottom: 1px solid var(--field-light);
+}
+
+[role="tablist"] {
+  display: flex;
+  overflow-x: auto;
+  padding: 0 0.5rem;
+  scrollbar-width: thin;
+}
+
+[role="tab"] {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 1rem;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.9375rem;
+  white-space: nowrap;
+  box-shadow: inset 0 -3px 0 transparent;
+}
+
+[role="tab"][aria-selected="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: inset 0 -3px 0 var(--ink);
+}
+
+[role="tab"]:focus-visible {
+  outline-offset: -6px;
+}
+
+#views [role="tab"] {
+  flex: 1;
+  justify-content: center;
+}
+
+.badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.375rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* Regions */
 
 main {
   display: flex;
@@ -59,27 +245,152 @@ main {
   min-height: 0;
 }
 
-#editor {
+.region {
+  position: relative;
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The view switch names the region, so the heading is for screen readers. */
+.region > h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.pane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   min-height: 0;
   background: var(--code-bg);
   color: var(--code-ink);
 }
 
-#editor .cm-editor {
-  height: 100%;
-  font: 16px/1.5 var(--font-code);
+.pane .cm-editor {
+  flex: 1 1 0;
+  min-height: 0;
 }
 
-#editor .cm-scroller {
-  overflow: auto;
-}
-
-:focus-visible {
-  outline: 3px solid var(--ink);
-  outline-offset: 2px;
-}
-
-#editor :focus-visible {
+.pane :focus-visible {
   outline-color: var(--accent);
+}
+
+.cursor-line {
+  flex: none;
+  min-height: 2.75rem;
+  margin: 0;
+  padding: 0.5rem 1rem;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-code);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.problems {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.problem {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--field-light);
+  background: transparent;
+  font-size: 0.9375rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.problem:focus-visible {
+  outline-offset: -6px;
+}
+
+.problem-where,
+.problem-code {
+  font-family: var(--font-code);
+  font-size: 0.875rem;
+}
+
+.problem-code {
+  font-weight: 600;
+}
+
+.empty {
+  margin: 0;
+  padding: 1rem;
+  color: var(--muted);
+}
+
+.stale-banner {
+  flex: none;
+  margin: 0;
+  padding: 0.5rem 1rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 500;
+}
+
+.pane-message {
+  flex: 1;
+  margin: 0;
+  padding: 1rem;
+  background: var(--code-bg);
+  color: var(--code-ink);
+}
+
+/* Wide layout: Source on the left, Problems above TypeScript on the right. */
+
+@media (min-width: 960px) {
+  #views {
+    display: none;
+  }
+
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 1rem 1rem;
+  }
+
+  #source-region {
+    grid-row: 1 / span 2;
+  }
+
+  .region > h2 {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0 0 0.25rem;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }

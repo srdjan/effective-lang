@@ -4,18 +4,58 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Effective playground</title>
+    <meta
+      name="description"
+      content="Edit Effective programs in the browser. See the problems, the contracts, and the generated TypeScript."
+    />
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="app.css" />
   </head>
   <body>
     <noscript>The Effective playground needs JavaScript.</noscript>
-    <header>
+    <header class="topbar">
       <h1>Effective playground</h1>
-      <p id="status">Loading the playground.</p>
+      <a class="book-link" href="https://effective.timok.deno.net/">
+        Read the book
+      </a>
+      <p id="status"></p>
     </header>
-    <main>
-      <p id="loading">Loading the playground.</p>
-      <div id="editor"></div>
+    <p id="loading">Loading the playground.</p>
+    <div id="error-region" class="error-region" role="alert" hidden>
+      <p id="error-message"></p>
+      <a id="reload" href="" hidden>Reload the page</a>
+    </div>
+    <nav id="files" aria-label="Files" hidden>
+      <div id="file-tabs" role="tablist" aria-label="Files"></div>
+    </nav>
+    <nav id="views" aria-label="Views" hidden></nav>
+    <main id="app" hidden>
+      <section id="source-region" class="region" aria-labelledby="source-title">
+        <h2 id="source-title">Source</h2>
+        <div id="source-pane" class="pane"></div>
+        <p id="cursor-line" class="cursor-line" aria-live="polite"></p>
+      </section>
+      <section
+        id="problems-region"
+        class="region"
+        aria-labelledby="problems-title"
+      >
+        <h2 id="problems-title">Problems</h2>
+        <ol id="problems" class="problems"></ol>
+        <p id="no-problems" class="empty">No problems</p>
+      </section>
+      <section
+        id="output-region"
+        class="region"
+        aria-labelledby="output-title"
+      >
+        <h2 id="output-title">TypeScript</h2>
+        <p id="stale-banner" class="stale-banner" hidden>
+          This module has errors. This is the last good output.
+        </p>
+        <p id="output-message" class="pane-message" hidden></p>
+        <div id="output-pane" class="pane"></div>
+      </section>
     </main>
     <script type="module" src="app.js"></script>
   </body>
