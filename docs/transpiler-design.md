@@ -1,8 +1,8 @@
 # Effective transpiler: design for discussion
 
-Status: design accepted in part, 2026-10-16. No transpiler code exists yet.
-The user settled eight decisions. Section 12 records them. Six decisions stay
-open until the measurements and spec answers that they depend on exist.
+Status: design accepted, 2026-10-16. No transpiler code exists yet. The user
+settled all fifteen decisions and accepted the suggested answers to the open
+spec questions. The decision record below lists each choice.
 
 ## Decision record
 
@@ -15,11 +15,32 @@ Decided by the user on 2026-10-16. Each entry took the recommended option.
 | D3 Host language | (a) TypeScript on Deno. Zig behind WASM only after a measured need. |
 | D4 Incremental model | (b) Query-shaped core. Module-level cutoff in Phase A. Declaration-level tracking in Phase B after M2 and M3. |
 | D5 Where `tsc` runs | (b) Emitter golden tests, `build --tsc`, and CI. Opt-in in `watch`. Never in the LSP. |
+| D6 Output location (Q7) | (a) `users.ts` next to `users.eff`. Import specifiers become `./users.ts`. A `.js` switch can come later. |
 | D7 Identity encoding | (b) Module-qualified strings such as `users#UserMissing`. The spec requires this: "A backend must encode resolved declaration identities in error tags, service keys, and brand tokens." |
+| D8 Mode firewall hole (I1) | (a) Source purity assertions stay deferred. The incremental model invalidates dependents on a mode change. M3 informs a later review. |
+| D9 Latency budget | (a) Set the budget after M1 and M6 give a baseline. |
 | D10 Host registry format | (a) Effective-syntax declaration file with a `provider` form, plus a `host:` map in `effective.json`. |
+| D11 IR validator | (a) Independent validator in the first version, used as a differential oracle for the checker. |
+| D12 Output formatting | (a) Own printer with one fixed style. A test confirms that `deno fmt --check` accepts the output unchanged. |
+| D13 Exported constants (Q4) | (a) Every exported constant requires a type annotation. This closes firewall hole I6. |
+| D14 `int` arithmetic (Q6) | (a) The emitter wraps `int` operations in a runtime helper that raises a defect outside the safe integer range. The cost needs to be measured. |
 | D15 Repository | (a) The transpiler lives in `effective-lang`, separate from the `effective` site and spec repository. |
 
-Open: D6, D8, D9, D11, D12, D13, D14.
+Open: none.
+
+The user also accepted the suggested answers in section 9 for Q1, Q5, Q8, Q9,
+and Q10. Q2, Q3, Q4, Q6, and Q7 follow from D7, D10, D13, D14, and D6.
+
+| Question | Answer |
+|---|---|
+| Q1 Builtin `ValueId` scope | Per module, content hash of the closed type. |
+| Q5 Unannotated module-level functions | Allowed, and never exported. |
+| Q8 Diagnostic codes | Category prefix plus a number, for example `failure-contract/001`. |
+| Q9 Optional and `Option` fields | `Schema.optional` for `?` fields, `Schema.Option` for `Option<T>` fields. Check against Effect 4.0.5. |
+| Q10 Providers in `provide` | Host-declared providers only. |
+
+D8, D13, D14, and the answers above interpret or extend the language spec. The
+spec in the `effective` repository does not record them yet.
 
 ## 0. Sources and conventions
 
@@ -709,5 +730,5 @@ defect outside the safe range. Recommended.
 (b) Plain JavaScript arithmetic; the host accepts silent overflow.
 (c) A compile-time option.
 
-Which decisions among D1 to D14 do you want to settle now, and which should
-wait for the measurements in section 10?
+The user settled D1 to D15 on 2026-10-16. The decision record at the top of
+this document lists each choice.
