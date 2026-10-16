@@ -1,8 +1,9 @@
 # Effective transpiler: design for discussion
 
-Status: design accepted, 2026-10-16. No transpiler code exists yet. The user
-settled all fifteen decisions and accepted the suggested answers to the open
-spec questions. The decision record below lists each choice.
+Status: design accepted, 2026-10-16. Phase A and the LSP phase are implemented.
+Phase B is not started and waits for the D9 latency budget. The user settled all
+nineteen decisions and accepted the suggested answers to the open spec
+questions. The decision record below lists each choice.
 
 ## Decision record
 
@@ -25,6 +26,10 @@ Decided by the user on 2026-10-16. Each entry took the recommended option.
 | D13 Exported constants (Q4) | (a) Every exported constant requires a type annotation. This closes firewall hole I6. |
 | D14 `int` arithmetic (Q6) | (a) The emitter wraps `int` operations in a runtime helper that raises a defect outside the safe integer range. The cost needs to be measured. |
 | D15 Repository | (a) The transpiler lives in `effective-lang`, separate from the `effective` site and spec repository. |
+| D16 Next phase (2026-10-16) | The LSP comes before Phase B. Phase B waits for the D9 budget, and D9 waits for M1, which needs the LSP (design 4.5 and D9). |
+| D17 JSON-RPC transport (2026-10-16) | Hand-written Content-Length framing over stdio. No npm dependency in the server. |
+| D18 Editor client (2026-10-16) | A thin VS Code client in `editors/vscode/`, plain JavaScript, with `vscode-languageclient`. npm is used only inside that directory. |
+| D19 Measurements (2026-10-16) | This phase adds the M1, M3, and M4 harness. It replays an edit script against the real server process. |
 
 Open: none.
 

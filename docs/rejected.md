@@ -26,8 +26,11 @@ None yet. Part A8 added the harness. No candidate change has been measured.
 These items are not measured. Each one names the reason.
 
 - Token representation. M2 of the design compares object arrays with typed arrays for tokens. The lexer in `src/core/lex.ts` has only the typed-array form (`Lexed.kinds`, `starts`, `ends`). The comparison needs a second lexer that builds object tokens. No second lexer exists, so the comparison is not run.
-- M1, M3, and M4 of the design. They need the LSP server and an edit script on the LSP process. Part A8 covers M2, M5, and M6.
+- M4 samples `rss` only at the end of a step. A short memory peak inside a step is not seen.
+- M1 times hover only on a declaration name. Hover on other nodes is not timed.
+- M1 and M3 run with only the edited document open. A session with many open documents is not measured.
+- The bench runs no `--full` profile by default. The default run uses the quick scale.
 - A/B between two builds. The harness runs A/A pairs only. It gives the noise floor. An A/B run needs two builds of the compiler and a harness that loads both.
-- Memory. The harness does not measure peak resident memory.
+- Memory of the compiler stages. M2 and M5 do not measure memory. M4 measures the `rss` of the server only.
 - Core pinning. macOS has no `taskset` equivalent. The runs are not pinned.
 - Garbage collection. The harness does not force a collection between runs. A collection that falls in a timed region is part of the distribution.

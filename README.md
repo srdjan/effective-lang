@@ -1,8 +1,8 @@
 # effective-lang
 
-Effective is a small functional language that transpiles to Effect-TS 4. This repository holds the transpiler core library and, in later parts, its command-line tool.
+Effective is a small functional language that transpiles to Effect-TS 4. This repository holds the transpiler core library, its command-line tool, a language server, and a VS Code client.
 
-The design is in `docs/transpiler-design.md`. The Phase A plan is in `docs/plans/2026-10-16-phase-a.md`. The plan splits the work into parts A1 to A8.
+The design is in `docs/transpiler-design.md`. The Phase A plan is in `docs/plans/2026-10-16-phase-a.md`. The plan splits the work into parts A1 to A8. The plan for the language server is in `docs/plans/2026-10-16-lsp.md`. It splits the work into parts L1 to L6.
 
 ## Status
 
@@ -26,6 +26,8 @@ Part A7 adds the program with module cutoff (`src/core/db.ts`), the public API (
 
 Part A8 adds the measurement harnesses in `bench/`: a synthetic module generator and the measurements M2, M5, and M6 of the design. See "Measurements". The README holds no measured number. The user decides which numbers enter the docs.
 
+Parts L1 to L6 add the language server in `src/lsp/`, the VS Code client in `editors/vscode/`, and the measurements M1, M3, and M4. See "Language server", "VS Code client", and "Measurements". The README holds no measured number for these parts either. The hand test of the client in VS Code (acceptance check 5 of the plan) is not done yet.
+
 ## Requirements
 
 The project needs Deno 2.9.7. The first test run downloads `@std/assert` from jsr, so it needs network access once.
@@ -42,6 +44,7 @@ Run every command from the repository root.
 | `deno task golden:update`   | Writes `fixtures/golden/<module>.ts` again from `fixtures/examples`.                       |
 | `deno task validate:update` | Writes the mutation fixtures in `fixtures/validate/` again from the current lowering.      |
 | `deno task effective`       | Runs the command-line tool. See "Using the command line".                                  |
+| `deno task lsp`             | Runs the language server over standard input and output. See "Language server".            |
 | `deno task bench`           | Runs the measurement harnesses. See "Measurements".                                        |
 | `deno task fmt`             | Formats the source files.                                                                  |
 | `deno task lint`            | Runs the linter.                                                                           |
@@ -71,6 +74,8 @@ src/core/      The core library. It is synchronous and pure.
   interface.ts   Module interfaces, their hashes, and the declaration driver.
   analyze.ts     Public entry: load a project, resolve it, collect diagnostics.
   db.ts          Program: revisions, parse memo, check memo with module cutoff, lazy IR, text, and maps.
+  editor.ts      hoverAt, definitionAt, and documentSymbols over a revision.
+  ids.ts         Parts of a declaration identity: module, name, and method.
   mod.ts         The public API of the core: a list of re-exports.
   sha256.ts      Synchronous SHA-256 over the UTF-8 bytes of a string.
   lower.ts       Checked modules to typed IR: pipelines, builtin specialization, imports.
@@ -108,6 +113,17 @@ src/cli/       The command-line tool. Only this directory calls Deno APIs, besid
   report.ts      Printing of a build outcome: diagnostics on stdout, the rest on stderr.
   watch.ts       The watch loop over an injected event source.
   events.ts      Debouncing of file system events.
+  outputs.ts     writeGenerated: the write of the .ts and .ts.map files, shared by build and the language server.
+src/lsp/       The language server. See "Language server".
+  main.ts        The stdio entry: reads frames, writes frames, and ends the process.
+  server.ts      LanguageServer: lifecycle, dispatch, and the flush schedule.
+  projects.ts    Project discovery, the open-document overlay, and the flush of a project.
+  features.ts    The handlers: hover, definition, symbols, generated text, save, and stats.
+  jsonrpc.ts     Content-Length frames and the message shapes.
+  protocol.ts    The subset of the protocol: types and the narrowing of incoming params.
+  positions.ts   Positions, ranges, and the conversion between URIs and paths.
+  methods.ts     The names of the custom methods, shared with the client.
+editors/vscode/ The VS Code client. See "VS Code client". Plain JavaScript, no build step.
 scripts/       Scripts that the tasks run. golden_update.ts writes the golden files.
                validate_fixtures.ts writes the mutation fixtures.
 tests/         Deno tests and test helpers.
@@ -120,10 +136,15 @@ fixtures/      Input files for the tests.
   validate/      Mutated copies of lowered IR and manifest.json, which names the expected code of each.
   parse/         Valid syntax forms (ok-*) and recovery inputs (recovery-*).
   errors/        One file or one project directory for each error case, with markers.
-bench/         The measurement harnesses of part A8. They are not part of the core.
+bench/         The measurement harnesses of parts A8 and L5. They are not part of the core.
   main.ts        The entry: arguments, profiles, and the report.
   profile.ts     The scale of --quick and --full.
   generate.ts    The synthetic module generator and the edit scripts.
+  m1.ts          M1: edit latency through the language server.
+  m3.ts          M3: work per edit, from the stats of the server.
+  m4.ts          M4: server memory over a long edit script.
+  lsp_client.ts  A client over a spawned server process.
+  lsp_script.ts  The inputs, the edit script, and the server session of M1, M3, and M4.
   m2.ts          M2: time per stage and the incremental path, with the checksum gate.
   m5.ts          M5: cold deno check over the emitted code.
   m5_target.ts   The inputs of M5: the emitted examples and synthetic projects.
@@ -298,20 +319,93 @@ After each build, `watch` prints `rechecked: <modules>` to stderr, then the diag
 
 `main(args, io)` in `src/cli/main.ts` returns the exit code. The `io` value gives the stdout and stderr writers, the file system, the `deno check` runner, and the watch source. The fast tests in `tests/cli_test.ts` run `main` with in-memory doubles from `tests/cli_helpers.ts`. The slow tests in `tests/cli_slow_test.ts` run the real tool.
 
+## Language server
+
+The language server is in `src/lsp/`. It wraps `Program` from the core. Run `deno task lsp` from the repository root to start it. The task runs `deno run --allow-read --allow-write src/lsp/main.ts`.
+
+The server talks to its client over standard input and output. A message is a frame: a `Content-Length: <n>` header line, an empty line, and a JSON body of `n` bytes. The server writes only frames to stdout. It writes log text to stderr or sends `window/logMessage`.
+
+The `exit` notification ends the process. End of input ends it too. The exit code is 0 after `shutdown` and 1 without it.
+
+### Capabilities
+
+The server announces `positionEncoding: "utf-16"`. It supports these features.
+
+- Incremental text sync. A change event without a range replaces the whole text.
+- Diagnostics. The server publishes `textDocument/publishDiagnostics` after each compile. The `code` field holds the code of the diagnostic, for example `failure-contract/001`. The `source` field is `effective`.
+- Hover. The text has the source contract of the node. On the name of a function or constant, it also has the backend type, which is the TypeScript signature that the emitter prints. When the module has errors, the backend line says that it is not available.
+- Definition. The server resolves types, errors, services, values, providers, service methods, and local bindings. It also finds declarations in `.effi` files. A builtin, a builtin type, and a field have no definition.
+- Document symbols. The result lists the declarations of the file in source order, with service methods as children. A file with syntax errors still has a symbol for each declaration whose name parsed.
+
+Diagnostics follow a fixed order. The server publishes each open document of the project first, sorted by path. It then publishes each closed file whose list changed. A closed file with an unchanged list gets no message.
+
+### Custom methods
+
+The names are in `src/lsp/methods.ts`. Each request takes the params `{ textDocument: { uri } }`. The URI selects the project, as for every other request.
+
+| Method                          | Kind         | Result                                                                                                                                                                                                       |
+| ------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `effective/generatedTypeScript` | Request      | `{ text, stale }` or `null`. The text is the emitted module. When the module has errors, the text is the last good output and `stale` is true. The result is `null` if it never emitted.                     |
+| `effective/generatedChanged`    | Notification | The params are `{ uri }`, the URI of the `.eff` source. The first `effective/generatedTypeScript` request for a module subscribes it. The server sends this message when its text or its stale flag changes. |
+| `effective/stats`               | Request      | `{ revision, rechecked, counts, delta, memory }`, or `null` for a document with no project. The measurements M3 and M4 use it.                                                                               |
+
+In the `effective/stats` result, `rechecked` lists the modules that the last compile checked again. The `counts` value holds the cumulative query counts `parses`, `checks`, `lowerings`, and `emits`. The `delta` value holds `interfaceChanged` and `modeChanged`, the modules whose interface hash or mode map changed in the last compile. The `memory` value holds `rss` and `heapUsed` in bytes.
+
+### Options
+
+The client passes `initializationOptions` with the `initialize` request. Both options are optional.
+
+| Option        | Default | Meaning                                                                                            |
+| ------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `debounceMs`  | `0`     | A finite number of at least 0. The delay in milliseconds before the server compiles after an edit. |
+| `writeOnSave` | `true`  | A boolean. When true, a save writes the `.ts` and `.ts.map` files of the saved module.             |
+
+A missing or invalid value takes the default. The server logs an invalid value. A request on a project with unsaved changes compiles first, so an answer never comes from an old revision.
+
+### Projects, save, and configuration errors
+
+A project is a directory with an `effective.json` file. When a document opens, the server walks up from its directory to the nearest `effective.json`. It keeps one `Program` for each project root. A document with no project gets no diagnostics, and its requests return `null`.
+
+An open document overrides the disk text of its path. When the document closes, the server reads the disk text again. The client sends `workspace/didChangeWatchedFiles` for changes on disk. The server ignores such an event for an open document, because the editor owns that text.
+
+On `textDocument/didSave` of an `.eff` file, the server compiles first. Then it writes the files of the saved module only. It does not write other modules. A module with an error keeps its last good `.ts` and `.ts.map` files, as `build` does. A write failure goes to `window/logMessage`.
+
+When `effective.json` is missing or invalid, the server publishes one diagnostic on `effective.json`, at line 0 and character 0. It keeps the last good revision for hover, definition, symbols, and generated text. It keeps the published diagnostics of the other files. The next good update clears the configuration diagnostic. Before the first good revision, each request on the project returns `null`.
+
+### Known limits
+
+- The server has no cancellation inside the core. `Program.update` runs as one synchronous call, and the server handles one message at a time. The plan, section 3, explains the reason. Measurement M1 measures the stall.
+- Nested projects are not supported. The disk walk of an outer project also reads the files of an inner project, so one file can belong to two programs.
+- An `.effi` file that no `.eff` module imports is not in the module graph. For such a file, the server gives document symbols only. Hover and definition return `null`.
+- A generated `.ts` file has no go-to-definition into the `.eff` source.
+- The server has no completion, semantic tokens, rename, references, or code actions.
+
+## VS Code client
+
+The client is in `editors/vscode/`. It is plain JavaScript with no build step. It starts the language server, adds syntax highlighting, and adds the command `Effective: Show Generated TypeScript`. Its README, `editors/vscode/README.md`, lists the settings and the versions.
+
+Run `npm ci` once in `editors/vscode`. Then start VS Code with the extension and the example files. Replace `<repo>` with the path of this repository.
+
+```sh
+code --extensionDevelopmentPath=<repo>/editors/vscode <repo>/fixtures/examples
+```
+
+A fast test, `tests/vscode_client_test.ts`, checks `package.json`, the grammar, and the method names. No automated test covers the user interface of the client.
+
 ## Measurements
 
 The harnesses in `bench/` follow the measurement protocol of the design (section 10). They run on this machine and print plain text tables on stdout. Run every command from the repository root.
 
-| Command                                                       | What it does                                                                          |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `deno task bench`                                             | Runs M2, M5, and M6 at the quick scale. The quick scale aims at less than one minute. |
-| `deno task bench --full`                                      | Runs the same measurements with larger iteration counts and more pairs.               |
-| `deno task bench m2`, `m5`, or `m6`                           | Runs one measurement. `m6` runs M2 and prints only the noise floor.                   |
-| `deno task bench --no-variants`                               | Skips the optional M5 variants.                                                       |
-| `deno task bench --json <file>`                               | Also writes the raw samples to the file.                                              |
-| `deno run --allow-write bench/generate.ts <size> <directory>` | Writes a synthetic project of the size `small`, `medium`, or `large`.                 |
+| Command                                                       | What it does                                                                                         |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `deno task bench`                                             | Runs all six measurements at the quick scale. The quick scale aims at less than one minute for each. |
+| `deno task bench --full`                                      | Runs the same measurements with larger iteration counts and more pairs.                              |
+| `deno task bench m1`, `m2`, `m3`, `m4`, `m5`, or `m6`         | Runs the named measurements. `m6` runs M2 and prints only the noise floor.                           |
+| `deno task bench --no-variants`                               | Skips the optional M5 variants.                                                                      |
+| `deno task bench --json <file>`                               | Also writes the raw samples to the file.                                                             |
+| `deno run --allow-write bench/generate.ts <size> <directory>` | Writes a synthetic project of the size `small`, `medium`, or `large`.                                |
 
-`--quick` is the default. `--full` changes only the iteration counts and the number of pairs. The three sizes stay the same: 30, 300, and 3000 declarations. The bench task passes `--no-lock`, so the optional variants never change `deno.lock`. The harness leaves nothing in the working tree. It uses temporary directories and removes them.
+`--quick` is the default. `--full` changes only the iteration counts, the step counts, and the number of pairs. The three sizes stay the same: 30, 300, and 3000 declarations. The bench task passes `--no-lock`, so the optional variants never change `deno.lock`. The harness leaves nothing in the working tree. It uses temporary directories and removes them.
 
 ### What each measurement decides
 
@@ -323,9 +417,38 @@ M5 also tries three optional variants: `tsc` as a cold process, a warm `ts.Langu
 
 M6 gives the noise floor. Each iteration runs two sides, A and B, of the same build. The order of the sides alternates. The floor is the 90th percentile of the absolute value of `A/B - 1` over the pairs, in percent. A later A/B difference below the floor of its row counts as null. M6 uses the pairs of M2 and M5, so every row of M2 and M5 shows its floor in the column `floor %`.
 
+M1 gets its floor from the A/B pairs of its own steps.
+
 Measure the floor again when the machine or its load changes.
 
-M1, M3, and M4 of the design are not part of part A8. M1 needs the LSP server. M3 and M4 need the edit script on the LSP process.
+M1, M3, and M4 run the real language server as a subprocess. All three replay the same edit script. The harness opens only the edited document. It starts the server with `writeOnSave` false and `debounceMs` 0.
+
+M1 times the path from an edit to its diagnostics. The time runs from just before the write of `textDocument/didChange` to the receipt of the matching `publishDiagnostics`. Then M1 times one hover on a fixed function name. Two server processes, A and B, run the same script, and the side that goes first alternates. M1 reports a distribution and the noise floor for each row.
+
+M1 decides the debounce time and whether the server needs a worker thread or can stay on the main thread. It also gives the baseline for the latency budget D9. The design needs this baseline before it sets the budget.
+
+M3 counts the work that one edit causes. After each step, the client sends `effective/stats`. M3 reports the median and the maximum of the per-step change in the counts `parses`, `checks`, `lowerings`, and `emits`. It also reports the fraction of steps with an interface change and with a mode change.
+
+M3 runs no hover, so the counts show the compile alone. The counts are exact, so M3 has no noise floor. M3 decides whether Phase B needs declaration-level tracking. It also informs the later review of the mode firewall (D8).
+
+M4 measures the memory of the server over a long script. It runs two servers, A and B, on the medium size. The script repeats the four edit kinds for N steps, and each row starts a new pair of servers. After each step, the client reads `rss` from `effective/stats`. A row shows the peak `rss` of each side and the `rss` after the last step.
+
+M4 samples `rss` only at the end of a step, so it does not see a short peak inside a step. M4 decides the release policy for old revisions: whether the memory of a long session stays flat or grows.
+
+### The edit script
+
+The script makes one edit in each step and sends it as a full-text `didChange`. The edited module is the module with the edit target. After each step, the diagnostic list of the edited file must be empty. Any other list stops the run with an error value, and the run prints no time.
+
+On the synthetic sizes, there are four kinds of edit.
+
+| Kind     | What the edit does                                                                                                                                  |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `body`   | Changes the literal in the body of `bump`. The interface of the module does not change.                                                             |
+| `header` | Toggles the annotated type of the constant `extra` between `int` and `number`. The interface hash changes.                                          |
+| `alias`  | Toggles the type alias `Amount` between `int` and `number`. The exported function `scale` names the alias, so the interface hash changes.           |
+| `flip`   | Toggles the body of the function `flip` between `n + 1` and `retry(() => n + 1, { times: 1 })`. The mode of `flip` changes between pure and effect. |
+
+For the five examples, the script has only the body edit. It changes the string literal in `displayName` of `users.eff` from `"Guest"` to `"Guest<n>"`, where `<n>` is a number that is new in each step. The hover of M1 names `displayName` on the examples and `bump` on the synthetic sizes.
 
 ### Protocol
 
@@ -334,6 +457,8 @@ Each M2 run ends with a checksum of the emitted text. Every run must give the sa
 The stage `parse` includes `lex`, because the parser lexes its own input. The row `total` is the sum of every stage except `lex`. M5 ends one generated file with a unique comment before each sample, so that `deno check` cannot answer from its type-check cache. The column `control` shows a repeat on unchanged input.
 
 The token representation test of the design (object arrays against typed arrays) is not run. The lexer has only the typed-array form, so the comparison needs a second lexer. `docs/rejected.md` records this gap.
+
+M1 and M3 run on the examples and on the three synthetic sizes. M4 runs on the medium size. The step counts of the quick and the full profile are in `bench/profile.ts`.
 
 A number from a run enters the README, the docs, or the ledger only with its noise floor, its size, and its number of samples. The user decides what to record. The timer is `performance.now()`, and the process is not pinned to a core, because macOS has no `taskset` equivalent.
 
@@ -355,4 +480,4 @@ The files `fixtures/parse/recovery-*.eff` use the same markers. The files `fixtu
 
 ## Format and lint scope
 
-`deno fmt` skips `docs/`, `src/core/ir.ts`, and every `.eff` and `.effi` file. The copy of `ir.ts` stays as it is in the sibling repository. `deno fmt` checks `fixtures/golden/`. `deno lint` skips `docs/` and `fixtures/golden/`, because generated code keeps unused handler parameters.
+`deno fmt` skips `docs/`, `src/core/ir.ts`, `editors/vscode/node_modules/`, and every `.eff` and `.effi` file. The copy of `ir.ts` stays as it is in the sibling repository. `deno fmt` checks `fixtures/golden/`. `deno lint` skips `docs/` and `fixtures/golden/`, because generated code keeps unused handler parameters. It also skips `editors/vscode/`, which holds plain JavaScript.
