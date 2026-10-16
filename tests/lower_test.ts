@@ -521,15 +521,13 @@ Deno.test("a syntax error blocks lowering", () => {
   assertEquals(failure(checked, "m").tag, "diagnostics");
 });
 
-Deno.test("an error built from a non-literal record is unsupported", () => {
+Deno.test("an error built from a non-literal record is a checker error", () => {
   const checked = checkText(`
 error Boom = { code: int }
 const make = (r: { code: int }): Boom => Boom(r)
 `);
-  assertEquals(checked.diagnostics, []);
-  const error = failure(checked, "m");
-  assert(error.tag === "unsupported");
-  assertEquals(error.module, "m");
+  assertEquals(checked.diagnostics.map((d) => d.code), ["type-mismatch/010"]);
+  assertEquals(failure(checked, "m").tag, "diagnostics");
 });
 
 // ------------------------------------------------------------------ every node kind

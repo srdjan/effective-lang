@@ -1,3 +1,17 @@
 const bad = (n: int): never =>
   // error: type-mismatch/010
   fail(n)
+
+error Boom = { message: string }
+const record = { message: "x" }
+const fromValue = (): never fails Boom =>
+  fail(
+    // error: type-mismatch/010
+    Boom(record)
+  )
+const fromSpread = (): never fails Boom =>
+  fail(
+    // error: type-mismatch/010
+    Boom({ ...record, message: "y" })
+  )
+const fine = (): never fails Boom => fail(Boom(({ message: "z" })))

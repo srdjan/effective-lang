@@ -722,6 +722,18 @@ export class BodyChecker {
     });
   }
 
+  /** True for `{ a: x, b }` without a spread. */
+  private isPlainRecordLiteral(node: NodeId): boolean {
+    if (kindOf(this.tree, node) === SyntaxKind.ParenExpr) {
+      const inner = this.kids(node)[0];
+      return inner !== undefined && this.isPlainRecordLiteral(inner);
+    }
+    if (kindOf(this.tree, node) !== SyntaxKind.RecordExpr) return false;
+    return this.kids(node).every((field) =>
+      kindOf(this.tree, field) !== SyntaxKind.SpreadField
+    );
+  }
+
   private errorConstruction(
     node: NodeId,
     id: ErrorId,
@@ -741,12 +753,26 @@ export class BodyChecker {
     const infos = args.map((arg, i) => {
       const info = this.argInfo(arg, i === 0 ? record : undefined);
       if (i === 0) {
-        this.fits(
+        const fits = this.fits(
           arg.node,
           info.type,
           record,
           `the argument of ${shortName(id)}`,
         );
+        // The IR error node lists its fields, so the argument must be a record
+        // literal without a spread.
+        if (
+          fits && !this.isError(info.type) &&
+          !this.isPlainRecordLiteral(arg.node)
+        ) {
+          this.report(
+            "type-mismatch/010",
+            `the error \`${shortName(id)}\` needs a record literal such as ${
+              shortName(id)
+            }({ field: value })`,
+            arg.node,
+          );
+        }
       }
       return info;
     });
