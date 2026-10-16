@@ -6,7 +6,11 @@ import { assert, assertEquals } from "@std/assert";
 import { checkProject } from "../src/core/check_project.ts";
 import { emitProject, type EmittedModule } from "../src/core/emit/emit.ts";
 import { buildSpanTable, hostImportSpans } from "../src/core/emit/spans.ts";
-import { mapTscDiagnostic, parseDenoCheck } from "../src/core/emit/tsc.ts";
+import {
+  hostModulePaths,
+  mapTscDiagnostic,
+  parseDenoCheck,
+} from "../src/core/emit/tsc.ts";
 import { lowerProject } from "../src/core/lower.ts";
 import type { Project } from "../src/core/project.ts";
 import {
@@ -427,4 +431,52 @@ Deno.test("a wrong host module gives one host-boundary diagnostic on the import 
       assertEquals(spanText(source, only.diagnostic.span), "UsersLive");
     });
   }
+});
+
+Deno.test("a host layer of the declared service that lacks a method gives one host-module diagnostic", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("examples/", FIXTURES), dir);
+    const built = buildProject(dir, EXAMPLE_ENTRIES);
+    Deno.writeTextFileSync(
+      `${dir}/users-live.ts`,
+      [
+        'import { Effect, Layer, Option } from "effect";',
+        'import { Users } from "./users.ts";',
+        "export const UsersLive = Layer.succeed(Users)({",
+        "  find: () => Effect.succeed(Option.none()),",
+        "  save: () => Effect.void,",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    const run = await deno(dir, [
+      "check",
+      "--config",
+      "deno.json",
+      ...built.paths,
+      "users-live.ts",
+    ]);
+    assertEquals(run.code, 1, `deno check should fail:\n${run.stderr}`);
+    const output = parseDenoCheck(run.stderr, Deno.realPathSync(dir));
+    assertEquals(output.other, [], run.stderr);
+    const imports = hostImportSpans(built.project);
+    const tables = new Map(
+      [...built.emitted].map(([name, module]) => [
+        module.path,
+        buildSpanTable(module, imports.get(name)),
+      ]),
+    );
+    const hosts = hostModulePaths(built.project.config);
+    const mapped = output.diagnostics.map((d) =>
+      mapTscDiagnostic(d, tables, hosts)
+    );
+    assertEquals(mapped.length, 1, run.stderr);
+    const only = mapped[0];
+    assert(only.tag === "host-module", JSON.stringify(only));
+    assertEquals([only.key, only.file, only.line], [
+      "providers",
+      "users-live.ts",
+      3,
+    ]);
+  });
 });

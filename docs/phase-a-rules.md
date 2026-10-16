@@ -105,9 +105,10 @@ the implementer picks the stricter rule and records it here.
 | Source map comment | The emitted text has no `//# sourceMappingURL` line, because it would change the golden files. Part A7 decides when it adds the line |
 | Import span of a host assertion | The IR has no import span. The span is the imported name in the `.eff` import, for example `UsersLive`. `hostImportSpans(project)` reads it from the project index |
 | Host assertion range | The emitter records the whole statement of each assertion constant. A `tsc` error anywhere in it is `host-boundary/001` |
-| Other `tsc` errors | No code is registered. The mapper returns `source` (the innermost source span, probably an emitter defect) or `generated` (no span table, or outside every record). Part A7 prints both as `TS<number>` |
+| Other `tsc` errors | No code is registered. The mapper returns `source` (the innermost source span, probably an emitter defect) or `generated` (no span table and no host module, or outside every record). Part A7 prints both as `TS<number>` |
 | Output of `deno check` | The parser keeps the first line of each message and the first location of each diagnostic. It drops notes about related declarations |
-| Wrong host module | `tsc` accepts a host layer that provides fewer methods than the declared service, because `Layer` is contravariant in its service. The fixture therefore changes the type of `find` as well |
+| Wrong host module | A host layer of the declared service tag that lacks a method fails inside the host module. The mapper returns `host-module`, and part A7 prints it as `host-boundary/001` at that position |
+| Own service class in a host module | `tsc` accepts a layer of a host-defined service class with fewer methods, because `Layer` is contravariant in its service. The fixture therefore changes the type of `find` as well |
 | Layout of an arrow chain | One line when it fits. Else the heads stay on the first line and the body moves down. Else the chain moves below `=` and the body moves down again |
 | Layout of a selector call | When the body of the selector arrow moves down, the arguments of the call get one more indent level |
 | Layout of a conditional chain | A match with several arms prints `a ? x : b ? y : z` with every `?` and `:` at one indent level |

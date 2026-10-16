@@ -7,12 +7,15 @@
 //   to the Effective source, through the span table of that file.
 //
 // A diagnostic on a host assertion constant (`const UsersLive$host: ... =
-// UsersLive;`) is the one error that correct generated code can have. It means
-// that the host module disagrees with its declaration file. It maps to the
-// code `host-boundary/001` on the imported name in the `.eff` import.
+// UsersLive;`) means that the host module disagrees with its declaration file.
+// It maps to the code `host-boundary/001` on the imported name in the `.eff`
+// import. A diagnostic inside a registered host module means the same thing,
+// for example a layer of the declared service that lacks a method. It keeps
+// its position in the host module.
 
 import { type Diagnostic, makeDiagnostic } from "../diagnostics.ts";
 import type { Span } from "../ir.ts";
+import type { ProjectConfig } from "../project.ts";
 import {
   hostAssertionAtOffset,
   mapOffset,
@@ -158,9 +161,24 @@ export type TscMapping =
     readonly message: string;
   }
   /**
-   * The diagnostic has no source span: its file has no span table (a host
-   * module, for example), or its position lies outside every record. The
-   * position is in the generated file.
+   * The diagnostic lies in a registered host module, so the host module does
+   * not fit the types that the generated code declares. The position is in the
+   * host module. Print it with the code `host-boundary/001`.
+   */
+  | {
+    readonly tag: "host-module";
+    /** The registry key: `providers` for `host:providers`. */
+    readonly key: string;
+    readonly file: string;
+    readonly line: number;
+    readonly column: number;
+    readonly tsCode: number;
+    readonly message: string;
+  }
+  /**
+   * The diagnostic has no source span: its file has no span table and is not a
+   * host module, or its position lies outside every record. The position is in
+   * the generated file.
    */
   | {
     readonly tag: "generated";
@@ -171,14 +189,38 @@ export type TscMapping =
     readonly message: string;
   };
 
+/** The root-relative path of each host module to its registry key. */
+export function hostModulePaths(
+  config: ProjectConfig,
+): ReadonlyMap<string, string> {
+  const paths = new Map<string, string>();
+  for (const [key, host] of config.host) paths.set(host.modulePath, key);
+  return paths;
+}
+
 /**
  * Maps one TypeScript diagnostic. `tables` maps the root-relative path of a
- * generated file, such as `users.ts`, to its span table.
+ * generated file, such as `users.ts`, to its span table. `hosts` maps the
+ * root-relative path of a host module to its registry key; see
+ * `hostModulePaths`.
  */
 export function mapTscDiagnostic(
   diagnostic: TscDiagnostic,
   tables: ReadonlyMap<string, SpanTable>,
+  hosts: ReadonlyMap<string, string> = new Map(),
 ): TscMapping {
+  const key = hosts.get(diagnostic.file);
+  if (key !== undefined) {
+    return {
+      tag: "host-module",
+      key,
+      file: diagnostic.file,
+      line: diagnostic.line,
+      column: diagnostic.column,
+      tsCode: diagnostic.code,
+      message: diagnostic.message,
+    };
+  }
   const unmapped: TscMapping = {
     tag: "generated",
     file: diagnostic.file,

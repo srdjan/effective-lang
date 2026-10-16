@@ -203,6 +203,20 @@ Deno.test("a diagnostic outside every record or in an unknown file keeps its gen
     tables(),
   );
   assertEquals(inHost.tag, "generated");
+  const inKnownHost = mapTscDiagnostic(
+    diagnosticAt("users-live.ts", 21, 14),
+    tables(),
+    new Map([["users-live.ts", "providers"]]),
+  );
+  assertEquals(inKnownHost, {
+    tag: "host-module",
+    key: "providers",
+    file: "users-live.ts",
+    line: 21,
+    column: 14,
+    tsCode: 2322,
+    message: "message",
+  });
   const pastEnd = mapTscDiagnostic(diagnosticAt("main.ts", 999, 1), tables());
   assertEquals(pastEnd.tag, "generated");
 });

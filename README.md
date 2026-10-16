@@ -150,7 +150,9 @@ A declaration with a syntax error is checked, but its body diagnostics are not p
 
 ## Using the lowering
 
-`lowerModule(checked, module)` returns the typed IR of one module, as a `Result`. The `checked` value comes from `checkProject`. The function returns an error value that names the module in these cases: the module is unknown, it is a `.effi` file, it has a diagnostic, an imported interface is missing, or a form has no IR. `lowerProject(checked)` does this for every `.eff` module. A `.effi` module has no entry, because it emits nothing.
+`lowerModule(checked, module)` returns the typed IR of one module, as a `Result`. The `checked` value comes from `checkProject`. The function returns an error value that names the module in five cases. The cases are an unknown module, a `.effi` file, and a diagnostic. A missing imported interface and a form without IR are the other two.
+
+`lowerProject(checked)` does this for every `.eff` module. A `.effi` module has no entry, because it emits nothing.
 
 The IR holds the declarations in source order, the sorted export identities, and one `Import` for each import declaration. The `module` of an `Import` is the module name for a relative import. It is the import string, such as `host:providers`, for a host import. A module that uses `map`, `filter`, or `fold` has one more `Import` with the module `effective:prelude`.
 
@@ -196,19 +198,20 @@ To change the output on purpose, edit the emitter and run `deno task golden:upda
 
 `mapGenerated(table, line, column)` returns the source span of a generated position, or `undefined`. The line and the column are one-based, in UTF-16 units. `mapOffset(table, offset)` does the same for a zero-based offset. The innermost record that contains the position wins. A position outside every record has no span. The header, the imports, and the host assertions are outside every record.
 
-`buildSourceMap(table, sourceTexts, options)` returns a version 3 source map as a `Result`. The `sourceTexts` value maps each source path to its text. `serializeSourceMap(map)` returns the text of the `.ts.map` file. The emitted `.ts` text has no `sourceMappingURL` comment. Part A7 decides when to add it. `decodeMappings` and `lookupMapping` read a map back. `encodeVlq` and `decodeVlqList` are the base64 VLQ coding.
+`buildSourceMap(table, sourceTexts, options)` returns a version 3 source map as a `Result`. The `sourceTexts` value maps each source path to its text. `serializeSourceMap(map)` returns the text of the `.ts.map` file. The emitted `.ts` text has no `sourceMappingURL` comment, and part A7 decides when to add it. `decodeMappings` and `lookupMapping` read a map back. `encodeVlq` and `decodeVlqList` are the base64 VLQ coding.
 
 ## Using the host-boundary mapping
 
 `parseDenoCheck(text, root)` reads the text that `deno check` prints. It returns the TypeScript diagnostics, each with a root-relative file, a one-based line and column, the TypeScript code, and the message. Lines that belong to no diagnostic go to `other`.
 
-`mapTscDiagnostic(diagnostic, tables)` maps one diagnostic. The `tables` value maps each generated path, such as `main.ts`, to its span table. The result has one of three tags:
+`mapTscDiagnostic(diagnostic, tables, hosts)` maps one diagnostic. The `tables` value maps each generated path, such as `main.ts`, to its span table. The `hosts` value comes from `hostModulePaths(config)` and maps each host module path to its registry key. The result has one of four tags:
 
 | Tag             | Meaning                                                                                                                                                 |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `host-boundary` | The position lies on a host assertion constant. The diagnostic has the code `host-boundary/001` and the span of the imported name in the `.eff` import. |
+| `host-module`   | The position lies in a registered host module. Part A7 prints it with the code `host-boundary/001` at that position.                                    |
 | `source`        | The position lies inside a printed node. The result has the innermost source span. This probably means a defect of the emitter.                         |
-| `generated`     | The file has no span table, or the position lies outside every record. The result keeps the generated position.                                         |
+| `generated`     | The file has no span table and is not a host module, or the position lies outside every record. The result keeps the generated position.                |
 
 The fixture `fixtures/host-boundary/users-live-missing-method/` holds a wrong `users-live.ts`. A slow test copies the examples to a temporary directory, replaces `users-live.ts`, and runs `deno check`. It requires exactly one diagnostic: `host-boundary/001` on `UsersLive` in the import of `main.eff`. The directory also holds two captured outputs of `deno check` for the parser tests.
 
