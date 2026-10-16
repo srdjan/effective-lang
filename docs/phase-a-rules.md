@@ -37,6 +37,7 @@ the implementer picks the stricter rule and records it here.
 | Function types in type syntax | Execution defaults to `effect` |
 | Provider compatibility | Equal `provides`, compatible execution, acquisition sets as subsets |
 | Interface hash | Ignores spans, so comments and body edits do not change it |
+| Interface payload | Also carries the declarations of other modules that the exports reach, so the hash covers them |
 
 ## Expressions, modes, and contracts (A3b)
 
@@ -71,3 +72,22 @@ the implementer picks the stricter rule and records it here.
 | Service method parameters | Named `a`, `b`, `c` in emitted service shapes, because the IR has no parameter names |
 | Reached declarations | Declarations that an exported signature reaches are exported in TypeScript, even when the source keeps them private |
 | Generated header | Each file starts with a comment that names its `.eff` source |
+
+## Validation (A5)
+
+| Rule | Choice |
+| --- | --- |
+| One fault, one diagnostic | After a disagreement the validator continues with the recomputed value; for an unknown identity it continues with the recorded value |
+| Exact nodes | The recorded type equals the recomputed type for a reference, get, update, error, brand, unbrand, call, perform, fail, retry, provide, binary, and block |
+| Contextual nodes | For a literal, `None`, `Some`, record, array, tuple, closure, `if`, `match`, and `catch`, the parts must fit the recorded type |
+| Type equality | Mutual assignability, so aliases are transparent and union order does not matter |
+| Record fields | Field order does not matter; the checker compares fields in order |
+| Effect sets | Comparison ignores order and duplicates; an unsorted or duplicated set gives only `validation/008` |
+| Closures | The type sets contain the body sets; the mode is effect when a set is nonempty or the body is effect |
+| Function contracts | An inferred contract equals the body sets; an explicit contract contains them |
+| Identities | `<kind>:<module>#<name>` for declarations and `cap:<module>#<Service>.<method>` for capabilities |
+| Builtins | A builtin reference is valid only as a callee; the prelude import has a fixed shape |
+| Area of a branch fault | A `catch` branch is Recovery; an `if` or `match` branch is Types |
+| Not checked | Match exhaustiveness, unreachable arms, and constant initialization order stay with the checker |
+| Payload spans | A span in an import payload is checked only when the caller supplies its source text |
+| Unexpected shape | An exception inside a check gives `validation/008` and does not stop the run |
