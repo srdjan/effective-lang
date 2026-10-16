@@ -1,0 +1,85 @@
+/* Walking skeleton styles. G2b replaces most of this file. */
+
+@font-face {
+  font-family: "Bricolage Grotesque";
+  src: url("fonts/bricolage-grotesque-latin.woff2") format("woff2");
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+:root {
+  --bg: #ffffff;
+  --ink: #1f2b4d;
+  --muted: #5b6275;
+  --accent: #f7941d;
+  --accent-ink: #1f2b4d;
+  --code-bg: #141d34;
+  --code-ink: #f4f4f2;
+  --font: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --font-code: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 16px/1.5 var(--font);
+}
+
+header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 1rem;
+  padding: 0.5rem 1rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+#status {
+  margin: 0;
+  color: var(--muted);
+}
+
+main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#editor {
+  flex: 1;
+  min-height: 0;
+  background: var(--code-bg);
+  color: var(--code-ink);
+}
+
+#editor .cm-editor {
+  height: 100%;
+  font: 16px/1.5 var(--font-code);
+}
+
+#editor .cm-scroller {
+  overflow: auto;
+}
+
+:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+#editor :focus-visible {
+  outline-color: var(--accent);
+}
