@@ -119,8 +119,9 @@ the implementer picks the stricter rule and records it here.
 
 | Rule | Choice |
 | --- | --- |
-| Check memo key | The key holds the module text, its path, the project configuration, the analysis diagnostics of its file, and the signature of each reached module |
-| Signature of a reached module | The hash of its full interface payload with spans, not the interface hash. IR imports carry the spans of foreign declarations, so a span change must recheck importers. A test shows that the interface hash alone breaks equality with a run from scratch |
+| Check memo key | The key holds the module text, its path, the project configuration, the analysis diagnostics of its file, and the interface hash of each reached module |
+| Lowering key | The hash of the full interface payload of each reached module, spans included. IR imports carry the spans of foreign declarations |
+| Span-only change | When only the lowering key changes, the module is not checked again. The program builds its interface again from the reused declarations, and it lowers the module again |
 | Signature without an interface | A module whose interface is an error value uses its own key as signature |
 | Reached module not yet checked | In an import cycle, a reached module that comes later in the order counts as absent, as in `checkAnalysis` |
 | Project configuration in the key | Every key holds the configuration, so a change of the host registry rechecks all modules |

@@ -203,15 +203,22 @@ Deno.test("an interface edit in users.eff rechecks main.eff", () => {
   assertEquals(second.rechecked, ["users", "host/providers", "main"]);
 });
 
-Deno.test("a comment above the types moves their spans, so the importers recheck and the IR stays exact", () => {
+Deno.test("a comment above the types moves their spans, so the importers lower again but do not recheck", () => {
   const files = exampleFiles();
   const session = new Session(files);
   const first = session.apply(files);
+  const mainBefore = first.checkedModule("main");
+  const irBefore = first.lowered("main");
   const second = session.apply({ [USERS]: "// a comment\n" + files[USERS] });
   // The interface hash leaves spans out and stays equal.
   assertEquals(second.interfaceHash("users"), first.interfaceHash("users"));
-  // The IR of main carries the spans of the imported declarations.
-  assertEquals(second.rechecked, ["users", "host/providers", "main"]);
+  assertEquals(second.rechecked, ["users"]);
+  // The checked declarations of main are reused, and its IR is lowered again
+  // with the new spans; the session compares that IR with a run from scratch.
+  assert(
+    second.checkedModule("main")?.declarations === mainBefore?.declarations,
+  );
+  assert(second.lowered("main") !== irBefore);
 });
 
 // ------------------------------------------------------------------ the differential test

@@ -9,14 +9,15 @@
 //
 // 1. Parse memo. A file whose text equals the text of the last parse keeps its
 //    syntax tree object, its parse diagnostics, and its declaration index.
-// 2. Check memo. The memo key of a module holds its own text and a signature of
-//    every module that it reaches. A module with an unchanged key is not checked
-//    again. Its checked module, type graph, interface, IR, emitted text, span
-//    table, and source map are reused. The signature of a reached module is the
-//    hash of its full interface payload, which includes the spans of the
-//    declarations (see the note on spans below).
-// 3. Lazy queries. IR, emitted text, span table, and source map are computed on
-//    first demand and stored on the memo entry of the module.
+// 2. Check memo. The memo key of a module holds its own text and the interface
+//    hash (design I8) of every module that it reaches. A module with an
+//    unchanged key is not checked again. Its checked module, type graph, and
+//    interface are reused.
+// 3. Lowering memo. The lowering key holds the hash of the full interface
+//    payload of every reached module, spans included (see the note on spans
+//    below). A module with an unchanged lowering key also reuses its IR, emitted
+//    text, span table, and source map. These are computed on first demand and
+//    stored on the memo entry of the module.
 //
 // The program checks the modules in the order and with the inputs of
 // `checkAnalysis`, and it calls the same per-module steps, so the result of a
@@ -27,13 +28,13 @@
 // watch session is measurement M4.
 //
 // Note on spans. The IR import of a module carries the interface payload of the
-// imported module, and the payload carries the source spans of the declarations
-// of that module. The interface hash of design I8 leaves the spans out. If the
-// key used only that hash, an edit that moves an exported declaration of an
-// imported module would leave stale spans in the IR of its importers. The key
-// therefore uses the hash of the full payload. A body edit below the last
-// exported type, error, or service keeps this hash, and so does an edit that
-// keeps the length of the text above them.
+// imported module, and the payload carries the source spans of the declarations.
+// The interface of a module also copies the declarations of other modules that
+// it reaches. The interface hash of design I8 leaves the spans out. An edit that
+// only moves a declaration of an imported module keeps that hash, so the
+// importer is not checked again. Its lowering key changes, so the program builds
+// its interface again from the reused declarations and lowers it again. The IR
+// then carries the new spans.
 
 import { type Analysis, analyzeProject } from "./analyze.ts";
 import { checkModuleDeclarations, type TypeGraph } from "./check.ts";
@@ -100,8 +101,12 @@ interface Entry {
   readonly checked: CheckedModule;
   readonly graph: TypeGraph;
   readonly iface: ModuleInterface | undefined;
-  /** What an importer sees of this module: the full payload hash, or the key when there is no interface. */
+  /** What the checker of an importer sees: the interface hash, or the key when there is no interface. */
   readonly signature: string;
+  /** What the lowering of an importer sees: the full payload hash, or the signature when there is no interface. */
+  readonly payload: string;
+  /** The payload hashes of the reached modules when this entry was lowered. */
+  readonly lowerKey: string;
   lowered?: Result<ModuleIR, LowerError>;
   emitted?: Result<EmittedModule, EmitProjectError>;
   table?: Result<SpanTable, EmitProjectError>;
@@ -300,6 +305,7 @@ export class Program {
     const graphs = new Map<string, TypeGraph>();
     const interfaces = new Map<string, ModuleInterface>();
     const signatures = new Map<string, string>();
+    const payloads = new Map<string, string>();
     const modules = new Map<string, CheckedModule>();
     const entries = new Map<string, Entry>();
     const rechecked: string[] = [];
@@ -325,6 +331,9 @@ export class Program {
         analysis.diagnostics.filter((d) => d.span.source === info.path),
         reached.map((other) => [other, signatures.get(other) ?? null]),
       ]);
+      const lowerKey = JSON.stringify(
+        reached.map((other) => [other, payloads.get(other) ?? null]),
+      );
 
       let entry = this.entries.get(name);
       if (
@@ -354,14 +363,19 @@ export class Program {
           ...bodies.diagnostics,
         ]);
         const iface = built.ok ? built.value : undefined;
+        const signature = iface === undefined
+          ? `key:${fnv1a64(rest)}:${fnv1a64(info.tree.text)}`
+          : iface.hash;
         entry = {
           text: info.tree.text,
           rest,
           graph,
           iface,
-          signature: iface === undefined
-            ? `key:${fnv1a64(rest)}:${fnv1a64(info.tree.text)}`
+          signature,
+          payload: iface === undefined
+            ? signature
             : fnv1a64(canonicalJson(iface.payload)),
+          lowerKey,
           checked: {
             module: name,
             path: info.path,
@@ -377,11 +391,33 @@ export class Program {
           },
         };
         rechecked.push(name);
+      } else if (entry.lowerKey !== lowerKey) {
+        // Only spans of reached modules moved. The interface copies foreign
+        // declarations, so it is built again; the IR is lowered again on demand.
+        const built = buildInterface(
+          entry.checked.declarations,
+          entry.checked.modes,
+          importedGraphs,
+        );
+        const iface = built.ok ? built.value : undefined;
+        entry = {
+          text: entry.text,
+          rest: entry.rest,
+          graph: entry.graph,
+          iface,
+          signature: entry.signature,
+          payload: iface === undefined
+            ? entry.signature
+            : fnv1a64(canonicalJson(iface.payload)),
+          lowerKey,
+          checked: { ...entry.checked, interface: built, hash: iface?.hash },
+        };
       }
       entries.set(name, entry);
       graphs.set(name, entry.graph);
       if (entry.iface !== undefined) interfaces.set(name, entry.iface);
       signatures.set(name, entry.signature);
+      payloads.set(name, entry.payload);
       modules.set(name, entry.checked);
       diagnostics.push(...entry.checked.diagnostics);
     }

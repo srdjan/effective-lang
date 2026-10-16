@@ -241,15 +241,13 @@ The program reads its files only from these calls, so it needs no `SourceHost`. 
 
 A `Revision` answers one query for each module name: `checkedModule`, `lowered`, `emitted`, `spanTable`, and `sourceMap`. It also holds `diagnostics`, `interfaceHash`, and `rechecked`. The `rechecked` list names the modules that this revision checked again, in topological order. It includes the host interface modules.
 
-The IR, the emitted text, the span table, and the source map are computed on first use. A module that is not checked again returns the same objects as in the revision before.
+The IR, the emitted text, the span table, and the source map are computed on first use. A module that is not checked again and not lowered again returns the same objects as in the revision before.
 
-The program has three memos. The parse memo keeps the syntax tree of a file whose text is equal. The check memo keeps a checked module when its key is equal. The lazy queries store their values on the memo entry of the module.
+The program has three memos. The parse memo keeps the syntax tree of a file whose text is equal. The check memo keeps a checked module when its key is equal. The lowering memo keeps the IR and the emitted values when the lowering key is equal.
 
-The key holds five items: the text of the module, its path, the project configuration, and the analysis diagnostics of its file. The fifth item is a signature of each module that it reaches. The program calls the same per-module steps as `checkAnalysis`, in the same order. A revision therefore equals a run from scratch. The test `tests/db_test.ts` compares both after each edit of a sequence.
+The check key holds five items: the text of the module, its path, the project configuration, and the analysis diagnostics of its file. The fifth item is the interface hash of each module that it reaches. The program calls the same per-module steps as `checkAnalysis`, in the same order. A revision therefore equals a run from scratch. The test `tests/db_test.ts` compares both after each edit of a sequence.
 
-The signature of a reached module is the hash of its full interface payload, not the interface hash of design I8. The IR import of a module carries the payload of each module it imports, and the payload carries source spans. An edit that moves an exported type, error, or service of an imported module therefore checks the importers again.
-
-A body edit below the last exported type, error, or service keeps the signature. An edit that keeps the length of the text above them keeps it too. The interface hash is still available through `interfaceHash(name)`.
+The lowering key holds the hash of the full interface payload of each reached module. The IR import of a module carries source spans of the imported declarations. An edit that only moves such a declaration keeps the interface hash, so the importer is not checked again. The program builds the interface of the importer again and lowers the importer again.
 
 One `TypeTable` lives as long as the program, so reused modules keep valid type references. The table only grows. Its memory growth in a long watch session is measurement M4.
 
