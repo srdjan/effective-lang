@@ -36,7 +36,7 @@ and Q10. Q2, Q3, Q4, Q6, and Q7 follow from D7, D10, D13, D14, and D6.
 | Q1 Builtin `ValueId` scope | Per module, content hash of the closed type. |
 | Q5 Unannotated module-level functions | Allowed, and never exported. |
 | Q8 Diagnostic codes | Category prefix plus a number, for example `failure-contract/001`. |
-| Q9 Optional and `Option` fields | `Schema.optional` for `?` fields, `Schema.Option` for `Option<T>` fields. Check against Effect 4.0.5. |
+| Q9 Optional and `Option` fields | `Schema.optionalKey` for `?` fields, as the book tab does. `Schema.Option` for `Option<T>` fields, after a `deno check` probe. Correction: an earlier answer named `Schema.optional`. |
 | Q10 Providers in `provide` | Host-declared providers only. |
 
 D8, D13, D14, and the answers above interpret or extend the language spec. The
@@ -600,6 +600,11 @@ shows a need. That escape hatch is a design property, not a plan.
 | Q8 | What are the diagnostic codes? The spec names categories only. | Diagnostics and conformance | Fixtures match on codes, not on message text | Category prefix plus a number, for example `failure-contract/001` |
 | Q9 | How are optional fields and `Option` fields emitted so that the difference survives? | Data and types | Schema emission | `Schema.optional` for `?` fields, `Schema.Option` for `Option<T>` fields; needs a check against Effect 4.0.5 |
 | Q10 | Does `provide` accept a provider whose acquisition fails or has dependencies in version 0 source, or only host-declared ones? | Retry and providers | Checker equation coverage | Host-declared only, as the spec implies |
+| Q11 | Do record types allow width subtyping? | Data and types | Assignability of every record | Phase A: no. Equal field names, equal optional flags, compatible field types |
+| Q12 | Which identifiers are reserved? | Source and lexical rules | Emitted names must be valid TypeScript | Phase A: reject JavaScript and TypeScript strict-mode reserved words; `void` stays a type name |
+| Q13 | What grammar covers record expressions, patterns, arrow detection, brace meaning, and newline continuation? | Surface grammar | The parser cannot be written without it | Phase A plan, section 5.1; no unary operators in version 0 |
+| Q14 | Can a provider supply single service methods? | Retry and providers | A `Layer` supplies whole services | Phase A: whole services only |
+| Q15 | May a module constant refer to a later declaration, and what is the initialization order? | Modules and boundaries | Emitted code fails with TS2448 in source order | Phase A: yes; topological order over eager dependencies; a cycle is a diagnostic |
 
 ## 10. What must be measured before committing
 
