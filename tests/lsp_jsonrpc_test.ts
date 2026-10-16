@@ -213,6 +213,7 @@ Deno.test("error codes match the plan", () => {
     methodNotFound: -32601,
     invalidParams: -32602,
     serverNotInitialized: -32002,
+    internalError: -32603,
   });
 });
 

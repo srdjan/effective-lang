@@ -20,7 +20,8 @@ function messageOf(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-const denoFs: CliFs = {
+/** The real file system. The language server uses the same object. */
+export const denoFs: CliFs = {
   readText(path: string): Result<string, ReadError> {
     try {
       return { ok: true, value: Deno.readTextFileSync(path) };

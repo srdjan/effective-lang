@@ -4,6 +4,7 @@
     "test": "deno test --allow-read --ignore='**/*_slow_test.ts' tests/",
     "test:slow": "deno test --allow-all --permit-no-files 'tests/**/*_slow_test.ts'",
     "effective": "deno run --allow-read --allow-write --allow-run=deno src/cli/main.ts",
+    "lsp": "deno run --allow-read --allow-write src/lsp/main.ts",
     "bench": "deno run --no-lock --allow-read --allow-write --allow-run=deno --allow-env bench/main.ts",
     "golden:update": "deno run --allow-read --allow-write scripts/golden_update.ts",
     "validate:update": "deno run --allow-read --allow-write scripts/validate_fixtures.ts",
