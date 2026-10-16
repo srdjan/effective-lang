@@ -17,3 +17,4 @@ export const log = (message: string): Effect.Effect<
   ConsoleUnavailable,
   Console
 > => Console.use(($s) => $s.print(message));
+//# sourceMappingURL=log.ts.map

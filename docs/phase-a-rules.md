@@ -102,7 +102,7 @@ the implementer picks the stricter rule and records it here.
 | Source map targets | A generated position maps to the start of the source span of its innermost record, not to a range |
 | Source map segments | One segment at each record start, each record end, and each generated line start. Consecutive segments with one target merge. An unmapped part after a mapped part gets a one-field segment |
 | Source map fields | `names` is empty. `sources` are paths relative to the map. `sourcesContent` is optional. A missing source text is an error value |
-| Source map comment | The emitted text has no `//# sourceMappingURL` line, because it would change the golden files. Part A7 decides when it adds the line |
+| Source map comment | The emitted text ends with the line `//# sourceMappingURL=<file>.map`, for example `users.ts.map`. Part A7 added it, so that the written `.ts.map` files take effect |
 | Import span of a host assertion | The IR has no import span. The span is the imported name in the `.eff` import, for example `UsersLive`. `hostImportSpans(project)` reads it from the project index |
 | Host assertion range | The emitter records the whole statement of each assertion constant. A `tsc` error anywhere in it is `host-boundary/001` |
 | Other `tsc` errors | No code is registered. The mapper returns `source` (the innermost source span, probably an emitter defect) or `generated` (no span table and no host module, or outside every record). Part A7 prints both as `TS<number>` |

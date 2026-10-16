@@ -78,3 +78,4 @@ export const pay = (id: OrderId): Effect.Effect<
     const $p4: Order = markPaid($p3);
     return yield* saveOrder($p4);
   });
+//# sourceMappingURL=pay.ts.map

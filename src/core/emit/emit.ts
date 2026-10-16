@@ -149,7 +149,8 @@ function build(ir: ModuleIR, context: EmitContext): EmittedModule {
     hostAssertions,
     ...[...typeDocs, ...functionDocs, ...constantDocs].map((d) => [d]),
   ]);
-  const rendered = render([doc, hard]);
+  const mapName = `${scope.path.slice(scope.path.lastIndexOf("/") + 1)}.map`;
+  const rendered = render([doc, hard, `//# sourceMappingURL=${mapName}`, hard]);
   const assertions: HostAssertionRecord[] = [];
   for (const mark of rendered.marks) {
     for (const host of scope.hosts.values()) {

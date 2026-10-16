@@ -25,3 +25,4 @@ export const total = (amounts: ReadonlyArray<number>): number => {
   const $p1: ReadonlyArray<number> = amounts;
   return $p1.reduce((sum, amount) => $int(sum + amount), 0);
 };
+//# sourceMappingURL=collections.ts.map

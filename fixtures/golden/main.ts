@@ -8,3 +8,4 @@ const UsersLive$host: Layer.Layer<Users> = UsersLive;
 
 export const main = (): Effect.Effect<string, StoreUnavailable> =>
   Effect.provide(Effect.suspend(() => displayName("u1")), UsersLive$host);
+//# sourceMappingURL=main.ts.map

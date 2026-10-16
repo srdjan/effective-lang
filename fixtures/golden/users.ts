@@ -75,3 +75,4 @@ export const activeNames = (): Effect.Effect<
     const $p2: ReadonlyArray<User> = $p1.filter((user) => user.active);
     return $p2.map((user) => user.name);
   });
+//# sourceMappingURL=users.ts.map
