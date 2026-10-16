@@ -61,3 +61,13 @@ the implementer picks the stricter rule and records it here.
 | Known limit | A `retry` or `provide` stage whose left value is effectful keeps the checker's sets, so the validator may report it |
 | Prelude value names | `$builtin/<name>/<hash>`, the text after `#` in the id |
 | Declaration order in IR | Source order by span start |
+
+## Emission (A6a)
+
+| Rule | Choice |
+| --- | --- |
+| Pure-to-effect lift | A pure function fits an effect function type only directly in a value position; the emitter wraps it there. Nested in a record, array, option, tuple, union, result, or parameter, the execution must match |
+| Hoisting | Trivial children (literals, references, `None`, closures) stay inline |
+| Service method parameters | Named `a`, `b`, `c` in emitted service shapes, because the IR has no parameter names |
+| Reached declarations | Declarations that an exported signature reaches are exported in TypeScript, even when the source keeps them private |
+| Generated header | Each file starts with a comment that names its `.eff` source |

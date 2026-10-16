@@ -417,3 +417,25 @@ Deno.test("show prints readable names", () => {
     "(int) => string fails Missing",
   );
 });
+
+Deno.test("a pure function lifts to an effect function only at the top of a value", () => {
+  const t = fresh();
+  const pure = pureFn(t, [t.int], t.int);
+  const effect = effectFn(t, [t.int], t.int);
+  assert(t.isAssignable(pure, effect));
+  assert(!t.isAssignable(pure, t.union([effect, t.string])));
+  // Nested positions cannot be wrapped by the emitter.
+  assert(
+    !t.isAssignable(
+      t.record([field("f", pure)]),
+      t.record([field("f", effect)]),
+    ),
+  );
+  assert(!t.isAssignable(t.array(pure), t.array(effect)));
+  assert(!t.isAssignable(t.option(pure), t.option(effect)));
+  assert(!t.isAssignable(pureFn(t, [], pure), pureFn(t, [], effect)));
+  // A parameter that expects a pure callback cannot receive an effect one.
+  assert(!t.isAssignable(pureFn(t, [pure], t.int), pureFn(t, [effect], t.int)));
+  // Equal execution still works when nested.
+  assert(t.isAssignable(t.array(effect), t.array(effect)));
+});

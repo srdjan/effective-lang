@@ -525,10 +525,21 @@ export class TypeTable {
 
   /** True when a value of type `source` may be used where `target` is expected. */
   isAssignable(source: TypeRef, target: TypeRef): boolean {
-    return this.assignable(source, target, 0);
+    return this.assignable(source, target, 0, true);
   }
 
-  private assignable(s: TypeRef, t: TypeRef, depth: number): boolean {
+  /**
+   * `lift` is true only at the top of a value position. There a pure function
+   * may fit an effect function type, because the emitter wraps the value. A
+   * function nested in a record, array, option, tuple, union, result, or
+   * parameter cannot be wrapped, so its execution must match.
+   */
+  private assignable(
+    s: TypeRef,
+    t: TypeRef,
+    depth: number,
+    lift = false,
+  ): boolean {
     if (s === t) return true;
     if (depth > MAX_DEPTH) return false;
     const sn = this.node(s);
@@ -537,11 +548,15 @@ export class TypeTable {
     if (sn.kind === "primitive" && sn.name === "never") return true;
     if (sn.kind === "named") {
       const alias = this.aliases.get(sn.id as TypeId);
-      if (alias !== undefined) return this.assignable(alias, t, depth + 1);
+      if (alias !== undefined) {
+        return this.assignable(alias, t, depth + 1, lift);
+      }
     }
     if (tn.kind === "named") {
       const alias = this.aliases.get(tn.id as TypeId);
-      if (alias !== undefined) return this.assignable(s, alias, depth + 1);
+      if (alias !== undefined) {
+        return this.assignable(s, alias, depth + 1, lift);
+      }
     }
     if (sn.kind === "union") {
       return sn.members.every((m) => this.assignable(m, t, depth + 1));
@@ -588,7 +603,12 @@ export class TypeTable {
       case "function":
         if (sn.kind !== "function") return false;
         if (sn.parameters.length !== tn.parameters.length) return false;
-        if (!executionFits(sn.execution, tn.execution)) return false;
+        if (
+          sn.execution !== tn.execution &&
+          !(lift && executionFits(sn.execution, tn.execution))
+        ) {
+          return false;
+        }
         if (!isSubset(sn.failures, tn.failures)) return false;
         if (!isSubset(sn.requirements, tn.requirements)) return false;
         if (!this.assignable(sn.result, tn.result, depth + 1)) return false;
