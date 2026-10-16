@@ -124,7 +124,7 @@ The result holds one shared type table and one entry for each module. A module e
 
 A function with a nonempty `fails` or `uses` set always has effect mode. A function with empty sets needs an entry in `modes`, because its body decides the mode. Without the entry, the `interface` field of the module is an error value. The diagnostics do not depend on `modes`.
 
-A module interface holds `exports`, `values`, `types`, `errors`, and `services`. It also holds each private declaration that an export reaches. Part A3b builds interfaces with `buildInterface` after it knows the modes. The hash covers the content without source spans.
+A module interface holds `exports`, `values`, `types`, `errors`, and `services`. It also holds each declaration that an export reaches, private or from another module. Part A3b builds interfaces with `buildInterface` after it knows the modes. The hash covers the content without source spans.
 
 ## Using the body checker
 
