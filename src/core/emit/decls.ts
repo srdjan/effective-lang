@@ -22,6 +22,7 @@ import {
   ifBreak,
   indent,
   line,
+  marked,
   soft,
 } from "./doc.ts";
 import { at, ExprEmitter } from "./expr.ts";
@@ -359,18 +360,18 @@ export class DeclarationEmitter {
     const header: Doc = returns === undefined
       ? parameters
       : [parameters, ": ", returns];
-    const head: Doc[] = [this.exportKeyword(d.id), "const ", d.name, " = "];
+    const prefix: Doc = [this.exportKeyword(d.id), "const ", d.name];
     if (
       d.type.execution === "pure" && d.body.kind === "block" &&
       d.body.steps.length > 0
     ) {
       const statements = this.expr.blockStatements(d.body, false);
-      return [...head, this.expr.arrowBlock(header, statements), ";"];
+      return [prefix, " = ", this.expr.arrowBlock(header, statements), ";"];
     }
     const body = d.type.execution === "effect"
       ? this.expr.asEffect(d.body, d.type.result)
       : this.expr.fit(d.body, d.type.result, "pure");
-    return [...head, this.expr.arrow(header, body), ";"];
+    return [this.expr.arrowDeclaration(prefix, header, body), ";"];
   }
 
   private constantDeclaration(d: ConstantDecl): Doc {
@@ -439,11 +440,11 @@ export class DeclarationEmitter {
       if (provider === undefined || provider.kind !== "provider") {
         throw unsupported(`the host binding ${host.local} is not a provider`);
       }
-      result.push([
+      result.push(marked(host.hostName, [
         `const ${host.hostName}: `,
         typeDoc(this.scope, provider),
         ` = ${host.local};`,
-      ]);
+      ]));
     }
     return result;
   }

@@ -1,0 +1,17 @@
+Check collections.ts
+Check log.ts
+Check main.ts
+Check pay.ts
+Check users.ts
+Check users-live.ts
+TS2375 [ERROR]: Type 'Layer<WrongUsers, never, never>' is not assignable to type 'Layer<Users, never, never>' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Type 'Users' is not assignable to type 'WrongUsers'.
+    The types of 'Service.find' are incompatible between these types.
+      Type '(a: string) => Effect<Option<{ readonly id: string; readonly name: string; readonly active: boolean; }>, StoreUnavailable, never>' is not assignable to type '(a: number) => Effect<Option<{ readonly id: string; readonly name: string; readonly active: boolean; }>, StoreUnavailable, never>'.
+        Types of parameters 'a' and 'a' are incompatible.
+          Type 'number' is not assignable to type 'string'.
+const UsersLive$host: Layer.Layer<Users> = UsersLive;
+      ~~~~~~~~~~~~~~
+    at file:///work/project/main.ts:7:7
+
+error: Type checking failed.

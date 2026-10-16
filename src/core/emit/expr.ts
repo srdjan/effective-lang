@@ -11,6 +11,7 @@ import type {
   LocalId,
   Parameter,
   Pattern,
+  Span,
   Step,
   Type,
   ValueId,
@@ -21,7 +22,10 @@ import {
   bracketed,
   type Doc,
   group,
+  type GroupId,
+  hard,
   ifBreak,
+  ifBroke,
   indent,
   join,
   line,
@@ -75,6 +79,26 @@ function binaryPrecedence(operator: string): number {
   }
 }
 
+/** The parameter list of one arrow of a chain, with the source span of that arrow. */
+interface ChainHead {
+  readonly doc: Doc;
+  readonly span: Span | undefined;
+}
+
+/** The body at the end of an arrow chain. */
+type ChainTail =
+  | { readonly kind: "expr"; readonly body: Emitted }
+  | { readonly kind: "block"; readonly statements: readonly Doc[] };
+
+/**
+ * An arrow function, seen as a chain of arrows: `(a) => (b) => body` has two
+ * heads. `deno fmt` lays out a chain as a unit, so the printer needs the parts.
+ */
+interface Chain {
+  readonly heads: readonly ChainHead[];
+  readonly tail: ChainTail;
+}
+
 /** A printed expression with the facts that its parent needs. */
 export interface Emitted {
   readonly doc: Doc;
@@ -83,18 +107,73 @@ export interface Emitted {
   readonly brace: boolean;
   /** A function or object literal that a call can print after the other arguments. */
   readonly huggable: boolean;
+  /** Present when the expression is an arrow function. */
+  readonly chain?: Chain;
 }
 
 function emitted(
   doc: Doc,
   prec: number = PREC.member,
-  flags: { readonly brace?: boolean; readonly huggable?: boolean } = {},
+  flags: {
+    readonly brace?: boolean;
+    readonly huggable?: boolean;
+    readonly chain?: Chain;
+  } = {},
 ): Emitted {
-  return {
+  const base = {
     doc,
     prec,
     brace: flags.brace ?? false,
     huggable: flags.huggable ?? false,
+  };
+  return flags.chain === undefined ? base : { ...base, chain: flags.chain };
+}
+
+/** The arrows `heads[i..]` followed by `last` after the final `=>`. Each arrow carries its span. */
+function nestHeads(
+  heads: readonly ChainHead[],
+  last: Doc,
+  i: number = 0,
+): Doc {
+  const head = heads[i];
+  const inner: Doc = i === heads.length - 1
+    ? [head.doc, " =>", last]
+    : [head.doc, " => ", nestHeads(heads, last, i + 1)];
+  return head.span === undefined ? inner : spanned(head.span, inner);
+}
+
+/**
+ * The layouts of an arrow chain, in the order that `deno fmt` prefers them.
+ * `deno fmt` keeps a chain on one line when it fits. Otherwise it keeps all
+ * heads on the first line and moves the body down. When the heads do not fit
+ * after `const name =`, it moves the whole chain to the next line.
+ */
+function chainOptions(chain: Chain): {
+  readonly oneLine: Doc;
+  readonly bodyDown: Doc | undefined;
+  readonly chainDown: Doc;
+} {
+  const { heads, tail } = chain;
+  if (tail.kind === "block") {
+    const last: Doc = [" ", braces(tail.statements)];
+    return {
+      oneLine: nestHeads(heads, last),
+      bodyDown: undefined,
+      chainDown: nestHeads(heads, last),
+    };
+  }
+  if (tail.body.brace) {
+    const last: Doc = [" (", tail.body.doc, ")"];
+    return {
+      oneLine: nestHeads(heads, last),
+      bodyDown: undefined,
+      chainDown: nestHeads(heads, last),
+    };
+  }
+  return {
+    oneLine: nestHeads(heads, [" ", tail.body.doc]),
+    bodyDown: nestHeads(heads, indent([hard, tail.body.doc])),
+    chainDown: nestHeads(heads, indent([hard, tail.body.doc])),
   };
 }
 
@@ -208,11 +287,22 @@ export class ExprEmitter {
     return emitted([`${effect}.gen(function* () `, braces(statements), ")"]);
   }
 
-  /** `(params) => expression`. The body moves to the next line when it does not fit. */
-  arrow(parameters: Doc, body: Emitted): Doc {
+  /**
+   * `(params) => expression`. The body moves to the next line when it does not
+   * fit. `bodyGroup` names the group of the body, so that the caller can ask
+   * whether the body moved.
+   */
+  arrow(parameters: Doc, body: Emitted, bodyGroup?: GroupId): Doc {
+    if (body.chain !== undefined) {
+      return this.chainDoc(this.chainOf(parameters, { kind: "expr", body }));
+    }
     // An object literal body stays on the line of the arrow: `=> ({`.
     if (body.brace) return [parameters, " => (", body.doc, ")"];
-    return [parameters, " =>", group(indent([line, body.doc]))];
+    return [
+      parameters,
+      " =>",
+      group(indent([line, body.doc]), false, bodyGroup),
+    ];
   }
 
   /** `(params) => { statements }` */
@@ -220,10 +310,64 @@ export class ExprEmitter {
     return [parameters, " => ", braces(statements)];
   }
 
+  /** The chain of an arrow with the parameters `parameters` and the tail `tail`. */
+  private chainOf(parameters: Doc, tail: ChainTail): Chain {
+    const head: ChainHead = { doc: parameters, span: undefined };
+    if (tail.kind === "expr" && tail.body.chain !== undefined) {
+      return {
+        heads: [head, ...tail.body.chain.heads],
+        tail: tail.body.chain.tail,
+      };
+    }
+    return { heads: [head], tail };
+  }
+
+  /** An arrow function as an expression. A chain keeps its parts for the parent. */
+  private arrowEmitted(parameters: Doc, tail: ChainTail): Emitted {
+    const chain = this.chainOf(parameters, tail);
+    const doc = chain.heads.length > 1
+      ? this.chainDoc(chain)
+      : tail.kind === "block"
+      ? this.arrowBlock(parameters, tail.statements)
+      : this.arrow(parameters, tail.body);
+    return emitted(doc, PREC.yield, { huggable: true, chain });
+  }
+
+  /** A chain of two or more arrows, or one arrow, as a document. */
+  private chainDoc(chain: Chain): Doc {
+    const options = chainOptions(chain);
+    if (options.bodyDown === undefined) return options.oneLine;
+    return alt([options.oneLine, options.bodyDown]);
+  }
+
+  /**
+   * `const name = <arrow>;` without the semicolon. The caller gives the text
+   * before the `=`. An arrow chain that is too long moves below the `=`.
+   */
+  arrowDeclaration(prefix: Doc, parameters: Doc, body: Emitted): Doc {
+    if (body.chain === undefined) {
+      return [prefix, " = ", this.arrow(parameters, body)];
+    }
+    const options = chainOptions(
+      this.chainOf(parameters, { kind: "expr", body }),
+    );
+    const choices: Doc[] = [[" ", options.oneLine]];
+    if (options.bodyDown !== undefined) choices.push([" ", options.bodyDown]);
+    choices.push(indent([hard, options.chainDown]));
+    return [prefix, " =", alt(choices)];
+  }
+
   // -------------------------------------------------------------- spans
 
   private tag(e: Expr, result: Emitted): Emitted {
-    return { ...result, doc: spanned(e.span, result.doc) };
+    const doc = spanned(e.span, result.doc);
+    if (result.chain === undefined) return { ...result, doc };
+    const [first, ...rest] = result.chain.heads;
+    const chain: Chain = {
+      heads: [{ doc: first.doc, span: e.span }, ...rest],
+      tail: result.chain.tail,
+    };
+    return { ...result, doc, chain };
   }
 
   // -------------------------------------------------------------- shared forms
@@ -271,9 +415,7 @@ export class ExprEmitter {
     const effect = this.scope.effect("Effect");
     const call = emitted([at(plain, PREC.member), "(", join(", ", names), ")"]);
     const body = emitted([`${effect}.succeed`, callArguments([call])]);
-    return emitted(this.arrow(parameters, body), PREC.yield, {
-      huggable: true,
-    });
+    return this.arrowEmitted(parameters, { kind: "expr", body });
   }
 
   private structural(e: Expr, mode: Mode): Emitted {
@@ -512,24 +654,21 @@ export class ExprEmitter {
     );
     const type: FunctionType = this.closureType(e);
     if (type.execution === "effect" || forceEffect) {
-      return emitted(
-        this.arrow(parameters, this.asEffect(e.body, type.result)),
-        PREC.yield,
-        { huggable: true },
-      );
+      return this.arrowEmitted(parameters, {
+        kind: "expr",
+        body: this.asEffect(e.body, type.result),
+      });
     }
     if (e.body.kind === "block" && e.body.steps.length > 0) {
-      return emitted(
-        this.arrowBlock(parameters, this.blockStatements(e.body, false)),
-        PREC.yield,
-        { huggable: true },
-      );
+      return this.arrowEmitted(parameters, {
+        kind: "block",
+        statements: this.blockStatements(e.body, false),
+      });
     }
-    return emitted(
-      this.arrow(parameters, this.fit(e.body, type.result, "pure")),
-      PREC.yield,
-      { huggable: true },
-    );
+    return this.arrowEmitted(parameters, {
+      kind: "expr",
+      body: this.fit(e.body, type.result, "pure"),
+    });
   }
 
   private closureType(e: Extract<Expr, { kind: "closure" }>): FunctionType {
@@ -705,30 +844,55 @@ export class ExprEmitter {
         ")",
       ];
     };
-    let chain: Doc | undefined;
+    // The chain is `test ? arm : test ? arm : last`. `deno fmt` prints the
+    // nested conditionals of the else branch at the indentation of the first.
+    let last: Doc | undefined;
+    let pairs: { readonly test: Doc; readonly arm: Doc }[] = [];
     for (let i = arms.length - 1; i >= 0; i--) {
       const arm = arms[i];
-      if (chain === undefined) {
-        chain = armDoc(arm);
+      if (last === undefined) {
+        last = armDoc(arm);
         continue;
       }
       const test = this.armTest(arm.pattern, selector);
       if (test === undefined) {
         // A wildcard before the last arm makes the later arms unreachable.
-        chain = armDoc(arm);
+        last = armDoc(arm);
+        pairs = [];
         continue;
       }
-      chain = group([
-        test,
-        indent([line, "? ", armDoc(arm), line, ": ", chain]),
-      ]);
+      pairs.unshift({ test, arm: armDoc(arm) });
     }
-    if (chain === undefined) throw internal("a match has no arm");
+    if (last === undefined) throw internal("a match has no arm");
+    const chain: Doc = pairs.length === 0 ? last : group([
+      pairs[0].test,
+      indent([
+        ...pairs.flatMap((pair, i) => [
+          ...(i === 0 ? [] : [pair.test]),
+          line,
+          "? ",
+          pair.arm,
+          line,
+          ": ",
+        ]),
+        last,
+      ]),
+    ]);
+    // When the body of the selector moves down, `deno fmt` also indents the
+    // arguments of the call by one more level.
+    const bodyGroup: GroupId = {};
     const callee = this.arrow(
       `(${selector})`,
       emitted(chain, PREC.conditional),
+      bodyGroup,
     );
-    return emitted(["(", callee, ")", callArguments([subject])]);
+    const args = callArguments([subject]);
+    return emitted([
+      "(",
+      callee,
+      ")",
+      ifBroke(bodyGroup, indent(args), args),
+    ]);
   }
 
   private armBinding(pattern: Pattern): Parameter | null {

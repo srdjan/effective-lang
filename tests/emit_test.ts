@@ -238,6 +238,38 @@ Deno.test("the forms fixture emits the plan's control forms", () => {
   assertStringIncludes(text, "Id.make(s)");
 });
 
+// ------------------------------------------------------------------ formatting
+
+Deno.test("an arrow chain that is too long moves below the equals sign", () => {
+  const forms = emitFiles(projectFiles("emit/forms"), ["forms.eff"]).get(
+    "forms",
+  );
+  assert(forms !== undefined);
+  assertStringIncludes(
+    forms.text,
+    "export const adder =\n  (n: number): (a: number) => Effect.Effect<number> => (x: number) =>\n    Effect.succeed($int(x + n));",
+  );
+  // A short chain stays on one line.
+  const short = oneModule(
+    "type F = (x: int) => int\nexport const f = (n: int): F => (x) => x\n",
+  );
+  assertStringIncludes(
+    short,
+    "export const f = (n: number): F => (x: number) => Effect.succeed(x);",
+  );
+});
+
+Deno.test("a match with three arms prints one flat chain of conditionals", () => {
+  const forms = emitFiles(projectFiles("emit/forms"), ["forms.eff"]).get(
+    "forms",
+  );
+  assert(forms !== undefined);
+  assertStringIncludes(
+    forms.text,
+    "        : $t0 === 2\n        ? Effect.succeed(2000000000)\n        : $t0 === 3\n        ? Effect.succeed(3000000000)\n        : Effect.succeed(4000000000))(",
+  );
+});
+
 // ------------------------------------------------------------------ spans and results
 
 Deno.test("span records lie inside the text and cover each declaration", () => {
@@ -296,4 +328,20 @@ Deno.test("emitModule returns an error value for a host module that the project 
 
 Deno.test("the example list stays in step with the helper", () => {
   assertEquals(EXAMPLE_ENTRIES.length, 5);
+});
+
+Deno.test("the emitted module lists the range of each host assertion", () => {
+  const main = emitExamples().get("main");
+  assert(main !== undefined);
+  assertEquals(main.hostAssertions.length, 1);
+  const found = main.hostAssertions[0];
+  assertEquals(
+    main.text.slice(found.start, found.end),
+    "const UsersLive$host: Layer.Layer<Users> = UsersLive;",
+  );
+  assertEquals(
+    [found.name, found.local, found.exported, found.key],
+    ["UsersLive$host", "UsersLive", "UsersLive", "providers"],
+  );
+  assertEquals(emitExamples().get("users")?.hostAssertions, []);
 });

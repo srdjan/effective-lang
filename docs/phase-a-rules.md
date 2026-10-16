@@ -91,3 +91,25 @@ the implementer picks the stricter rule and records it here.
 | Not checked | Match exhaustiveness, unreachable arms, and constant initialization order stay with the checker |
 | Payload spans | A span in an import payload is checked only when the caller supplies its source text |
 | Unexpected shape | An exception inside a check gives `validation/008` and does not stop the run |
+
+## Spans and formatting (A6b)
+
+| Rule | Choice |
+| --- | --- |
+| Position outside every record | Not mapped. The header, the imports, the helpers, the host assertions, and the blank lines lie outside every record. A position inside a declaration maps to that declaration at worst |
+| Nested records | The innermost record wins. Of two records with one range, the record that closed first (the inner one) wins. Empty records are dropped |
+| Positions in the API | `mapGenerated` takes a one-based line and column in UTF-16 units, as `tsc` and the diagnostic format do. `mapOffset` takes a zero-based offset |
+| Source map targets | A generated position maps to the start of the source span of its innermost record, not to a range |
+| Source map segments | One segment at each record start, each record end, and each generated line start. Consecutive segments with one target merge. An unmapped part after a mapped part gets a one-field segment |
+| Source map fields | `names` is empty. `sources` are paths relative to the map. `sourcesContent` is optional. A missing source text is an error value |
+| Source map comment | The emitted text has no `//# sourceMappingURL` line, because it would change the golden files. Part A7 decides when it adds the line |
+| Import span of a host assertion | The IR has no import span. The span is the imported name in the `.eff` import, for example `UsersLive`. `hostImportSpans(project)` reads it from the project index |
+| Host assertion range | The emitter records the whole statement of each assertion constant. A `tsc` error anywhere in it is `host-boundary/001` |
+| Other `tsc` errors | No code is registered. The mapper returns `source` (the innermost source span, probably an emitter defect) or `generated` (no span table, or outside every record). Part A7 prints both as `TS<number>` |
+| Output of `deno check` | The parser keeps the first line of each message and the first location of each diagnostic. It drops notes about related declarations |
+| Wrong host module | `tsc` accepts a host layer that provides fewer methods than the declared service, because `Layer` is contravariant in its service. The fixture therefore changes the type of `find` as well |
+| Layout of an arrow chain | One line when it fits. Else the heads stay on the first line and the body moves down. Else the chain moves below `=` and the body moves down again |
+| Layout of a selector call | When the body of the selector arrow moves down, the arguments of the call get one more indent level |
+| Layout of a conditional chain | A match with several arms prints `a ? x : b ? y : z` with every `?` and `:` at one indent level |
+| Function type parameters | A broken parameter list of a function type ends with a comma |
+| Not at a fixed point | A binary expression that is longer than 80 columns, and an arrow chain whose first parameter list must break. The printer does not break them yet |

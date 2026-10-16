@@ -16,6 +16,7 @@ import { analyzeProject } from "../src/core/analyze.ts";
 import { checkAnalysis, checkProject } from "../src/core/check_project.ts";
 import { emitProject, type EmittedModule } from "../src/core/emit/emit.ts";
 import { lowerProject } from "../src/core/lower.ts";
+import type { Project } from "../src/core/project.ts";
 import type { ModeMap } from "../src/core/check.ts";
 import type { Execution, ValueId } from "../src/core/ir.ts";
 import {
@@ -484,6 +485,17 @@ export function emitFiles(
   files: Record<string, string>,
   entries: readonly string[],
 ): ReadonlyMap<string, EmittedModule> {
+  return emitFilesWithProject(files, entries).emitted;
+}
+
+/** Like `emitFiles`, and also returns the project, for the import spans and the source texts. */
+export function emitFilesWithProject(
+  files: Record<string, string>,
+  entries: readonly string[],
+): {
+  readonly project: Project;
+  readonly emitted: ReadonlyMap<string, EmittedModule>;
+} {
   const checked = checkProject(memoryHost(files), "", entries);
   if (!checked.ok) throw new Error(JSON.stringify(checked.error));
   const project = checked.value;
@@ -500,7 +512,7 @@ export function emitFiles(
     if (!module.ok) throw new Error(JSON.stringify(module.error));
     result.set(name, module.value);
   }
-  return result;
+  return { project: project.analysis.project, emitted: result };
 }
 
 /** The five examples, emitted in memory. */
@@ -542,4 +554,40 @@ export function validationManifest(): readonly ValidationFixture[] {
     throw new Error("fixtures/validate/manifest.json has no fixtures list");
   }
   return parsed.fixtures as ValidationFixture[];
+}
+
+// ------------------------------------------------------------------ host boundary
+
+/** One entry of `fixtures/host-boundary/manifest.json`. */
+export interface HostBoundaryFixture {
+  readonly code: string;
+  /** The directory under `fixtures/host-boundary/`. */
+  readonly directory: string;
+  /** The wrong host module in that directory. It replaces `users-live.ts` of the examples. */
+  readonly host: string;
+  readonly mutation: string;
+  readonly expected: {
+    readonly source: string;
+    /** One-based. */
+    readonly line: number;
+    /** One-based, in UTF-16 code units. */
+    readonly column: number;
+    readonly text: string;
+  };
+}
+
+export function hostBoundaryManifest(): readonly HostBoundaryFixture[] {
+  const text = Deno.readTextFileSync(
+    new URL("host-boundary/manifest.json", FIXTURES),
+  );
+  const parsed: unknown = JSON.parse(text);
+  if (
+    typeof parsed !== "object" || parsed === null || !("fixtures" in parsed) ||
+    !Array.isArray(parsed.fixtures)
+  ) {
+    throw new Error(
+      "fixtures/host-boundary/manifest.json has no fixtures list",
+    );
+  }
+  return parsed.fixtures as HostBoundaryFixture[];
 }

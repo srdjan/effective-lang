@@ -10,7 +10,16 @@ import type {
   FunctionType,
   Type,
 } from "../ir.ts";
-import { bracketed, type Doc, group, indent, join, line, soft } from "./doc.ts";
+import {
+  bracketed,
+  type Doc,
+  group,
+  ifBreak,
+  indent,
+  join,
+  line,
+  soft,
+} from "./doc.ts";
 import { internal, type Scope, servicesOf, unsupported } from "./scope.ts";
 
 function literalText(value: string | number | boolean): string {
@@ -105,6 +114,7 @@ function functionTypeDoc(scope: Scope, type: FunctionType): Doc {
     group([
       "(",
       indent([soft, join([",", line], parameters)]),
+      ifBreak(","),
       soft,
       ")",
     ]),

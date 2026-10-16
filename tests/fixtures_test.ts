@@ -18,6 +18,7 @@ import {
   expectedMarkers,
   type FixtureFile,
   FIXTURES,
+  hostBoundaryManifest,
   listErrorCases,
   listFixtures,
   modeOfFixture,
@@ -132,6 +133,9 @@ Deno.test("every registered code has at least one error fixture", () => {
   // A validation code has a mutation fixture in fixtures/validate/ instead of
   // a marked source file, because the validator reads IR and not source.
   for (const f of validationManifest()) marked.add(f.code);
+  // A host-boundary code has a wrong host module in fixtures/host-boundary/,
+  // because only `deno check` finds the error.
+  for (const f of hostBoundaryManifest()) marked.add(f.code);
   for (const code of registeredCodes()) {
     assert(marked.has(code), `${code} has no error fixture`);
   }

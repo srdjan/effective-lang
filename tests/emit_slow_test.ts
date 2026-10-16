@@ -1,13 +1,21 @@
-// Slow tests for part A6a. Each test copies a fixture project to a temporary
-// directory, builds there, and runs `deno check` or `deno run` on the result.
-// Nothing is written under fixtures/.
+// Slow tests for parts A6a and A6b. Each test copies a fixture project to a
+// temporary directory, builds there, and runs `deno check`, `deno fmt`, or
+// `deno run` on the result. Nothing is written under fixtures/.
 
 import { assert, assertEquals } from "@std/assert";
 import { checkProject } from "../src/core/check_project.ts";
-import { emitProject } from "../src/core/emit/emit.ts";
+import { emitProject, type EmittedModule } from "../src/core/emit/emit.ts";
+import { buildSpanTable, hostImportSpans } from "../src/core/emit/spans.ts";
+import { mapTscDiagnostic, parseDenoCheck } from "../src/core/emit/tsc.ts";
 import { lowerProject } from "../src/core/lower.ts";
-import type { SourceHost } from "../src/core/source.ts";
-import { EXAMPLE_ENTRIES, FIXTURES } from "./helpers.ts";
+import type { Project } from "../src/core/project.ts";
+import {
+  lineStarts,
+  positionOf,
+  type SourceHost,
+  spanText,
+} from "../src/core/source.ts";
+import { EXAMPLE_ENTRIES, FIXTURES, hostBoundaryManifest } from "./helpers.ts";
 
 const DENO_CONFIG = JSON.stringify(
   {
@@ -53,11 +61,23 @@ const fileHost: SourceHost = {
   },
 };
 
+interface Built {
+  /** The root-relative generated paths. */
+  readonly paths: string[];
+  readonly project: Project;
+  readonly emitted: ReadonlyMap<string, EmittedModule>;
+}
+
 /**
  * Builds the project in `root`: checks it, lowers it, emits it, and writes each
  * generated file next to its source. Returns the root-relative generated paths.
  */
 function build(root: string, entries: readonly string[]): string[] {
+  return buildProject(root, entries).paths;
+}
+
+/** Like `build`, and also returns the project and the emitted modules. */
+function buildProject(root: string, entries: readonly string[]): Built {
   const checked = checkProject(fileHost, root, entries);
   assert(checked.ok, JSON.stringify(checked));
   assertEquals(checked.value.diagnostics.map((d) => d.code), []);
@@ -65,6 +85,7 @@ function build(root: string, entries: readonly string[]): string[] {
     config: checked.value.analysis.project.config,
   });
   const paths: string[] = [];
+  const modules = new Map<string, EmittedModule>();
   for (const [name, module] of emitted) {
     assert(module.ok, `${name}: ${JSON.stringify(module)}`);
     const target = `${root}/${module.value.path}`;
@@ -73,9 +94,14 @@ function build(root: string, entries: readonly string[]): string[] {
     });
     Deno.writeTextFileSync(target, module.value.text);
     paths.push(module.value.path);
+    modules.set(name, module.value);
   }
   Deno.writeTextFileSync(`${root}/deno.json`, DENO_CONFIG);
-  return paths;
+  return {
+    paths,
+    project: checked.value.analysis.project,
+    emitted: modules,
+  };
 }
 
 interface Run {
@@ -310,4 +336,95 @@ console.log(JSON.stringify({
     );
     assertEquals(result, { lift: 3, closure: 12 });
   });
+});
+
+// ------------------------------------------------------------------ formatting (A6b)
+
+Deno.test("deno fmt does not exclude the golden files, and it accepts them unchanged", async () => {
+  const config = JSON.parse(
+    Deno.readTextFileSync(new URL("../deno.json", import.meta.url)),
+  );
+  const excluded: unknown = config.fmt.exclude;
+  assert(Array.isArray(excluded));
+  assert(
+    !excluded.some((entry) => String(entry).startsWith("fixtures/golden")),
+    "deno.json excludes the golden files from deno fmt",
+  );
+  const root = new URL("../", import.meta.url).pathname;
+  const run = await deno(root, ["fmt", "--check", "fixtures/golden"]);
+  assertEquals(run.code, 0, `deno fmt --check failed:\n${run.stderr}`);
+  assert(
+    run.stderr.includes("Checked 5 files"),
+    `deno fmt did not check the five golden files:\n${run.stderr}`,
+  );
+});
+
+Deno.test("the emitted forms are a fixed point of deno fmt", async () => {
+  await withTemporary(async (dir) => {
+    const generated = buildForms(dir);
+    assertEquals([...generated].sort(), ["forms.ts", "names.ts"]);
+    const run = await deno(dir, ["fmt", "--check", ...generated]);
+    assertEquals(run.code, 0, `deno fmt --check failed:\n${run.stderr}`);
+    assert(
+      run.stderr.includes("Checked 2 files"),
+      `deno fmt did not check both files:\n${run.stderr}`,
+    );
+  });
+});
+
+// ------------------------------------------------------------------ host boundary (A6b)
+
+Deno.test("a wrong host module gives one host-boundary diagnostic on the import of UsersLive", async () => {
+  const fixtures = hostBoundaryManifest();
+  assertEquals(fixtures.length, 1);
+  for (const fixture of fixtures) {
+    await withTemporary(async (dir) => {
+      copyDirectory(new URL("examples/", FIXTURES), dir);
+      const built = buildProject(dir, EXAMPLE_ENTRIES);
+      // The wrong module replaces the right one.
+      Deno.copyFileSync(
+        new URL(
+          `host-boundary/${fixture.directory}/${fixture.host}`,
+          FIXTURES,
+        ),
+        `${dir}/users-live.ts`,
+      );
+      const run = await deno(dir, [
+        "check",
+        "--config",
+        "deno.json",
+        ...built.paths,
+        "users-live.ts",
+      ]);
+      assertEquals(run.code, 1, `deno check should fail:\n${run.stderr}`);
+
+      const output = parseDenoCheck(run.stderr, Deno.realPathSync(dir));
+      assertEquals(output.other, [], run.stderr);
+      const imports = hostImportSpans(built.project);
+      const tables = new Map(
+        [...built.emitted].map(([name, module]) => [
+          module.path,
+          buildSpanTable(module, imports.get(name)),
+        ]),
+      );
+      const mapped = output.diagnostics.map((d) => mapTscDiagnostic(d, tables));
+      assertEquals(mapped.length, 1, run.stderr);
+      const only = mapped[0];
+      assert(only.tag === "host-boundary", JSON.stringify(only));
+      assertEquals(only.diagnostic.code, fixture.code);
+
+      const source = Deno.readTextFileSync(`${dir}/${fixture.expected.source}`);
+      const position = positionOf(
+        lineStarts(source),
+        source,
+        only.diagnostic.span.start,
+      );
+      assertEquals(only.diagnostic.span.source, fixture.expected.source);
+      assertEquals(
+        [position.line, position.column],
+        [fixture.expected.line, fixture.expected.column],
+      );
+      assertEquals(spanText(source, only.diagnostic.span), "UsersLive");
+    });
+  }
 });

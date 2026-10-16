@@ -9,9 +9,11 @@ import {
   group,
   hard,
   ifBreak,
+  ifBroke,
   indent,
   join,
   line,
+  marked,
   render,
   soft,
   spanned,
@@ -77,4 +79,29 @@ Deno.test("span tags record the generated range of their content", () => {
 Deno.test("join puts the separator between items only", () => {
   assertEquals(render(join(", ", ["a", "b", "c"])).text, "a, b, c");
   assertEquals(render(join(", ", [])).text, "");
+});
+
+Deno.test("ifBroke asks whether an earlier group broke", () => {
+  const id = {};
+  const doc: Doc = [
+    "(",
+    group(indent([line, "body"]), false, id),
+    ")",
+    ifBroke(id, " broken", " flat"),
+  ];
+  assertEquals(render(doc, 80).text, "( body) flat");
+  assertEquals(render(doc, 5).text, "(\n  body) broken");
+});
+
+Deno.test("ifBroke counts a group that a hard line forces to break", () => {
+  const id = {};
+  const doc: Doc = [group(["a", hard, "b"], false, id), ifBroke(id, "!", "?")];
+  assertEquals(render(doc).text, "a\nb!");
+});
+
+Deno.test("mark tags record the generated range of their content", () => {
+  const doc: Doc = ["a ", marked("k", ["b", hard, "c"]), " d"];
+  const result = render(doc);
+  assertEquals(result.text, "a b\nc d");
+  assertEquals(result.marks, [{ key: "k", start: 2, end: 5 }]);
 });

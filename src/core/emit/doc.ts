@@ -3,8 +3,9 @@
 // tree. `render` lays the tree out at a fixed width with one fixed style.
 //
 // A `span` node tags a part of the output with a source span. `render` returns
-// the generated range of each tag. Part A6b uses this seam for the span table
-// and the source map.
+// the generated range of each tag. Part A6b builds the span table and the
+// source map from these ranges. A `mark` node tags a part of the output with a
+// key, for the ranges that have no source span, such as a host assertion.
 
 import type { Span } from "../ir.ts";
 
@@ -12,12 +13,28 @@ export type Doc =
   | string
   | readonly Doc[]
   | { readonly k: "line"; readonly soft: boolean; readonly hard: boolean }
-  | { readonly k: "group"; readonly d: Doc; readonly brk: boolean }
+  | {
+    readonly k: "group";
+    readonly d: Doc;
+    readonly brk: boolean;
+    readonly id: GroupId | undefined;
+  }
+  | {
+    readonly k: "ifbroke";
+    readonly id: GroupId;
+    readonly broken: Doc;
+    readonly flat: Doc;
+  }
   | { readonly k: "indent"; readonly d: Doc }
   | { readonly k: "ifbreak"; readonly broken: Doc; readonly flat: Doc }
   | { readonly k: "alt"; readonly options: readonly Doc[] }
   | { readonly k: "span"; readonly span: Span; readonly d: Doc }
-  | { readonly k: "endspan"; readonly span: Span; readonly start: number };
+  | { readonly k: "endspan"; readonly span: Span; readonly start: number }
+  | { readonly k: "mark"; readonly key: string; readonly d: Doc }
+  | { readonly k: "endmark"; readonly key: string; readonly start: number };
+
+/** Names a group, so that a later `ifBroke` can ask whether the group broke. */
+export type GroupId = object;
 
 /** A space when flat and a newline when broken. */
 export const line: Doc = { k: "line", soft: false, hard: false };
@@ -26,8 +43,21 @@ export const soft: Doc = { k: "line", soft: true, hard: false };
 /** Always a newline. A group that contains it always breaks. */
 export const hard: Doc = { k: "line", soft: false, hard: true };
 
-export function group(d: Doc, brk = false): Doc {
-  return { k: "group", d, brk };
+export function group(d: Doc, brk = false, id?: GroupId): Doc {
+  return { k: "group", d, brk, id };
+}
+
+/**
+ * `broken` when the group named `id` was laid out in break mode, else `flat`.
+ * The group must come before this node in the output.
+ */
+export function ifBroke(id: GroupId, broken: Doc, flat: Doc = ""): Doc {
+  return { k: "ifbroke", id, broken, flat };
+}
+
+/** Tags the output of `d` with a key. `render` returns its generated range. */
+export function marked(key: string, d: Doc): Doc {
+  return { k: "mark", key, d };
 }
 
 export function indent(d: Doc): Doc {
@@ -92,10 +122,18 @@ export interface SpanRecord {
   readonly span: Span;
 }
 
+export interface MarkRecord {
+  readonly key: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 export interface Rendered {
   readonly text: string;
   /** In the order in which the tagged parts close. */
   readonly spans: readonly SpanRecord[];
+  /** In the order in which the marked parts close. */
+  readonly marks: readonly MarkRecord[];
 }
 
 const INDENT_WIDTH = 2;
@@ -137,9 +175,11 @@ function makeHardCheck(): (doc: Doc) => boolean {
           break;
         case "indent":
         case "span":
+        case "mark":
           result = check(doc.d);
           break;
         case "ifbreak":
+        case "ifbroke":
           result = check(doc.broken) || check(doc.flat);
           break;
         case "alt":
@@ -147,6 +187,7 @@ function makeHardCheck(): (doc: Doc) => boolean {
           result = false;
           break;
         case "endspan":
+        case "endmark":
           result = false;
           break;
       }
@@ -162,6 +203,9 @@ export function render(doc: Doc, width = 80): Rendered {
   const hasHard = makeHardCheck();
   const out: string[] = [];
   const spans: SpanRecord[] = [];
+  const marks: MarkRecord[] = [];
+  /** The groups that were laid out in break mode. */
+  const broke = new Set<GroupId>();
   let column = 0;
   let offset = 0;
   let remeasure = false;
@@ -199,7 +243,15 @@ export function render(doc: Doc, width = 80): Rendered {
           }
           case "indent":
           case "span":
+          case "mark":
             cmds.push({ indent: cmd.indent, mode: cmd.mode, doc: d.d });
+            break;
+          case "ifbroke":
+            cmds.push({
+              indent: cmd.indent,
+              mode: cmd.mode,
+              doc: broke.has(d.id) ? d.broken : d.flat,
+            });
             break;
           case "ifbreak":
             cmds.push({
@@ -218,6 +270,7 @@ export function render(doc: Doc, width = 80): Rendered {
             });
             break;
           case "endspan":
+          case "endmark":
             break;
         }
       }
@@ -262,6 +315,7 @@ export function render(doc: Doc, width = 80): Rendered {
       case "group": {
         if (cmd.mode === "flat" && !remeasure) {
           const mode: Mode = d.brk || hasHard(d.d) ? "break" : "flat";
+          if (mode === "break" && d.id !== undefined) broke.add(d.id);
           stack.push({ indent: cmd.indent, mode, doc: d.d });
           break;
         }
@@ -271,10 +325,18 @@ export function render(doc: Doc, width = 80): Rendered {
         if (!forced && fits(flat, stack, width - column)) {
           stack.push(flat);
         } else {
+          if (d.id !== undefined) broke.add(d.id);
           stack.push({ indent: cmd.indent, mode: "break", doc: d.d });
         }
         break;
       }
+      case "ifbroke":
+        stack.push({
+          indent: cmd.indent,
+          mode: cmd.mode,
+          doc: broke.has(d.id) ? d.broken : d.flat,
+        });
+        break;
       case "indent":
         stack.push({
           indent: cmd.indent + INDENT_WIDTH,
@@ -334,7 +396,18 @@ export function render(doc: Doc, width = 80): Rendered {
       case "endspan":
         spans.push({ start: d.start, end: offset, span: d.span });
         break;
+      case "mark":
+        stack.push({
+          indent: cmd.indent,
+          mode: cmd.mode,
+          doc: { k: "endmark", key: d.key, start: offset },
+        });
+        stack.push({ indent: cmd.indent, mode: cmd.mode, doc: d.d });
+        break;
+      case "endmark":
+        marks.push({ key: d.key, start: d.start, end: offset });
+        break;
     }
   }
-  return { text: out.join(""), spans };
+  return { text: out.join(""), spans, marks };
 }

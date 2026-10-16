@@ -6,7 +6,7 @@ The design is in `docs/transpiler-design.md`. The Phase A plan is in `docs/plans
 
 ## Status
 
-Parts A1, A2, A3a, A3b, A4, A5, and A6a exist. Part A1 adds the project skeleton, the lexer, a lossless parser with error recovery, and the `syntax` diagnostics. The parser reads `.eff` source files and `.effi` host interface files.
+Parts A1, A2, A3a, A3b, A4, A5, A6a, and A6b exist. Part A1 adds the project skeleton, the lexer, a lossless parser with error recovery, and the `syntax` diagnostics. The parser reads `.eff` source files and `.effi` host interface files.
 
 Part A2 adds the declaration index, the project loader, the module graph, and the name resolver. It adds the diagnostic codes `unknown-name`, `module`, and `declaration`.
 
@@ -16,7 +16,9 @@ Part A3b adds body checking. It checks every function and constant body, infers 
 
 Part A4 lowers a checked module to typed IR and serializes it. It adds a synchronous SHA-256 for builtin identities.
 
-Part A6a adds the Effect-TS emitter. It turns the IR of each module into the text of one TypeScript module. It adds the five golden files, the host module `users-live.ts`, and the slow tests that check and run the emitted code. The span table, the source map, and the `deno fmt` check of the golden files belong to part A6b. The command-line tool does not exist yet.
+Part A6a adds the Effect-TS emitter. It turns the IR of each module into the text of one TypeScript module. It adds the five golden files, the host module `users-live.ts`, and the slow tests that check and run the emitted code. The command-line tool does not exist yet.
+
+Part A6b adds the span table, version 3 source maps, and the mapping of `deno check` errors to Effective spans. It adds the diagnostic code `host-boundary/001`, a parser for `deno check` output, and the fixtures in `fixtures/host-boundary/`. It also makes the printer a fixed point of `deno fmt` for the golden files and for the programs in `fixtures/emit/forms/`. The golden files are no longer excluded from `deno fmt`.
 
 Part A5 adds the independent IR validator. It recomputes every annotation of a module from the IR and the source texts, and it reports each disagreement with its validation area. It adds the category `validation` with the codes `validation/001` to `validation/008`, and the mutation fixtures in `fixtures/validate/`.
 
@@ -28,15 +30,15 @@ The project needs Deno 2.9.7. The first test run downloads `@std/assert` from js
 
 Run every command from the repository root.
 
-| Command                     | What it does                                                                          |
-| --------------------------- | ------------------------------------------------------------------------------------- |
-| `deno task check`           | Runs the format check, the lint, the type check, the fast tests, and the slow tests.  |
-| `deno task test`            | Runs the fast tests. It skips files named `*_slow_test.ts`.                           |
-| `deno task test:slow`       | Runs only files named `*_slow_test.ts`. They run `deno check` and `deno run`.         |
-| `deno task golden:update`   | Writes `fixtures/golden/<module>.ts` again from `fixtures/examples`.                  |
-| `deno task validate:update` | Writes the mutation fixtures in `fixtures/validate/` again from the current lowering. |
-| `deno task fmt`             | Formats the source files.                                                             |
-| `deno task lint`            | Runs the linter.                                                                      |
+| Command                     | What it does                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------ |
+| `deno task check`           | Runs the format check, the lint, the type check, the fast tests, and the slow tests.       |
+| `deno task test`            | Runs the fast tests. It skips files named `*_slow_test.ts`.                                |
+| `deno task test:slow`       | Runs only files named `*_slow_test.ts`. They run `deno check`, `deno fmt`, and `deno run`. |
+| `deno task golden:update`   | Writes `fixtures/golden/<module>.ts` again from `fixtures/examples`.                       |
+| `deno task validate:update` | Writes the mutation fixtures in `fixtures/validate/` again from the current lowering.      |
+| `deno task fmt`             | Formats the source files.                                                                  |
+| `deno task lint`            | Runs the linter.                                                                           |
 
 The tasks `effective` and `bench` do not exist yet. Later parts add them.
 
@@ -78,6 +80,9 @@ src/core/      The core library. It is synchronous and pure.
   validate_project.ts validateProject: validates the output of lowerProject.
   emit/          The Effect-TS emitter.
     emit.ts        emitModule and emitProject: the public entries.
+    spans.ts       The span table: generated position to source span, and host import spans.
+    sourcemap.ts   Version 3 source maps and the base64 VLQ coding.
+    tsc.ts         Parser for deno check output and the mapping of its errors.
     doc.ts         The printer: documents, layout at 80 columns, span tags.
     scope.ts       Names, fresh names, imports, host bindings, specifiers.
     types.ts       The type printer and the schema printer.
@@ -91,6 +96,7 @@ fixtures/      Input files for the tests.
   examples/      The five example programs, the host interface file, and users-live.ts.
   golden/        The expected emitted TypeScript of each example.
   emit/forms/    Extra programs for the emitter tests. They are not golden examples.
+  host-boundary/ A wrong host module, captured deno check output, and manifest.json.
   ir/example/    The log example and its IR fixture.
   validate/      Mutated copies of lowered IR and manifest.json, which names the expected code of each.
   parse/         Valid syntax forms (ok-*) and recovery inputs (recovery-*).
@@ -178,11 +184,33 @@ An import of another module becomes a relative `.ts` specifier. A host import be
 
 The emitter adds `export` to each declaration that the source exports and to each declaration that an exported interface reaches. It never renames a source name. It gives its own names, such as `$t0`, `$int`, and `Option$1`, only when no source name is taken.
 
-A manual run of `deno fmt` left the five golden files unchanged. Part A6a has no test for this. Part A6b adds the test and removes the exclusion of `fixtures/golden/` from `deno fmt`.
+The printer has one fixed style, and `deno fmt` leaves its output unchanged (decision D12). Two slow tests check this: one runs `deno fmt --check` on `fixtures/golden/`, and one runs it on the emitted programs of `fixtures/emit/forms/`. The printer does not yet break a binary expression that is longer than 80 columns. `deno fmt` would change such a line.
 
 The slow tests copy a fixture project to a temporary directory and build there. They check the emitted code with `deno check` under `effect@4.0.5` with strict settings. They run the emitted code with `deno run`. They need the npm package in the Deno cache, so the first run needs network access.
 
 To change the output on purpose, edit the emitter and run `deno task golden:update`. Then read the diff of `fixtures/golden/`.
+
+## Using the span table and the source map
+
+`buildSpanTable(emitted, importSpans)` returns the span table of one emitted module. The table holds the generated ranges with their source spans, nested from the outside in. `importSpans` maps the name that the `.eff` source binds in a host import to the span of that name. Get it with `hostImportSpans(project).get(emitted.module)`.
+
+`mapGenerated(table, line, column)` returns the source span of a generated position, or `undefined`. The line and the column are one-based, in UTF-16 units. `mapOffset(table, offset)` does the same for a zero-based offset. The innermost record that contains the position wins. A position outside every record has no span. The header, the imports, and the host assertions are outside every record.
+
+`buildSourceMap(table, sourceTexts, options)` returns a version 3 source map as a `Result`. The `sourceTexts` value maps each source path to its text. `serializeSourceMap(map)` returns the text of the `.ts.map` file. The emitted `.ts` text has no `sourceMappingURL` comment. Part A7 decides when to add it. `decodeMappings` and `lookupMapping` read a map back. `encodeVlq` and `decodeVlqList` are the base64 VLQ coding.
+
+## Using the host-boundary mapping
+
+`parseDenoCheck(text, root)` reads the text that `deno check` prints. It returns the TypeScript diagnostics, each with a root-relative file, a one-based line and column, the TypeScript code, and the message. Lines that belong to no diagnostic go to `other`.
+
+`mapTscDiagnostic(diagnostic, tables)` maps one diagnostic. The `tables` value maps each generated path, such as `main.ts`, to its span table. The result has one of three tags:
+
+| Tag             | Meaning                                                                                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `host-boundary` | The position lies on a host assertion constant. The diagnostic has the code `host-boundary/001` and the span of the imported name in the `.eff` import. |
+| `source`        | The position lies inside a printed node. The result has the innermost source span. This probably means a defect of the emitter.                         |
+| `generated`     | The file has no span table, or the position lies outside every record. The result keeps the generated position.                                         |
+
+The fixture `fixtures/host-boundary/users-live-missing-method/` holds a wrong `users-live.ts`. A slow test copies the examples to a temporary directory, replaces `users-live.ts`, and runs `deno check`. It requires exactly one diagnostic: `host-boundary/001` on `UsersLive` in the import of `main.eff`. The directory also holds two captured outputs of `deno check` for the parser tests.
 
 ## Error fixture convention
 
@@ -202,4 +230,4 @@ The files `fixtures/parse/recovery-*.eff` use the same markers. The files `fixtu
 
 ## Format and lint scope
 
-`deno fmt` skips `docs/`, `src/core/ir.ts`, `fixtures/golden/`, and every `.eff` and `.effi` file. The copy of `ir.ts` stays as it is in the sibling repository. Part A6b removes the exclusion of `fixtures/golden/`. `deno lint` skips `docs/` and `fixtures/golden/`, because generated code keeps unused handler parameters.
+`deno fmt` skips `docs/`, `src/core/ir.ts`, and every `.eff` and `.effi` file. The copy of `ir.ts` stays as it is in the sibling repository. `deno fmt` checks `fixtures/golden/`. `deno lint` skips `docs/` and `fixtures/golden/`, because generated code keeps unused handler parameters.

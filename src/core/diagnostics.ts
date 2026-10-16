@@ -294,6 +294,11 @@ export const DIAGNOSTIC_CODES = {
     description:
       "Module constants depend on each other in a cycle, directly or through functions, so the module cannot initialize.",
   },
+  "host-boundary/001": {
+    category: "host-boundary",
+    description:
+      "A host module does not match its declaration file: the TypeScript module that implements a provider disagrees with the provider type that the host interface file declares.",
+  },
   "validation/001": {
     category: "validation",
     description:

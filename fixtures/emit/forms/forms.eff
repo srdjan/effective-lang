@@ -171,3 +171,24 @@ export const sumRec = (xs: int[]): Acc =>
   xs |> fold({ n: 0, label: "x" }, (acc, x) => ({ n: acc.n + x, label: acc.label }))
 const pair = (a: int, b: int): int uses Store.count => a + b + Store.count()
 export const hoistOrder = (x: int): int uses Store.count => pair(add(x, 1), Store.count())
+export const adderShort = (n: int): (x: int) => int => (x) => x + n
+export const adderBlock = (n: int): (x: int) => int => (x) => {
+  const y = x + n
+  y * 2
+}
+export const statusLong = (s: Status, longerNameForTheSubject: string): string =>
+  match s { "pending" => "pendingpendingpendingpending", "paid" => "paidpaidpaidpaidpaidpaid" }
+export const matchLongEff = (id: Id): int
+  uses Store.count | Store.tick =>
+  match Store.count() {
+    1 => 1000000000,
+    2 => 2000000000,
+    3 => 3000000000,
+    _ => 4000000000
+  }
+export const shapeEff = (s: Shape): int
+  uses Store.count =>
+  match s {
+    { kind: "circle", ...c } => Store.count() + 1,
+    { kind: "square", ...q } => Store.count() + 2
+  }

@@ -3,3 +3,4 @@ demos/
 fixtures/**/*.ts
 !fixtures/golden/**
 !fixtures/examples/users-live.ts
+!fixtures/host-boundary/**
