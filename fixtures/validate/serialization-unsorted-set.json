@@ -518,13 +518,178 @@
           "target": "value:host/providers#UsersLive"
         }
       ],
-      "errors": [],
+      "errors": [
+        {
+          "fields": [
+            {
+              "name": "message",
+              "optional": false,
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            }
+          ],
+          "id": "error:users#StoreUnavailable",
+          "kind": "error",
+          "name": "StoreUnavailable",
+          "span": {
+            "end": 165,
+            "source": "users.eff",
+            "start": 114
+          }
+        }
+      ],
       "exports": [
         "value:host/providers#UsersLive"
       ],
       "module": "host:providers",
-      "services": [],
-      "types": [],
+      "services": [
+        {
+          "id": "service:users#Users",
+          "kind": "service",
+          "methods": [
+            {
+              "id": "cap:users#Users.find",
+              "name": "find",
+              "span": {
+                "end": 245,
+                "source": "users.eff",
+                "start": 192
+              },
+              "type": {
+                "effects": {
+                  "failures": [
+                    "error:users#StoreUnavailable"
+                  ],
+                  "requirements": []
+                },
+                "execution": "effect",
+                "kind": "function",
+                "parameters": [
+                  {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                ],
+                "result": {
+                  "element": {
+                    "id": "type:users#User",
+                    "kind": "named"
+                  },
+                  "kind": "option"
+                }
+              }
+            },
+            {
+              "id": "cap:users#Users.save",
+              "name": "save",
+              "span": {
+                "end": 293,
+                "source": "users.eff",
+                "start": 248
+              },
+              "type": {
+                "effects": {
+                  "failures": [
+                    "error:users#StoreUnavailable"
+                  ],
+                  "requirements": []
+                },
+                "execution": "effect",
+                "kind": "function",
+                "parameters": [
+                  {
+                    "id": "type:users#User",
+                    "kind": "named"
+                  }
+                ],
+                "result": {
+                  "kind": "primitive",
+                  "name": "unit"
+                }
+              }
+            },
+            {
+              "id": "cap:users#Users.all",
+              "name": "all",
+              "span": {
+                "end": 332,
+                "source": "users.eff",
+                "start": 296
+              },
+              "type": {
+                "effects": {
+                  "failures": [
+                    "error:users#StoreUnavailable"
+                  ],
+                  "requirements": []
+                },
+                "execution": "effect",
+                "kind": "function",
+                "parameters": [],
+                "result": {
+                  "element": {
+                    "id": "type:users#User",
+                    "kind": "named"
+                  },
+                  "kind": "array"
+                }
+              }
+            }
+          ],
+          "name": "Users",
+          "span": {
+            "end": 334,
+            "source": "users.eff",
+            "start": 167
+          }
+        }
+      ],
+      "types": [
+        {
+          "definition": {
+            "kind": "alias",
+            "type": {
+              "fields": [
+                {
+                  "name": "id",
+                  "optional": false,
+                  "type": {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                },
+                {
+                  "name": "name",
+                  "optional": false,
+                  "type": {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                },
+                {
+                  "name": "active",
+                  "optional": false,
+                  "type": {
+                    "kind": "primitive",
+                    "name": "boolean"
+                  }
+                }
+              ],
+              "kind": "record"
+            }
+          },
+          "id": "type:users#User",
+          "kind": "type",
+          "name": "User",
+          "span": {
+            "end": 70,
+            "source": "users.eff",
+            "start": 0
+          }
+        }
+      ],
       "values": [
         {
           "id": "value:host/providers#UsersLive",

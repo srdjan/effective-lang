@@ -1,7 +1,9 @@
 // Module interfaces. An interface is the `Import` payload of the IR without
 // `module` and `bindings`: the exports, the types of the exported values, and
-// the declarations that those exports reach (design I8). Imported declarations
-// are not repeated here; they stay in the interface of their own module.
+// the declarations that those exports reach (design I8). The spec requires the
+// complete supporting type graph, so the payload also carries the declarations
+// of other modules that the exports reach. A dependent then sees them without
+// an import of their module, and the hash changes when one of them changes.
 //
 // The interface hash covers the content without source spans, so a comment or a
 // body edit that moves a declaration does not change it. The hash is FNV-1a 64
@@ -165,6 +167,78 @@ export function buildTypeGraph(declarations: ModuleDeclarations): TypeGraph {
 }
 
 /**
+ * The declarations of other modules that the exports and the own type graph
+ * reach, directly or through other foreign declarations. `imported` holds the
+ * type graphs of the modules that this module reaches.
+ */
+function foreignTypeGraph(
+  declarations: ModuleDeclarations,
+  own: TypeGraph,
+  imported: ReadonlyMap<string, TypeGraph>,
+): TypeGraph {
+  const foreign = new Map<string, TypeDecl | ErrorDecl | ServiceDecl>();
+  for (const graph of imported.values()) {
+    for (const d of graph.types) foreign.set(d.id, d);
+    for (const d of graph.errors) foreign.set(d.id, d);
+    for (const d of graph.services) foreign.set(d.id, d);
+  }
+  const reached = new Set<string>();
+  const pending: string[] = [];
+  const visit = (ids: ReadonlySet<string>): void => {
+    for (const id of ids) {
+      if (reached.has(id) || !foreign.has(id)) continue;
+      reached.add(id);
+      pending.push(id);
+    }
+  };
+  visit(exportedValueIds(declarations));
+  const seeds = new Set<string>();
+  for (const d of own.types) {
+    referencedIds(
+      d.definition.kind === "alias" ? d.definition.type : d.definition.base,
+      seeds,
+    );
+  }
+  for (const d of own.errors) {
+    for (const field of d.fields) referencedIds(field.type, seeds);
+  }
+  for (const d of own.services) {
+    for (const method of d.methods) referencedIds(method.type, seeds);
+  }
+  visit(seeds);
+  while (pending.length > 0) {
+    const d = foreign.get(pending.pop()!);
+    if (d === undefined) continue;
+    const found = new Set<string>();
+    switch (d.kind) {
+      case "type":
+        referencedIds(
+          d.definition.kind === "alias" ? d.definition.type : d.definition.base,
+          found,
+        );
+        break;
+      case "error":
+        for (const field of d.fields) referencedIds(field.type, found);
+        break;
+      case "service":
+        for (const method of d.methods) referencedIds(method.type, found);
+        break;
+    }
+    visit(found);
+  }
+  const types: TypeDecl[] = [];
+  const errors: ErrorDecl[] = [];
+  const services: ServiceDecl[] = [];
+  for (const id of reached) {
+    const d = foreign.get(id);
+    if (d?.kind === "type") types.push(d);
+    else if (d?.kind === "error") errors.push(d);
+    else if (d?.kind === "service") services.push(d);
+  }
+  return { types, errors, services };
+}
+
+/**
  * Builds the interface of a module. Every explicit function whose sets are empty
  * needs an entry in `modes`. Without it the result is an error value, because the
  * hash would otherwise hide a pending mode.
@@ -172,6 +246,7 @@ export function buildTypeGraph(declarations: ModuleDeclarations): TypeGraph {
 export function buildInterface(
   declarations: ModuleDeclarations,
   modes: ModeMap,
+  imported: ReadonlyMap<string, TypeGraph> = new Map(),
 ): Result<ModuleInterface, InterfaceError> {
   const functions: FunctionSignature[] = [];
   for (const signature of declarations.values.values()) {
@@ -220,12 +295,13 @@ export function buildInterface(
     }
   }
   const graph = buildTypeGraph(declarations);
+  const foreign = foreignTypeGraph(declarations, graph, imported);
   const payload: InterfacePayload = {
     exports: declarations.exports as readonly DeclarationId[],
     values: byId(values),
-    types: graph.types,
-    errors: graph.errors,
-    services: graph.services,
+    types: byId([...graph.types, ...foreign.types]),
+    errors: byId([...graph.errors, ...foreign.errors]),
+    services: byId([...graph.services, ...foreign.services]),
   };
   return {
     ok: true,
@@ -302,7 +378,7 @@ export function checkDeclarations(
     modules.set(name, {
       module: name,
       declarations,
-      interface: buildInterface(declarations, modes),
+      interface: buildInterface(declarations, modes, imported),
       diagnostics: declarations.diagnostics,
     });
     diagnostics.push(...declarations.diagnostics);

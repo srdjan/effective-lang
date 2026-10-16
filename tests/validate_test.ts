@@ -357,6 +357,27 @@ Deno.test("a provider with acquisition failures validates with zero diagnostics"
   }
 });
 
+Deno.test("a provider from a host module carries the service it provides", () => {
+  // m imports only the provider L. The interface of host:p carries the
+  // service S of s.eff, so the capability in the provider type resolves.
+  const lowered = lowerFiles({
+    "effective.json": JSON.stringify({
+      host: { p: { interface: "./host/p.effi", module: "./live.ts" } },
+    }),
+    "host/p.effi":
+      'import { S } from "../s.eff"\nexport provider L provides S\n',
+    "s.eff": "export service S { f(): int }\n",
+    "m.eff":
+      'import { L } from "host:p"\nexport const g = (): int => provide(L, () => 1)\n',
+  }, ["s.eff", "m.eff"]);
+  const m = lowered.modules.get("m");
+  assert(m !== undefined);
+  assertEquals(
+    validateModule(m, lowered.sources).map((d) => `${d.code} ${d.message}`),
+    [],
+  );
+});
+
 Deno.test("log.ir.json validates with the source text of log.eff under log.lft", () => {
   const ir: ModuleIR = JSON.parse(
     Deno.readTextFileSync(new URL("ir/example/log.ir.json", FIXTURES)),

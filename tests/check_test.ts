@@ -257,10 +257,12 @@ Deno.test("UsersLive has a provider type that provides every Users method", () =
       effects: { failures: [], requirements: [] },
     },
   });
-  // The provider does not repeat the declarations of users.
+  // The interface carries the supporting declarations of users that the
+  // provider reaches (spec: the complete supporting type graph).
   const payload = interfaceOf(project, "host/providers").payload;
-  assertEquals(payload.services, []);
-  assertEquals(payload.types, []);
+  assertEquals(names(payload.services), ["Users"]);
+  assertEquals(names(payload.types), ["User"]);
+  assertEquals(names(payload.errors), ["StoreUnavailable"]);
 });
 
 Deno.test("the users interface lists User, UserMissing, StoreUnavailable, and Users", () => {
@@ -604,6 +606,29 @@ export const make = (): Secret[] => []
 
 // ------------------------------------------------------------------ imports
 
+Deno.test("an edit to a private type of an import changes the interface hash of the dependent", () => {
+  const files = (code: string) => ({
+    "effective.json": "{}",
+    "a.eff": `
+type Hidden = { code: ${code} }
+export type Wrapper = { inner: Hidden }
+`,
+    "b.eff": `
+import { Wrapper } from "./a.eff"
+export const show = (wrapper: Wrapper): int => 1
+`,
+  });
+  const hashOf = (code: string): string => {
+    const project = checkDeclarations(
+      analyzeFiles(files(code), ["b.eff"]),
+      new Map([["value:b#show", "pure"]]),
+    );
+    assertEquals(project.diagnostics, []);
+    return interfaceOf(project, "b").hash;
+  };
+  assertNotEquals(hashOf("int"), hashOf("string"));
+});
+
 Deno.test("imported types resolve through the interface graph, not through syntax", () => {
   const files = {
     "effective.json": "{}",
@@ -625,9 +650,10 @@ export const show = (name: Name, wrapper: Wrapper): Name => name
   assertEquals(project.diagnostics, []);
   const aGraph = interfaceOf(project, "a").payload;
   assertEquals(names(aGraph.types), ["Hidden", "Name", "Wrapper"]);
-  // The interface of b does not repeat the declarations of a.
+  // The interface of b carries the declarations of a that its exports reach,
+  // including the private Hidden.
   const bPayload = interfaceOf(project, "b").payload;
-  assertEquals(bPayload.types, []);
+  assertEquals(names(bPayload.types), ["Hidden", "Name", "Wrapper"]);
   assertEquals(bPayload.values[0].type, {
     kind: "function",
     execution: "pure",

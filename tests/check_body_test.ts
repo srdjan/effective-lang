@@ -8,7 +8,12 @@ import {
   checkProject,
   typeAt,
 } from "../src/core/check_project.ts";
-import { buildInterface } from "../src/core/interface.ts";
+import {
+  buildInterface,
+  buildTypeGraph,
+  reachableModules,
+} from "../src/core/interface.ts";
+import type { TypeGraph } from "../src/core/check.ts";
 import { solveModeGroup } from "../src/core/modes.ts";
 import type { Execution, ValueId } from "../src/core/ir.ts";
 import { memoryHost } from "../src/core/source.ts";
@@ -116,7 +121,18 @@ Deno.test("every example module has an interface with a hash", () => {
 Deno.test("the interface built from computed modes equals the interface from the plan's modes", () => {
   const project = examples();
   for (const module of project.modules.values()) {
-    const rebuilt = buildInterface(module.declarations, EXAMPLE_MODES);
+    const imported = new Map<string, TypeGraph>();
+    for (const other of reachableModules(project.analysis, module.module)) {
+      const found = project.modules.get(other);
+      if (found !== undefined) {
+        imported.set(other, buildTypeGraph(found.declarations));
+      }
+    }
+    const rebuilt = buildInterface(
+      module.declarations,
+      EXAMPLE_MODES,
+      imported,
+    );
     assert(rebuilt.ok && module.interface.ok);
     assertEquals(rebuilt.value.hash, module.interface.value.hash);
   }

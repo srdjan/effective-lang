@@ -469,7 +469,7 @@ export function checkAnalysis(analysis: Analysis): CheckedProject {
       declarations,
       interfaces: visible,
     });
-    const built = buildInterface(declarations, bodies.modes);
+    const built = buildInterface(declarations, bodies.modes, importedGraphs);
     if (built.ok) interfaces.set(name, built.value);
     const moduleDiagnostics = normalizeDiagnostics([
       ...declarations.diagnostics,
