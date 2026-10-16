@@ -13,7 +13,9 @@ import {
   type SourceHost,
 } from "../src/core/source.ts";
 import { analyzeProject } from "../src/core/analyze.ts";
-import { checkAnalysis } from "../src/core/check_project.ts";
+import { checkAnalysis, checkProject } from "../src/core/check_project.ts";
+import { emitProject, type EmittedModule } from "../src/core/emit/emit.ts";
+import { lowerProject } from "../src/core/lower.ts";
 import type { ModeMap } from "../src/core/check.ts";
 import type { Execution, ValueId } from "../src/core/ir.ts";
 import {
@@ -470,3 +472,47 @@ export const EXAMPLE_MODES: ModeMap = new Map<ValueId, Execution>([
   ["value:pay#pay", "effect"],
   ["value:main#main", "effect"],
 ]);
+
+// ------------------------------------------------------------------ emitter
+
+/**
+ * Checks, lowers, and emits a project held in memory. Every module must check
+ * and lower without an error. The result maps each module name to its emitted
+ * module.
+ */
+export function emitFiles(
+  files: Record<string, string>,
+  entries: readonly string[],
+): ReadonlyMap<string, EmittedModule> {
+  const checked = checkProject(memoryHost(files), "", entries);
+  if (!checked.ok) throw new Error(JSON.stringify(checked.error));
+  const project = checked.value;
+  if (project.diagnostics.length > 0) {
+    throw new Error(
+      `diagnostics: ${project.diagnostics.map((d) => d.code).join(", ")}`,
+    );
+  }
+  const emitted = emitProject(lowerProject(project), {
+    config: project.analysis.project.config,
+  });
+  const result = new Map<string, EmittedModule>();
+  for (const [name, module] of emitted) {
+    if (!module.ok) throw new Error(JSON.stringify(module.error));
+    result.set(name, module.value);
+  }
+  return result;
+}
+
+/** The five examples, emitted in memory. */
+export function emitExamples(): ReadonlyMap<string, EmittedModule> {
+  return emitFiles(exampleFiles(), EXAMPLE_ENTRIES);
+}
+
+/** The files of a fixture project under `fixtures/`: root-relative path to text. */
+export function projectFiles(dir: string): Record<string, string> {
+  const files: Record<string, string> = {};
+  for (const f of listFixtures(dir, /\.(eff|effi|json)$/)) {
+    files[f.path.slice(dir.length + 1)] = f.text;
+  }
+  return files;
+}

@@ -6,7 +6,7 @@ The design is in `docs/transpiler-design.md`. The Phase A plan is in `docs/plans
 
 ## Status
 
-Parts A1, A2, A3a, A3b, and A4 exist. Part A1 adds the project skeleton, the lexer, a lossless parser with error recovery, and the `syntax` diagnostics. The parser reads `.eff` source files and `.effi` host interface files.
+Parts A1, A2, A3a, A3b, A4, and A6a exist. Part A1 adds the project skeleton, the lexer, a lossless parser with error recovery, and the `syntax` diagnostics. The parser reads `.eff` source files and `.effi` host interface files.
 
 Part A2 adds the declaration index, the project loader, the module graph, and the name resolver. It adds the diagnostic codes `unknown-name`, `module`, and `declaration`.
 
@@ -14,7 +14,9 @@ Part A3a adds the declaration level of the checker. It adds the type intern tabl
 
 Part A3b adds body checking. It checks every function and constant body, infers effects and execution modes, and checks contracts, patterns, `try` and `catch`, `retry`, and `provide`. It builds the module initialization graph and the `typeAt` query. It adds the codes `type-mismatch/003` to `type-mismatch/011`, `failure-contract/001` to `/003`, `requirement-contract/001`, `execution-mode/001` to `/004`, `pattern/001` to `/004`, and `module/004`.
 
-Part A4 lowers a checked module to typed IR and serializes it. It adds a synchronous SHA-256 for builtin identities. The IR validator, the emitter, and the command-line tool do not exist yet.
+Part A4 lowers a checked module to typed IR and serializes it. It adds a synchronous SHA-256 for builtin identities.
+
+Part A6a adds the Effect-TS emitter. It turns the IR of each module into the text of one TypeScript module. It adds the five golden files, the host module `users-live.ts`, and the slow tests that check and run the emitted code. The span table, the source map, and the `deno fmt` check of the golden files belong to part A6b. The IR validator and the command-line tool do not exist yet.
 
 ## Requirements
 
@@ -24,15 +26,16 @@ The project needs Deno 2.9.7. The first test run downloads `@std/assert` from js
 
 Run every command from the repository root.
 
-| Command               | What it does                                                                         |
-| --------------------- | ------------------------------------------------------------------------------------ |
-| `deno task check`     | Runs the format check, the lint, the type check, the fast tests, and the slow tests. |
-| `deno task test`      | Runs the fast tests. It skips files named `*_slow_test.ts`.                          |
-| `deno task test:slow` | Runs only files named `*_slow_test.ts`. A1 has none, and the task still succeeds.    |
-| `deno task fmt`       | Formats the source files.                                                            |
-| `deno task lint`      | Runs the linter.                                                                     |
+| Command                   | What it does                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------ |
+| `deno task check`         | Runs the format check, the lint, the type check, the fast tests, and the slow tests. |
+| `deno task test`          | Runs the fast tests. It skips files named `*_slow_test.ts`.                          |
+| `deno task test:slow`     | Runs only files named `*_slow_test.ts`. They run `deno check` and `deno run`.        |
+| `deno task golden:update` | Writes `fixtures/golden/<module>.ts` again from `fixtures/examples`.                 |
+| `deno task fmt`           | Formats the source files.                                                            |
+| `deno task lint`          | Runs the linter.                                                                     |
 
-The tasks `effective`, `golden:update`, and `bench` do not exist yet. Later parts add them.
+The tasks `effective` and `bench` do not exist yet. Later parts add them.
 
 ## Layout
 
@@ -61,9 +64,20 @@ src/core/      The core library. It is synchronous and pure.
   sha256.ts      Synchronous SHA-256 over the UTF-8 bytes of a string.
   lower.ts       Checked modules to typed IR: pipelines, builtin specialization, imports.
   serialize.ts   Canonical JSON of a module IR, with the set and number checks.
+  emit/          The Effect-TS emitter.
+    emit.ts        emitModule and emitProject: the public entries.
+    doc.ts         The printer: documents, layout at 80 columns, span tags.
+    scope.ts       Names, fresh names, imports, host bindings, specifiers.
+    types.ts       The type printer and the schema printer.
+    expr.ts        The expression scheme: pure, inGen, asEffect.
+    decls.ts       Declarations, their order, and the export rule.
+    walk.ts        Traversals of the IR.
+scripts/       Scripts that the tasks run. golden_update.ts writes the golden files.
 tests/         Deno tests and test helpers.
 fixtures/      Input files for the tests.
-  examples/      The five example programs and the host interface file.
+  examples/      The five example programs, the host interface file, and users-live.ts.
+  golden/        The expected emitted TypeScript of each example.
+  emit/forms/    Extra programs for the emitter tests. They are not golden examples.
   ir/example/    The log example and its IR fixture.
   parse/         Valid syntax forms (ok-*) and recovery inputs (recovery-*).
   errors/        One file or one project directory for each error case, with markers.
@@ -124,6 +138,24 @@ Each distinct closed instance of a builtin gets the identity `value:<module>#$bu
 
 `serializeModule(ir)` returns the canonical JSON text: sorted object keys, two-space indentation, and a trailing newline. It returns an error value when an effect set is not sorted and unique or when a number literal is not finite.
 
+## Using the emitter
+
+`emitModule(ir, { config })` returns the TypeScript text of one module, as a `Result`. The `config` value is the project configuration, `checked.analysis.project.config`. It gives the paths of the host modules. The function reads only the IR and the configuration. It writes no file.
+
+The result holds `module`, `path`, `text`, and `spans`. The `path` is the generated file next to the source, for example `users.ts`. The `spans` list holds the generated range of each printed declaration and expression, with its source span. Part A6b builds the span table and the source map from it.
+
+`emitProject(lowered, { config })` emits every module of the map that `lowerProject` returns. A module that did not lower gives a `lowering` error value. Expected failures are error values with the tag `unsupported` or `internal`.
+
+An import of another module becomes a relative `.ts` specifier. A host import becomes a relative path to the host module of `effective.json`. The emitter checks the host module against the registry: `const UsersLive$host: Layer.Layer<Users> = UsersLive`. The code for `provide` uses the `$host` constant.
+
+The emitter adds `export` to each declaration that the source exports and to each declaration that an exported interface reaches. It never renames a source name. It gives its own names, such as `$t0`, `$int`, and `Option$1`, only when no source name is taken.
+
+A manual run of `deno fmt` left the five golden files unchanged. Part A6a has no test for this. Part A6b adds the test and removes the exclusion of `fixtures/golden/` from `deno fmt`.
+
+The slow tests copy a fixture project to a temporary directory and build there. They check the emitted code with `deno check` under `effect@4.0.5` with strict settings. They run the emitted code with `deno run`. They need the npm package in the Deno cache, so the first run needs network access.
+
+To change the output on purpose, edit the emitter and run `deno task golden:update`. Then read the diff of `fixtures/golden/`.
+
 ## Error fixture convention
 
 An error fixture is a file in `fixtures/errors/` or a project directory in `fixtures/errors/`. Its name is `<category>-<topic>`, where the category is a diagnostic category such as `syntax` or `module`. A host interface file error uses the extension `.effi`.
@@ -142,4 +174,4 @@ The files `fixtures/parse/recovery-*.eff` use the same markers. The files `fixtu
 
 ## Format and lint scope
 
-`deno fmt` skips `docs/`, `src/core/ir.ts`, and every `.eff` and `.effi` file. The copy of `ir.ts` stays as it is in the sibling repository. `deno lint` skips `docs/` and `fixtures/golden/`.
+`deno fmt` skips `docs/`, `src/core/ir.ts`, `fixtures/golden/`, and every `.eff` and `.effi` file. The copy of `ir.ts` stays as it is in the sibling repository. Part A6b removes the exclusion of `fixtures/golden/`. `deno lint` skips `docs/` and `fixtures/golden/`, because generated code keeps unused handler parameters.

@@ -1,8 +1,9 @@
 {
   "tasks": {
-    "check": "deno fmt --check && deno lint && deno check 'src/**/*.ts' 'tests/**/*.ts' && deno task test && deno task test:slow",
+    "check": "deno fmt --check && deno lint && deno check 'src/**/*.ts' 'tests/**/*.ts' 'scripts/**/*.ts' && deno task test && deno task test:slow",
     "test": "deno test --allow-read --ignore='**/*_slow_test.ts' tests/",
     "test:slow": "deno test --allow-all --permit-no-files 'tests/**/*_slow_test.ts'",
+    "golden:update": "deno run --allow-read --allow-write scripts/golden_update.ts",
     "fmt": "deno fmt",
     "lint": "deno lint"
   },
@@ -19,7 +20,8 @@
       "docs/",
       "src/core/ir.ts",
       "fixtures/**/*.eff",
-      "fixtures/**/*.effi"
+      "fixtures/**/*.effi",
+      "fixtures/golden/"
     ]
   },
   "lint": {

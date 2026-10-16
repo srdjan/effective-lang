@@ -1,0 +1,15 @@
+// Declarations that use the names the emitter generates. The emitter must pick
+// other names for its helpers, temporaries, and imports from the effect package.
+
+export const f = ($t0: int, $int: int): int => $t0 + $int
+
+export const g = (Option: Option<int>): int =>
+  match Option { Some(x) => x, None => 0 }
+
+export const h = ($t0: string): int => match $t0 { "a" => 1, _ => 2 }
+
+export type Schema = { n: int }
+
+service Env { get(x: int): int }
+
+export const Effect = ($s: int): int uses Env.get => Env.get($s)

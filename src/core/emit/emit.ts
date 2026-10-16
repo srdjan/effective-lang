@@ -1,0 +1,192 @@
+// The Effect-TS emitter (plan section 6, part A6a). `emitModule` turns one
+// `ModuleIR` into the text of one TypeScript module. It reads only the IR and
+// the project configuration. It is synchronous and pure: the caller writes files.
+
+import type { ModuleIR, Result } from "../ir.ts";
+import type { LowerError } from "../lower.ts";
+import type { ProjectConfig } from "../project.ts";
+import type { Span } from "../ir.ts";
+import {
+  bracketed,
+  type Doc,
+  hard,
+  render,
+  spanned,
+  type SpanRecord,
+} from "./doc.ts";
+import {
+  DeclarationEmitter,
+  exportedIds,
+  orderConstants,
+  orderTypeLevel,
+} from "./decls.ts";
+import { EmitFailure, type ImportGroup, Scope } from "./scope.ts";
+
+export interface EmitContext {
+  /** The project configuration, for the paths of host modules. */
+  readonly config: ProjectConfig;
+}
+
+export interface EmittedModule {
+  readonly module: string;
+  /** The generated file, relative to the project root: `users.ts` for `users.eff`. */
+  readonly path: string;
+  readonly text: string;
+  /** Generated ranges of the printed declarations and expressions. Part A6b builds the span table from them. */
+  readonly spans: readonly SpanRecord[];
+}
+
+export type EmitError =
+  | {
+    readonly tag: "unsupported";
+    readonly module: string;
+    readonly message: string;
+    readonly span?: Span;
+  }
+  | {
+    readonly tag: "internal";
+    readonly module: string;
+    readonly message: string;
+  };
+
+export type EmitProjectError =
+  | EmitError
+  | {
+    readonly tag: "lowering";
+    readonly module: string;
+    readonly error: LowerError;
+  };
+
+function importLine(group: ImportGroup): Doc {
+  const names = group.names.map((n) => {
+    const base = n.exported === n.local
+      ? n.exported
+      : `${n.exported} as ${n.local}`;
+    return n.typeOnly ? `type ${base}` : base;
+  });
+  return [
+    "import ",
+    bracketed("{", "}", names, true),
+    ` from ${JSON.stringify(group.specifier)};`,
+  ];
+}
+
+function blankSeparated(sections: readonly (readonly Doc[])[]): Doc {
+  const nonEmpty = sections.filter((s) => s.length > 0);
+  const out: Doc[] = [];
+  nonEmpty.forEach((section, i) => {
+    if (i > 0) out.push(hard, hard);
+    section.forEach((item, j) => {
+      if (j > 0) out.push(hard);
+      out.push(item);
+    });
+  });
+  return out;
+}
+
+function build(ir: ModuleIR, context: EmitContext): EmittedModule {
+  const scope = new Scope(ir, context.config);
+  const exported = exportedIds(ir);
+  const emitter = new DeclarationEmitter(scope, exported);
+
+  const typeLevel = orderTypeLevel(ir);
+  const functions = ir.declarations.filter((d) => d.kind === "function");
+  const constants = orderConstants(ir);
+  const printed = (declarations: readonly (typeof ir.declarations)[number][]) =>
+    declarations.map((d) => spanned(d.span, emitter.declaration(d)));
+  // Declarations first: they decide which imports and helpers the module needs.
+  const typeDocs = printed(typeLevel);
+  const functionDocs = printed(functions);
+  const constantDocs = printed(constants);
+
+  const helpers: Doc[][] = [];
+  if (scope.usesIntSchema()) helpers.push([emitter.intSchemaDeclaration()]);
+  if (scope.usesIntFunction()) helpers.push([emitter.intFunctionDeclaration()]);
+  const hostAssertions = emitter.hostAssertions();
+
+  const effectNames = scope.effectImports().map((n) =>
+    n.exported === n.local ? n.exported : `${n.exported} as ${n.local}`
+  );
+  const imports: Doc[] = [];
+  if (effectNames.length > 0) {
+    imports.push([
+      "import ",
+      bracketed("{", "}", effectNames, true),
+      ' from "effect";',
+    ]);
+  }
+  for (const group of scope.moduleImports()) imports.push(importLine(group));
+  for (const group of scope.hostImports()) imports.push(importLine(group));
+
+  const source = ir.sources[0] ?? `${ir.module}.eff`;
+  const header: Doc =
+    `// Generated from ${source} by the Effective compiler. Do not edit.`;
+  const doc = blankSeparated([
+    [header],
+    imports,
+    ...helpers,
+    hostAssertions,
+    ...[...typeDocs, ...functionDocs, ...constantDocs].map((d) => [d]),
+  ]);
+  const rendered = render([doc, hard]);
+  return {
+    module: ir.module,
+    path: scope.path,
+    text: rendered.text,
+    spans: rendered.spans,
+  };
+}
+
+/** Emits the TypeScript module for one module of the IR. */
+export function emitModule(
+  ir: ModuleIR,
+  context: EmitContext,
+): Result<EmittedModule, EmitError> {
+  try {
+    return { ok: true, value: build(ir, context) };
+  } catch (e) {
+    if (e instanceof EmitFailure) {
+      const failure = e.failure;
+      return {
+        ok: false,
+        error: failure.tag === "unsupported"
+          ? failure.span === undefined
+            ? {
+              tag: "unsupported",
+              module: ir.module,
+              message: failure.message,
+            }
+            : {
+              tag: "unsupported",
+              module: ir.module,
+              message: failure.message,
+              span: failure.span,
+            }
+          : { tag: "internal", module: ir.module, message: failure.message },
+      };
+    }
+    throw e;
+  }
+}
+
+/**
+ * Emits every lowered module of a project, in the order of `lowered`. A module
+ * whose lowering failed gives a `lowering` error and no text.
+ */
+export function emitProject(
+  lowered: ReadonlyMap<string, Result<ModuleIR, LowerError>>,
+  context: EmitContext,
+): ReadonlyMap<string, Result<EmittedModule, EmitProjectError>> {
+  const results = new Map<string, Result<EmittedModule, EmitProjectError>>();
+  for (const [name, result] of lowered) {
+    if (!result.ok) {
+      results.set(name, {
+        ok: false,
+        error: { tag: "lowering", module: name, error: result.error },
+      });
+      continue;
+    }
+    results.set(name, emitModule(result.value, context));
+  }
+  return results;
+}

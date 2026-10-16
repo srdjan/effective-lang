@@ -1,0 +1,173 @@
+// Forms for the emitter tests. The tests check that the emitted code compiles
+// and, for some functions, that it runs. This file is not a golden example.
+type Status = "pending" | "paid"
+type Acc = { n: int, label: string }
+type Flags = true | false
+type Small = 1 | 2
+type Nada = void
+type Unreachable = never
+type Mixed = "a" | 1 | true
+type Unions = string | int
+type Raw = { raw: unknown, nothing: Nada, small: Small, flags: Flags, mixed: Mixed, either: Unions }
+type Pair = [int, string]
+type Profile = { name: string, nickname?: string, tags: string[], pair: Pair, maybe: Option<string> }
+type Shape = { kind: "circle", radius: number } | { kind: "square", side: number }
+type Callback = (n: int) => int
+type CbBox = { run: Callback, label: string }
+type Id = Brand<string>
+
+error NotFound = { id: Id }
+error Empty = {}
+error Other = { why: string }
+
+service Store {
+  find(id: Id): Option<Profile> fails NotFound
+  count(): int
+  tick(): void
+}
+
+export const extent = (s: Shape): number =>
+  match s {
+    { kind: "circle", ...c } => c.radius,
+    { kind: "square", ...q } => q.side
+  }
+
+export const extent2 = (s: Shape): number =>
+  match s {
+    { kind: "circle" } => 1,
+    { kind: "square" } => 2
+  }
+
+export const lit = (s: string): int => match s { "a" => 1, "b" => 2, _ => 3 }
+export const bool = (b: boolean): int => match b { true => 1, false => 0 }
+export const mul = (a: int, b: int): int => a * b
+export const arith = (a: int, b: int): int => a * b + a - b
+export const divide = (a: int, b: int): number => a / b
+export const nick = (p: Profile): Option<string> => p.nickname
+export const cond = (b: boolean, x: int): string => if (b) { "a" } else { "b" }
+export const prof = (p: Profile): Profile => ({ ...p, name: "x" })
+export const blockF = (x: int): int => {
+  const y = x + 1
+  const z: int = y * 2
+  z
+}
+export const nestedBlockPure = (o: Option<int>): int =>
+  match o {
+    Some(x) => { const y = x + 1
+ y },
+    None => 0
+  }
+export const brand = (s: string): Id => Id(s)
+export const unb = (i: Id): string => unbrand(i)
+export const cbCall = (b: CbBox, x: int): int => b.run(x)
+export const mkBox = (): CbBox => ({ run: (n) => n + 1, label: "l" })
+
+export const lookup = (id: Id): Profile
+  fails NotFound
+  uses Store.find =>
+  match Store.find(id) {
+    Some(p) => p,
+    None => fail(NotFound({ id }))
+  }
+
+export const both = (id: Id, b: boolean): string
+  fails NotFound | Other
+  uses Store.find =>
+  if (b) { fail(NotFound({ id })) } else { fail(Other({ why: "w" })) }
+
+export const lookup2 = (id: Id, b: boolean): string
+  fails Other
+  uses Store.find =>
+  try {
+    both(id, b)
+  } catch {
+    NotFound(e) => fail(Other({ why: "n" })),
+    Other(o) => "x"
+  }
+
+export const hoist = (id: Id, n: int): int
+  fails NotFound
+  uses Store.find | Store.count =>
+  Store.count() + n
+
+export const hoist2 = (id: Id): int
+  fails NotFound
+  uses Store.find | Store.count =>
+  add(lookup(id).tags |> map((t) => 1) |> fold(0, (a, b) => a + b), Store.count())
+
+export const add = (a: int, b: int): int => a + b
+
+export const ifEff = (id: Id, b: boolean): string
+  fails NotFound
+  uses Store.find =>
+  if (b) { lookup(id).name } else { "none" }
+
+export const andEff = (a: boolean): boolean
+  uses Store.count =>
+  a && Store.count() > 1
+
+export const matchEff = (id: Id): int
+  uses Store.count =>
+  match Store.count() { 1 => 10, _ => 20 }
+
+export const nestedEff = (id: Id): int
+  fails NotFound
+  uses Store.find | Store.count => {
+  const n = Store.count()
+  const p = lookup(id)
+  n + 1
+}
+
+export const pureBlockEff = (id: Id): int
+  uses Store.count => {
+  const n = Store.count()
+  const m = match Some(n) {
+    Some(x) => { const q = x + 1
+ q },
+    None => 0
+  }
+  m
+}
+
+export const unitF = (): void
+  uses Store.tick => {
+  Store.tick()
+}
+
+export const retried = (): int
+  uses Store.count =>
+  retry(() => Store.count(), { times: 3 })
+
+export const fnArg = (xs: int[]): int[] => xs |> map((x) => x * 2)
+export const total = (xs: string[]): int => xs |> fold(0, (acc, x) => acc + 1)
+const cfg: int = base + 1
+const base: int = 1
+export const useCfg = (): int => cfg
+
+export const applyTwice = (f: Callback, x: int): int => f(f(x))
+const addOne = (n: int): int => n + 1
+export const useLift = (x: int): int => applyTwice(addOne, x)
+export const useLiftClosure = (x: int): int => applyTwice((n) => n * 2, x)
+
+export const mkEmpty = (): string fails Empty => fail(Empty({}))
+export const withNick = (p: Profile): Profile => ({ ...p, nickname: "k" })
+const readCount = (): int uses Store.count => Store.count()
+export const retryNamed = (): int uses Store.count => retry(readCount, { times: 1 })
+export const caught = (id: Id): string
+  uses Store.find =>
+  try { lookup(id).name } catch { NotFound(e) => "missing" }
+export const pureEval = (x: int): int => {
+  add(x, 1)
+  x
+}
+export const optMatch = (p: Profile): string =>
+  match p.nickname { Some(n) => n, None => "anon" }
+export const statusName = (s: Status): string =>
+  match s { "pending" => "p", "paid" => "q" }
+export const adder = (n: int): (x: int) => int => (x) => x + n
+export const sumAll = (xs: int[]): int => xs |> fold(0, (a, b) => a + b)
+export const names = (ps: Profile[]): string[] => ps |> map((p) => p.name)
+export const sumRec = (xs: int[]): Acc =>
+  xs |> fold({ n: 0, label: "x" }, (acc, x) => ({ n: acc.n + x, label: acc.label }))
+const pair = (a: int, b: int): int uses Store.count => a + b + Store.count()
+export const hoistOrder = (x: int): int uses Store.count => pair(add(x, 1), Store.count())

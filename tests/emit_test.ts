@@ -1,0 +1,299 @@
+// Tests for part A6a: the Effect-TS emitter. The tests run through the public
+// entries `emitModule` and `emitProject` and compare the emitted text.
+
+import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import { checkProject } from "../src/core/check_project.ts";
+import { emitModule, emitProject } from "../src/core/emit/emit.ts";
+import { relativeSpecifier } from "../src/core/emit/scope.ts";
+import { lowerProject } from "../src/core/lower.ts";
+import { memoryHost } from "../src/core/source.ts";
+import {
+  emitExamples,
+  emitFiles,
+  EXAMPLE_ENTRIES,
+  FIXTURES,
+  projectFiles,
+} from "./helpers.ts";
+
+function oneModule(text: string): string {
+  const files = { "effective.json": "{}", "m.eff": text };
+  const emitted = emitFiles(files, ["m.eff"]).get("m");
+  assert(emitted !== undefined, "module m was not emitted");
+  return emitted.text;
+}
+
+function indexOfOrFail(text: string, needle: string): number {
+  const at = text.indexOf(needle);
+  assert(at >= 0, `the text does not contain ${needle}`);
+  return at;
+}
+
+// ------------------------------------------------------------------ golden
+
+Deno.test("each example emits exactly its golden file", () => {
+  const emitted = emitExamples();
+  assertEquals([...emitted.keys()].sort(), [
+    "collections",
+    "log",
+    "main",
+    "pay",
+    "users",
+  ]);
+  for (const [name, module] of emitted) {
+    const golden = Deno.readTextFileSync(
+      new URL(`golden/${name}.ts`, FIXTURES),
+    );
+    assertEquals(module.text, golden, `golden file ${name}.ts differs`);
+    assertEquals(module.path, `${name}.ts`);
+  }
+});
+
+Deno.test("emitting twice gives identical text", () => {
+  const first = emitExamples();
+  const second = emitExamples();
+  for (const [name, module] of first) {
+    assertEquals(second.get(name)?.text, module.text);
+  }
+  const forms = projectFiles("emit/forms");
+  assertEquals(
+    emitFiles(forms, ["forms.eff"]).get("forms")?.text,
+    emitFiles(forms, ["forms.eff"]).get("forms")?.text,
+  );
+});
+
+// ------------------------------------------------------------------ names
+
+Deno.test("a module that declares generated names still emits valid names", () => {
+  const emitted = emitFiles(projectFiles("emit/forms"), ["names.eff"]).get(
+    "names",
+  );
+  assert(emitted !== undefined, "module names was not emitted");
+  const text = emitted.text;
+  // The helper takes the next free name and leaves the source names alone.
+  assertStringIncludes(
+    text,
+    "const f = ($t0: number, $int: number): number =>",
+  );
+  assertStringIncludes(text, "$int$1($t0 + $int)");
+  assertStringIncludes(text, "const $int$1 = (value: number): number =>");
+  // The `Option` import gets an alias, and the parameter keeps its name.
+  assertStringIncludes(text, "Option as Option$1");
+  assertStringIncludes(text, "(Option: Option$1.Option<number>)");
+  assertStringIncludes(text, "Option$1.match(Option, {");
+  // The selector temporary skips the taken name.
+  assertStringIncludes(text, '(($t1) => $t1 === "a" ? 1 : 2)($t0)');
+  // A declaration named `Schema` or `Effect` moves the matching import.
+  assertStringIncludes(text, "Schema as Schema$1");
+  assertStringIncludes(text, "const Schema = Schema$1.Struct(");
+  assertStringIncludes(text, "Effect as Effect$1");
+  assertStringIncludes(text, "Effect$1.Effect<number, never, Env>");
+  // The service parameter skips the taken name `$s`.
+  assertStringIncludes(text, "Env.use(($s$1) => $s$1.get($s))");
+});
+
+// ------------------------------------------------------------------ order
+
+Deno.test("a type used before its definition is emitted after it", () => {
+  const text = oneModule(`
+export type Outer = { inner: Inner }
+error Boom = { reason: Reason }
+type Reason = "a" | "b"
+type Inner = { n: int }
+export const make = (n: int): Outer => ({ inner: { n } })
+`);
+  assert(
+    indexOfOrFail(text, "const Inner =") < indexOfOrFail(text, "const Outer ="),
+  );
+  assert(
+    indexOfOrFail(text, "const Reason =") < indexOfOrFail(text, "class Boom"),
+  );
+});
+
+Deno.test("a constant that calls a later function is emitted after the function and its inputs", () => {
+  const text = oneModule(`
+export const answer: int = twice(base)
+const twice = (x: int): int => x * 2
+const base: int = 21
+`);
+  const twice = indexOfOrFail(text, "const twice =");
+  const base = indexOfOrFail(text, "const base:");
+  const answer = indexOfOrFail(text, "const answer:");
+  assert(twice < base, "functions come before constants");
+  assert(base < answer, "a constant comes after its eager dependency");
+});
+
+Deno.test("a module with an initialization cycle has no IR to emit", () => {
+  const checked = checkProject(
+    memoryHost({
+      "effective.json": "{}",
+      "m.eff": "const a: int = b\nconst b: int = a\n",
+    }),
+    "",
+    ["m.eff"],
+  );
+  assert(checked.ok);
+  // The checker reports the cycle, so the module has no IR.
+  const lowered = lowerProject(checked.value).get("m");
+  assert(lowered !== undefined && !lowered.ok);
+});
+
+// ------------------------------------------------------------------ annotations
+
+Deno.test("every const in a body carries a type annotation", () => {
+  const sources = [
+    ...[...emitExamples().values()].map((m) => m.text),
+    emitFiles(projectFiles("emit/forms"), ["forms.eff"]).get("forms")?.text ??
+      "",
+  ];
+  let seen = 0;
+  for (const text of sources) {
+    for (const line of text.split("\n")) {
+      if (!/^\s+const /.test(line)) continue;
+      seen += 1;
+      assert(/^\s+const [^\s:=]+: \S/.test(line), `no annotation: ${line}`);
+    }
+  }
+  assert(seen >= 10, `only ${seen} body consts were checked`);
+});
+
+Deno.test("a module constant and a host assertion carry a type annotation", () => {
+  const text = oneModule("export const answer: int = 21\n");
+  assertStringIncludes(text, "export const answer: number = 21;");
+  const main = emitExamples().get("main")?.text ?? "";
+  assertStringIncludes(
+    main,
+    "const UsersLive$host: Layer.Layer<Users> = UsersLive;",
+  );
+});
+
+// ------------------------------------------------------------------ imports
+
+Deno.test("specifiers are relative to the generated file", () => {
+  assertEquals(relativeSpecifier("main.ts", "users.ts"), "./users.ts");
+  assertEquals(relativeSpecifier("a/b.ts", "c.ts"), "../c.ts");
+  assertEquals(relativeSpecifier("a/b.ts", "a/c.ts"), "./c.ts");
+  assertEquals(relativeSpecifier("a/b/c.ts", "x/y.ts"), "../../x/y.ts");
+  assertEquals(relativeSpecifier("a.ts", "impl/live.ts"), "./impl/live.ts");
+});
+
+Deno.test("imports and host modules are rewritten relative to a nested module", () => {
+  const emitted = emitFiles({
+    "effective.json": JSON.stringify({
+      host: { p: { interface: "./host/p.effi", module: "./impl/live.ts" } },
+    }),
+    "host/p.effi":
+      'import { S } from "../s.eff"\nexport provider L provides S\n',
+    "s.eff": "export service S { f(): int }\n",
+    "sub/m.eff": [
+      'import { S } from "../s.eff"',
+      'import { L } from "host:p"',
+      "export const g = (): int => provide(L, () => S.f())",
+      "",
+    ].join("\n"),
+  }, ["s.eff", "sub/m.eff"]);
+  const text = emitted.get("sub/m")?.text ?? "";
+  assertEquals(emitted.get("sub/m")?.path, "sub/m.ts");
+  assertStringIncludes(text, 'from "../s.ts";');
+  assertStringIncludes(text, 'import { L } from "../impl/live.ts";');
+  assertStringIncludes(text, "const L$host: Layer.Layer<S> = L;");
+  assertStringIncludes(
+    text,
+    "Effect.provide(Effect.suspend(() => S.use(($s) => $s.f())), L$host)",
+  );
+});
+
+// ------------------------------------------------------------------ forms
+
+Deno.test("the forms fixture emits the plan's control forms", () => {
+  const text = emitFiles(projectFiles("emit/forms"), ["forms.eff"]).get("forms")
+    ?.text ?? "";
+  // One Effect.catchTags call with all handlers, never a chain of catchTag.
+  assertStringIncludes(text, "Effect.catchTags({");
+  assert(!text.includes("catchTag("));
+  // Parentheses by parent position.
+  assertStringIncludes(
+    text,
+    "return $int((yield* Store.use(($s) => $s.count())) + n);",
+  );
+  assertStringIncludes(
+    text,
+    "const n: number = yield* Store.use(($s) => $s.count());",
+  );
+  assertStringIncludes(text, "(yield* lookup(id)).name");
+  // A leaf with an effectful child hoists it inside a nested Effect.gen.
+  assertStringIncludes(text, "const $t0: number = yield* f(x);");
+  assertStringIncludes(text, "return yield* f($t0);");
+  // A pure child that comes before an effectful child keeps its place.
+  assertStringIncludes(text, "const $t0: number = add(x, 1);");
+  assertStringIncludes(
+    text,
+    "const $t1: number = yield* Store.use(($s) => $s.count());",
+  );
+  assertStringIncludes(text, "return yield* pair($t0, $t1);");
+  // A pure function fits an effect function slot through a wrapper.
+  assertStringIncludes(text, "Effect.succeed(addOne($t0))");
+  // The optional field read.
+  assertStringIncludes(text, "Option.fromUndefinedOr(p.nickname)");
+  // Brand construction.
+  assertStringIncludes(text, "Id.make(s)");
+});
+
+// ------------------------------------------------------------------ spans and results
+
+Deno.test("span records lie inside the text and cover each declaration", () => {
+  const module = emitExamples().get("pay");
+  assert(module !== undefined);
+  assert(module.spans.length > 20);
+  for (const record of module.spans) {
+    assert(record.start >= 0 && record.start <= record.end);
+    assert(record.end <= module.text.length);
+  }
+  const functionSpans = module.spans.filter((r) =>
+    module.text.slice(r.start, r.end).startsWith("export const pay =")
+  );
+  assertEquals(functionSpans.length, 1);
+});
+
+Deno.test("emitProject reports a module that did not lower", () => {
+  const checked = checkProject(
+    memoryHost({
+      "effective.json": "{}",
+      "m.eff": 'export const x: int = "no"\n',
+    }),
+    "",
+    ["m.eff"],
+  );
+  assert(checked.ok);
+  const emitted = emitProject(lowerProject(checked.value), {
+    config: checked.value.analysis.project.config,
+  });
+  const result = emitted.get("m");
+  assert(result !== undefined && !result.ok);
+  assertEquals(result.error.tag, "lowering");
+});
+
+Deno.test("emitModule returns an error value for a host module that the project file lacks", () => {
+  const files = {
+    "effective.json": JSON.stringify({
+      host: { p: { interface: "./host/p.effi", module: "./live.ts" } },
+    }),
+    "host/p.effi":
+      'import { S } from "../s.eff"\nexport provider L provides S\n',
+    "s.eff": "export service S { f(): int }\n",
+    "m.eff":
+      'import { L } from "host:p"\nexport const g = (): int => provide(L, () => 1)\n',
+  };
+  const checked = checkProject(memoryHost(files), "", ["s.eff", "m.eff"]);
+  assert(checked.ok);
+  const lowered = lowerProject(checked.value).get("m");
+  assert(lowered !== undefined && lowered.ok);
+  const result = emitModule(lowered.value, {
+    config: { host: new Map() },
+  });
+  assert(!result.ok);
+  assertEquals(result.error.tag, "unsupported");
+});
+
+Deno.test("the example list stays in step with the helper", () => {
+  assertEquals(EXAMPLE_ENTRIES.length, 5);
+});
