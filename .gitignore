@@ -6,3 +6,4 @@ fixtures/**/*.ts
 !fixtures/host-boundary/**
 editors/vscode/node_modules/
 playground/dist/
+.playwright-mcp/
