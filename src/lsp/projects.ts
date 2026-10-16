@@ -292,9 +292,27 @@ export class ProjectSet {
       return;
     }
     this.#documents.delete(uri);
-    found.project.open.delete(found.path);
-    found.project.publishedVersions.delete(found.path);
-    found.project.dirty = true;
+    const { project, path } = found;
+    project.open.delete(path);
+    project.publishedVersions.delete(path);
+    // The watcher ignores an open document, so a save while it was open never
+    // reached `disk`. Read the file again.
+    this.#reread(project, path);
+    project.dirty = true;
+  }
+
+  /** Reads one file of a project from disk again. A missing file leaves `disk`. */
+  #reread(project: ProjectState, path: string): void {
+    const absolute = joinPath(project.root, path);
+    const read = this.ports.fs.readText(absolute);
+    const disk = new Map(project.disk);
+    if (read.ok) disk.set(path, read.value);
+    else if (read.error.tag === "not-found") disk.delete(path);
+    else {
+      this.ports.stderr(`cannot read ${absolute}: ${read.error.message}`);
+      return;
+    }
+    project.disk = disk;
   }
 
   /**
@@ -309,21 +327,13 @@ export class ProjectSet {
         const path = relativeTo(project.root, absolute);
         if (path === undefined || !isSourcePath(path)) continue;
         if (project.open.has(path)) continue;
-        const disk = new Map(project.disk);
         if (event.type === 3) {
+          const disk = new Map(project.disk);
           disk.delete(path);
+          project.disk = disk;
         } else {
-          const read = this.ports.fs.readText(absolute);
-          if (read.ok) disk.set(path, read.value);
-          else if (read.error.tag === "not-found") disk.delete(path);
-          else {
-            this.ports.stderr(
-              `cannot read ${absolute}: ${read.error.message}`,
-            );
-            continue;
-          }
+          this.#reread(project, path);
         }
-        project.disk = disk;
         project.dirty = true;
       }
     }

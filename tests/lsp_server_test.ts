@@ -405,6 +405,22 @@ Deno.test("didClose restores the disk text", () => {
   assertEquals(found.project.open.size, 0);
 });
 
+Deno.test("didClose reads the disk again, so a save while open is not lost", () => {
+  const h = started();
+  h.deliver(didOpen(MAIN, 1, MAIN_TEXT));
+  h.deliver(didChangeFull(MAIN, 2, MAIN_BROKEN));
+  // The editor saves; the watcher ignores the open document.
+  h.files.set(`${ROOT}/main.eff`, MAIN_BROKEN);
+  h.deliver(watched({ uri: MAIN, type: 2 }));
+  h.clearSent();
+  h.deliver(didClose(MAIN));
+  const found = h.server.projects.lookup(MAIN);
+  assert(found !== undefined);
+  assertEquals(found.project.current.get("main.eff"), MAIN_BROKEN);
+  // The list did not change, so the closed file needs no new publish.
+  assertEquals(h.published(), []);
+});
+
 Deno.test("didClose of a file that is not on disk removes it from the program", () => {
   const h = started();
   const extra = exampleUri("extra.eff");
