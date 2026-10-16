@@ -299,3 +299,15 @@ Deno.test("two files with one module name conflict", () => {
   }, ["main.eff"]);
   assertEquals(project.diagnostics.map((d) => d.code), ["module/001"]);
 });
+
+Deno.test("a module path with special characters is a module diagnostic", () => {
+  const files = {
+    "effective.json": "{}",
+    "main.eff": 'import { a } from "./a#b.eff"\n',
+    "a#b.eff": "export const a: int = 1\n",
+  };
+  const project = load(files, ["main.eff"]);
+  assertEquals(project.diagnostics.map((d) => d.code), ["module/001"]);
+  assert(project.diagnostics[0].message.includes("a#b.eff"));
+  assertEquals(project.modules.has("a#b"), false);
+});

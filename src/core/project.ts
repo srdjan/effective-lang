@@ -263,7 +263,14 @@ export interface Project {
 
 type LoadFailure =
   | { readonly tag: "read"; readonly error: ReadError }
-  | { readonly tag: "conflict"; readonly other: string };
+  | { readonly tag: "conflict"; readonly other: string }
+  | { readonly tag: "bad-name" };
+
+/**
+ * Module names become part of identities such as `value:users#getUser` and of
+ * emitted error tags, so a name may not contain `#` or other special characters.
+ */
+const MODULE_NAME_PATTERN = /^[A-Za-z0-9_.\/-]+$/;
 
 function describeReadError(error: ReadError): string {
   return error.tag === "not-found"
@@ -299,6 +306,11 @@ class Loader {
     const failed = this.failures.get(path);
     if (failed !== undefined) return failed;
     const name = moduleNameOf(path);
+    if (!MODULE_NAME_PATTERN.test(name)) {
+      const failure: LoadFailure = { tag: "bad-name" };
+      this.failures.set(path, failure);
+      return failure;
+    }
     const owner = this.pathOfName.get(name);
     if (owner !== undefined && owner !== path) {
       const failure: LoadFailure = { tag: "conflict", other: owner };
@@ -328,6 +340,12 @@ class Loader {
       this.diagnostics.push(makeDiagnostic(
         "module/001",
         `${path} and ${failure.other} have the same module name`,
+        span,
+      ));
+    } else if (failure.tag === "bad-name") {
+      this.diagnostics.push(makeDiagnostic(
+        "module/001",
+        `the module path ${path} may contain only letters, digits, and _ . - /`,
         span,
       ));
     } else {
