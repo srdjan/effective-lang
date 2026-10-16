@@ -1,0 +1,85 @@
+{
+  "name": "effective-vscode",
+  "displayName": "Effective",
+  "description": "Language support for Effective: diagnostics, hover, definitions, and generated TypeScript.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onLanguage:effective",
+    "onCommand:effective.showGeneratedTypeScript"
+  ],
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "effective",
+        "aliases": ["Effective"],
+        "extensions": [".eff", ".effi"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "effective",
+        "scopeName": "source.effective",
+        "path": "./syntaxes/effective.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "effective.showGeneratedTypeScript",
+        "title": "Effective: Show Generated TypeScript"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "effective.showGeneratedTypeScript",
+          "when": "editorLangId == effective",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "effective.showGeneratedTypeScript",
+          "when": "editorLangId == effective"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Effective",
+      "properties": {
+        "effective.server.deno": {
+          "type": "string",
+          "default": "deno",
+          "description": "The Deno executable that starts the language server."
+        },
+        "effective.server.repository": {
+          "type": "string",
+          "default": "",
+          "description": "The path of the effective-lang repository. Empty means two directories above the extension."
+        },
+        "effective.writeOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Write the generated .ts and .ts.map files of a module when the user saves it."
+        },
+        "effective.debounceMs": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "description": "Delay in milliseconds before the server compiles after an edit."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "10.1.2"
+  }
+}

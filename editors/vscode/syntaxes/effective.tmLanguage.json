@@ -1,0 +1,135 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Effective",
+  "scopeName": "source.effective",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#declaration-words" },
+    { "include": "#constants" },
+    { "include": "#builtin-types" },
+    { "include": "#builtin-functions" },
+    { "include": "#operators" },
+    { "include": "#types" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.effective",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.effective",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.effective",
+      "begin": "\"",
+      "end": "\"|$",
+      "patterns": [
+        {
+          "name": "constant.character.escape.effective",
+          "match": "\\\\(?:[\\\\\"/bfnrt]|u[0-9A-Fa-f]{4})"
+        }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.effective",
+      "match": "\\b[0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?\\b"
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.import.effective",
+          "match": "\\b(?:import|export)\\b"
+        },
+        {
+          "name": "keyword.control.effective",
+          "match": "\\b(?:match|try|catch|if|else)\\b"
+        },
+        {
+          "name": "storage.type.effective",
+          "match": "\\bconst\\b"
+        }
+      ]
+    },
+    "declaration-words": {
+      "patterns": [
+        {
+          "name": "storage.type.declaration.effective",
+          "match": "\\b(?:type|error|service|provider)\\b"
+        },
+        {
+          "name": "keyword.other.clause.effective",
+          "match": "\\b(?:fails|uses|provides|from)\\b"
+        }
+      ]
+    },
+    "constants": {
+      "name": "constant.language.effective",
+      "match": "\\b(?:true|false)\\b"
+    },
+    "builtin-types": {
+      "name": "support.type.builtin.effective",
+      "match": "\\b(?:string|boolean|int|number|void|never|unknown|Option|Brand)\\b"
+    },
+    "builtin-functions": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.effective",
+          "match": "\\b(?:map|filter|fold|retry|provide|fail|unbrand)\\b"
+        },
+        {
+          "name": "support.constant.builtin.effective",
+          "match": "\\b(?:Some|None|some|none)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.pipe.effective",
+          "match": "\\|>"
+        },
+        {
+          "name": "storage.type.function.arrow.effective",
+          "match": "=>"
+        },
+        {
+          "name": "keyword.operator.spread.effective",
+          "match": "\\.\\.\\."
+        },
+        {
+          "name": "keyword.operator.comparison.effective",
+          "match": "===|!==|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.logical.effective",
+          "match": "&&|\\|\\||!"
+        },
+        {
+          "name": "keyword.operator.arithmetic.effective",
+          "match": "[-+*/]"
+        },
+        {
+          "name": "keyword.operator.type.union.effective",
+          "match": "\\|"
+        },
+        {
+          "name": "keyword.operator.assignment.effective",
+          "match": "="
+        }
+      ]
+    },
+    "types": {
+      "name": "entity.name.type.effective",
+      "match": "\\b[A-Z][A-Za-z0-9_$]*\\b"
+    }
+  }
+}

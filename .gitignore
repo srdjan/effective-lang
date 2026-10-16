@@ -4,3 +4,4 @@ fixtures/**/*.ts
 !fixtures/golden/**
 !fixtures/examples/users-live.ts
 !fixtures/host-boundary/**
+editors/vscode/node_modules/

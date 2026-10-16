@@ -25,10 +25,11 @@
       "docs/",
       "src/core/ir.ts",
       "fixtures/**/*.eff",
-      "fixtures/**/*.effi"
+      "fixtures/**/*.effi",
+      "editors/vscode/node_modules/"
     ]
   },
   "lint": {
-    "exclude": ["docs/", "fixtures/golden/"]
+    "exclude": ["docs/", "fixtures/golden/", "editors/vscode/"]
   }
 }

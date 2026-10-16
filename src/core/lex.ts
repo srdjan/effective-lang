@@ -83,7 +83,7 @@ export interface Lexed {
   readonly diagnostics: readonly Diagnostic[];
 }
 
-const KEYWORDS: ReadonlyMap<string, TokenKind> = new Map([
+export const KEYWORDS: ReadonlyMap<string, TokenKind> = new Map([
   ["import", TokenKind.KwImport],
   ["export", TokenKind.KwExport],
   ["const", TokenKind.KwConst],
