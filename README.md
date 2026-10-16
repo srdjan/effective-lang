@@ -315,13 +315,15 @@ The harnesses in `bench/` follow the measurement protocol of the design (section
 
 ### What each measurement decides
 
-M2 times the whole-module recheck for each stage: lex, parse, index, link, resolve, check, lower, emit, and validate. It also replays a body edit and an interface edit through `Program.update` and prints the modules that each revision checked again. M2 decides whether Phase B needs declaration-level tracking (design section 4.5), whether typed arrays pay for tokens, and whether a Zig port is worth its cost.
+M2 times the whole-module recheck for each stage: lex, parse, index, link, resolve, check, lower, emit, and validate. It also replays a body edit and an interface edit through `Program.update` and prints the modules that each revision checked again. M2 decides whether Phase B needs declaration-level tracking (design section 4.5). It also decides whether typed arrays pay for tokens and whether a Zig port is worth its cost.
 
 M5 times a cold `deno check` over the emitted five examples and the three synthetic sizes. It uses the configuration that `effective build --tsc` generates, with `effect` mapped to `npm:effect@4.0.5`. M5 decides the oracle runner and whether `watch --tsc` can default to on.
 
 M5 also tries three optional variants: `tsc` as a cold process, a warm `ts.LanguageService` in the same process, and `tsgo` from `@typescript/native-preview`. The harness installs them into a temporary workspace with `deno install`. The first run needs network access. A variant that cannot run is skipped, and the report names the reason.
 
-M6 gives the noise floor. Each iteration runs two sides, A and B, of the same build. The order of the sides alternates. The floor is the 90th percentile of the absolute value of `A/B - 1` over the pairs, in percent. A later A/B difference below the floor of its row counts as null. M6 uses the pairs of M2 and M5, so every row of M2 and M5 shows its floor in the column `floor %`. Measure the floor again when the machine or its load changes.
+M6 gives the noise floor. Each iteration runs two sides, A and B, of the same build. The order of the sides alternates. The floor is the 90th percentile of the absolute value of `A/B - 1` over the pairs, in percent. A later A/B difference below the floor of its row counts as null. M6 uses the pairs of M2 and M5, so every row of M2 and M5 shows its floor in the column `floor %`.
+
+Measure the floor again when the machine or its load changes.
 
 M1, M3, and M4 of the design are not part of part A8. M1 needs the LSP server. M3 and M4 need the edit script on the LSP process.
 
@@ -333,7 +335,7 @@ The stage `parse` includes `lex`, because the parser lexes its own input. The ro
 
 The token representation test of the design (object arrays against typed arrays) is not run. The lexer has only the typed-array form, so the comparison needs a second lexer. `docs/rejected.md` records this gap.
 
-No number from a run enters the README, the docs, or the ledger without the noise floor of its row, the size, and the number of samples. The user decides what to record. The timer is `performance.now()`, and the process is not pinned to a core, because macOS has no `taskset` equivalent.
+A number from a run enters the README, the docs, or the ledger only with its noise floor, its size, and its number of samples. The user decides what to record. The timer is `performance.now()`, and the process is not pinned to a core, because macOS has no `taskset` equivalent.
 
 ## Error fixture convention
 
