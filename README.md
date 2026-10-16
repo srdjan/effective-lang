@@ -6,7 +6,7 @@ The design is in `docs/transpiler-design.md`. The Phase A plan is in `docs/plans
 
 ## Status
 
-Parts A1, A2, A3a, A3b, A4, A5, A6a, A6b, and A7 exist. Part A1 adds the project skeleton, the lexer, a lossless parser with error recovery, and the `syntax` diagnostics. The parser reads `.eff` source files and `.effi` host interface files.
+Parts A1, A2, A3a, A3b, A4, A5, A6a, A6b, A7, and A8 exist. Part A1 adds the project skeleton, the lexer, a lossless parser with error recovery, and the `syntax` diagnostics. The parser reads `.eff` source files and `.effi` host interface files.
 
 Part A2 adds the declaration index, the project loader, the module graph, and the name resolver. It adds the diagnostic codes `unknown-name`, `module`, and `declaration`.
 
@@ -24,6 +24,8 @@ Part A5 adds the independent IR validator. It recomputes every annotation of a m
 
 Part A7 adds the program with module cutoff (`src/core/db.ts`), the public API (`src/core/mod.ts`), and the command-line tool (`src/cli/main.ts`). The tool has the commands `check`, `build`, and `watch`, and the flags `--tsc` and `--validate`. It also adds the line `//# sourceMappingURL=<file>.map` to each emitted file.
 
+Part A8 adds the measurement harnesses in `bench/`: a synthetic module generator and the measurements M2, M5, and M6 of the design. See "Measurements". The README holds no measured number. The user decides which numbers enter the docs.
+
 ## Requirements
 
 The project needs Deno 2.9.7. The first test run downloads `@std/assert` from jsr, so it needs network access once.
@@ -40,10 +42,9 @@ Run every command from the repository root.
 | `deno task golden:update`   | Writes `fixtures/golden/<module>.ts` again from `fixtures/examples`.                       |
 | `deno task validate:update` | Writes the mutation fixtures in `fixtures/validate/` again from the current lowering.      |
 | `deno task effective`       | Runs the command-line tool. See "Using the command line".                                  |
+| `deno task bench`           | Runs the measurement harnesses. See "Measurements".                                        |
 | `deno task fmt`             | Formats the source files.                                                                  |
 | `deno task lint`            | Runs the linter.                                                                           |
-
-The task `bench` does not exist yet. Part A8 adds it.
 
 ## Layout
 
@@ -119,7 +120,17 @@ fixtures/      Input files for the tests.
   validate/      Mutated copies of lowered IR and manifest.json, which names the expected code of each.
   parse/         Valid syntax forms (ok-*) and recovery inputs (recovery-*).
   errors/        One file or one project directory for each error case, with markers.
-docs/          Design and plans.
+bench/         The measurement harnesses of part A8. They are not part of the core.
+  main.ts        The entry: arguments, profiles, and the report.
+  profile.ts     The scale of --quick and --full.
+  generate.ts    The synthetic module generator and the edit scripts.
+  m2.ts          M2: time per stage and the incremental path, with the checksum gate.
+  m5.ts          M5: cold deno check over the emitted code.
+  m5_target.ts   The inputs of M5: the emitted examples and synthetic projects.
+  m5_variants.ts The optional M5 variants: tsc, ts.LanguageService, and tsgo.
+  m6.ts          M6: the noise floor report.
+  stats.ts       Quantiles, the noise floor, the checksum, and plain text tables.
+docs/          Design, plans, and rejected.md, the ledger of rejected ideas.
 ```
 
 The core reads files only through `SourceHost`. It calls no Deno API. Tests may use Deno APIs.
@@ -286,6 +297,43 @@ A line that belongs to no diagnostic goes to stderr. Any `deno check` diagnostic
 After each build, `watch` prints `rechecked: <modules>` to stderr, then the diagnostics. A broken `effective.json` prints an error, and the loop goes on. At start, a broken `effective.json` gives exit code 2. The loop takes its event source as a parameter, so a fast test drives it with a fake source.
 
 `main(args, io)` in `src/cli/main.ts` returns the exit code. The `io` value gives the stdout and stderr writers, the file system, the `deno check` runner, and the watch source. The fast tests in `tests/cli_test.ts` run `main` with in-memory doubles from `tests/cli_helpers.ts`. The slow tests in `tests/cli_slow_test.ts` run the real tool.
+
+## Measurements
+
+The harnesses in `bench/` follow the measurement protocol of the design (section 10). They run on this machine and print plain text tables on stdout. Run every command from the repository root.
+
+| Command                                                       | What it does                                                                          |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `deno task bench`                                             | Runs M2, M5, and M6 at the quick scale. The quick scale aims at less than one minute. |
+| `deno task bench --full`                                      | Runs the same measurements with larger iteration counts and more pairs.               |
+| `deno task bench m2`, `m5`, or `m6`                           | Runs one measurement. `m6` runs M2 and prints only the noise floor.                   |
+| `deno task bench --no-variants`                               | Skips the optional M5 variants.                                                       |
+| `deno task bench --json <file>`                               | Also writes the raw samples to the file.                                              |
+| `deno run --allow-write bench/generate.ts <size> <directory>` | Writes a synthetic project of the size `small`, `medium`, or `large`.                 |
+
+`--quick` is the default. `--full` changes only the iteration counts and the number of pairs. The three sizes stay the same: 30, 300, and 3000 declarations. The bench task passes `--no-lock`, so the optional variants never change `deno.lock`. The harness leaves nothing in the working tree. It uses temporary directories and removes them.
+
+### What each measurement decides
+
+M2 times the whole-module recheck for each stage: lex, parse, index, link, resolve, check, lower, emit, and validate. It also replays a body edit and an interface edit through `Program.update` and prints the modules that each revision checked again. M2 decides whether Phase B needs declaration-level tracking (design section 4.5), whether typed arrays pay for tokens, and whether a Zig port is worth its cost.
+
+M5 times a cold `deno check` over the emitted five examples and the three synthetic sizes. It uses the configuration that `effective build --tsc` generates, with `effect` mapped to `npm:effect@4.0.5`. M5 decides the oracle runner and whether `watch --tsc` can default to on.
+
+M5 also tries three optional variants: `tsc` as a cold process, a warm `ts.LanguageService` in the same process, and `tsgo` from `@typescript/native-preview`. The harness installs them into a temporary workspace with `deno install`. The first run needs network access. A variant that cannot run is skipped, and the report names the reason.
+
+M6 gives the noise floor. Each iteration runs two sides, A and B, of the same build. The order of the sides alternates. The floor is the 90th percentile of the absolute value of `A/B - 1` over the pairs, in percent. A later A/B difference below the floor of its row counts as null. M6 uses the pairs of M2 and M5, so every row of M2 and M5 shows its floor in the column `floor %`. Measure the floor again when the machine or its load changes.
+
+M1, M3, and M4 of the design are not part of part A8. M1 needs the LSP server. M3 and M4 need the edit script on the LSP process.
+
+### Protocol
+
+Each M2 run ends with a checksum of the emitted text. Every run must give the same checksum, or the run stops with an error and prints no time. The first runs of each size are warm-ups, and the report drops them. Each row is a distribution: `n`, `min`, `p10`, `median`, `p90`, and `max`. The harness never reports a best of N. The rows of M2 pool the runs of both sides.
+
+The stage `parse` includes `lex`, because the parser lexes its own input. The row `total` is the sum of every stage except `lex`. M5 ends one generated file with a unique comment before each sample, so that `deno check` cannot answer from its type-check cache. The column `control` shows a repeat on unchanged input.
+
+The token representation test of the design (object arrays against typed arrays) is not run. The lexer has only the typed-array form, so the comparison needs a second lexer. `docs/rejected.md` records this gap.
+
+No number from a run enters the README, the docs, or the ledger without the noise floor of its row, the size, and the number of samples. The user decides what to record. The timer is `performance.now()`, and the process is not pinned to a core, because macOS has no `taskset` equivalent.
 
 ## Error fixture convention
 
