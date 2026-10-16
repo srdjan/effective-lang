@@ -28,6 +28,8 @@ Part A8 adds the measurement harnesses in `bench/`: a synthetic module generator
 
 Parts L1 to L6 add the language server in `src/lsp/`, the VS Code client in `editors/vscode/`, and the measurements M1, M3, and M4. See "Language server", "VS Code client", and "Measurements". The README holds no measured number for these parts either. The hand test of the client in VS Code (acceptance check 5 of the plan) is not done yet.
 
+Parts G1 to G4 add the playground in `playground/`. See "Playground". The user has not accepted the page yet (acceptance check 5 of the playground plan).
+
 ## Requirements
 
 The project needs Deno 2.9.7. The first test run downloads `@std/assert` from jsr, so it needs network access once.
@@ -36,18 +38,20 @@ The project needs Deno 2.9.7. The first test run downloads `@std/assert` from js
 
 Run every command from the repository root.
 
-| Command                     | What it does                                                                               |
-| --------------------------- | ------------------------------------------------------------------------------------------ |
-| `deno task check`           | Runs the format check, the lint, the type check, the fast tests, and the slow tests.       |
-| `deno task test`            | Runs the fast tests. It skips files named `*_slow_test.ts`.                                |
-| `deno task test:slow`       | Runs only files named `*_slow_test.ts`. They run `deno check`, `deno fmt`, and `deno run`. |
-| `deno task golden:update`   | Writes `fixtures/golden/<module>.ts` again from `fixtures/examples`.                       |
-| `deno task validate:update` | Writes the mutation fixtures in `fixtures/validate/` again from the current lowering.      |
-| `deno task effective`       | Runs the command-line tool. See "Using the command line".                                  |
-| `deno task lsp`             | Runs the language server over standard input and output. See "Language server".            |
-| `deno task bench`           | Runs the measurement harnesses. See "Measurements".                                        |
-| `deno task fmt`             | Formats the source files.                                                                  |
-| `deno task lint`            | Runs the linter.                                                                           |
+| Command                      | What it does                                                                               |
+| ---------------------------- | ------------------------------------------------------------------------------------------ |
+| `deno task check`            | Runs the format check, the lint, the type check, the fast tests, and the slow tests.       |
+| `deno task test`             | Runs the fast tests. It skips files named `*_slow_test.ts`.                                |
+| `deno task test:slow`        | Runs only files named `*_slow_test.ts`. They run `deno check`, `deno fmt`, and `deno run`. |
+| `deno task golden:update`    | Writes `fixtures/golden/<module>.ts` again from `fixtures/examples`.                       |
+| `deno task validate:update`  | Writes the mutation fixtures in `fixtures/validate/` again from the current lowering.      |
+| `deno task effective`        | Runs the command-line tool. See "Using the command line".                                  |
+| `deno task lsp`              | Runs the language server over standard input and output. See "Language server".            |
+| `deno task bench`            | Runs the measurement harnesses. See "Measurements".                                        |
+| `deno task playground:build` | Writes the playground page to `playground/dist/`. See "Playground".                        |
+| `deno task playground:serve` | Builds the playground page, then serves it on `http://127.0.0.1:8790/`.                    |
+| `deno task fmt`              | Formats the source files.                                                                  |
+| `deno task lint`             | Runs the linter.                                                                           |
 
 ## Layout
 
@@ -124,6 +128,7 @@ src/lsp/       The language server. See "Language server".
   positions.ts   Positions, ranges, and the conversion between URIs and paths.
   methods.ts     The names of the custom methods, shared with the client.
 editors/vscode/ The VS Code client. See "VS Code client". Plain JavaScript, no build step.
+playground/    The browser playground. See "Playground". The page is in src/, the build in build.ts.
 scripts/       Scripts that the tasks run. golden_update.ts writes the golden files.
                validate_fixtures.ts writes the mutation fixtures.
 tests/         Deno tests and test helpers.
@@ -391,6 +396,16 @@ code --extensionDevelopmentPath=<repo>/editors/vscode <repo>/fixtures/examples
 ```
 
 A fast test, `tests/vscode_client_test.ts`, checks `package.json`, the grammar, and the method names. No automated test covers the user interface of the client.
+
+## Playground
+
+The playground is a static page in `playground/`. It runs the core in the browser. The examples are editable tabs. The page shows the problems, the generated TypeScript, and a hover with the contract and the backend type. It does not run the generated code. A reload discards the edits.
+
+Run `deno task playground:serve` and open `http://127.0.0.1:8790/`. The task builds the page first. `deno task playground:build [outDir]` only writes the files. The default output directory is `playground/dist/`, which git ignores.
+
+The build uses `deno bundle` with the CodeMirror 6 packages that `deno.json` pins. The highlighter uses the core lexer, so the page and the compiler agree on each token. Below 960 pixels, the page shows one region at a time. The URL hash holds the active file, for example `#host/providers.effi`.
+
+Fast tests cover the compile facade, the highlighter, and the page model without a browser. The slow test `tests/playground_build_slow_test.ts` runs the build. No automated test covers the page in a browser. On 2026-10-16, a manual browser review at 375 and 1280 pixels passed the checks in `docs/plans/2026-10-16-playground.md`, section 7.
 
 ## Measurements
 

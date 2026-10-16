@@ -1,8 +1,8 @@
 # Effective transpiler: design for discussion
 
-Status: design accepted, 2026-10-16. Phase A and the LSP phase are implemented.
-Phase B is not started. The D9 budget does not require it now. The user settled all
-nineteen decisions and accepted the suggested answers to the open spec
+Status: design accepted, 2026-10-16. Phase A, the LSP phase, and the playground
+are implemented. Phase B is not started. The D9 budget does not require it
+now. The user settled all nineteen decisions and accepted the suggested answers to the open spec
 questions. The decision record below lists each choice.
 
 ## Decision record
