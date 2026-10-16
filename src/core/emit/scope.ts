@@ -15,6 +15,11 @@ import type {
   Type,
   TypeDecl,
 } from "../ir.ts";
+import {
+  methodOfCapability as coreMethodOfCapability,
+  moduleOfId as coreModuleOfId,
+  nameOfId as coreNameOfId,
+} from "../ids.ts";
 import { normalizeRelative, type ProjectConfig } from "../project.ts";
 import { collectBinderNames } from "./walk.ts";
 
@@ -52,19 +57,16 @@ export function unsupported(message: string, span?: Span): EmitFailure {
 
 /** The module part of an identity such as `type:users#User`. */
 export function moduleOfId(id: string): string {
-  const colon = id.indexOf(":");
-  const hash = id.indexOf("#");
-  if (colon < 0 || hash < colon) throw internal(`malformed identity ${id}`);
-  return id.slice(colon + 1, hash);
+  const module = coreModuleOfId(id);
+  if (module === undefined) throw internal(`malformed identity ${id}`);
+  return module;
 }
 
 /** The declared name in an identity such as `type:users#User`. */
 export function nameOfId(id: string): string {
-  const hash = id.indexOf("#");
-  if (hash < 0) throw internal(`malformed identity ${id}`);
-  const rest = id.slice(hash + 1);
-  const dot = rest.indexOf(".");
-  return dot < 0 ? rest : rest.slice(0, dot);
+  const name = coreNameOfId(id);
+  if (name === undefined) throw internal(`malformed identity ${id}`);
+  return name;
 }
 
 /** The text after the colon: the tag, service key, or brand token of the emitted code. */
@@ -82,9 +84,11 @@ export function serviceOfCapability(capability: CapabilityId): ServiceId {
 }
 
 export function methodOfCapability(capability: CapabilityId): string {
-  const dot = capability.indexOf(".", capability.indexOf("#"));
-  if (dot < 0) throw internal(`malformed capability ${capability}`);
-  return capability.slice(dot + 1);
+  const method = coreMethodOfCapability(capability);
+  if (method === undefined) {
+    throw internal(`malformed capability ${capability}`);
+  }
+  return method;
 }
 
 function compareText(a: string, b: string): number {

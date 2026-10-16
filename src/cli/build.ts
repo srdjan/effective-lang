@@ -4,13 +4,12 @@
 import type { Diagnostic } from "../core/diagnostics.ts";
 import type { Revision } from "../core/db.ts";
 import type { SpanTable } from "../core/emit/spans.ts";
-import { serializeSourceMap } from "../core/emit/sourcemap.ts";
 import type { ModuleIR, Result } from "../core/ir.ts";
 import type { LowerError } from "../core/lower.ts";
-import { joinPath } from "../core/project.ts";
 import { validateProject } from "../core/validate_project.ts";
 import { formatDiagnostics, type TextOf } from "./format.ts";
 import type { CliIo } from "./io.ts";
+import { writeGenerated } from "./outputs.ts";
 import { runTsc } from "./tsc.ts";
 
 export interface BuildOptions {
@@ -33,21 +32,6 @@ export interface BuildOutcome {
   readonly failed: boolean;
   /** The root-relative paths of the files that changed on disk. */
   readonly written: readonly string[];
-}
-
-function describeLowerError(error: LowerError): string {
-  switch (error.tag) {
-    case "diagnostics":
-      return `${error.module} has ${error.count} diagnostics`;
-    case "unknown-module":
-    case "host-interface":
-      return `${error.module}: ${error.tag}`;
-    case "no-interface":
-      return `${error.module} imports ${error.imported}, which has no interface`;
-    case "unsupported":
-    case "internal":
-      return `${error.module}: ${error.message}`;
-  }
 }
 
 /**
@@ -84,60 +68,27 @@ export async function buildRevision(
     }
   }
 
-  const generated: string[] = [];
-  const tables = new Map<string, SpanTable>();
+  let generated: string[] = [];
+  let tables = new Map<string, SpanTable>();
   if (wanted) {
-    for (const name of names) {
+    // A module that lowered and failed validation is reported, and not written.
+    const passed = names.filter((name) => {
       const lowered = revision.lowered(name);
-      if (lowered === undefined) continue;
-      if (!lowered.ok) {
-        // A module with diagnostics is already reported. Any other reason is a defect.
-        if (lowered.error.tag !== "diagnostics") {
-          notes.push(
-            `error: cannot lower ${describeLowerError(lowered.error)}`,
-          );
-          failed = true;
-        }
-        continue;
-      }
-      if ((validation.get(name) ?? []).length > 0) continue;
-      const emitted = revision.emitted(name);
-      const table = revision.spanTable(name);
-      const map = revision.sourceMap(name);
-      if (emitted === undefined || table === undefined || map === undefined) {
-        continue;
-      }
-      if (!emitted.ok) {
-        notes.push(`error: cannot emit ${name}: ${emitted.error.tag}`);
-        failed = true;
-        continue;
-      }
-      if (!map.ok || !table.ok) {
-        notes.push(`error: cannot build the source map of ${name}`);
-        failed = true;
-        continue;
-      }
-      if (options.write) {
-        const outputs: [string, string][] = [
-          [emitted.value.path, emitted.value.text],
-          [`${emitted.value.path}.map`, serializeSourceMap(map.value)],
-        ];
-        for (const [path, text] of outputs) {
-          const full = joinPath(root, path);
-          const old = io.fs.readText(full);
-          if (old.ok && old.value === text) continue;
-          const result = io.fs.writeText(full, text);
-          if (result.ok) {
-            written.push(path);
-          } else {
-            notes.push(`error: cannot write ${path}: ${result.error.message}`);
-            failed = true;
-          }
-        }
-      }
-      generated.push(emitted.value.path);
-      tables.set(emitted.value.path, table.value);
-    }
+      return lowered === undefined || !lowered.ok ||
+        (validation.get(name) ?? []).length === 0;
+    });
+    const outputs = writeGenerated(
+      io.fs,
+      root,
+      revision,
+      passed,
+      options.write,
+    );
+    written.push(...outputs.written);
+    notes.push(...outputs.notes);
+    if (outputs.failed) failed = true;
+    generated = outputs.generated;
+    tables = outputs.tables;
   }
 
   lines.push(...formatDiagnostics(diagnostics, textOf));

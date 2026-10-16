@@ -3,7 +3,7 @@
 
 import { assert, assertEquals, assertNotEquals } from "@std/assert";
 import { checkProject } from "../src/core/check_project.ts";
-import { Program, type Revision } from "../src/core/db.ts";
+import { Program, type Revision, revisionDelta } from "../src/core/db.ts";
 import { emitProject } from "../src/core/emit/emit.ts";
 import {
   buildSourceMap,
@@ -326,4 +326,171 @@ Deno.test("a host registry change rechecks the importers of the host module", ()
   const second = session.apply({ "effective.json": config });
   // The registry is part of every key, so every module checks again.
   assertEquals(second.rechecked.length, 6);
+});
+
+// ------------------------------------------------------------------ query counts
+
+function updated(program: Program, set: Files = {}): Revision {
+  const result = program.update({ set });
+  assert(result.ok, JSON.stringify(result));
+  return result.value;
+}
+
+Deno.test("counts: a cold update parses and checks every module and lowers nothing", () => {
+  const program = new Program("");
+  assertEquals(program.counts, {
+    parses: 0,
+    checks: 0,
+    lowerings: 0,
+    emits: 0,
+  });
+  updated(program, exampleFiles());
+  // Five .eff files and the .effi file that main.eff imports.
+  assertEquals(program.counts, {
+    parses: 6,
+    checks: 6,
+    lowerings: 0,
+    emits: 0,
+  });
+});
+
+Deno.test("counts: a body edit parses and checks one module, an interface edit checks its importers", () => {
+  const files = exampleFiles();
+  const program = new Program("");
+  updated(program, files);
+  const body = files[USERS].replace(
+    "None => fail(UserMissing({ id }))",
+    "None => fail(UserMissing({ id: id }))",
+  );
+  assertNotEquals(body, files[USERS]);
+  updated(program, { [USERS]: body });
+  assertEquals(program.counts, {
+    parses: 7,
+    checks: 7,
+    lowerings: 0,
+    emits: 0,
+  });
+  const iface = body.replace(
+    "fails StoreUnavailable\n  uses Users.all",
+    "fails StoreUnavailable | UserMissing\n  uses Users.all",
+  );
+  updated(program, { [USERS]: iface });
+  // users, host/providers, and main check again.
+  assertEquals(program.counts, {
+    parses: 8,
+    checks: 10,
+    lowerings: 0,
+    emits: 0,
+  });
+  // An update with no change adds nothing.
+  updated(program);
+  assertEquals(program.counts, {
+    parses: 8,
+    checks: 10,
+    lowerings: 0,
+    emits: 0,
+  });
+});
+
+Deno.test("counts: lowerings and emits count once per module and revision, and not on a memo hit", () => {
+  const program = new Program("");
+  const first = updated(program, exampleFiles());
+  first.lowered("main");
+  first.lowered("main");
+  assertEquals(program.counts.lowerings, 1);
+  assertEquals(program.counts.emits, 0);
+  first.emitted("main");
+  first.emitted("main");
+  first.emitted("pay");
+  assertEquals(program.counts.lowerings, 2);
+  assertEquals(program.counts.emits, 2);
+  // The next revision reuses the memo entries of both modules.
+  const second = updated(program);
+  second.lowered("main");
+  second.emitted("main");
+  second.emitted("pay");
+  assertEquals(program.counts.lowerings, 2);
+  assertEquals(program.counts.emits, 2);
+  // The counts are a snapshot: an earlier value does not change.
+  const before = program.counts;
+  second.emitted("log");
+  assertEquals(before.emits, 2);
+  assertEquals(program.counts.emits, 3);
+});
+
+// ------------------------------------------------------------------ revision delta
+
+const FLIP_PURE = "export const flip = (n: int): int => n + 1\n";
+const FLIP_EFFECT =
+  "export const flip = (n: int): int => retry(() => n + 1, { times: 1 })\n";
+
+Deno.test("revisionDelta: no change and a body edit change nothing, an interface edit changes the interface", () => {
+  const files = exampleFiles();
+  const program = new Program("");
+  const first = updated(program, files);
+  const same = updated(program);
+  assertEquals(revisionDelta(first, same), {
+    interfaceChanged: [],
+    modeChanged: [],
+  });
+  const body = files[USERS].replace(
+    "None => fail(UserMissing({ id }))",
+    "None => fail(UserMissing({ id: id }))",
+  );
+  const edited = updated(program, { [USERS]: body });
+  assertEquals(revisionDelta(same, edited), {
+    interfaceChanged: [],
+    modeChanged: [],
+  });
+  const iface = body.replace(
+    "fails StoreUnavailable\n  uses Users.all",
+    "fails StoreUnavailable | UserMissing\n  uses Users.all",
+  );
+  const changed = updated(program, { [USERS]: iface });
+  const delta = revisionDelta(edited, changed);
+  assert(delta.interfaceChanged.includes("users"));
+  assertEquals(delta.modeChanged, []);
+  // The lists follow the module order of the later revision.
+  const order = changed.moduleNames();
+  assertEquals(
+    delta.interfaceChanged,
+    order.filter((name) => delta.interfaceChanged.includes(name)),
+  );
+});
+
+Deno.test("revisionDelta: a mode flip appears in both lists", () => {
+  const program = new Program("");
+  const pure = updated(program, { "effective.json": "{}", "m.eff": FLIP_PURE });
+  assertEquals(pure.diagnostics, []);
+  assertEquals([...pure.checkedModule("m")!.modes.values()], ["pure"]);
+  const effect = updated(program, { "m.eff": FLIP_EFFECT });
+  assertEquals(effect.diagnostics, []);
+  assertEquals([...effect.checkedModule("m")!.modes.values()], ["effect"]);
+  assertEquals(revisionDelta(pure, effect), {
+    interfaceChanged: ["m"],
+    modeChanged: ["m"],
+  });
+  assertEquals(revisionDelta(effect, pure), {
+    interfaceChanged: ["m"],
+    modeChanged: ["m"],
+  });
+});
+
+Deno.test("revisionDelta: a module absent from the previous revision, or no previous revision, counts as changed", () => {
+  const program = new Program("");
+  const first = updated(program, exampleFiles());
+  assertEquals(
+    revisionDelta(undefined, first),
+    {
+      interfaceChanged: [...first.moduleNames()],
+      modeChanged: [...first.moduleNames()],
+    },
+  );
+  const extra = updated(program, {
+    "extra.eff": "export const one = (): int => 1\n",
+  });
+  assertEquals(revisionDelta(first, extra), {
+    interfaceChanged: ["extra"],
+    modeChanged: ["extra"],
+  });
 });

@@ -526,3 +526,23 @@ Deno.test("resolving never throws on a prefix of every example", () => {
     }
   }
 });
+
+Deno.test("locals holds the span of the name that binds a parameter and a block const", () => {
+  const text = "const f = (n: int): int => {\n  const total = n\n  total\n}\n";
+  const analysis = single(text);
+  const locals = analysis.resolutions.get("m")!.locals;
+  const param = locals.get("local:m#f/n");
+  const block = locals.get("local:m#f/total");
+  assert(param !== undefined && block !== undefined);
+  assertEquals(param, {
+    source: "m.eff",
+    start: text.indexOf("n:"),
+    end: text.indexOf("n:") + 1,
+  });
+  assertEquals(block, {
+    source: "m.eff",
+    start: text.indexOf("total"),
+    end: text.indexOf("total") + 5,
+  });
+  assertEquals(locals.size, 2);
+});

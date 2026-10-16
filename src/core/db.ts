@@ -37,7 +37,11 @@
 // then carries the new spans.
 
 import { type Analysis, analyzeProject } from "./analyze.ts";
-import { checkModuleDeclarations, type TypeGraph } from "./check.ts";
+import {
+  checkModuleDeclarations,
+  type ModeMap,
+  type TypeGraph,
+} from "./check.ts";
 import {
   type CheckedModule,
   type CheckedProject,
@@ -92,6 +96,26 @@ export interface ProgramChanges {
   readonly remove?: readonly string[];
 }
 
+// ------------------------------------------------------------------ query counts
+
+/**
+ * Cumulative counts of the expensive queries of a program (design measurement
+ * M3). A memo hit does not count.
+ */
+export interface QueryCounts {
+  /** Parses that missed the parse memo. */
+  readonly parses: number;
+  /** Modules checked again, whatever the reason. */
+  readonly checks: number;
+  /** Lowerings that `Revision.lowered` computed on demand. */
+  readonly lowerings: number;
+  /** Emissions that `Revision.emitted` computed on demand. */
+  readonly emits: number;
+}
+
+/** The mutable counters that a program shares with its revisions. */
+type Counters = { -readonly [K in keyof QueryCounts]: number };
+
 // ------------------------------------------------------------------ memo entries
 
 /** A memo entry. The key decides when it is valid. The lazy fields fill on demand. */
@@ -143,6 +167,12 @@ export class Revision {
     readonly rechecked: readonly string[],
     private readonly entries: ReadonlyMap<string, Entry>,
     private readonly texts: ReadonlyMap<string, string>,
+    private readonly counters: Counters = {
+      parses: 0,
+      checks: 0,
+      lowerings: 0,
+      emits: 0,
+    },
   ) {}
 
   /** All diagnostics of the project, sorted and without duplicates. */
@@ -181,7 +211,10 @@ export class Revision {
     const entry = this.entries.get(name);
     if (entry === undefined) return undefined;
     if (this.project.modules.get(name)?.mode !== "eff") return undefined;
-    entry.lowered ??= lowerModule(this.checked, name);
+    if (entry.lowered === undefined) {
+      this.counters.lowerings++;
+      entry.lowered = lowerModule(this.checked, name);
+    }
     return entry.lowered;
   }
 
@@ -191,6 +224,7 @@ export class Revision {
     const lowered = this.lowered(name);
     if (entry === undefined || lowered === undefined) return undefined;
     if (entry.emitted === undefined) {
+      this.counters.emits++;
       entry.emitted = lowered.ok
         ? emitModule(lowered.value, { config: this.project.config })
         : {
@@ -246,6 +280,12 @@ export class Program {
   /** The one intern table of the program. Reused modules keep valid type references. */
   private readonly table = new TypeTable();
   private count = 0;
+  private readonly counters: Counters = {
+    parses: 0,
+    checks: 0,
+    lowerings: 0,
+    emits: 0,
+  };
 
   /** `root` is the project directory that diagnostics and error values name. */
   constructor(private readonly root: string = "") {}
@@ -255,9 +295,15 @@ export class Program {
     return this.count;
   }
 
+  /** A snapshot of the cumulative query counts over the life of the program. */
+  get counts(): QueryCounts {
+    return { ...this.counters };
+  }
+
   private readonly parseFile: FileParser = (path, text) => {
     const memo = this.parses.get(path);
     if (memo !== undefined && memo.text === text) return memo.file;
+    this.counters.parses++;
     const file = parseFileFresh(path, text);
     this.parses.set(path, { text, file });
     return file;
@@ -391,6 +437,7 @@ export class Program {
           },
         };
         rechecked.push(name);
+        this.counters.checks++;
       } else if (entry.lowerKey !== lowerKey) {
         // Only spans of reached modules moved. The interface copies foreign
         // declarations, so it is built again; the IR is lowered again on demand.
@@ -435,6 +482,53 @@ export class Program {
       rechecked,
       entries,
       texts,
+      this.counters,
     );
   }
+}
+
+// ------------------------------------------------------------------ revision delta
+
+/** The modules that differ between two revisions, in the module order of the later one. */
+export interface RevisionDelta {
+  /** Modules whose interface hash differs. */
+  readonly interfaceChanged: string[];
+  /** Modules whose mode map differs in size or in any entry. */
+  readonly modeChanged: string[];
+}
+
+function sameModes(a: ModeMap | undefined, b: ModeMap | undefined): boolean {
+  if (a === undefined || b === undefined) return a === b;
+  if (a.size !== b.size) return false;
+  for (const [id, mode] of a) {
+    if (b.get(id) !== mode) return false;
+  }
+  return true;
+}
+
+/**
+ * Compares two revisions. A module that the earlier revision lacks counts as
+ * changed in both lists. An undefined `previous` makes every module changed.
+ */
+export function revisionDelta(
+  previous: Revision | undefined,
+  next: Revision,
+): RevisionDelta {
+  const interfaceChanged: string[] = [];
+  const modeChanged: string[] = [];
+  for (const name of next.moduleNames()) {
+    const before = previous?.checkedModule(name);
+    if (previous === undefined || before === undefined) {
+      interfaceChanged.push(name);
+      modeChanged.push(name);
+      continue;
+    }
+    if (previous.interfaceHash(name) !== next.interfaceHash(name)) {
+      interfaceChanged.push(name);
+    }
+    if (!sameModes(before.modes, next.checkedModule(name)?.modes)) {
+      modeChanged.push(name);
+    }
+  }
+  return { interfaceChanged, modeChanged };
 }

@@ -142,6 +142,8 @@ export interface ModuleResolution {
   readonly module: string;
   /** From syntax node id to target. Every resolved name node has one entry. */
   readonly targets: ReadonlyMap<NodeId, Target>;
+  /** From local identity to the span of the name that binds it. */
+  readonly locals: ReadonlyMap<LocalId, Span>;
   /** The module-level names, including imported names. */
   readonly namespace: ReadonlyMap<string, Binding>;
   readonly diagnostics: readonly Diagnostic[];
@@ -217,6 +219,7 @@ function describeKind(target: Target): string {
 
 class Resolver {
   readonly targets = new Map<NodeId, Target>();
+  readonly locals = new Map<LocalId, Span>();
   readonly diagnostics: Diagnostic[] = [];
   readonly namespace = new Map<string, Binding>();
 
@@ -458,6 +461,7 @@ class Resolver {
       span,
     };
     scope.names.set(name, binding);
+    this.locals.set(binding.id, span);
     this.set(nameNode, { kind: "local", id: binding.id });
     return binding;
   }
@@ -1123,6 +1127,7 @@ class Resolver {
     return {
       module: this.name,
       targets: this.targets,
+      locals: this.locals,
       namespace: this.namespace,
       diagnostics: normalizeDiagnostics(this.diagnostics),
     };

@@ -515,7 +515,8 @@ export function checkProject(
 
 // ------------------------------------------------------------------ typeAt
 
-function effectText(
+/** The ` fails ...` and ` uses ...` text of two sets, as `typeAt` prints it. */
+export function effectText(
   failures: readonly string[],
   requirements: readonly string[],
 ): string {

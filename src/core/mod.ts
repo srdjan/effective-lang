@@ -2,8 +2,18 @@
 // synchronous and pure: it reads files only through `SourceHost`.
 
 // The program with module cutoff.
-export { Program, Revision } from "./db.ts";
-export type { ProgramChanges } from "./db.ts";
+export { Program, Revision, revisionDelta } from "./db.ts";
+export type { ProgramChanges, QueryCounts, RevisionDelta } from "./db.ts";
+
+// The editor queries.
+export { definitionAt, documentSymbols, hoverAt } from "./editor.ts";
+export type {
+  EditorSymbol,
+  EditorSymbolKind,
+  Hover,
+  HoverBackend,
+} from "./editor.ts";
+export { methodOfCapability, moduleOfId, nameOfId } from "./ids.ts";
 
 // The pipeline functions.
 export { checkProject } from "./check_project.ts";
