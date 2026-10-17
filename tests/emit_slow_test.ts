@@ -587,6 +587,35 @@ console.log(JSON.stringify({ attempts, tag: error._tag }));
     assertEquals(result, { attempts: 3, tag: "main#Stop" });
   });
 });
+Deno.test("pure codecs validate both directions and preserve None", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "export const shift: Codec<Int, Int> = codec((n: Int): Int => n + 1, (n: Int): Int => n - 1)",
+        "export const parse = (input: unknown): Option<Int> => decode(shift, input)",
+        "export const print = (n: Int): Option<Int> => encode(shift, n)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Option } from "effect";
+import { parse, print } from "./main.ts";
+const good = parse(4);
+const bad = parse("bad");
+const encoded = print(5);
+console.log(JSON.stringify({ good: Option.getOrUndefined(good), bad: Option.isNone(bad), encoded: Option.getOrUndefined(encoded) }));
+`,
+    );
+    assertEquals(result, { good: 5, bad: true, encoded: 4 });
+  });
+});
 Deno.test("source Layers merge and provide their declared services", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

@@ -53,6 +53,11 @@ export type TypeNode =
   | { readonly kind: "ref"; readonly element: TypeRef }
   | { readonly kind: "retry-schedule"; readonly error: TypeRef }
   | {
+    readonly kind: "codec";
+    readonly decoded: TypeRef;
+    readonly encoded: TypeRef;
+  }
+  | {
     readonly kind: "effect";
     readonly result: TypeRef;
     readonly failures: readonly ErrorId[];
@@ -239,6 +244,8 @@ export class TypeTable {
         return `q:${node.element}`;
       case "retry-schedule":
         return `z:${node.error}`;
+      case "codec":
+        return `c:${node.decoded}:${node.encoded}`;
       case "effect":
         return `x:${
           JSON.stringify([node.result, node.failures, node.requirements])
@@ -334,6 +341,10 @@ export class TypeTable {
 
   retrySchedule(error: TypeRef): TypeRef {
     return this.intern({ kind: "retry-schedule", error });
+  }
+
+  codec(decoded: TypeRef, encoded: TypeRef): TypeRef {
+    return this.intern({ kind: "codec", decoded, encoded });
   }
 
   effect(
@@ -579,6 +590,13 @@ export class TypeTable {
         tallest = this.heightWithin(node.error, budget - 1, memo);
         if (tallest === Infinity) return Infinity;
         break;
+      case "codec":
+        tallest = Math.max(
+          this.heightWithin(node.decoded, budget - 1, memo),
+          this.heightWithin(node.encoded, budget - 1, memo),
+        );
+        if (tallest === Infinity) return Infinity;
+        break;
       case "stream":
         tallest = this.heightWithin(node.element, budget - 1, memo);
         if (tallest === Infinity) return Infinity;
@@ -632,6 +650,8 @@ export class TypeTable {
         return this.ref(this.fromIr(type.element));
       case "retry-schedule":
         return this.retrySchedule(this.fromIr(type.error));
+      case "codec":
+        return this.codec(this.fromIr(type.decoded), this.fromIr(type.encoded));
       case "effect":
         return this.effect(
           this.fromIr(type.result),
@@ -717,6 +737,12 @@ export class TypeTable {
         return { kind: "ref", element: this.toIr(node.element) };
       case "retry-schedule":
         return { kind: "retry-schedule", error: this.toIr(node.error) };
+      case "codec":
+        return {
+          kind: "codec",
+          decoded: this.toIr(node.decoded),
+          encoded: this.toIr(node.encoded),
+        };
       case "effect":
         return {
           kind: "effect",
@@ -863,6 +889,12 @@ export class TypeTable {
         return sn.kind === "retry-schedule" &&
           this.assignable(sn.error, tn.error, depth + 1) &&
           this.assignable(tn.error, sn.error, depth + 1);
+      case "codec":
+        return sn.kind === "codec" &&
+          this.assignable(sn.decoded, tn.decoded, depth + 1) &&
+          this.assignable(tn.decoded, sn.decoded, depth + 1) &&
+          this.assignable(sn.encoded, tn.encoded, depth + 1) &&
+          this.assignable(tn.encoded, sn.encoded, depth + 1);
       case "effect":
         return sn.kind === "effect" &&
           this.assignable(sn.result, tn.result, depth + 1) &&
@@ -955,6 +987,8 @@ export class TypeTable {
         return `Ref<${this.show(node.element)}>`;
       case "retry-schedule":
         return `RetrySchedule<${this.show(node.error)}>`;
+      case "codec":
+        return `Codec<${this.show(node.decoded)}, ${this.show(node.encoded)}>`;
       case "effect":
         return `Effect<${this.show(node.result)}, ${
           node.failures.map(idName).join(" | ") || "never"

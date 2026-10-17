@@ -64,6 +64,9 @@ export type PreludeName =
   | "layer"
   | "mergeLayers"
   | "retrySchedule"
+  | "codec"
+  | "decode"
+  | "encode"
   | "unbrand"
   | "Some"
   | "None"
@@ -93,6 +96,9 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "layer",
   "mergeLayers",
   "retrySchedule",
+  "codec",
+  "decode",
+  "encode",
   "unbrand",
   "Some",
   "None",
@@ -113,7 +119,8 @@ export type BuiltinTypeName =
   | "Option"
   | "Brand"
   | "Ref"
-  | "RetrySchedule";
+  | "RetrySchedule"
+  | "Codec";
 
 export const BUILTIN_TYPE_NAMES: ReadonlySet<string> = new Set<
   BuiltinTypeName
@@ -129,6 +136,7 @@ export const BUILTIN_TYPE_NAMES: ReadonlySet<string> = new Set<
   "Brand",
   "Ref",
   "RetrySchedule",
+  "Codec",
 ]);
 
 /**

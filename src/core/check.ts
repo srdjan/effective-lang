@@ -431,6 +431,18 @@ export class TypeLowerer {
           ir: { kind: "retry-schedule", error: error.ir },
         };
       }
+      case "Codec": {
+        if (args.length !== 2) {
+          this.arity(name, 2, args, node);
+          return this.errorLowered();
+        }
+        const decoded = this.lower(args[0]);
+        const encoded = this.lower(args[1]);
+        return {
+          ref: table.codec(decoded.ref, encoded.ref),
+          ir: { kind: "codec", decoded: decoded.ir, encoded: encoded.ir },
+        };
+      }
       case "Brand":
         for (const arg of args) this.lower(arg);
         this.report(

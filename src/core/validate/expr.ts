@@ -429,6 +429,11 @@ export class BodyValidator {
         return this.retrySchedule(e, path);
       case "retry-with-schedule":
         return this.retryWithSchedule(e, path);
+      case "codec":
+        return this.codec(e, path);
+      case "decode":
+      case "encode":
+        return this.codecOperation(e, path);
       case "perform":
         return this.perform(e, path);
       case "block":
@@ -1430,6 +1435,95 @@ export class BodyValidator {
     };
   }
 
+  private codec(e: Extract<Expr, { kind: "codec" }>, path: string): Comp {
+    const decode = this.check(e.decode, `${path}.decode`);
+    const encode = this.check(e.encode, `${path}.encode`);
+    const d = asFunction(this.env, decode.type);
+    const en = asFunction(this.env, encode.type);
+    if (
+      d === undefined || en === undefined || d.parameters.length !== 1 ||
+      en.parameters.length !== 1
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "codec needs two single-argument functions",
+        e.span,
+      );
+      return this.poison();
+    }
+    if (
+      d.execution !== "pure" || en.execution !== "pure" ||
+      d.effects.failures.length || d.effects.requirements.length ||
+      en.effects.failures.length || en.effects.requirements.length
+    ) {
+      this.add(
+        AREA.control,
+        path,
+        "codec transformations must be pure",
+        e.span,
+      );
+    }
+    if (
+      !fits(this.env, d.result, en.parameters[0]) ||
+      !fits(this.env, en.result, d.parameters[0])
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "codec encode transformation must reverse decode types",
+        e.span,
+      );
+    }
+    if (!this.dataOnly(d.result) || !this.dataOnly(d.parameters[0])) {
+      this.add(
+        AREA.types,
+        path,
+        "codec types need compiler-derived schemas",
+        e.span,
+      );
+    }
+    return {
+      type: { kind: "codec", decoded: d.result, encoded: d.parameters[0] },
+      match: "fit",
+      active: combine([decode, encode]),
+    };
+  }
+
+  private codecOperation(
+    e: Extract<Expr, { kind: "decode" | "encode" }>,
+    path: string,
+  ): Comp {
+    const codec = this.check(e.codec, `${path}.codec`);
+    const input = this.check(e.input, `${path}.input`);
+    const type = unfold(this.env, codec.type);
+    if (type.kind !== "codec") {
+      this.add(
+        AREA.types,
+        `${path}.codec`,
+        `${e.kind} needs a Codec value`,
+        e.codec.span,
+      );
+      return this.poison();
+    }
+    if (e.kind === "encode" && !fits(this.env, input.type, type.decoded)) {
+      this.add(
+        AREA.types,
+        `${path}.input`,
+        "encode input does not fit decoded type",
+        e.input.span,
+      );
+    }
+    return {
+      type: {
+        kind: "option",
+        element: e.kind === "decode" ? type.decoded : type.encoded,
+      },
+      match: "exact",
+      active: combine([codec, input]),
+    };
+  }
+
   private defer(e: Extract<Expr, { kind: "defer" }>, path: string): Comp {
     const job = this.check(e.job, `${path}.job`);
     const fn = this.jobFunction(job, `${path}.job`, e.job.span, "defer");
@@ -1609,6 +1703,11 @@ export class BodyValidator {
             return [e.step];
           case "retry-with-schedule":
             return [e.job, e.options];
+          case "codec":
+            return [e.decode, e.encode];
+          case "decode":
+          case "encode":
+            return [e.codec, e.input];
           case "defer":
           case "retry":
             return [e.job];

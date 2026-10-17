@@ -47,7 +47,7 @@ import {
   tokenOfId,
   unsupported,
 } from "./scope.ts";
-import { typeDoc } from "./types.ts";
+import { schemaDoc, typeDoc } from "./types.ts";
 
 // ------------------------------------------------------------------ precedence
 
@@ -906,6 +906,70 @@ export class ExprEmitter {
           `return ${effect}.succeed([${metadata}.attempt, ${duration}.millis(${decision}.value)] as [number, ${duration}.Duration]); }))`,
         ]);
       }
+      case "codec": {
+        const type = this.scope.resolve(e.type);
+        if (type.kind !== "codec") throw internal("codec has wrong type");
+        const schema = this.scope.effect("Schema");
+        const option = this.scope.effect("Option");
+        const decode = this.pure(e.decode);
+        const encode = this.pure(e.encode);
+        const encodedSchema = schemaDoc(this.scope, type.encoded);
+        const decodedSchema = schemaDoc(this.scope, type.decoded);
+        const input = this.scope.temp();
+        const value = this.scope.temp();
+        return emitted([
+          "{ decode: (",
+          input,
+          ": unknown) => { try { return ",
+          `${option}.flatMap(`,
+          `${schema}.decodeUnknownOption(`,
+          encodedSchema,
+          ")(",
+          input,
+          "), (",
+          value,
+          ") => ",
+          `${schema}.decodeUnknownOption(`,
+          decodedSchema,
+          ")(",
+          at(decode, PREC.member),
+          "(",
+          value,
+          "))); } catch { return ",
+          `${option}.none()`,
+          "; } }, ",
+          "encode: (",
+          input,
+          ": ",
+          typeDoc(this.scope, type.decoded),
+          ") => { try { return ",
+          `${option}.flatMap(`,
+          `${schema}.decodeUnknownOption(`,
+          decodedSchema,
+          ")(",
+          input,
+          "), (",
+          value,
+          ") => ",
+          `${schema}.decodeUnknownOption(`,
+          encodedSchema,
+          ")(",
+          at(encode, PREC.member),
+          "(",
+          value,
+          "))); } catch { return ",
+          `${option}.none()`,
+          "; } } }",
+        ]);
+      }
+      case "decode":
+      case "encode":
+        return emitted([
+          at(kid(e.codec), PREC.member),
+          ".",
+          e.kind,
+          callArguments([kid(e.input)]),
+        ]);
       case "call":
         return this.nonLeafCall(e, kid);
       case "block":

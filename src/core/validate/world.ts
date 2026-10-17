@@ -173,6 +173,10 @@ export function checkTypeIds(
           fail(at, "a retry schedule needs a nominal error type");
         }
         return;
+      case "codec":
+        walk(t.decoded, `${at}.decoded`, depth + 1);
+        walk(t.encoded, `${at}.encoded`, depth + 1);
+        return;
       case "effect":
         walk(t.result, `${at}.result`, depth + 1);
         effects(`${at}.effects`, t.effects);
@@ -262,6 +266,10 @@ export function checkRecordFields(
         return;
       case "retry-schedule":
         walk(t.error, `${at}.error`, depth + 1);
+        return;
+      case "codec":
+        walk(t.decoded, `${at}.decoded`, depth + 1);
+        walk(t.encoded, `${at}.encoded`, depth + 1);
         return;
       case "effect":
         walk(t.result, `${at}.result`, depth + 1);
@@ -458,6 +466,10 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
         return;
       case "retry-schedule":
         reaches(type.error, from, depth + 1);
+        return;
+      case "codec":
+        reaches(type.decoded, from, depth + 1);
+        reaches(type.encoded, from, depth + 1);
         return;
       case "effect":
         reaches(type.result, from, depth + 1);

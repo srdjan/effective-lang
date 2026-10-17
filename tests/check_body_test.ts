@@ -1255,6 +1255,26 @@ type Int = int
   assertEquals(shortIds(fn(project, "m", "run").body!.failures), ["Stop"]);
 });
 
+Deno.test("pure codecs infer both directions and return Options", () => {
+  const project = checkText(`
+type Int = int
+const shift: Codec<Int, Int> = codec((n: Int): Int => n + 1, (n: Int): Int => n - 1)
+const a = (input: unknown): Option<Int> => decode(shift, input)
+const b = (n: Int): Option<Int> => encode(shift, n)
+`);
+  assertEquals(messages(project), []);
+  assertEquals(fn(project, "m", "a").mode, "pure");
+});
+
+Deno.test("codec rejects effectful transformations", () => {
+  const project = checkText(`
+service S { read(): Int }
+const bad = codec((n: Int): Int uses S.read => n + S.read(), (n: Int): Int => n)
+type Int = int
+`);
+  assert(codes(project).includes("execution-mode/001"));
+});
+
 const HOST = {
   "effective.json": JSON.stringify({
     host: {

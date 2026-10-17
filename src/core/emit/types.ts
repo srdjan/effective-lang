@@ -176,6 +176,19 @@ export function typeDoc(scope: Scope, type: Type): Doc {
         typeDoc(scope, type.error),
         ">",
       ];
+    case "codec": {
+      const option = scope.effect("Option");
+      return [
+        "{ readonly decode: (input: unknown) => ",
+        `${option}.Option<`,
+        typeDoc(scope, type.decoded),
+        ">; readonly encode: (input: ",
+        typeDoc(scope, type.decoded),
+        `) => ${option}.Option<`,
+        typeDoc(scope, type.encoded),
+        "> }",
+      ];
+    }
     case "record": {
       if (type.fields.length === 0) return "{}";
       const fields = type.fields.map((f) => [
@@ -318,6 +331,7 @@ export function schemaDoc(scope: Scope, type: Type): Doc {
     case "provider":
     case "ref":
     case "retry-schedule":
+    case "codec":
       throw unsupported("a deferred or function type has no schema");
   }
 }

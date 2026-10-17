@@ -564,6 +564,12 @@ class BodyLowerer {
           options: arg(1),
           ...annotation,
         };
+      case "codec":
+        return { kind: "codec", decode: arg(0), encode: arg(1), ...annotation };
+      case "decode":
+        return { kind: "decode", codec: arg(0), input: arg(1), ...annotation };
+      case "encode":
+        return { kind: "encode", codec: arg(0), input: arg(1), ...annotation };
       case "provide":
         return {
           kind: "provide",
@@ -877,6 +883,10 @@ class BodyLowerer {
         return combine([
           setOf(this.required(args[0], "the retry schedule step", stage)),
         ]);
+      case "codec":
+      case "decode":
+      case "encode":
+        return combine(args.map((a) => setOf(a)));
       case "retry-with-schedule": {
         const fn = this.functionOf(leftInfo.type);
         return combine([

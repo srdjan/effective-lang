@@ -398,6 +398,7 @@ export class Scope {
       case "provider":
       case "ref":
       case "retry-schedule":
+      case "codec":
         return true;
       case "primitive":
       case "literal":

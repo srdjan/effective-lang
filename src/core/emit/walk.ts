@@ -68,6 +68,11 @@ export function childrenOf(expr: Expr): Expr[] {
       return [expr.step];
     case "retry-with-schedule":
       return [expr.job, expr.options];
+    case "codec":
+      return [expr.decode, expr.encode];
+    case "decode":
+    case "encode":
+      return [expr.codec, expr.input];
     case "call":
       return [expr.callee, ...expr.arguments];
     case "perform":

@@ -834,6 +834,11 @@ export class BodyChecker {
         return this.retryCall(node, args);
       case "retrySchedule":
         return this.retryScheduleCall(node, args, expected);
+      case "codec":
+        return this.codecCall(node, args);
+      case "decode":
+      case "encode":
+        return this.codecOperation(node, name, args);
       case "provide":
         return this.provideCall(node, args);
       case "defer":
@@ -1207,6 +1212,103 @@ export class BodyChecker {
       ? this.table.retrySchedule(fn.parameters[0])
       : this.table.error;
     return this.finish(node, type, combine([info]));
+  }
+
+  private codecCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "codec" });
+    if (!this.arity(node, "codec", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((a) => this.argInfo(a))),
+      );
+    }
+    this.noPipeline("codec", args);
+    const decode = this.argInfo(args[0]);
+    const encode = this.argInfo(args[1]);
+    const d = this.functionOf(decode.type);
+    const e = this.functionOf(encode.type);
+    if (
+      d === undefined || e === undefined || d.parameters.length !== 1 ||
+      e.parameters.length !== 1
+    ) {
+      this.report(
+        "type-mismatch/010",
+        "`codec` needs two single-argument functions",
+        node,
+      );
+      return this.finish(node, this.table.error, combine([decode, encode]));
+    }
+    if (
+      d.execution !== "pure" || e.execution !== "pure" || d.failures.length ||
+      d.requirements.length || e.failures.length || e.requirements.length
+    ) {
+      this.report(
+        "execution-mode/001",
+        "codec transformations must be pure",
+        node,
+      );
+    }
+    const decoded = this.widen(d.result);
+    const encoded = this.widen(d.parameters[0]);
+    if (
+      !this.table.isAssignable(decoded, e.parameters[0]) ||
+      !this.table.isAssignable(e.result, encoded)
+    ) {
+      this.report(
+        "type-mismatch/003",
+        "codec encode transformation must reverse the decode types",
+        args[1].node,
+      );
+    }
+    if (!this.dataOnly(decoded) || !this.dataOnly(encoded)) {
+      this.report(
+        "type-mismatch/010",
+        "codec types need compiler-derived schemas",
+        node,
+      );
+    }
+    return this.finish(
+      node,
+      this.table.codec(decoded, encoded),
+      combine([decode, encode]),
+    );
+  }
+
+  private codecOperation(
+    node: NodeId,
+    name: string,
+    args: readonly Arg[],
+  ): NodeInfo {
+    this.fact(node, { kind: name === "decode" ? "decode" : "encode" });
+    if (!this.arity(node, name, 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((a) => this.argInfo(a))),
+      );
+    }
+    this.noPipeline(name, args);
+    const codec = this.argInfo(args[0]);
+    const type = this.table.node(this.table.unfold(codec.type));
+    if (type.kind !== "codec" && !this.isError(codec.type)) {
+      this.report(
+        "type-mismatch/010",
+        `\`${name}\` needs a Codec value`,
+        args[0].node,
+      );
+    }
+    const input = this.argInfo(
+      args[1],
+      name === "encode" && type.kind === "codec" ? type.decoded : undefined,
+    );
+    if (name === "encode" && type.kind === "codec") {
+      this.fits(args[1].node, input.type, type.decoded, "the codec input");
+    }
+    const result = type.kind === "codec"
+      ? this.table.option(name === "decode" ? type.decoded : type.encoded)
+      : this.table.error;
+    return this.finish(node, result, combine([codec, input]));
   }
 
   private deferCall(node: NodeId, args: readonly Arg[]): NodeInfo {
