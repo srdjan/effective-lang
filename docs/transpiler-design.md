@@ -2,7 +2,7 @@
 
 Status: design accepted, 2026-10-16. Phase A, the LSP phase, and the playground
 are implemented. Phase B is not started. The D9 budget does not require it
-now. The user settled all twenty-five decisions and accepted the suggested
+now. The user settled all thirty-two decisions and accepted the suggested
 answers to the open spec questions. The decision record below lists each choice.
 
 ## Decision record
@@ -36,6 +36,13 @@ Decided by the user on 2026-10-16 and 2026-10-17. Each entry took the recommende
 | D23 Long selector tests (2026-10-17) | The printer breaks a long selector test after `===`, as `deno fmt` does. In a later arm, it joins the earlier links on the first line when `deno fmt` does. |
 | D24 CI (2026-10-17, revised the same day) | The project has no hosted CI. In this document, CI is the gate `deno task check`, which runs before each commit (D5). |
 | D25 Book targets (2026-10-17) | The five examples are the golden outputs. The eight book targets are not, because they use short tags (D7) and source order (section 5.4). |
+| D26 Names for primitives (2026-10-17) | (a) R1: a primitive type outside a type or error body is rejected. Any type declaration, alias or brand, gives the name. See `docs/raw-types-and-nominal-records.md`. |
+| D27 R1 positions (2026-10-17) | (a) Every position outside type and error bodies, local annotations included. |
+| D28 R1 in host files (2026-10-17) | (a) `.effi` files follow the same rule. |
+| D29 R1 rollout (2026-10-17) | (a) Always on. One plan migrates the examples, fixtures, tests, bench generator, and golden files. |
+| D30 R1 code (2026-10-17) | (a) `declaration/013`. |
+| D31 Other type forms (2026-10-17) | (a) R1 checks only primitive leaves. `Effect<A>`, inline records, and inline unions with named parts stay legal. |
+| D32 Brand operators (2026-10-17) | (c2) `<`, `<=`, `>`, `>=`, `+`, and `-` accept two values of one numeric brand (base `int` or `number`). `+` and `-` give that brand. `*`, `/`, and string brands keep needing `unbrand`. |
 
 Open: none.
 

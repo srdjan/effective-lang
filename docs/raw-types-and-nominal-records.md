@@ -151,6 +151,12 @@ D32. Do operators accept a primitive brand?
 - (b) The comparisons `<`, `<=`, `>`, and `>=` accept two values of one numeric brand, as `===` does now. Arithmetic still needs `unbrand`.
 - (c) The comparisons, and `+` and `-` on two values of one brand. The result has the same brand. `*` and `/` still need `unbrand`, because the product of two amounts is not an amount.
 
-## 7. Next action
+## 7. Decisions taken
 
-The user answers D26 to D32. Then Opus writes the implementation plan for R1 in `docs/plans/`, a Fable subagent validates it, and a Sonnet subagent implements it. The user also decides when the spec in `/Users/srdjans/Code/effective` gets the R1 and R2 text.
+The user answered on 2026-10-17. D26 to D31 take option (a). D32 takes a revised option (c2): the comparisons, and `+` and `-` on two values of one numeric brand. A numeric brand has the base `int` or `number`. String brands still need `unbrand` for concatenation. A literal operand still needs the brand call, as in `count + Count(1)`.
+
+The user first preferred D32 (c) for every brand. Opus showed that (c) gives a wrong type with no diagnostic for `UserId + UserId` and `OrderNumber + OrderNumber`. Option (c2) removes the string case and needs no new syntax. `Timestamp - Timestamp` stays a `Timestamp`, which is no worse than a plain `int`.
+
+## 8. Next action
+
+Opus writes the implementation plan for R1 in `docs/plans/`, a Fable subagent validates it, and a Sonnet subagent implements it. The user also decides when the spec in `/Users/srdjans/Code/effective` gets the R1 and R2 text.
