@@ -2,12 +2,12 @@
 
 Status: design accepted, 2026-10-16. Phase A, the LSP phase, and the playground
 are implemented. Phase B is not started. The D9 budget does not require it
-now. The user settled all nineteen decisions and accepted the suggested
+now. The user settled all twenty-five decisions and accepted the suggested
 answers to the open spec questions. The decision record below lists each choice.
 
 ## Decision record
 
-Decided by the user on 2026-10-16. Each entry took the recommended option.
+Decided by the user on 2026-10-16 and 2026-10-17. Each entry took the recommended option.
 
 | Decision | Choice |
 |---|---|
@@ -30,6 +30,12 @@ Decided by the user on 2026-10-16. Each entry took the recommended option.
 | D17 JSON-RPC transport (2026-10-16) | Hand-written Content-Length framing over stdio. No npm dependency in the server. |
 | D18 Editor client (2026-10-16) | A thin VS Code client in `editors/vscode/`, plain JavaScript, with `vscode-languageclient`. npm is used only inside that directory. |
 | D19 Measurements (2026-10-16) | This phase adds the M1, M3, and M4 harness. It replays an edit script against the real server process. |
+| D20 Target names (2026-10-17) | No declaration or binding may take `undefined`, `Number`, `RangeError`, `ReadonlyArray`, `any`, `bigint`, `object`, or `symbol` (`declaration/002`). |
+| D21 Type depth (2026-10-17) | A type deeper than the comparison cap gets a named diagnostic, as section 4.6 asks. |
+| D22 Package export (2026-10-17) | `deno.json` exports `./src/core/mod.ts`, the documented public API. |
+| D23 Long selector tests (2026-10-17) | The printer breaks a long selector test after `===`, as `deno fmt` does. |
+| D24 CI (2026-10-17) | A GitHub workflow runs `deno task check` (D5). |
+| D25 Book targets (2026-10-17) | The five examples are the golden outputs. The eight book targets are not, because they use short tags (D7) and source order (section 5.4). |
 
 Open: none.
 
@@ -202,7 +208,7 @@ Recommendation: the first deliverable is the core plus `effective check` and
 
 Deviation, recorded 2026-10-17: Phase A made the five examples the golden
 outputs (acceptance check 4 of the plan). The eight book targets are not
-goldens and not inputs of M5. No document recorded this before.
+goldens and not inputs of M5. D25 accepts this and closes item 3.
 
 The LSP follows at once. At that point the server is an adapter: JSON-RPC over
 stdio, document sync, `publishDiagnostics`, `hover`, `definition`. Document
