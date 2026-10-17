@@ -1,6 +1,7 @@
 # Disagreement audit, 2026-10-17
 
-Status: done, except six items that wait for a decision of the user. This
+Status: the user chose option (a) for the six decisions on 2026-10-17. Four
+are done. D21 and D23 follow the plan `docs/plans/2026-10-17-d21-d23.md`. This
 ledger lists each disagreement that the audit found between the code, the
 tests, and the documents. Each item has a status: done (with its commit),
 rejected (with a reason), or decision (it waits for the user).
@@ -20,17 +21,17 @@ and 27 slow tests.
 | C2 | A binding type on a module arrow is not checked | `const f: (x: int) => string = (x: int): int => x` gave no diagnostic | High | done, f0c93a7 |
 | C3 | An error operand of `-`, `*`, or `/` causes a cascade | `const x: int = y - 1` also gave `type-mismatch/003`. The audit also named `%`, but `%` is not an operator of the language | High | done, 900b0ed |
 | C4 | A pure job of `retry` or `provide` emits code that `deno check` rejects | `retry(() => 2, { times: 2 })` gave TS2322 | High | done, 4266474 |
-| C5 | A source name can shadow a global that the emitted code uses | `const Number = "x"` with int `+` gives TS2339. `const undefined = 5` changes a unit result. `type ReadonlyArray` gives TS2315, and `type any` gives TS2457 | High | decision 1 |
+| C5 | A source name can shadow a global that the emitted code uses | `const Number = "x"` with int `+` gives TS2339. `const undefined = 5` changes a unit result. `type ReadonlyArray` gives TS2315, and `type any` gives TS2457 | High | done, 8e64f9f (D20) |
 | C6 | The nesting-limit recovery skips the rest of the file | 300 nested `(` hid the next two declarations and their error | High | done, c71d41a |
-| C7 | The type comparison has a silent depth cap of 256 | Record types 300 levels deep, `int` to `number`, give a false `type-mismatch/003`. A chain of aliases can exceed any fixed cap | High | decision 2 |
+| C7 | The type comparison has a silent depth cap of 256 | Record types 300 levels deep, `int` to `number`, give a false `type-mismatch/003`. A chain of aliases can exceed any fixed cap | High | planned (D21) |
 | C8 | A second handler for an absent error gets `/002`, not `/003` | Probe and fixture | High | done, 4cade14 |
 | C9 | `validateModule` throws on a malformed IR | A `null` declaration gave a TypeError | High | done, fa0757b |
 | C10 | `playground:build <dir>` can delete a source directory | The guard refused only the root and its parents | High | done, 73e310a |
 | C11 | Generated `.ts.map` files in `fixtures/` are not ignored | `git check-ignore` found no rule | High | done, 8d4614d |
 | C12 | The message for `!x` says to write `0 - x` | Wrong advice for a boolean | High | done, 2ace490 |
-| C13 | Every `deno` command warns that `exports` is missing | `name` and `version` in `deno.json`, commit dc0687b | High | decision 3 |
+| C13 | Every `deno` command warns that `exports` is missing | `name` and `version` in `deno.json`, commit dc0687b | High | done, 2aae498 and c3c0286 (D22) |
 | C14 | The grammar test copies the prelude names by hand | A new prelude name passes unnoticed | High | done, 82e83fa |
-| C15 | A string of 80 characters in a `match` arm is not a `deno fmt` fixed point | The ledger records the form. The README now says that user source can reach it | High | decision 4 |
+| C15 | A string of 80 characters in a `match` arm is not a `deno fmt` fixed point | The ledger records the form. The README now says that user source can reach it | High | planned (D23) |
 
 ## Document corrections
 
@@ -65,7 +66,19 @@ guide and code comments). The STE checker passes on every changed document.
 | The validator accepts a builtin hash of any length | No document promises a length check in the validator. The lowering makes the 12-digit form |
 | The parser has no array literal | The spec grammar has none. The ledger now records the gap |
 
-## Decisions for the user
+## New tasks found
+
+| Id | Task | Status |
+| --- | --- | --- |
+| N1 | No CI exists, but D5 places `tsc` and the validator in CI | done, 81be512 (D24). The workflow has not run, because nothing is pushed |
+| N2 | Decide whether the eight book targets become goldens | done, 731e76e (D25) |
+| N3 | Long names and module paths break the `deno fmt` fixed point in six forms besides C15 | planned (D23) |
+| N4 | `deno publish --dry-run` fails: the repository has no license file | open; publication is not part of this audit |
+
+## Decisions of the user
+
+The user chose option (a) for each decision on 2026-10-17. The design records
+them as D20 to D25.
 
 1. C5, global names. (a) Reject `undefined`, `Number`, `RangeError`, `ReadonlyArray`, `any`, `bigint`, `object`, and `symbol` as source names, as Q12 did for reserved words. Recommended. (b) Change the emitter: print `void 0`, `globalThis.Number`, and `readonly T[]`, and reject only `globalThis` and the type names.
 2. C7, type depth. (a) Add a named diagnostic for a type deeper than the cap, as design 4.6 asks. Recommended. (b) Raise the cap and record the limit.
