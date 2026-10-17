@@ -1292,6 +1292,51 @@ type Int = int
   assert(codes(bad).includes("type-mismatch/010"));
 });
 
+Deno.test("opaque handles require borrowed host parameters and cannot escape", () => {
+  const files = {
+    "effective.json": JSON.stringify({
+      host: { files: { interface: "./host.effi", module: "./host.ts" } },
+    }),
+    "host.effi": `
+export opaque type Handle
+export type Text = string
+export service Files {
+  open(): Handle
+  read(borrow handle: Handle): Text
+  plain(handle: Handle): Text
+  close(borrow handle: Handle): void
+}
+`,
+    "main.eff": `
+import { Handle, Text, Files } from "host:files"
+const readBorrowed = (borrow handle: Handle): Text uses Files.read => Files.read(handle)
+const good = (): Text uses Files.open | Files.read | Files.close =>
+  withResource(() => Files.open(), (handle) => readBorrowed(handle), (handle) => Files.close(handle))
+const bad = (): Text uses Files.open | Files.plain | Files.close =>
+  withResource(() => Files.open(), (handle) => Files.plain(handle), (handle) => Files.close(handle))
+`,
+  };
+  const project = checkFiles(files, ["main.eff"]);
+  assertEquals(codes(project), ["type-mismatch/010"]);
+  const escaped = checkFiles({
+    ...files,
+    "main.eff": `
+import { Handle, Text, Files } from "host:files"
+const bad = (): Handle uses Files.open | Files.close =>
+  withResource(() => Files.open(), (handle) => handle, (handle) => Files.close(handle))
+`,
+  }, ["main.eff"]);
+  assert(codes(escaped).includes("type-mismatch/010"));
+  const forged = checkFiles({
+    ...files,
+    "main.eff": `
+import { Handle } from "host:files"
+const forged = (): Handle => Handle(1)
+`,
+  }, ["main.eff"]);
+  assert(codes(forged).includes("type-mismatch/010"));
+});
+
 const HOST = {
   "effective.json": JSON.stringify({
     host: {

@@ -193,6 +193,10 @@ export class Scope {
     Map<string, ImportedName>
   >();
   readonly hosts = new Map<DeclarationId, HostBinding>();
+  private readonly hostDeclarations = new Map<
+    string,
+    Map<string, ImportedName>
+  >();
   private readonly effectAliases = new Map<EffectModule, string>();
   private intHelper: string | undefined;
   private intSchema: string | undefined;
@@ -259,14 +263,27 @@ export class Scope {
     }
     const specifier = relativeSpecifier(this.path, target);
     for (const binding of bindings) {
-      if (!binding.target.startsWith("value:")) continue;
-      this.hosts.set(binding.target, {
-        key,
-        exported: nameOfId(binding.target),
-        local: binding.name,
-        hostName: this.fresh(`${binding.name}$host`),
-        specifier,
-      });
+      if (binding.target.startsWith("value:")) {
+        this.hosts.set(binding.target, {
+          key,
+          exported: nameOfId(binding.target),
+          local: binding.name,
+          hostName: this.fresh(`${binding.name}$host`),
+          specifier,
+        });
+      } else if (
+        binding.target.startsWith("type:") ||
+        binding.target.startsWith("service:")
+      ) {
+        this.bound.set(binding.target, binding.name);
+        const names = this.hostDeclarations.get(specifier) ??
+          new Map<string, ImportedName>();
+        names.set(nameOfId(binding.target), {
+          local: binding.name,
+          typeOnly: binding.target.startsWith("type:"),
+        });
+        this.hostDeclarations.set(specifier, names);
+      }
     }
   }
 
@@ -477,18 +494,21 @@ export class Scope {
 
   /** The host imports in registry order of first appearance, sorted by specifier. */
   hostImports(): ImportGroup[] {
-    const bySpecifier = new Map<string, string[]>();
+    const bySpecifier = new Map<string, Map<string, ImportedName>>();
+    for (const [specifier, names] of this.hostDeclarations) {
+      bySpecifier.set(specifier, new Map(names));
+    }
     for (const host of this.hosts.values()) {
-      const names = bySpecifier.get(host.specifier) ?? [];
-      names.push(`${host.exported}\u0000${host.local}`);
+      const names = bySpecifier.get(host.specifier) ??
+        new Map<string, ImportedName>();
+      names.set(host.exported, { local: host.local, typeOnly: false });
       bySpecifier.set(host.specifier, names);
     }
     return [...bySpecifier].map(([specifier, names]) => ({
       specifier,
-      names: names.sort(compareImportNames).map((n) => {
-        const [exported, local] = n.split("\u0000");
-        return { exported, local, typeOnly: false };
-      }),
+      names: [...names].sort((a, b) => compareImportNames(a[0], b[0])).map((
+        [exported, entry],
+      ) => ({ exported, local: entry.local, typeOnly: entry.typeOnly })),
     })).sort((a, b) => compareText(a.specifier, b.specifier));
   }
 }

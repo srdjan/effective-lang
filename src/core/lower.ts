@@ -1381,7 +1381,13 @@ function lowerFunction(
     if (p.id === undefined) {
       throw internal(`the parameter ${p.name} has no local identity`);
     }
-    return { id: p.id, name: p.name, type: p.type.ir, span: p.span };
+    return {
+      id: p.id,
+      name: p.name,
+      type: p.type.ir,
+      ...(p.borrow ? { borrow: true } : {}),
+      span: p.span,
+    };
   });
   return {
     kind: "function",

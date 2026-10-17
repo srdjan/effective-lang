@@ -372,6 +372,85 @@ console.log(JSON.stringify({ value, missing: missing._tag, invalid: invalid.mess
   });
 });
 
+Deno.test("opaque host handles pass only through borrowed scoped methods", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(
+      `${dir}/effective.json`,
+      JSON.stringify({
+        host: { files: { interface: "./host.effi", module: "./host.ts" } },
+      }),
+    );
+    Deno.writeTextFileSync(
+      `${dir}/host.effi`,
+      [
+        "export opaque type Handle",
+        "export type Text = string",
+        "export service Files {",
+        "  open(): Handle",
+        "  read(borrow handle: Handle): Text",
+        "  close(borrow handle: Handle): void",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        'import { Handle, Text, Files } from "host:files"',
+        "const readBorrowed = (borrow handle: Handle): Text uses Files.read => Files.read(handle)",
+        "export const load = (): Text uses Files.open | Files.read | Files.close =>",
+        "  withResource(() => Files.open(), (handle) => readBorrowed(handle), (handle) => Files.close(handle))",
+        "",
+      ].join("\n"),
+    );
+    Deno.writeTextFileSync(
+      `${dir}/host.ts`,
+      `
+import { Context, Effect } from "effect";
+export type Handle = { readonly value: string };
+export type Text = string;
+export let closes = 0;
+export class Files extends Context.Service<Files, {
+  readonly open: () => Effect.Effect<Handle>;
+  readonly read: (handle: Handle) => Effect.Effect<Text>;
+  readonly close: (handle: Handle) => Effect.Effect<void>;
+}>()("host#Files") {}
+`,
+    );
+    const built = await effective(["build", dir, "--validate", "--tsc"]);
+    assertEquals(built.code, 0, built.stdout + built.stderr);
+    Deno.writeTextFileSync(`${dir}/deno.json`, tscConfig());
+    Deno.writeTextFileSync(
+      `${dir}/run.ts`,
+      `
+import { Effect, Layer } from "effect";
+import { Files } from "./host.ts";
+import { load } from "./main.ts";
+let closes = 0;
+const Live = Layer.succeed(Files)({
+  open: () => Effect.succeed({ value: "hello" }),
+  read: (handle) => Effect.succeed(handle.value),
+  close: () => Effect.sync(() => { closes++; }),
+});
+const value = await Effect.runPromise(load().pipe(Effect.provide(Live)));
+console.log(JSON.stringify({ value, closes }));
+`,
+    );
+    const run = await new Deno.Command(Deno.execPath(), {
+      args: ["run", "--config", "deno.json", "--check", "run.ts"],
+      cwd: dir,
+      env: { NO_COLOR: "1" },
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    assertEquals(run.code, 0, new TextDecoder().decode(run.stderr));
+    assertEquals(JSON.parse(new TextDecoder().decode(run.stdout).trim()), {
+      value: "hello",
+      closes: 1,
+    });
+  });
+});
+
 Deno.test("watch rebuilds when a source changes and prints the rechecked modules", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("examples/", FIXTURES), dir);

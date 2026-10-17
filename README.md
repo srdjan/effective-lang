@@ -20,9 +20,11 @@ Collection literals use brackets: `[1, 2]` infers an array, while an expected tu
 
 `Effect<A, E, R>` stores a computation with result type `A`, typed failures `E`, and service method requirements `R`. `defer(() => job())` constructs it without running the job. `run(value)` executes it and adds its failures and requirements to the caller's contract. Empty channels may be omitted or written as `never`. A source binding named `run` shadows the prelude operation.
 
-`withResource(acquire, use, release)` composes a scoped resource through three inline callbacks. Acquisition returns a record of operations, and use and release call its fields directly. The checker rejects returning, capturing, storing, or passing the record; operation arguments and results and the use result must contain data only. The generated Effect runs release after success, failure, defect, or interruption. A host adapter implements the record's operations.
+`withResource(acquire, use, release)` composes a scoped resource through three inline callbacks. Acquisition can return an operation record or an opaque host handle. A record may only receive direct operation calls. An opaque handle may pass directly to a borrow-qualified host method or checked source helper. The checker rejects handle escape and requires a data-only use result. The generated Effect runs release after success, failure, defect, or interruption.
 
-`Stream<A, E, R>` and `Sink<I, O, E, R>` hold deferred producer and consumer channels. `unfold(seed, callback)` creates a pull stream, `mapEffect(stream, callback)` transforms it, `sinkForEach(callback)` consumes values, and `runStream(stream, sink)` executes the pipeline. These callbacks use inline arrows. The producer starts on consumption and stays at most one item ahead of the sink. This is the first stream slice; buffered and concurrent stream operations remain separate work.
+`Stream<A, E, R>` and `Sink<I, O, E, R>` hold deferred producer and consumer channels. `unfold(seed, callback)` creates a pull stream, `mapEffect(stream, callback)` transforms it, `sinkForEach(callback)` consumes values, and `runStream(stream, sink)` executes the pipeline. `bufferStream(stream, { capacity: N })` adds suspending backpressure, and `mergeStreams(left, right)` combines producers. Construction defers production until consumption.
+
+Core 1 also includes `Ref<A>` state, `race` of Effect values, supervised `withFiber` with direct `joinFiber` and `interruptFiber`, pure `Codec<Decoded,Encoded>` transformations, `RetrySchedule<E>` policies, and source-defined `Layer<Services,E,R>` values. The [gap audit](docs/effect-4-gap-audit.md) records the remaining boundary: general Effect and stream operators and ecosystem packages still require host adapters.
 
 Part A4 lowers a checked module to typed IR and serializes it. It adds a synchronous SHA-256 for builtin identities.
 
@@ -249,7 +251,7 @@ The result holds `module`, `path`, `text`, `spans`, and `hostAssertions`. The `p
 
 `emitProject(lowered, { config })` emits every module of the map that `lowerProject` returns. A module that did not lower gives a `lowering` error value. Expected failures are error values with the tag `unsupported` or `internal`.
 
-An import of another module becomes a relative `.ts` specifier. A host import becomes a relative path to the host module of `effective.json`. The emitter checks the host module against the registry: `const UsersLive$host: Layer.Layer<Users> = UsersLive`. The code for `provide` uses the `$host` constant.
+An import of another module becomes a relative `.ts` specifier. A host import becomes a relative path to the host module of `effective.json`. The emitter checks provider imports against the registry: `const UsersLive$host: Layer.Layer<Users> = UsersLive`. Host interfaces may also export opaque types and service tags; their TypeScript host module supplies the corresponding type and value exports.
 
 The emitter adds `export` to each declaration that the source exports and to each declaration that an exported interface reaches. It never renames a source name. It gives its own names, such as `$t0`, `$int`, and `Option$1`, only when no source name is taken.
 

@@ -196,6 +196,9 @@ function assignable(
     case "function": {
       if (s.kind !== "function") return false;
       if (s.parameters.length !== t.parameters.length) return false;
+      if (t.borrows?.some((borrow, i) => borrow && s.borrows?.[i] !== true)) {
+        return false;
+      }
       if (
         s.execution !== t.execution &&
         !(lift && executionFits(s.execution, t.execution))

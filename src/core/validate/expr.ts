@@ -180,6 +180,57 @@ export class BodyValidator {
       });
     }
     const body = this.check(d.body, `${path}.body`);
+    if (
+      d.type.borrows !== undefined &&
+      d.type.borrows.length !== d.parameters.length
+    ) {
+      this.add(
+        AREA.types,
+        `${path}.type.borrows`,
+        "borrow flags must match function parameters",
+        d.span,
+      );
+    }
+    d.parameters.forEach((parameter, index) => {
+      if (d.type.borrows?.[index] === true && parameter.borrow !== true) {
+        this.add(
+          AREA.types,
+          `${path}.parameters[${index}]`,
+          "borrow parameter flag disagrees with function type",
+          parameter.span,
+        );
+      }
+      if (parameter.borrow !== true) return;
+      const type = unfold(env, parameter.type);
+      if (
+        type.kind !== "named" ||
+        this.ctx.world.types.get(type.id)?.opaque !== true
+      ) {
+        this.add(
+          AREA.types,
+          `${path}.parameters[${index}]`,
+          "a borrow parameter needs an opaque type",
+          parameter.span,
+        );
+      }
+      if (d.type.borrows?.[index] !== true) {
+        this.add(
+          AREA.types,
+          `${path}.type.borrows[${index}]`,
+          "borrow flag missing from function type",
+          parameter.span,
+        );
+      }
+      if (!this.dataOnly(d.type.result)) {
+        this.add(
+          AREA.types,
+          `${path}.type.result`,
+          "a borrow function must return data only",
+          d.span,
+        );
+      }
+      this.borrowedReferences(d.body, parameter.id, `${path}.body`);
+    });
     this.release(added);
     if (!fits(env, body.type, d.type.result)) {
       this.add(
@@ -727,6 +778,13 @@ export class BodyValidator {
         `${e.brand} is a type alias, not a brand`,
         e.span,
       );
+    } else if (decl.opaque === true) {
+      this.add(
+        AREA.types,
+        `${path}.brand`,
+        "an opaque type cannot be constructed in source",
+        e.span,
+      );
     } else if (!fits(this.env, v.type, decl.definition.base)) {
       this.add(
         AREA.types,
@@ -747,6 +805,18 @@ export class BodyValidator {
   private unbrand(e: Extract<Expr, { kind: "unbrand" }>, path: string): Comp {
     const v = this.check(e.value, `${path}.value`);
     const unfolded = unfold(this.env, v.type);
+    if (
+      unfolded.kind === "named" &&
+      this.ctx.world.types.get(unfolded.id)?.opaque === true
+    ) {
+      this.add(
+        AREA.types,
+        `${path}.value`,
+        "an opaque type cannot be unbranded in source",
+        e.value.span,
+      );
+      return this.poison();
+    }
     const base = unfolded.kind === "named"
       ? this.env.brands.get(unfolded.id)
       : undefined;
@@ -1910,11 +1980,16 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    this.checkOperationRecord(
-      a.result,
-      `${path}.acquire.type.result`,
-      e.acquire.span,
-    );
+    const acquired = unfold(this.env, a.result);
+    const opaque = acquired.kind === "named" &&
+      this.ctx.world.types.get(acquired.id)?.opaque === true;
+    if (!opaque) {
+      this.checkOperationRecord(
+        a.result,
+        `${path}.acquire.type.result`,
+        e.acquire.span,
+      );
+    }
     if (
       !same(this.env, a.result, u.parameters[0]) ||
       !same(this.env, a.result, r.parameters[0])
@@ -1942,12 +2017,21 @@ export class BodyValidator {
         e.use.span,
       );
     }
-    this.scopedReferences(e.use.body, e.useBinding, `${path}.use.body`);
-    this.scopedReferences(
-      e.release.body,
-      e.releaseBinding,
-      `${path}.release.body`,
-    );
+    if (opaque) {
+      this.borrowedReferences(e.use.body, e.useBinding, `${path}.use.body`);
+      this.borrowedReferences(
+        e.release.body,
+        e.releaseBinding,
+        `${path}.release.body`,
+      );
+    } else {
+      this.scopedReferences(e.use.body, e.useBinding, `${path}.use.body`);
+      this.scopedReferences(
+        e.release.body,
+        e.releaseBinding,
+        `${path}.release.body`,
+      );
+    }
     return {
       type: u.result,
       match: "exact",
@@ -1961,6 +2045,54 @@ export class BodyValidator {
         EFFECT_ONLY,
       ]),
     };
+  }
+
+  private borrowedReferences(body: Expr, id: string, path: string): void {
+    const visit = (
+      value: unknown,
+      parent: Expr | undefined,
+      nested: boolean,
+    ): void => {
+      if (Array.isArray(value)) {
+        value.forEach((item) => visit(item, parent, nested));
+        return;
+      }
+      if (value === null || typeof value !== "object") return;
+      const fields = value as Record<string, unknown>;
+      const expr =
+        "kind" in fields && "type" in fields && "effects" in fields &&
+          "span" in fields
+          ? value as Expr
+          : undefined;
+      if (expr?.kind === "reference" && expr.target === id) {
+        const index = parent?.kind === "perform" || parent?.kind === "call"
+          ? parent.arguments.indexOf(expr)
+          : -1;
+        const method = parent?.kind === "perform"
+          ? this.ctx.world.methods.get(parent.capability)
+          : undefined;
+        const functionType =
+          parent?.kind === "call" && parent.callee.kind === "reference"
+            ? this.ctx.world.values.get(parent.callee.target)
+            : undefined;
+        const borrowed = method?.borrows?.[index] === true ||
+          (functionType?.kind === "function" &&
+            functionType.borrows?.[index] === true);
+        if (nested || index < 0 || !borrowed) {
+          this.add(
+            AREA.control,
+            path,
+            "borrowed handle may only pass to a borrow-qualified method",
+            expr.span,
+          );
+        }
+      }
+      for (const [key, child] of Object.entries(fields)) {
+        if (key === "type" || key === "effects" || key === "span") continue;
+        visit(child, expr ?? parent, nested || expr?.kind === "closure");
+      }
+    };
+    visit(body, undefined, false);
   }
 
   private streamState(type: Type): Type {

@@ -787,6 +787,15 @@ export class BodyChecker {
     id: TypeId,
     args: readonly Arg[],
   ): NodeInfo {
+    if (this.table.isOpaque(id)) {
+      const infos = args.map((a) => this.argInfo(a));
+      this.report(
+        "type-mismatch/010",
+        "an opaque type cannot be constructed in source",
+        node,
+      );
+      return this.finish(node, this.table.error, combine(infos));
+    }
     const base = this.table.brandBaseOf(id);
     if (base === undefined) {
       const infos = args.map((a) => this.argInfo(a));
@@ -948,6 +957,17 @@ export class BodyChecker {
     let type = this.table.error;
     if (rightCount) {
       const unfolded = this.table.node(this.table.unfold(infos[0].type));
+      if (
+        unfolded.kind === "named" && unfolded.id.startsWith("type:") &&
+        this.table.isOpaque(unfolded.id as TypeId)
+      ) {
+        this.report(
+          "type-mismatch/010",
+          "an opaque type cannot be unbranded in source",
+          args[0].node,
+        );
+        return this.finish(node, this.table.error, combine(infos));
+      }
       const base = unfolded.kind === "named"
         ? this.table.brandBaseOf(unfolded.id as TypeId)
         : undefined;
@@ -1659,7 +1679,8 @@ export class BodyChecker {
       }
     }
     const acquire = this.callback("withResource", args[0], [], undefined, true);
-    this.operationRecord(acquire.result, args[0].node);
+    const opaque = this.opaqueHandle(acquire.result);
+    if (!opaque) this.operationRecord(acquire.result, args[0].node);
     const use = this.callback(
       "withResource",
       args[1],
@@ -1691,7 +1712,10 @@ export class BodyChecker {
       const fact = this.body.facts.get(arg.node);
       if (fact?.kind === "arrow" && fact.parameters[0]?.id !== undefined) {
         const body = this.kids(arg.node).at(-1);
-        if (body !== undefined) this.scopedUses(body, fact.parameters[0].id);
+        if (body !== undefined) {
+          if (opaque) this.scopedBorrowUses(body, fact.parameters[0].id);
+          else this.scopedUses(body, fact.parameters[0].id);
+        }
       }
     }
     const invoked = [acquire.info, use.info, release.info].map((info) => {
@@ -1713,6 +1737,98 @@ export class BodyChecker {
         EFFECT_ONLY,
       ]),
     );
+  }
+
+  private opaqueHandle(ref: TypeRef): boolean {
+    const type = this.table.node(this.table.unfold(ref));
+    return type.kind === "named" && type.id.startsWith("type:") &&
+      this.table.isOpaque(type.id as TypeId);
+  }
+
+  private scopedBorrowUses(body: NodeId, id: LocalId): void {
+    const visit = (
+      node: NodeId,
+      parent: NodeId | undefined,
+      grandparent: NodeId | undefined,
+      nested: boolean,
+    ): void => {
+      if (kindOf(this.tree, node) === SyntaxKind.NameExpr) {
+        const target = this.targets.get(node);
+        if (target?.kind === "local" && target.id === id) {
+          const call = parent !== undefined &&
+              kindOf(this.tree, parent) === SyntaxKind.ArgList &&
+              grandparent !== undefined &&
+              kindOf(this.tree, grandparent) === SyntaxKind.CallExpr
+            ? grandparent
+            : undefined;
+          const callee = call === undefined ? undefined : this.kids(call)[0];
+          const method = callee === undefined
+            ? undefined
+            : this.targets.get(callee);
+          const index = parent === undefined
+            ? -1
+            : this.kids(parent).indexOf(node);
+          const capability = method?.kind === "cap" ? method.id : undefined;
+          const serviceId = capability === undefined
+            ? undefined
+            : `service:${
+              capability.slice(4, capability.lastIndexOf("."))
+            }` as ServiceId;
+          const signature = serviceId === undefined
+            ? undefined
+            : this.benv.env.services.get(serviceId)?.methods.find((m) =>
+              m.id === capability
+            );
+          const functionType = method?.kind === "value"
+            ? this.functionOf(this.benv.values(method.id))
+            : undefined;
+          const borrowed = signature?.borrows?.[index] === true ||
+            functionType?.borrows?.[index] === true;
+          if (nested || index < 0 || !borrowed) {
+            this.report(
+              "type-mismatch/010",
+              "a borrowed handle may only pass to a borrow-qualified method",
+              node,
+            );
+          }
+        }
+      }
+      for (const child of this.kids(node)) {
+        visit(
+          child,
+          node,
+          parent,
+          nested || kindOf(this.tree, node) === SyntaxKind.ArrowExpr,
+        );
+      }
+    };
+    visit(body, undefined, undefined, false);
+  }
+
+  checkBorrowedParameter(
+    body: NodeId | undefined,
+    parameter: {
+      readonly id: LocalId | undefined;
+      readonly type: { readonly ref: TypeRef };
+    },
+    result: TypeRef,
+  ): void {
+    if (parameter.id === undefined) return;
+    if (!this.opaqueHandle(parameter.type.ref)) {
+      this.report(
+        "type-mismatch/010",
+        "a borrow parameter needs an opaque type",
+        body ?? this.tree.root,
+      );
+    }
+    if (!this.dataOnly(result)) {
+      this.report(
+        "type-mismatch/010",
+        "a borrow function must return data only",
+        body ?? this.tree.root,
+      );
+    }
+    if (body !== undefined) this.scopedBorrowUses(body, parameter.id);
   }
 
   private noPipeline(name: string, args: readonly Arg[]): void {
@@ -3800,10 +3916,18 @@ export function checkFunctionBody(
     requirements: explicit ? signature.requirements : [],
   };
   const run = checker.checkBody(bodyNode, contract, undefined);
+  for (const parameter of signature.parameters) {
+    if (parameter.borrow) {
+      checker.checkBorrowedParameter(bodyNode, parameter, run.result);
+    }
+  }
   const table = benv.env.table;
   const type = table.function({
     execution: run.execution,
     parameters: signature.parameters.map((p) => p.type.ref),
+    ...(signature.parameters.some((p) => p.borrow)
+      ? { borrows: signature.parameters.map((p) => p.borrow) }
+      : {}),
     result: run.result,
     failures: sortedUnique(run.failures),
     requirements: sortedUnique(run.requirements),

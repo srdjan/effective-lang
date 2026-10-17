@@ -79,6 +79,7 @@ const MAX_NESTING = 512;
 
 const DECL_WORDS: ReadonlySet<string> = new Set([
   "type",
+  "opaque",
   "error",
   "service",
   "provider",
@@ -722,6 +723,9 @@ class Parser {
       if (word === "type") {
         kind = SyntaxKind.TypeDecl;
         this.parseTypeBody();
+      } else if (word === "opaque") {
+        kind = SyntaxKind.TypeDecl;
+        this.parseOpaqueTypeBody();
       } else if (word === "error") {
         kind = SyntaxKind.ErrorDecl;
         this.parseErrorBody();
@@ -773,6 +777,22 @@ class Parser {
       this.missing("`=`");
     }
     this.parseType();
+  }
+
+  private parseOpaqueTypeBody(): void {
+    if (this.mode !== "effi") {
+      this.report(
+        "syntax/012",
+        "an opaque type belongs in a host interface file",
+        this.starts[this.pos],
+        this.ends[this.pos],
+      );
+    }
+    this.tok(); // opaque
+    if (this.kind() === TokenKind.Ident && this.isWordAt(this.pos, "type")) {
+      this.tok();
+    } else this.missing("`type`");
+    this.parseName("binding");
   }
 
   private parseErrorBody(): void {
@@ -918,6 +938,12 @@ class Parser {
 
   private parseParam(): void {
     this.begin();
+    if (
+      this.kind() === TokenKind.Ident && this.isWordAt(this.pos, "borrow") &&
+      this.kinds[this.pos + 1] === TokenKind.Ident
+    ) {
+      this.tok();
+    }
     this.parseName("binding");
     if (this.kind() === TokenKind.Colon) {
       this.tok();

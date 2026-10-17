@@ -83,6 +83,7 @@ export interface TypeEnv {
 
 export interface ParameterSignature {
   readonly name: string;
+  readonly borrow: boolean;
   /** The local identity from the resolver. Absent in a function type, where names are labels. */
   readonly id: LocalId | undefined;
   readonly type: Lowered;
@@ -211,6 +212,9 @@ export function signatureType(
   const ref = table.function({
     execution: execution.value,
     parameters: signature.parameters.map((p) => p.type.ref),
+    ...(signature.parameters.some((p) => p.borrow)
+      ? { borrows: signature.parameters.map((p) => p.borrow) }
+      : {}),
     result: result.ref,
     failures: signature.failures,
     requirements: signature.requirements,
@@ -219,6 +223,9 @@ export function signatureType(
     kind: "function",
     execution: execution.value,
     parameters: signature.parameters.map((p) => p.type.ir),
+    ...(signature.parameters.some((p) => p.borrow)
+      ? { borrows: signature.parameters.map((p) => p.borrow) }
+      : {}),
     result: result.ir,
     effects: {
       failures: sortedUnique(signature.failures),
@@ -652,6 +659,7 @@ export class TypeLowerer {
       result,
       failures,
       requirements,
+      parameters.map((p) => p.borrow),
     );
   }
 
@@ -721,6 +729,7 @@ export class TypeLowerer {
     result: Lowered,
     failures: readonly ErrorId[],
     requirements: readonly CapabilityId[],
+    borrows?: readonly boolean[],
   ): Lowered {
     const failureSet = sortedUnique(failures);
     const requirementSet = sortedUnique(requirements);
@@ -728,6 +737,7 @@ export class TypeLowerer {
       ref: this.env.table.function({
         execution,
         parameters: parameters.map((p) => p.ref),
+        ...(borrows?.some(Boolean) ? { borrows } : {}),
         result: result.ref,
         failures: failureSet,
         requirements: requirementSet,
@@ -736,6 +746,7 @@ export class TypeLowerer {
         kind: "function",
         execution,
         parameters: parameters.map((p) => p.ir),
+        ...(borrows?.some(Boolean) ? { borrows } : {}),
         result: result.ir,
         effects: { failures: failureSet, requirements: requirementSet },
       },
@@ -774,6 +785,7 @@ export class TypeLowerer {
       }
       result.push({
         name,
+        borrow: /^borrow\s+/.test(nodeText(this.tree, param)),
         id: target?.kind === "local" ? target.id : undefined,
         type: typeNode === undefined
           ? this.errorLowered()
@@ -1072,9 +1084,20 @@ class ModuleChecker {
   private checkType(entry: DeclEntry): void {
     const id = this.id("type", entry.name) as TypeId;
     const body = this.bodyOf(entry);
+    const opaque = /^(?:export\s+)?opaque\s+type\b/.test(
+      nodeText(this.tree, entry.node),
+    );
     let definition: TypeDecl["definition"];
     let kind: "alias" | "brand" = "alias";
-    if (body !== undefined && this.isBrand(body)) {
+    if (opaque) {
+      this.table.defineBrand(id, this.table.unknown);
+      this.table.markOpaque(id);
+      definition = {
+        kind: "brand",
+        base: { kind: "primitive", name: "unknown" },
+      };
+      kind = "brand";
+    } else if (body !== undefined && this.isBrand(body)) {
       const base = this.lowerer.brandBase(body);
       this.table.defineBrand(id, base.ref);
       definition = { kind: "brand", base: base.ir };
@@ -1091,6 +1114,7 @@ class ModuleChecker {
       id,
       name: entry.name,
       definition,
+      ...(opaque ? { opaque: true } : {}),
       span: entry.span,
     });
     const refs = new Set<string>();
@@ -1276,6 +1300,28 @@ class ModuleChecker {
       const parameters = paramList === undefined
         ? []
         : this.lowerer.parameters(paramList, "report");
+      for (const parameter of parameters) {
+        if (parameter.borrow) {
+          if (this.tree.mode !== "effi") {
+            this.lowerer.report(
+              "type-mismatch/010",
+              "a service borrow parameter belongs in a host interface",
+              parameter.span,
+            );
+          }
+          const ref = this.table.node(this.table.unfold(parameter.type.ref));
+          if (
+            ref.kind !== "named" || !ref.id.startsWith("type:") ||
+            !this.table.isOpaque(ref.id as TypeId)
+          ) {
+            this.lowerer.report(
+              "type-mismatch/010",
+              "borrow parameters need an opaque type",
+              parameter.span,
+            );
+          }
+        }
+      }
       const resultNode = parts.find((k) =>
         k !== method.nameNode && k !== paramList &&
         kindOf(this.tree, k) !== SyntaxKind.FailsClause
@@ -1300,6 +1346,9 @@ class ModuleChecker {
         id: capability,
         name: method.name,
         type: type.ir as FunctionType,
+        ...(parameters.some((p) => p.borrow)
+          ? { borrows: parameters.map((p) => p.borrow) }
+          : {}),
         span: method.span,
       });
     }

@@ -85,6 +85,7 @@ export type TypeNode =
     readonly kind: "function";
     readonly execution: Execution;
     readonly parameters: readonly TypeRef[];
+    readonly borrows?: readonly boolean[];
     readonly result: TypeRef;
     /** Sorted and unique. */
     readonly failures: readonly ErrorId[];
@@ -105,6 +106,7 @@ export type TypeNode =
 export interface FunctionSpec {
   readonly execution: Execution;
   readonly parameters: readonly TypeRef[];
+  readonly borrows?: readonly boolean[];
   readonly result: TypeRef;
   readonly failures: readonly ErrorId[];
   readonly requirements: readonly CapabilityId[];
@@ -168,6 +170,7 @@ export function canonicalJson(value: unknown): string {
 export interface DefinitionSource {
   readonly types: readonly {
     readonly id: TypeId;
+    readonly opaque?: boolean;
     readonly definition:
       | { readonly kind: "alias"; readonly type: Type }
       | { readonly kind: "brand"; readonly base: Type };
@@ -189,6 +192,7 @@ export class TypeTable {
   private readonly byKey = new Map<string, TypeRef>();
   private readonly aliases = new Map<TypeId, TypeRef>();
   private readonly brands = new Map<TypeId, TypeRef>();
+  private readonly opaque = new Set<TypeId>();
   private readonly errorRecords = new Map<ErrorId, TypeRef>();
 
   /** The recovery type. */
@@ -275,6 +279,7 @@ export class TypeTable {
           JSON.stringify([
             node.execution,
             node.parameters,
+            node.borrows ?? [],
             node.result,
             node.failures,
             node.requirements,
@@ -431,6 +436,7 @@ export class TypeTable {
       kind: "function",
       execution: spec.execution,
       parameters: [...spec.parameters],
+      ...(spec.borrows?.some(Boolean) ? { borrows: [...spec.borrows] } : {}),
       result: spec.result,
       failures: sortedUnique(spec.failures),
       requirements: sortedUnique(spec.requirements),
@@ -456,6 +462,14 @@ export class TypeTable {
 
   defineBrand(id: TypeId, base: TypeRef): void {
     this.brands.set(id, base);
+  }
+
+  markOpaque(id: TypeId): void {
+    this.opaque.add(id);
+  }
+
+  isOpaque(id: TypeId): boolean {
+    return this.opaque.has(id);
   }
 
   /** Registers the field record of an error declaration. */
@@ -493,6 +507,7 @@ export class TypeTable {
         this.defineAlias(decl.id, this.fromIr(decl.definition.type));
       } else {
         this.defineBrand(decl.id, this.fromIr(decl.definition.base));
+        if (decl.opaque === true) this.markOpaque(decl.id);
       }
     }
     for (const decl of source.errors) {
@@ -708,6 +723,7 @@ export class TypeTable {
     return this.function({
       execution: type.execution,
       parameters: type.parameters.map((p) => this.fromIr(p)),
+      ...(type.borrows === undefined ? {} : { borrows: type.borrows }),
       result: this.fromIr(type.result),
       failures: type.effects.failures,
       requirements: type.effects.requirements,
@@ -821,6 +837,7 @@ export class TypeTable {
       kind: "function",
       execution: node.execution,
       parameters: node.parameters.map((p) => this.toIr(p)),
+      ...(node.borrows === undefined ? {} : { borrows: node.borrows }),
       result: this.toIr(node.result),
       effects: { failures: node.failures, requirements: node.requirements },
     };
@@ -955,6 +972,9 @@ export class TypeTable {
       case "function":
         if (sn.kind !== "function") return false;
         if (sn.parameters.length !== tn.parameters.length) return false;
+        if (
+          tn.borrows?.some((borrow, i) => borrow && sn.borrows?.[i] !== true)
+        ) return false;
         if (
           sn.execution !== tn.execution &&
           !(lift && executionFits(sn.execution, tn.execution))

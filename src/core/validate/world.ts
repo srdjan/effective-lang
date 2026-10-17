@@ -203,6 +203,11 @@ export function checkTypeIds(
         t.members.forEach((m, i) => walk(m, `${at}.members[${i}]`, depth + 1));
         return;
       case "function":
+        if (
+          t.borrows !== undefined && t.borrows.length !== t.parameters.length
+        ) {
+          fail(at, "borrow flags must match function parameters");
+        }
         t.parameters.forEach((p, i) =>
           walk(p, `${at}.parameters[${i}]`, depth + 1)
         );
@@ -359,10 +364,63 @@ function checkServiceDecl(
     }
     seenMethods.add(m.id);
     checkDeclaredType(ctx, m.type, `${at}.type`, m.span);
+    if (m.borrows !== undefined) {
+      if (m.borrows.length !== m.type.parameters.length) {
+        ctx.report.add(
+          AREA.types,
+          `${at}.borrows`,
+          "borrow flags must match method parameters",
+          m.span,
+        );
+      }
+      m.borrows.forEach((borrow, index) => {
+        if (!borrow) return;
+        if (!m.span.source.endsWith(".effi")) {
+          ctx.report.add(
+            AREA.types,
+            `${at}.borrows[${index}]`,
+            "a service borrow parameter belongs in a host interface",
+            m.span,
+          );
+        }
+        const parameter = m.type.parameters[index];
+        if (
+          parameter?.kind !== "named" ||
+          ctx.world.types.get(parameter.id)?.opaque !== true
+        ) {
+          ctx.report.add(
+            AREA.types,
+            `${at}.borrows[${index}]`,
+            "a borrow parameter needs an opaque type",
+            m.span,
+          );
+        }
+      });
+    }
   });
 }
 
 function checkTypeDecl(ctx: Ctx, d: TypeDecl, path: string): void {
+  if (d.opaque === true && !d.span.source.endsWith(".effi")) {
+    ctx.report.add(
+      AREA.types,
+      `${path}.opaque`,
+      "an opaque type belongs in a host interface",
+      d.span,
+    );
+  }
+  if (
+    d.opaque === true &&
+    (d.definition.kind !== "brand" || d.definition.base.kind !== "primitive" ||
+      d.definition.base.name !== "unknown")
+  ) {
+    ctx.report.add(
+      AREA.types,
+      `${path}.definition`,
+      "an opaque type needs an unknown nominal base",
+      d.span,
+    );
+  }
   const type = d.definition.kind === "alias"
     ? d.definition.type
     : d.definition.base;

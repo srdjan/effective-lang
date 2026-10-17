@@ -632,6 +632,46 @@ type Int = int
   assert(codesOf(wrong, sources).includes("validation/006"));
 });
 
+Deno.test("borrowed host handle validation rejects a lost qualifier", () => {
+  const files = {
+    "effective.json": JSON.stringify({
+      host: { files: { interface: "./host.effi", module: "./host.ts" } },
+    }),
+    "host.effi": `
+export opaque type Handle
+export type Text = string
+export service Files {
+  open(): Handle
+  read(borrow handle: Handle): Text
+  close(borrow handle: Handle): void
+}
+`,
+    "main.eff": `
+import { Handle, Text, Files } from "host:files"
+const readBorrowed = (borrow handle: Handle): Text uses Files.read => Files.read(handle)
+export const load = (): Text uses Files.open | Files.read | Files.close =>
+  withResource(() => Files.open(), (handle) => readBorrowed(handle), (handle) => Files.close(handle))
+`,
+  };
+  const checked = checkProject(memoryHost(files), "", ["main.eff"]);
+  assert(checked.ok);
+  assertEquals(checked.value.diagnostics.map((d) => d.code), []);
+  const result = lowerProject(checked.value).get("main");
+  assert(result?.ok === true);
+  const sources = new Map([["main.eff", files["main.eff"]], [
+    "host.effi",
+    files["host.effi"],
+  ]]);
+  assertEquals(validateModule(result.value, sources), []);
+  const wrong = copy(result.value);
+  const service = wrong.imports[0].services.find((s) => s.name === "Files");
+  assert(service !== undefined);
+  const read = service.methods.find((m) => m.name === "read");
+  assert(read?.borrows?.[0] === true);
+  setAt(wrong, "imports[0].services[0].methods[1].borrows[0]", false);
+  assert(codesOf(wrong, sources).includes("validation/006"));
+});
+
 Deno.test("array and contextual tuple literals validate with ordered element effects", () => {
   const { ir, sources } = lowerText(
     [
