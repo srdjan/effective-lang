@@ -413,6 +413,24 @@ export class TypeLowerer {
           ir: { kind: "ref", element: element.ir },
         };
       }
+      case "RetrySchedule": {
+        if (args.length !== 1) {
+          this.arity(name, 1, args, node);
+          return this.errorLowered();
+        }
+        const error = this.lower(args[0]);
+        if (error.ir.kind !== "named" || !error.ir.id.startsWith("error:")) {
+          this.report(
+            "type-mismatch/001",
+            "RetrySchedule needs a nominal error type",
+            this.span(args[0]),
+          );
+        }
+        return {
+          ref: table.retrySchedule(error.ref),
+          ir: { kind: "retry-schedule", error: error.ir },
+        };
+      }
       case "Brand":
         for (const arg of args) this.lower(arg);
         this.report(

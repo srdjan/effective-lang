@@ -143,6 +143,21 @@ type Int = int
   assertStringIncludes(output, "Effect.Effect<Int, Stop, Counter>");
 });
 
+Deno.test("retry schedules emit the Effect 4 schedule step", () => {
+  const output = oneModule(`
+export error Stop = {}
+export service Jobs { next(): Int fails Stop }
+export const policy: RetrySchedule<Stop> = retrySchedule((error: Stop, attempt: Int): Option<Int> =>
+  if (attempt < 2) { Some(0) } else { None })
+export const run = (): Int fails Stop uses Jobs.next => retry(() => Jobs.next(), { schedule: policy })
+type Int = int
+`);
+  assertStringIncludes(output, "Schedule.fromStepWithMetadata<");
+  assertStringIncludes(output, "Cause.done(");
+  assertStringIncludes(output, "Duration.millis(");
+  assertStringIncludes(output, "Effect.retry(");
+});
+
 // ------------------------------------------------------------------ golden
 
 Deno.test("each example emits exactly its golden file", () => {

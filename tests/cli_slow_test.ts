@@ -196,6 +196,25 @@ Deno.test("build --validate --tsc accepts an effectful retry pipeline", async ()
   });
 });
 
+Deno.test("build --validate --tsc accepts a custom retry schedule", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "error Stop = {}",
+        "service Jobs { next(): Int fails Stop }",
+        "export const policy: RetrySchedule<Stop> = retrySchedule((error: Stop, attempt: Int): Option<Int> =>",
+        "  if (attempt < 2) { Some(0) } else { None })",
+        "export const run = (): Int fails Stop uses Jobs.next => retry(() => Jobs.next(), { schedule: policy })",
+        "type Int = int",
+      ].join("\n"),
+    );
+    const built = await effective(["build", dir, "--validate", "--tsc"]);
+    assertEquals(built.code, 0, built.stdout + built.stderr);
+  });
+});
+
 Deno.test("build --validate --tsc accepts stored Effect values", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

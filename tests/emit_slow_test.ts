@@ -556,6 +556,37 @@ console.log(JSON.stringify({ value: await Effect.runPromise(main()) }));
     assertEquals(result, { value: 4 });
   });
 });
+Deno.test("custom retry schedule sees one-based attempts and stops on None", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "export error Stop = {}",
+        "export service Jobs { next(): Int fails Stop }",
+        "const policy: RetrySchedule<Stop> = retrySchedule((error: Stop, attempt: Int): Option<Int> =>",
+        "  if (attempt < 3) { Some(0) } else { None })",
+        "export const main = (): Int fails Stop uses Jobs.next => retry(() => Jobs.next(), { schedule: policy })",
+        "type Int = int",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer } from "effect";
+import { Jobs, Stop, main } from "./main.ts";
+let attempts = 0;
+const Live = Layer.succeed(Jobs)({ next: () => Effect.sync(() => { attempts++; }).pipe(Effect.andThen(Effect.fail(new Stop({})))) });
+const error = await Effect.runPromise(Effect.flip(main().pipe(Effect.provide(Live))));
+console.log(JSON.stringify({ attempts, tag: error._tag }));
+`,
+    );
+    assertEquals(result, { attempts: 3, tag: "main#Stop" });
+  });
+});
 Deno.test("source Layers merge and provide their declared services", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

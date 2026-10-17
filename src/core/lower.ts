@@ -555,6 +555,15 @@ class BodyLowerer {
           times: this.required(fact.times, "the retry count", node),
           ...annotation,
         };
+      case "retry-schedule":
+        return { kind: "retry-schedule", step: arg(0), ...annotation };
+      case "retry-with-schedule":
+        return {
+          kind: "retry-with-schedule",
+          job: arg(0),
+          options: arg(1),
+          ...annotation,
+        };
       case "provide":
         return {
           kind: "provide",
@@ -856,6 +865,23 @@ class BodyLowerer {
         const fn = this.functionOf(leftInfo.type);
         return combine([
           setOf(this.required(args[0], "the retry job", stage)),
+          {
+            failures: fn.failures,
+            requirements: fn.requirements,
+            mode: fn.execution,
+          },
+          EFFECT_ONLY,
+        ]);
+      }
+      case "retry-schedule":
+        return combine([
+          setOf(this.required(args[0], "the retry schedule step", stage)),
+        ]);
+      case "retry-with-schedule": {
+        const fn = this.functionOf(leftInfo.type);
+        return combine([
+          setOf(this.required(args[0], "the retry job", stage)),
+          setOf(this.required(args[1], "the retry options", stage)),
           {
             failures: fn.failures,
             requirements: fn.requirements,

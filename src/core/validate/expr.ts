@@ -425,6 +425,10 @@ export class BodyValidator {
         return this.layer(e, path);
       case "merge-layers":
         return this.mergeLayers(e, path);
+      case "retry-schedule":
+        return this.retrySchedule(e, path);
+      case "retry-with-schedule":
+        return this.retryWithSchedule(e, path);
       case "perform":
         return this.perform(e, path);
       case "block":
@@ -1333,6 +1337,99 @@ export class BodyValidator {
     };
   }
 
+  private retrySchedule(
+    e: Extract<Expr, { kind: "retry-schedule" }>,
+    path: string,
+  ): Comp {
+    const step = this.check(e.step, `${path}.step`);
+    const fn = asFunction(this.env, step.type);
+    if (fn === undefined || fn.parameters.length !== 2) {
+      this.add(
+        AREA.control,
+        `${path}.step`,
+        "retry schedule needs a two-parameter callback",
+        e.step.span,
+      );
+      return this.poison();
+    }
+    const error = unfold(this.env, fn.parameters[0]);
+    if (error.kind !== "named" || !this.env.errors.has(error.id)) {
+      this.add(
+        AREA.types,
+        `${path}.step`,
+        "retry schedule needs a nominal error parameter",
+        e.step.span,
+      );
+    }
+    if (
+      !fits(this.env, INT, fn.parameters[1]) ||
+      !fits(this.env, fn.result, { kind: "option", element: INT })
+    ) {
+      this.add(
+        AREA.types,
+        `${path}.step`,
+        "retry schedule needs an Int attempt and Option<Int> result",
+        e.step.span,
+      );
+    }
+    if (
+      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
+      fn.effects.requirements.length > 0
+    ) {
+      this.add(
+        AREA.control,
+        `${path}.step`,
+        "retry schedule callback must be pure",
+        e.step.span,
+      );
+    }
+    return {
+      type: { kind: "retry-schedule", error: fn.parameters[0] },
+      match: "exact",
+      active: combine([step]),
+    };
+  }
+
+  private retryWithSchedule(
+    e: Extract<Expr, { kind: "retry-with-schedule" }>,
+    path: string,
+  ): Comp {
+    const job = this.check(e.job, `${path}.job`);
+    const options = this.check(e.options, `${path}.options`);
+    const fn = this.jobFunction(job, `${path}.job`, e.job.span, "retry");
+    const shape = unfold(this.env, options.type);
+    const fields = shape.kind === "record" ? shape.fields : [];
+    const policy = fields.length === 1 && fields[0].name === "schedule" &&
+        !fields[0].optional
+      ? unfold(this.env, fields[0].type)
+      : undefined;
+    if (policy?.kind !== "retry-schedule") {
+      this.add(
+        AREA.control,
+        `${path}.options`,
+        "retry needs a schedule option",
+        e.options.span,
+      );
+    } else if (fn !== undefined) {
+      for (const failure of fn.effects.failures) {
+        if (!fits(this.env, { kind: "named", id: failure }, policy.error)) {
+          this.add(
+            AREA.types,
+            `${path}.options`,
+            `retry schedule does not accept ${failure}`,
+            e.options.span,
+          );
+        }
+      }
+    }
+    if (fn === undefined) return this.poison();
+    return {
+      type: fn.result,
+      match: "exact",
+      active: combine([job, options, invocationOf(fn), EFFECT_ONLY]),
+    };
+  }
+
   private defer(e: Extract<Expr, { kind: "defer" }>, path: string): Comp {
     const job = this.check(e.job, `${path}.job`);
     const fn = this.jobFunction(job, `${path}.job`, e.job.span, "defer");
@@ -1508,6 +1605,10 @@ export class BodyValidator {
             return [e.acquire];
           case "merge-layers":
             return [e.left, e.right];
+          case "retry-schedule":
+            return [e.step];
+          case "retry-with-schedule":
+            return [e.job, e.options];
           case "defer":
           case "retry":
             return [e.job];

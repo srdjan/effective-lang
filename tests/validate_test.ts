@@ -578,6 +578,23 @@ Deno.test("a retry stage with an effectful left value validates locally", () => 
   assertEquals(codesOf(wrong, sources), ["validation/003"]);
 });
 
+Deno.test("retry schedule validates its deferred failure channel", () => {
+  const { ir, sources } = lowerText(`
+error Stop = {}
+service Jobs { next(): Int fails Stop }
+const policy: RetrySchedule<Stop> = retrySchedule((error: Stop, attempt: Int): Option<Int> =>
+  if (attempt < 2) { Some(0) } else { None })
+export const run = (): Int fails Stop uses Jobs.next => retry(() => Jobs.next(), { schedule: policy })
+type Int = int
+`);
+  assertEquals(validateModule(ir, sources), []);
+  const wrong = copy(ir);
+  const run = wrong.declarations[decl(wrong, "run")];
+  assert(run.kind === "function");
+  setAt(wrong, `declarations[${decl(wrong, "run")}].body.effects.failures`, []);
+  assertEquals(codesOf(wrong, sources), ["validation/003"]);
+});
+
 Deno.test("array and contextual tuple literals validate with ordered element effects", () => {
   const { ir, sources } = lowerText(
     [

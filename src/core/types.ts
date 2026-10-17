@@ -51,6 +51,7 @@ export type TypeNode =
   | { readonly kind: "union"; readonly members: readonly TypeRef[] }
   | { readonly kind: "option"; readonly element: TypeRef }
   | { readonly kind: "ref"; readonly element: TypeRef }
+  | { readonly kind: "retry-schedule"; readonly error: TypeRef }
   | {
     readonly kind: "effect";
     readonly result: TypeRef;
@@ -236,6 +237,8 @@ export class TypeTable {
         return `o:${node.element}`;
       case "ref":
         return `q:${node.element}`;
+      case "retry-schedule":
+        return `z:${node.error}`;
       case "effect":
         return `x:${
           JSON.stringify([node.result, node.failures, node.requirements])
@@ -327,6 +330,10 @@ export class TypeTable {
 
   ref(element: TypeRef): TypeRef {
     return this.intern({ kind: "ref", element });
+  }
+
+  retrySchedule(error: TypeRef): TypeRef {
+    return this.intern({ kind: "retry-schedule", error });
   }
 
   effect(
@@ -568,6 +575,10 @@ export class TypeTable {
         tallest = this.heightWithin(node.element, budget - 1, memo);
         if (tallest === Infinity) return Infinity;
         break;
+      case "retry-schedule":
+        tallest = this.heightWithin(node.error, budget - 1, memo);
+        if (tallest === Infinity) return Infinity;
+        break;
       case "stream":
         tallest = this.heightWithin(node.element, budget - 1, memo);
         if (tallest === Infinity) return Infinity;
@@ -619,6 +630,8 @@ export class TypeTable {
         return this.option(this.fromIr(type.element));
       case "ref":
         return this.ref(this.fromIr(type.element));
+      case "retry-schedule":
+        return this.retrySchedule(this.fromIr(type.error));
       case "effect":
         return this.effect(
           this.fromIr(type.result),
@@ -702,6 +715,8 @@ export class TypeTable {
         return { kind: "option", element: this.toIr(node.element) };
       case "ref":
         return { kind: "ref", element: this.toIr(node.element) };
+      case "retry-schedule":
+        return { kind: "retry-schedule", error: this.toIr(node.error) };
       case "effect":
         return {
           kind: "effect",
@@ -844,6 +859,10 @@ export class TypeTable {
         return sn.kind === "ref" &&
           this.assignable(sn.element, tn.element, depth + 1) &&
           this.assignable(tn.element, sn.element, depth + 1);
+      case "retry-schedule":
+        return sn.kind === "retry-schedule" &&
+          this.assignable(sn.error, tn.error, depth + 1) &&
+          this.assignable(tn.error, sn.error, depth + 1);
       case "effect":
         return sn.kind === "effect" &&
           this.assignable(sn.result, tn.result, depth + 1) &&
@@ -934,6 +953,8 @@ export class TypeTable {
         return `Option<${this.show(node.element)}>`;
       case "ref":
         return `Ref<${this.show(node.element)}>`;
+      case "retry-schedule":
+        return `RetrySchedule<${this.show(node.error)}>`;
       case "effect":
         return `Effect<${this.show(node.result)}, ${
           node.failures.map(idName).join(" | ") || "never"

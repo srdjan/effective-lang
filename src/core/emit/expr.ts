@@ -880,6 +880,32 @@ export class ExprEmitter {
           callArguments([kid(e.left), kid(e.right)]),
         ]);
       }
+      case "retry-schedule": {
+        const schedule = this.scope.effect("Schedule");
+        const effect = this.scope.effect("Effect");
+        const option = this.scope.effect("Option");
+        const cause = this.scope.effect("Cause");
+        const duration = this.scope.effect("Duration");
+        const type = this.scope.resolve(e.type);
+        if (type.kind !== "retry-schedule") {
+          throw internal("retry schedule has wrong type");
+        }
+        const error = typeDoc(this.scope, type.error);
+        const step = this.pure(e.step);
+        const metadata = this.scope.temp();
+        const decision = this.scope.temp();
+        return emitted([
+          `${schedule}.fromStepWithMetadata<`,
+          error,
+          `, number, never, never, never, never>(${effect}.succeed((${metadata}: ${schedule}.InputMetadata<`,
+          error,
+          `>) => { const ${decision} = `,
+          at(step, PREC.member),
+          `(${metadata}.input, ${metadata}.attempt); if (${option}.isNone(${decision})) return ${cause}.done(${metadata}.attempt); `,
+          `if (${decision}.value < 0) throw new RangeError("negative retry delay"); `,
+          `return ${effect}.succeed([${metadata}.attempt, ${duration}.millis(${decision}.value)] as [number, ${duration}.Duration]); }))`,
+        ]);
+      }
       case "call":
         return this.nonLeafCall(e, kid);
       case "block":
@@ -894,6 +920,7 @@ export class ExprEmitter {
       case "fail":
       case "catch":
       case "retry":
+      case "retry-with-schedule":
       case "provide":
       case "run":
       case "with-resource":
@@ -1513,6 +1540,7 @@ export class ExprEmitter {
       case "perform":
       case "fail":
       case "retry":
+      case "retry-with-schedule":
       case "provide":
       case "run":
       case "catch":
@@ -1748,6 +1776,11 @@ export class ExprEmitter {
         });
         return emitted([`${effect}.retry`, callArguments([job, options])]);
       }
+      case "retry-with-schedule":
+        return emitted([
+          `${effect}.retry`,
+          callArguments([this.suspended(e.job), this.pure(e.options)]),
+        ]);
       case "provide": {
         const job = this.suspended(e.job);
         return emitted([

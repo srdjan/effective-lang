@@ -1242,6 +1242,19 @@ type Int = int
   assertEquals(shortIds(fn(project, "m", "f").body!.failures), ["E"]);
 });
 
+Deno.test("custom retry schedules keep nominal failure contracts", () => {
+  const project = checkText(`
+error Stop = {}
+service Jobs { next(): Int fails Stop }
+const policy: RetrySchedule<Stop> = retrySchedule((error: Stop, attempt: Int): Option<Int> =>
+  if (attempt < 2) { Some(0) } else { None })
+const run = (): Int fails Stop uses Jobs.next => retry(() => Jobs.next(), { schedule: policy })
+type Int = int
+`);
+  assertEquals(messages(project), []);
+  assertEquals(shortIds(fn(project, "m", "run").body!.failures), ["Stop"]);
+});
+
 const HOST = {
   "effective.json": JSON.stringify({
     host: {

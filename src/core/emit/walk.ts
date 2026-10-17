@@ -64,6 +64,10 @@ export function childrenOf(expr: Expr): Expr[] {
       return [expr.acquire];
     case "merge-layers":
       return [expr.left, expr.right];
+    case "retry-schedule":
+      return [expr.step];
+    case "retry-with-schedule":
+      return [expr.job, expr.options];
     case "call":
       return [expr.callee, ...expr.arguments];
     case "perform":

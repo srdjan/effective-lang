@@ -170,6 +170,12 @@ export function typeDoc(scope: Scope, type: Type): Doc {
     }
     case "ref":
       return [`${scope.effect("Ref")}.Ref<`, typeDoc(scope, type.element), ">"];
+    case "retry-schedule":
+      return [
+        `${scope.effect("Schedule")}.Schedule<number, `,
+        typeDoc(scope, type.error),
+        ">",
+      ];
     case "record": {
       if (type.fields.length === 0) return "{}";
       const fields = type.fields.map((f) => [
@@ -311,6 +317,7 @@ export function schemaDoc(scope: Scope, type: Type): Doc {
     case "sink":
     case "provider":
     case "ref":
+    case "retry-schedule":
       throw unsupported("a deferred or function type has no schema");
   }
 }

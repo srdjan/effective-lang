@@ -128,6 +128,7 @@ export type NodeFact =
   | { readonly kind: "make-ref" | "get-ref" | "set-ref" | "update-ref" }
   | { readonly kind: "layer"; readonly service: ServiceId | undefined }
   | { readonly kind: "merge-layers" }
+  | { readonly kind: "retry-schedule" | "retry-with-schedule" }
   /** A bracket literal, classified by its checked contextual type. */
   | { readonly kind: "list"; readonly shape: "array" | "tuple" }
   /** A collection builtin with its closed function type. */

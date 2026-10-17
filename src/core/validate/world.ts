@@ -167,6 +167,12 @@ export function checkTypeIds(
       case "ref":
         walk(t.element, `${at}.element`, depth + 1);
         return;
+      case "retry-schedule":
+        walk(t.error, `${at}.error`, depth + 1);
+        if (t.error.kind !== "named" || !t.error.id.startsWith("error:")) {
+          fail(at, "a retry schedule needs a nominal error type");
+        }
+        return;
       case "effect":
         walk(t.result, `${at}.result`, depth + 1);
         effects(`${at}.effects`, t.effects);
@@ -253,6 +259,9 @@ export function checkRecordFields(
       case "option":
       case "ref":
         walk(t.element, `${at}.element`, depth + 1);
+        return;
+      case "retry-schedule":
+        walk(t.error, `${at}.error`, depth + 1);
         return;
       case "effect":
         walk(t.result, `${at}.result`, depth + 1);
@@ -446,6 +455,9 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
       case "option":
       case "ref":
         reaches(type.element, from, depth + 1);
+        return;
+      case "retry-schedule":
+        reaches(type.error, from, depth + 1);
         return;
       case "effect":
         reaches(type.result, from, depth + 1);

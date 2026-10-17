@@ -46,6 +46,7 @@ export type Type =
   | { readonly kind: "union"; readonly members: readonly Type[] }
   | { readonly kind: "option"; readonly element: Type }
   | { readonly kind: "ref"; readonly element: Type }
+  | { readonly kind: "retry-schedule"; readonly error: Type }
   | { readonly kind: "effect"; readonly result: Type; readonly effects: Effects }
   | { readonly kind: "stream"; readonly element: Type; readonly effects: Effects }
   | { readonly kind: "sink"; readonly input: Type; readonly result: Type; readonly effects: Effects }
@@ -133,6 +134,8 @@ export type Expr =
   | Node<{ kind: "update-ref"; ref: Expr; transform: Expr }>
   | Node<{ kind: "layer"; service: ServiceId; acquire: Expr }>
   | Node<{ kind: "merge-layers"; left: Expr; right: Expr }>
+  | Node<{ kind: "retry-schedule"; step: Expr }>
+  | Node<{ kind: "retry-with-schedule"; job: Expr; options: Expr }>
   | Node<{ kind: "perform"; capability: CapabilityId; arguments: readonly Expr[] }>
   | Node<{ kind: "block"; steps: readonly Step[]; result: Expr }>
   | Node<{ kind: "if"; condition: Expr; then: Expr; else: Expr }>

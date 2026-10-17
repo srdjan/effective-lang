@@ -153,6 +153,10 @@ function assignable(
       return s.kind === "ref" &&
         assignable(env, s.element, t.element, false, depth + 1) &&
         assignable(env, t.element, s.element, false, depth + 1);
+    case "retry-schedule":
+      return s.kind === "retry-schedule" &&
+        assignable(env, s.error, t.error, false, depth + 1) &&
+        assignable(env, t.error, s.error, false, depth + 1);
     case "effect":
       return s.kind === "effect" &&
         assignable(env, s.result, t.result, false, depth + 1) &&
@@ -355,6 +359,8 @@ export function show(type: Type): string {
       return `Option<${show(type.element)}>`;
     case "ref":
       return `Ref<${show(type.element)}>`;
+    case "retry-schedule":
+      return `RetrySchedule<${show(type.error)}>`;
     case "effect":
       return `Effect<${show(type.result)}, ${
         type.effects.failures.join(" | ") || "never"

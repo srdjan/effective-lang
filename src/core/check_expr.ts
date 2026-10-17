@@ -832,6 +832,8 @@ export class BodyChecker {
         return this.failCall(node, args);
       case "retry":
         return this.retryCall(node, args);
+      case "retrySchedule":
+        return this.retryScheduleCall(node, args, expected);
       case "provide":
         return this.provideCall(node, args);
       case "defer":
@@ -1058,6 +1060,43 @@ export class BodyChecker {
     }
     const job = this.argInfo(args[0]);
     const fn = this.jobFunction("retry", args[0], job);
+    if (this.retryScheduleOption(args[1])) {
+      const options = this.argInfo(args[1]);
+      const shape = this.table.node(this.table.unfold(options.type));
+      const policy = shape.kind === "record"
+        ? this.table.node(this.table.unfold(shape.fields[0].type))
+        : undefined;
+      if (policy?.kind !== "retry-schedule") {
+        this.report(
+          "type-mismatch/010",
+          "`retry` needs a RetrySchedule in `schedule`",
+          args[1].node,
+        );
+      } else if (fn !== undefined) {
+        for (const failure of fn.failures) {
+          if (
+            !this.table.isAssignable(this.table.named(failure), policy.error)
+          ) {
+            this.report(
+              "type-mismatch/003",
+              `the retry schedule does not accept ${failure}`,
+              args[1].node,
+            );
+          }
+        }
+      }
+      this.fact(node, { kind: "retry-with-schedule" });
+      const invocation: EffectSet = fn === undefined ? PURE_EFFECTS : {
+        failures: fn.failures,
+        requirements: fn.requirements,
+        mode: fn.execution,
+      };
+      return this.finish(
+        node,
+        fn?.result ?? this.table.error,
+        combine([job, options, invocation, EFFECT_ONLY]),
+      );
+    }
     const times = this.retryTimes(args[1]);
     this.fact(node, { kind: "retry", times });
     const invocation: EffectSet = fn === undefined ? PURE_EFFECTS : {
@@ -1070,6 +1109,104 @@ export class BodyChecker {
       fn?.result ?? this.table.error,
       combine([job, invocation, EFFECT_ONLY]),
     );
+  }
+
+  private retryScheduleOption(arg: Arg): boolean {
+    if (
+      arg.pre !== undefined ||
+      kindOf(this.tree, arg.node) !== SyntaxKind.RecordExpr
+    ) return false;
+    const fields = this.kids(arg.node);
+    if (
+      fields.length !== 1 ||
+      kindOf(this.tree, fields[0]) !== SyntaxKind.RecordField
+    ) return false;
+    const name = this.kids(fields[0]).find((k) =>
+      kindOf(this.tree, k) === SyntaxKind.Name
+    );
+    return name !== undefined && nameTextOf(this.tree, name) === "schedule";
+  }
+
+  private retryScheduleCall(
+    node: NodeId,
+    args: readonly Arg[],
+    expected: TypeRef | undefined,
+  ): NodeInfo {
+    this.fact(node, { kind: "retry-schedule" });
+    if (!this.arity(node, "retrySchedule", 1, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((a) => this.argInfo(a))),
+      );
+    }
+    const expectedType = expected === undefined
+      ? undefined
+      : this.table.node(this.table.unfold(expected));
+    const errorHint = expectedType?.kind === "retry-schedule"
+      ? expectedType.error
+      : undefined;
+    const info = errorHint === undefined
+      ? this.argInfo(args[0])
+      : this.callback(
+        "retrySchedule",
+        args[0],
+        [errorHint, this.table.int],
+        this.table.option(this.table.int),
+      ).info;
+    const fn = this.functionOf(info.type);
+    if (fn === undefined) {
+      if (!this.isError(info.type)) {
+        this.report(
+          "type-mismatch/010",
+          "`retrySchedule` needs a function",
+          args[0].node,
+        );
+      }
+      return this.finish(node, this.table.error, combine([info]));
+    }
+    if (fn.parameters.length !== 2) {
+      this.report(
+        "type-mismatch/004",
+        "the retry schedule callback takes an error and an attempt number",
+        args[0].node,
+      );
+      return this.finish(node, this.table.error, combine([info]));
+    }
+    const error = this.table.node(this.table.unfold(fn.parameters[0]));
+    if (error.kind !== "named" || !error.id.startsWith("error:")) {
+      this.report(
+        "type-mismatch/010",
+        "the retry schedule callback needs a nominal error parameter",
+        args[0].node,
+      );
+    }
+    this.fits(
+      args[0].node,
+      fn.parameters[1],
+      this.table.int,
+      "the retry attempt number",
+    );
+    this.fits(
+      args[0].node,
+      fn.result,
+      this.table.option(this.table.int),
+      "the retry delay",
+    );
+    if (
+      fn.execution !== "pure" || fn.failures.length > 0 ||
+      fn.requirements.length > 0
+    ) {
+      this.report(
+        "execution-mode/001",
+        "the retry schedule callback must be pure",
+        args[0].node,
+      );
+    }
+    const type = error.kind === "named" && error.id.startsWith("error:")
+      ? this.table.retrySchedule(fn.parameters[0])
+      : this.table.error;
+    return this.finish(node, type, combine([info]));
   }
 
   private deferCall(node: NodeId, args: readonly Arg[]): NodeInfo {
