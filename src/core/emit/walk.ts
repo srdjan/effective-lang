@@ -52,6 +52,14 @@ export function childrenOf(expr: Expr): Expr[] {
       return [expr.left, expr.right];
     case "race":
       return [expr.left, expr.right];
+    case "make-ref":
+      return [expr.value];
+    case "get-ref":
+      return [expr.ref];
+    case "set-ref":
+      return [expr.ref, expr.value];
+    case "update-ref":
+      return [expr.ref, expr.transform];
     case "call":
       return [expr.callee, ...expr.arguments];
     case "perform":

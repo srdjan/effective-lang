@@ -57,6 +57,10 @@ export type PreludeName =
   | "bufferStream"
   | "mergeStreams"
   | "race"
+  | "makeRef"
+  | "getRef"
+  | "setRef"
+  | "updateRef"
   | "unbrand"
   | "Some"
   | "None"
@@ -79,6 +83,10 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "bufferStream",
   "mergeStreams",
   "race",
+  "makeRef",
+  "getRef",
+  "setRef",
+  "updateRef",
   "unbrand",
   "Some",
   "None",
@@ -97,7 +105,8 @@ export type BuiltinTypeName =
   | "never"
   | "unknown"
   | "Option"
-  | "Brand";
+  | "Brand"
+  | "Ref";
 
 export const BUILTIN_TYPE_NAMES: ReadonlySet<string> = new Set<
   BuiltinTypeName
@@ -111,6 +120,7 @@ export const BUILTIN_TYPE_NAMES: ReadonlySet<string> = new Set<
   "unknown",
   "Option",
   "Brand",
+  "Ref",
 ]);
 
 /**

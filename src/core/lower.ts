@@ -611,6 +611,19 @@ class BodyLowerer {
         };
       case "race":
         return { kind: "race", left: arg(0), right: arg(1), ...annotation };
+      case "make-ref":
+        return { kind: "make-ref", value: arg(0), ...annotation };
+      case "get-ref":
+        return { kind: "get-ref", ref: arg(0), ...annotation };
+      case "set-ref":
+        return { kind: "set-ref", ref: arg(0), value: arg(1), ...annotation };
+      case "update-ref":
+        return {
+          kind: "update-ref",
+          ref: arg(0),
+          transform: arg(1),
+          ...annotation,
+        };
       default:
         throw internal(
           `the fact ${fact.kind} is no call at ${this.describe(node)}`,

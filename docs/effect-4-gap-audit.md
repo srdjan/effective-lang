@@ -12,6 +12,9 @@ The coverage map and original probes remain a snapshot until a full re-audit.
 Update, 2026-10-17: `race` now accepts compatible first-class Effect values.
 The runtime regression confirms loser interruption and finalizer completion.
 Source fiber handles and general concurrency remain gaps.
+Update, 2026-10-17: `Ref<A>` and source make/get/set/update operations now
+compile. Ref is invariant, and update requires a pure callback. A bounded
+concurrency runtime test checks atomic updates.
 
 Update, 2026-10-17: the pipeline validation defect described below was fixed
 in phase 1 of the [implementation plan](plans/2026-10-17-effect4-gap-closure.md).

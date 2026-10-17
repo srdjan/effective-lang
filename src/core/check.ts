@@ -401,6 +401,17 @@ export class TypeLowerer {
           ir: { kind: "option", element: element.ir },
         };
       }
+      case "Ref": {
+        if (args.length !== 1) {
+          this.arity(name, 1, args, node);
+          return this.errorLowered();
+        }
+        const element = this.lower(args[0]);
+        return {
+          ref: table.ref(element.ref),
+          ir: { kind: "ref", element: element.ir },
+        };
+      }
       case "Brand":
         for (const arg of args) this.lower(arg);
         this.report(

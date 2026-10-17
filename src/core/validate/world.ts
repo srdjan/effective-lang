@@ -164,6 +164,7 @@ export function checkTypeIds(
         return;
       case "array":
       case "option":
+      case "ref":
         walk(t.element, `${at}.element`, depth + 1);
         return;
       case "effect":
@@ -250,6 +251,7 @@ export function checkRecordFields(
         return;
       case "array":
       case "option":
+      case "ref":
         walk(t.element, `${at}.element`, depth + 1);
         return;
       case "effect":
@@ -442,6 +444,7 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
         return;
       case "array":
       case "option":
+      case "ref":
         reaches(type.element, from, depth + 1);
         return;
       case "effect":

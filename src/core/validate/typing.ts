@@ -149,6 +149,10 @@ function assignable(
     case "option":
       return s.kind === "option" &&
         assignable(env, s.element, t.element, false, depth + 1);
+    case "ref":
+      return s.kind === "ref" &&
+        assignable(env, s.element, t.element, false, depth + 1) &&
+        assignable(env, t.element, s.element, false, depth + 1);
     case "effect":
       return s.kind === "effect" &&
         assignable(env, s.result, t.result, false, depth + 1) &&
@@ -349,6 +353,8 @@ export function show(type: Type): string {
       return type.members.map(show).join(" | ");
     case "option":
       return `Option<${show(type.element)}>`;
+    case "ref":
+      return `Ref<${show(type.element)}>`;
     case "effect":
       return `Effect<${show(type.result)}, ${
         type.effects.failures.join(" | ") || "never"

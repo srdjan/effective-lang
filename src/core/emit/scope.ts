@@ -31,7 +31,8 @@ export type EffectModule =
   | "Option"
   | "Schema"
   | "Stream"
-  | "Sink";
+  | "Sink"
+  | "Ref";
 
 export type EmitFailureData =
   | {
@@ -392,6 +393,7 @@ export class Scope {
       case "stream":
       case "sink":
       case "provider":
+      case "ref":
         return true;
       case "primitive":
       case "literal":

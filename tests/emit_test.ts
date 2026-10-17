@@ -94,6 +94,22 @@ export const choose = (): Int =>
   assertStringIncludes(output, "Effect.suspend(");
 });
 
+Deno.test("reference operations emit Effect 4 Ref methods", () => {
+  const output = oneModule(`
+type Int = int
+export const count = (): Int => {
+  const ref = makeRef(0)
+  updateRef(ref, (n) => n + 1)
+  setRef(ref, 3)
+  getRef(ref)
+}
+`);
+  assertStringIncludes(output, "Ref.make(0)");
+  assertStringIncludes(output, "Ref.update(ref, (n: number) => $int(n + 1))");
+  assertStringIncludes(output, "Ref.set(ref, 3)");
+  assertStringIncludes(output, "Ref.get(ref)");
+});
+
 Deno.test("defer stores an Effect and run executes it in an effect function", () => {
   const output = oneModule(`
 error Stop = {}

@@ -45,6 +45,7 @@ export type Type =
   | { readonly kind: "tuple"; readonly elements: readonly Type[] }
   | { readonly kind: "union"; readonly members: readonly Type[] }
   | { readonly kind: "option"; readonly element: Type }
+  | { readonly kind: "ref"; readonly element: Type }
   | { readonly kind: "effect"; readonly result: Type; readonly effects: Effects }
   | { readonly kind: "stream"; readonly element: Type; readonly effects: Effects }
   | { readonly kind: "sink"; readonly input: Type; readonly result: Type; readonly effects: Effects }
@@ -126,6 +127,10 @@ export type Expr =
   | Node<{ kind: "buffer-stream"; stream: Expr; capacity: number }>
   | Node<{ kind: "merge-streams"; left: Expr; right: Expr }>
   | Node<{ kind: "race"; left: Expr; right: Expr }>
+  | Node<{ kind: "make-ref"; value: Expr }>
+  | Node<{ kind: "get-ref"; ref: Expr }>
+  | Node<{ kind: "set-ref"; ref: Expr; value: Expr }>
+  | Node<{ kind: "update-ref"; ref: Expr; transform: Expr }>
   | Node<{ kind: "perform"; capability: CapabilityId; arguments: readonly Expr[] }>
   | Node<{ kind: "block"; steps: readonly Step[]; result: Expr }>
   | Node<{ kind: "if"; condition: Expr; then: Expr; else: Expr }>

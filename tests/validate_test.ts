@@ -167,6 +167,18 @@ type Int = int
   assert(codesOf(wrong, lowered.sources).includes("validation/002"));
 });
 
+Deno.test("reference operations validate atomic pure updates", () => {
+  const lowered = lowerText(`
+type Int = int
+const count = (): Int => {
+  const ref = makeRef(0)
+  updateRef(ref, (n) => n + 1)
+  getRef(ref)
+}
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+});
+
 Deno.test("with-resource validation rejects scoped escape and channel mutation", () => {
   const lowered = lowerText(`
 error Stop = {}

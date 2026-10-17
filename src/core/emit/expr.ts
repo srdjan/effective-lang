@@ -889,6 +889,10 @@ export class ExprEmitter {
       case "run":
       case "with-resource":
       case "run-stream":
+      case "make-ref":
+      case "get-ref":
+      case "set-ref":
+      case "update-ref":
         throw internal(`${e.kind} node in a structural position`);
     }
   }
@@ -1450,6 +1454,10 @@ export class ExprEmitter {
       case "catch":
       case "with-resource":
       case "run-stream":
+      case "make-ref":
+      case "get-ref":
+      case "set-ref":
+      case "update-ref":
         return true;
       default:
         return false;
@@ -1472,6 +1480,14 @@ export class ExprEmitter {
         return [e.value];
       case "run-stream":
         return [e.stream, e.sink];
+      case "make-ref":
+        return [e.value];
+      case "get-ref":
+        return [e.ref];
+      case "set-ref":
+        return [e.ref, e.value];
+      case "update-ref":
+        return [e.ref, e.transform];
       default:
         return [];
     }
@@ -1627,6 +1643,20 @@ export class ExprEmitter {
           `${stream}.run`,
           callArguments([children[0], children[1]]),
         ]);
+      }
+      case "make-ref":
+      case "get-ref":
+      case "set-ref":
+      case "update-ref": {
+        const ref = this.scope.effect("Ref");
+        const method = e.kind === "make-ref"
+          ? "make"
+          : e.kind === "get-ref"
+          ? "get"
+          : e.kind === "set-ref"
+          ? "set"
+          : "update";
+        return emitted([`${ref}.${method}`, callArguments(children)]);
       }
       case "with-resource": {
         if (

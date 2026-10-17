@@ -124,6 +124,7 @@ export type NodeFact =
   | { readonly kind: "buffer-stream"; readonly capacity: number | undefined }
   | { readonly kind: "merge-streams" }
   | { readonly kind: "race" }
+  | { readonly kind: "make-ref" | "get-ref" | "set-ref" | "update-ref" }
   /** A bracket literal, classified by its checked contextual type. */
   | { readonly kind: "list"; readonly shape: "array" | "tuple" }
   /** A collection builtin with its closed function type. */

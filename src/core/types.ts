@@ -50,6 +50,7 @@ export type TypeNode =
   | { readonly kind: "tuple"; readonly elements: readonly TypeRef[] }
   | { readonly kind: "union"; readonly members: readonly TypeRef[] }
   | { readonly kind: "option"; readonly element: TypeRef }
+  | { readonly kind: "ref"; readonly element: TypeRef }
   | {
     readonly kind: "effect";
     readonly result: TypeRef;
@@ -233,6 +234,8 @@ export class TypeTable {
         return `u:${JSON.stringify(node.members)}`;
       case "option":
         return `o:${node.element}`;
+      case "ref":
+        return `q:${node.element}`;
       case "effect":
         return `x:${
           JSON.stringify([node.result, node.failures, node.requirements])
@@ -320,6 +323,10 @@ export class TypeTable {
 
   option(element: TypeRef): TypeRef {
     return this.intern({ kind: "option", element });
+  }
+
+  ref(element: TypeRef): TypeRef {
+    return this.intern({ kind: "ref", element });
   }
 
   effect(
@@ -557,6 +564,10 @@ export class TypeTable {
         tallest = this.heightWithin(node.result, budget - 1, memo);
         if (tallest === Infinity) return Infinity;
         break;
+      case "ref":
+        tallest = this.heightWithin(node.element, budget - 1, memo);
+        if (tallest === Infinity) return Infinity;
+        break;
       case "stream":
         tallest = this.heightWithin(node.element, budget - 1, memo);
         if (tallest === Infinity) return Infinity;
@@ -606,6 +617,8 @@ export class TypeTable {
         return this.union(type.members.map((m) => this.fromIr(m)));
       case "option":
         return this.option(this.fromIr(type.element));
+      case "ref":
+        return this.ref(this.fromIr(type.element));
       case "effect":
         return this.effect(
           this.fromIr(type.result),
@@ -687,6 +700,8 @@ export class TypeTable {
       }
       case "option":
         return { kind: "option", element: this.toIr(node.element) };
+      case "ref":
+        return { kind: "ref", element: this.toIr(node.element) };
       case "effect":
         return {
           kind: "effect",
@@ -825,6 +840,10 @@ export class TypeTable {
       case "option":
         return sn.kind === "option" &&
           this.assignable(sn.element, tn.element, depth + 1);
+      case "ref":
+        return sn.kind === "ref" &&
+          this.assignable(sn.element, tn.element, depth + 1) &&
+          this.assignable(tn.element, sn.element, depth + 1);
       case "effect":
         return sn.kind === "effect" &&
           this.assignable(sn.result, tn.result, depth + 1) &&
@@ -913,6 +932,8 @@ export class TypeTable {
         return node.members.map((m) => this.show(m)).join(" | ");
       case "option":
         return `Option<${this.show(node.element)}>`;
+      case "ref":
+        return `Ref<${this.show(node.element)}>`;
       case "effect":
         return `Effect<${this.show(node.result)}, ${
           node.failures.map(idName).join(" | ") || "never"

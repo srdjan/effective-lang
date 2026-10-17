@@ -416,6 +416,11 @@ export class BodyValidator {
         return this.mergeStreams(e, path);
       case "race":
         return this.race(e, path);
+      case "make-ref":
+      case "get-ref":
+      case "set-ref":
+      case "update-ref":
+        return this.refOperation(e, path);
       case "perform":
         return this.perform(e, path);
       case "block":
@@ -1487,6 +1492,14 @@ export class BodyValidator {
             return [e.left, e.right];
           case "race":
             return [e.left, e.right];
+          case "make-ref":
+            return [e.value];
+          case "get-ref":
+            return [e.ref];
+          case "set-ref":
+            return [e.ref, e.value];
+          case "update-ref":
+            return [e.ref, e.transform];
           case "defer":
           case "retry":
             return [e.job];
@@ -1891,6 +1904,73 @@ export class BodyValidator {
       },
       match: "exact",
       active: combine([left, right]),
+    };
+  }
+
+  private refOperation(
+    e: Extract<
+      Expr,
+      { kind: "make-ref" | "get-ref" | "set-ref" | "update-ref" }
+    >,
+    path: string,
+  ): Comp {
+    if (e.kind === "make-ref") {
+      const value = this.check(e.value, `${path}.value`);
+      return {
+        type: { kind: "ref", element: this.streamState(value.type) },
+        match: "exact",
+        active: combine([value, EFFECT_ONLY]),
+      };
+    }
+    const ref = this.check(e.ref, `${path}.ref`);
+    const type = unfold(this.env, ref.type);
+    if (type.kind !== "ref") {
+      this.add(AREA.types, path, `${e.kind} needs a Ref value`, e.span);
+      return this.poison();
+    }
+    if (e.kind === "get-ref") {
+      return {
+        type: type.element,
+        match: "exact",
+        active: combine([ref, EFFECT_ONLY]),
+      };
+    }
+    if (e.kind === "set-ref") {
+      const value = this.check(e.value, `${path}.value`);
+      if (!fits(this.env, value.type, type.element)) {
+        this.add(
+          AREA.types,
+          `${path}.value`,
+          "the new value must fit the Ref element",
+          e.value.span,
+        );
+      }
+      return {
+        type: UNIT,
+        match: "exact",
+        active: combine([ref, value, EFFECT_ONLY]),
+      };
+    }
+    const transform = this.check(e.transform, `${path}.transform`);
+    const fn = asFunction(this.env, transform.type);
+    if (
+      fn === undefined || fn.parameters.length !== 1 ||
+      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
+      fn.effects.requirements.length > 0 ||
+      !fits(this.env, type.element, fn.parameters[0]) ||
+      !fits(this.env, fn.result, type.element)
+    ) {
+      this.add(
+        AREA.execution,
+        `${path}.transform`,
+        "updateRef needs a pure element-to-element callback",
+        e.transform.span,
+      );
+    }
+    return {
+      type: UNIT,
+      match: "exact",
+      active: combine([ref, transform, EFFECT_ONLY]),
     };
   }
 

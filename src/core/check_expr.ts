@@ -853,6 +853,11 @@ export class BodyChecker {
         return this.mergeStreamsCall(node, args);
       case "race":
         return this.raceCall(node, args);
+      case "makeRef":
+      case "getRef":
+      case "setRef":
+      case "updateRef":
+        return this.refCall(node, name, args);
       case "unbrand":
         return this.unbrandCall(node, args);
       case "Some":
@@ -1632,6 +1637,62 @@ export class BodyChecker {
       [...a.requirements, ...b.requirements],
     );
     return this.finish(node, type, combine([left, right]));
+  }
+
+  private refCall(node: NodeId, name: string, args: readonly Arg[]): NodeInfo {
+    const kind = name === "makeRef"
+      ? "make-ref"
+      : name === "getRef"
+      ? "get-ref"
+      : name === "setRef"
+      ? "set-ref"
+      : "update-ref";
+    this.fact(node, { kind });
+    const count = kind === "make-ref" || kind === "get-ref" ? 1 : 2;
+    if (!this.arity(node, name, count, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine([...args.map((a) => this.argInfo(a)), EFFECT_ONLY]),
+      );
+    }
+    this.noPipeline(name, args);
+    const first = this.argInfo(args[0]);
+    if (kind === "make-ref") {
+      return this.finish(
+        node,
+        this.table.ref(this.widen(first.type)),
+        combine([first, EFFECT_ONLY]),
+      );
+    }
+    const ref = this.table.node(this.table.unfold(first.type));
+    if (ref.kind !== "ref" && !this.isError(first.type)) {
+      this.report(
+        "type-mismatch/010",
+        `\`${name}\` needs a Ref value`,
+        args[0].node,
+      );
+    }
+    const element = ref.kind === "ref" ? ref.element : this.table.error;
+    if (kind === "get-ref") {
+      return this.finish(node, element, combine([first, EFFECT_ONLY]));
+    }
+    if (kind === "set-ref") {
+      const value = this.argInfo(args[1], element);
+      this.fits(args[1].node, value.type, element, "the new Ref value");
+      return this.finish(
+        node,
+        this.table.unit,
+        combine([first, value, EFFECT_ONLY]),
+      );
+    }
+    const transform = this.callback(name, args[1], [element], element);
+    this.fits(args[1].node, transform.result, element, "the updated Ref value");
+    return this.finish(
+      node,
+      this.table.unit,
+      combine([first, transform.info, EFFECT_ONLY]),
+    );
   }
 
   private provideCall(node: NodeId, args: readonly Arg[]): NodeInfo {

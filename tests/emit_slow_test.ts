@@ -528,6 +528,34 @@ console.log(JSON.stringify({ value, started, released }));
     assertEquals(result, { value: 7, started: 1, released: 1 });
   });
 });
+Deno.test("reference updates are atomic under bounded traversal", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "export const main = (): Int => {",
+        "  const ref = makeRef(0)",
+        "  traverse([1, 2, 3, 4], (n) => updateRef(ref, (current) => current + 1), { concurrency: 4 })",
+        "  getRef(ref)",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect } from "effect";
+import { main } from "./main.ts";
+console.log(JSON.stringify({ value: await Effect.runPromise(main()) }));
+`,
+    );
+    assertEquals(result, { value: 4 });
+  });
+});
 Deno.test("stream pull releases a scoped operation on failure and interruption", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
