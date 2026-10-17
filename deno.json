@@ -1,6 +1,7 @@
 {
   "name": "@srdjan/effective-lang",
   "version": "0.1.0",
+  "license": "MIT",
   "exports": "./src/core/mod.ts",
   "tasks": {
     "check": "deno fmt --check && deno lint && deno check 'src/**/*.ts' 'playground/**/*.ts' 'tests/**/*.ts' 'scripts/**/*.ts' 'bench/**/*.ts' && deno task test && deno task test:slow",
