@@ -1,0 +1,7 @@
+type Zone = string
+
+export service Clock {
+  // error: declaration/013
+  now(zone: string): Zone
+  zone(): Zone
+}

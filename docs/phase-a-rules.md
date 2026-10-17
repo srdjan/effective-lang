@@ -41,6 +41,7 @@ the implementer picks the stricter rule and records it here.
 | Effect value compatibility | `Effect<A, E, R>` checks `A` covariantly and requires the source's deferred failure and requirement sets to be subsets of the target's sets. Omitted sets and `never` mean empty sets |
 | Interface hash | Ignores spans, so comments do not change it. A body edit changes it only when it flips the mode of an exported function, because the payload holds each exported function type with its mode |
 | Interface payload | Also carries the declarations of other modules that the exports reach, so the hash covers them |
+| Primitive positions | R1, `declaration/013`, decisions D26 to D31: a type node that resolves to `string`, `int`, `number`, or `boolean`, and every literal type node, can occur only inside the body of a `type` or `error` declaration. The rule covers parameters, results, service methods, constant annotations, local annotations, function types, and type arguments, in `.eff` and `.effi` files. `void`, `never`, `unknown`, and other type forms are legal. The pass skips parser error regions, because the parser reported them, and it checks a broken declaration, because its annotations parsed |
 | Type depth | A type declaration deeper than 128 levels, counting aliases, is `declaration/012`, and the alias becomes the error type. The comparison caps are 1536 |
 
 ## Expressions, modes, and contracts (A3b)

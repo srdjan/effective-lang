@@ -285,6 +285,11 @@ export const DIAGNOSTIC_CODES = {
     description:
       "A type declaration is nested deeper than 128 levels, counting the levels inside its aliases.",
   },
+  "declaration/013": {
+    category: "declaration",
+    description:
+      "A primitive type (string, int, number, boolean, or a literal type) appears outside the body of a type or error declaration.",
+  },
   "module/001": {
     category: "module",
     description:

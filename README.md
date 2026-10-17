@@ -10,7 +10,7 @@ Parts A1, A2, A3a, A3b, A4, A5, A6a, A6b, A7, and A8 exist. Part A1 adds the pro
 
 Part A2 adds the declaration index, the project loader, the module graph, and the name resolver. It adds the diagnostic codes `unknown-name`, `module`, and `declaration`.
 
-Part A3a adds the declaration level of the checker. It adds the type intern table, the compatibility rules, function and provider signatures, and module interfaces with hashes. It adds the codes `type-mismatch/001`, `type-mismatch/002`, and `declaration/005` to `declaration/012`. Decision D21 added `declaration/012` on 2026-10-17.
+Part A3a adds the declaration level of the checker. It adds the type intern table, the compatibility rules, function and provider signatures, and module interfaces with hashes. It adds the codes `type-mismatch/001`, `type-mismatch/002`, and `declaration/005` to `declaration/013`. Decision D21 added `declaration/012` on 2026-10-17. Decision D26 added `declaration/013` on 2026-10-17.
 
 Part A3b adds body checking. It checks every function and constant body, infers effects and execution modes, and checks contracts, patterns, `try` and `catch`, `retry`, and `provide`. It builds the module initialization graph and the `typeAt` query. It adds the codes `type-mismatch/003` to `type-mismatch/011`, `failure-contract/001` to `/003`, `requirement-contract/001`, `execution-mode/001` to `/004`, `pattern/001` to `/004`, and `module/004`.
 
@@ -194,6 +194,8 @@ A diagnostic span names its file by the root-relative path, for example `users.e
 The result holds one shared type table and one entry for each module. A module entry holds the declarations, the signatures, the interface, and the sorted declaration diagnostics. The result also holds all diagnostics of the project, sorted and without duplicates.
 
 A function with a nonempty `fails` or `uses` set always has effect mode. A function with empty sets needs an entry in `modes`, because its body decides the mode. Without the entry, the `interface` field of the module is an error value. The diagnostics do not depend on `modes`.
+
+Rule R1: a primitive type can occur only inside a type or error declaration. Each `string`, `int`, `number`, `boolean`, or literal type node elsewhere gives `declaration/013`, in `.eff` and `.effi` files.
 
 A module interface holds `exports`, `values`, `types`, `errors`, and `services`. It also holds each declaration that an export reaches, private or from another module. Part A3b builds interfaces with `buildInterface` after it knows the modes. The hash covers the content without source spans.
 
@@ -434,7 +436,9 @@ The harnesses in `bench/` follow the measurement protocol of the design (section
 | `deno task bench --json <file>`                               | Also writes the raw samples to the file.                                                             |
 | `deno run --allow-write bench/generate.ts <size> <directory>` | Writes a synthetic project of the size `small`, `medium`, or `large`.                                |
 
-`--quick` is the default. `--full` changes only these counts: iterations, steps, warm-ups, M2 edits of each kind, and pairs. The three sizes stay the same: 30, 300, and 3000 declarations. The bench task passes `--no-lock`, so the optional variants never change `deno.lock`. The harness leaves nothing in the working tree. It uses temporary directories and removes them.
+`--quick` is the default. `--full` changes only these counts: iterations, steps, warm-ups, M2 edits of each kind, and pairs. The three sizes stay the same: 30, 300, and 3000 feature declarations. Each generated module also declares the aliases `Int`, `Num`, and `Text`, because rule R1 needs names for primitives.
+
+The bench task passes `--no-lock`, so the optional variants never change `deno.lock`. The harness leaves nothing in the working tree. It uses temporary directories and removes them.
 
 ### What each measurement decides
 
@@ -473,7 +477,7 @@ On the synthetic sizes, there are four kinds of edit.
 | Kind     | What the edit does                                                                                                                                  |
 | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `body`   | Changes the literal in the body of `bump`. The interface of the module does not change.                                                             |
-| `header` | Toggles the annotated type of the constant `extra` between `int` and `number`. The interface hash changes.                                          |
+| `header` | Toggles the annotated type of the constant `extra` between the aliases `Int` and `Num`. The interface hash changes.                                 |
 | `alias`  | Toggles the type alias `Amount` between `int` and `number`. The exported function `scale` names the alias, so the interface hash changes.           |
 | `flip`   | Toggles the body of the function `flip` between `n + 1` and `retry(() => n + 1, { times: 1 })`. The mode of `flip` changes between pure and effect. |
 

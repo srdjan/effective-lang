@@ -1,0 +1,5 @@
+import { Clock } from "host:x"
+
+type Count = int
+
+export const main = (): Count => 1

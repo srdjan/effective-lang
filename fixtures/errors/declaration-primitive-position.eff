@@ -1,0 +1,40 @@
+type Count = int
+type Text = string
+type Flag = boolean
+type Paid = "paid"
+type Id = Brand<string>
+type Record = { name: string, tags: string[], ready: boolean, status: "a" | "b" }
+error Declined = { reason: string, code: int }
+
+// error: declaration/013
+const moduleParameter = (n: int): Count => n
+
+// error: declaration/013
+const moduleResult = (n: Count): number => n
+
+service Store {
+  // error: declaration/013
+  save(item: string): void
+  load(id: Id): Text
+  ping(): void
+}
+
+// error: declaration/013
+const limit: number = 1
+
+const outer = (n: Count): Count => {
+  // error: declaration/013
+  const inner = (flag: boolean): Count => n
+  inner(true)
+}
+
+// error: declaration/013
+const apply: (x: string) => Count = (x) => 1
+
+// error: declaration/013
+const maybe = (o: Option<string>): Count => 1
+
+// error: declaration/013
+const literal = (s: "paid"): Count => 1
+
+const unused = (a: unknown, b: never, c: Option<Text>): Count => 1

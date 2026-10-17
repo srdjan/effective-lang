@@ -52,6 +52,7 @@ import {
   nodeText,
   SyntaxKind,
   type SyntaxTree,
+  walk,
 } from "./syntax.ts";
 import { sortedUnique, type TypeRef, type TypeTable } from "./types.ts";
 
@@ -880,6 +881,7 @@ class ModuleChecker {
     }
     this.checkCycles();
     this.checkDepths();
+    this.checkPrimitivePositions();
     for (const entry of entries) {
       if (entry.kind === "service") this.checkService(entry);
     }
@@ -906,6 +908,49 @@ class ModuleChecker {
       exports: this.exports,
       diagnostics: normalizeDiagnostics(this.sink),
     };
+  }
+
+  /**
+   * Rule R1: a primitive type node can occur only inside a type or error declaration.
+   * The walk skips those declarations and the regions that the parser already reported.
+   * A broken declaration is checked, because its annotations parsed.
+   */
+  private checkPrimitivePositions(): void {
+    const { tree } = this;
+    walk(tree, tree.root, (node) => {
+      const kind = kindOf(tree, node);
+      if (
+        kind === SyntaxKind.TypeDecl || kind === SyntaxKind.ErrorDecl ||
+        kind === SyntaxKind.Error
+      ) return false;
+      if (kind === SyntaxKind.LiteralType || this.isPrimitiveName(node)) {
+        this.lowerer.report(
+          "declaration/013",
+          `the primitive type \`${
+            nodeText(tree, node)
+          }\` can occur only inside a type or error declaration`,
+          nodeSpan(tree, node),
+        );
+      }
+    });
+  }
+
+  /** True for a named type that resolves to string, int, number, or boolean. */
+  private isPrimitiveName(node: NodeId): boolean {
+    if (kindOf(this.tree, node) !== SyntaxKind.NamedType) return false;
+    const nameNode = this.lowerer.kidsOfKind(node, SyntaxKind.Name)[0];
+    if (nameNode === undefined) return false;
+    const target = this.env.targets.get(nameNode);
+    if (target?.kind !== "builtin-type") return false;
+    switch (target.name) {
+      case "string":
+      case "int":
+      case "number":
+      case "boolean":
+        return true;
+      default:
+        return false;
+    }
   }
 
   // -------------------------------------------------------------- types and errors
