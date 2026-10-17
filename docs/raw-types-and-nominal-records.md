@@ -66,19 +66,21 @@ Point 4 does not name every type form. The parser and the checker also accept `E
 
 A script parses every `.eff` and `.effi` file with `parse` from `src/core/parse.ts`. It counts the primitive type nodes outside type and error bodies, by position. A primitive inside a type argument, for example `Option<string>` or `Effect<int>`, counts under the position of the enclosing type. The script is `/tmp/rules-probe/count/count.ts`. A hand count of the five examples gives the same numbers as the script.
 
+Correction, 2026-10-17: an earlier version of the script counted a primitive in a function type inside a type declaration as a use outside. It gave 33 uses in function types and a total of 609. The fixed script gives 19 and 595.
+
 | Position | `fixtures/examples/` (6 files) | All of `fixtures/` (84 files) |
 | --- | --- | --- |
 | Module function parameter | 6 | 252 |
 | Module function result | 5 | 259 |
 | Service method parameter or result | 4 | 34 |
-| Inside a function type | 0 | 33 |
+| Inside a function type | 0 | 19 |
 | Module constant annotation | 0 | 11 |
 | Local function parameter | 0 | 10 |
 | Local constant annotation | 0 | 7 |
 | Local function result | 0 | 3 |
 | Literal type, any position | 0 | 0 |
-| Total outside type definitions | 15 (5 files) | 609 (64 files) |
-| For comparison: inside type and error bodies | 13 | 141 |
+| Total outside type definitions | 15 (5 files) | 595 (64 files) |
+| For comparison: inside type and error bodies | 13 | 155 |
 
 R1 rejects 5 of the 6 example files and 64 of the 84 fixture files. Of the 64 files, 45 are in `fixtures/errors/`, 7 in `fixtures/emit/`, 6 in `fixtures/parse/`, 5 in `fixtures/examples/`, and 1 in `fixtures/ir/`. The files in `fixtures/errors/` exist to cause other diagnostics. So the fixture count is not a measure of real user code. No real user code exists to measure.
 
@@ -122,7 +124,7 @@ I recommend (a) because (b) and (c) make arithmetic and concatenation on branded
 
 D27. Which positions does R1 cover?
 
-- (a) Every position outside type and error bodies, local annotations included. Recommended. The rule text stays one sentence, and the local positions add only 20 of the 609 uses.
+- (a) Every position outside type and error bodies, local annotations included. Recommended. The rule text stays one sentence, and the local positions add only 20 of the 595 uses.
 - (b) Only module-level declarations and service methods, which form the module interface. Local function parameters, local results, and local constants stay free.
 
 D28. Does R1 apply to `.effi` host interface files?
