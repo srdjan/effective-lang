@@ -34,6 +34,8 @@ Parts G1 to G4 add the playground in `playground/`. See "Playground". The user h
 
 The project needs Deno 2.9.7. The first test run downloads `@std/assert` from jsr, so it needs network access once.
 
+The workflow `.github/workflows/check.yml` runs `deno task check` with Deno 2.9.7 on each push to `main` and on each pull request.
+
 ## Commands
 
 Run every command from the repository root.
