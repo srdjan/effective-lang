@@ -14,6 +14,7 @@ the implementer picks the stricter rule and records it here.
 | `fails` and `uses` on a new line | Continue a clause only when an identifier follows |
 | `Some(_)` | Accepted; `_` is the binding name |
 | Nesting depth | 512 levels of expressions and types; a parenthesis counts two levels. Deeper input is `syntax/009`, and the parser skips only the one group at the limit |
+| Array and tuple literals | The spec grammar has none, so `[1, 2]` is `syntax/008`. The IR `array` and `tuple` nodes have no source form yet |
 | Parenthesized types | `(A \| B)[]` and the empty tuple type are accepted |
 
 ## Projects and names (A2)
@@ -43,7 +44,7 @@ the implementer picks the stricter rule and records it here.
 
 | Rule | Choice |
 | --- | --- |
-| Contract diagnostics | One diagnostic per function lists every extra error or capability |
+| Contract diagnostics | One diagnostic for each contract kind of a function: `failure-contract/001` lists every extra error, and `requirement-contract/001` lists every extra capability |
 | Literal widening | Unannotated bindings, branch joins, inferred results, and the `fold` accumulator widen literals to primitives |
 | Branch joins | Without an expected type, one branch type must accept the other; no union is formed |
 | Local recursion | A block-level function cannot call itself (`execution-mode/003`) |
