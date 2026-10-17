@@ -360,6 +360,24 @@ Deno.test("a pure pipeline in collections binds its base value", () => {
   assertEquals(body.execution, "pure");
 });
 
+Deno.test("a pipeline binding skips a $p name that the source uses", () => {
+  const ir = lowerText(
+    "const add = (a: int, b: int): int => a + b\n" +
+      "export const p = (y: int): int => {\n" +
+      "  const $p1 = 10\n" +
+      "  y |> add($p1)\n" +
+      "}\n",
+  );
+  const body = functionBody(ir, "p");
+  assert(body.kind === "block");
+  const pipeline = body.result;
+  assert(pipeline.kind === "block");
+  const [first] = pipeline.steps;
+  assert(first.kind === "bind");
+  assertEquals(first.binding.id, "local:m#p/$p2");
+  assertEquals(first.binding.name, "$p2");
+});
+
 Deno.test("the pay pipeline numbers its bindings and keeps stage sets", () => {
   const source = exampleText("pay");
   const body = functionBody(lowered(examples(), "pay"), "pay");

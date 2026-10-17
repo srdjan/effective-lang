@@ -47,6 +47,7 @@ import type {
   Type,
   ValueId,
 } from "./ir.ts";
+import { TokenKind } from "./lex.ts";
 import type { ModuleInfo } from "./project.ts";
 import type { ModuleResolution, Target } from "./resolve.ts";
 import { sha256Hex } from "./sha256.ts";
@@ -147,9 +148,23 @@ interface ModuleContext {
   readonly services: ReadonlyMap<ServiceId, ServiceDecl>;
   /** Specialized builtins in the order of first use. */
   readonly builtins: Map<ValueId, BuiltinInstance>;
+  /** The identifier texts of the module, which a generated `$p<n>` name skips. */
+  readonly identifiers: ReadonlySet<string>;
 }
 
 const EMPTY_EFFECTS: Effects = { failures: [], requirements: [] };
+
+/** Every identifier text of a module. */
+function identifiersOf(tree: SyntaxTree): ReadonlySet<string> {
+  const lexed = tree.lexed;
+  const names = new Set<string>();
+  for (let t = 0; t < lexed.count; t++) {
+    if (lexed.kinds[t] === TokenKind.Ident) {
+      names.add(lexed.text.slice(lexed.starts[t], lexed.ends[t]));
+    }
+  }
+  return names;
+}
 
 function setOf(expr: Expr): EffectSet {
   return {
@@ -298,6 +313,9 @@ class BodyLowerer {
 
   private nextPipelineBinding(): LocalId {
     this.pipelines += 1;
+    while (this.ctx.identifiers.has(`$p${this.pipelines}`)) {
+      this.pipelines += 1;
+    }
     return `local:${this.ctx.module}#${this.owner}/$p${this.pipelines}` as LocalId;
   }
 
@@ -1214,6 +1232,7 @@ export function lowerModule(
     targets: resolution.targets,
     services: checkedModule.declarations.env.services,
     builtins: new Map(),
+    identifiers: identifiersOf(checkedModule.tree),
   };
   try {
     const declarations = lowerDeclarations(checked, checkedModule, ctx);
