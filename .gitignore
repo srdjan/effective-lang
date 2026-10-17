@@ -1,6 +1,7 @@
 demos/
 .DS_Store
 fixtures/**/*.ts
+fixtures/**/*.ts.map
 !fixtures/golden/**
 !fixtures/examples/users-live.ts
 !fixtures/host-boundary/**
