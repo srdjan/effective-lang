@@ -1568,3 +1568,49 @@ Deno.test("a chain of 5000 aliases gives declaration/012 and no exception", () =
   assert(codes(project).includes("declaration/012"));
   assert(codes(project).every((code) => code === "declaration/012"));
 });
+
+// ------------------------------------------------------------------ record brands
+
+const NOMINAL_RECORDS = `
+type UserId = Brand<string>
+type User = Brand<{ id: UserId, name: string, active: boolean, nickname?: string }>
+type Dog = { id: UserId, name: string, active: boolean, nickname?: string }
+const nameOf = (user: User): string => user.name
+const nick = (user: User): string =>
+  match user.nickname {
+    Some(n) => n,
+    None => "none"
+  }
+const activate = (user: User): User => ({ ...user, active: true })
+`;
+
+Deno.test("a field read and a record update see through a brand of a record", () => {
+  const project = checkText(NOMINAL_RECORDS);
+  assertEquals(messages(project), []);
+  const activate = fn(project, "m", "activate");
+  const type = project.table.node(activate.type);
+  assert(type.kind === "function");
+  const update = nodesOfKind(project, "m", SyntaxKind.RecordExpr)
+    .map((n) => activate.table.info.get(n))
+    .find((info) => info !== undefined);
+  assert(update !== undefined);
+  assertEquals(update.type, type.result);
+  const result = project.table.node(update.type);
+  assert(result.kind === "named");
+  assert(result.id.endsWith("#User"), result.id);
+});
+
+Deno.test("a record brand stays nominal against a structural record of equal fields", () => {
+  const project = checkText(`${NOMINAL_RECORDS}
+const dog: Dog = { id: UserId("d1"), name: "barki", active: false }
+const wrong = (): User => activate(dog)
+`);
+  assertEquals(codes(project), ["type-mismatch/003"]);
+});
+
+Deno.test("a record update through a brand rejects a field that the base lacks", () => {
+  const project = checkText(`${NOMINAL_RECORDS}
+const owned = (user: User): User => ({ ...user, owner: "x" })
+`);
+  assertEquals(codes(project), ["type-mismatch/005"]);
+});

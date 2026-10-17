@@ -53,6 +53,7 @@ the implementer picks the stricter rule and records it here.
 | Local recursion | A block-level function cannot call itself (`execution-mode/003`) |
 | Mode fixed point | Round cap 32 (`execution-mode/004`) |
 | Equality | Compares string, numeric, boolean, or one primitive brand; records and options are rejected |
+| Record brand | A field read and a record update see through a brand whose base is a record, after aliases. The update keeps the brand type. A record literal does not fit a record brand; the program calls the brand. A brand whose base is a union has no fields. A match with a record pattern on a record brand, and a record brand as a `withResource` operation record, stay unsupported |
 | `retry` form | The second argument must be the literal record `{ times: N }` |
 | `traverse` | `traverse(items, callback)` invokes the callback sequentially. An optional literal `{ concurrency: N }` with positive safe integer N runs at most N callbacks simultaneously, preserves input order, interrupts active siblings after a typed failure, and waits for scoped finalizers. Callback invocation failures and requirements remain active. `map`, `filter`, and `fold` keep their pure-callback rule |
 | `defer` and `run` | `defer(job)` stores the invocation of a zero-argument function without running it. Constructing the value carries only effects of evaluating the job expression. Each `run(value)` executes the stored Effect and activates its deferred failures and requirements, even when both sets are empty |

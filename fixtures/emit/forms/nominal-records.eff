@@ -1,0 +1,31 @@
+type UserId = Brand<string>
+
+export type User = Brand<{
+  id: UserId,
+  name: string,
+  active: boolean,
+  nickname?: string
+}>
+
+type Dog = {
+  id: UserId,
+  name: string,
+  active: boolean,
+  nickname?: string
+}
+
+export const make = (): User =>
+  User({ id: UserId("u1"), name: "Ann", active: false })
+
+export const nameOf = (user: User): string => user.name
+
+export const nick = (user: User): string =>
+  match user.nickname {
+    Some(n) => n,
+    None => "none"
+  }
+
+export const activate = (user: User): User =>
+  ({ ...user, active: true })
+
+export const plain = (user: User): Dog => unbrand(user)

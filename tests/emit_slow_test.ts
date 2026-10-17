@@ -174,6 +174,7 @@ function buildForms(dir: string): string[] {
     "forms.eff",
     "names.eff",
     "conditional-chains.eff",
+    "nominal-records.eff",
     LONG_NAMES + ".eff",
   ]);
 }
@@ -783,13 +784,14 @@ Deno.test("the emitted forms are a fixed point of deno fmt", async () => {
         "conditional-chains.ts",
         "forms.ts",
         "names.ts",
+        "nominal-records.ts",
       ],
     );
     const run = await deno(dir, ["fmt", "--check", ...generated]);
     assertEquals(run.code, 0, `deno fmt --check failed:\n${run.stderr}`);
     assert(
-      run.stderr.includes("Checked 4 files"),
-      `deno fmt did not check the four files:\n${run.stderr}`,
+      run.stderr.includes("Checked 5 files"),
+      `deno fmt did not check the five files:\n${run.stderr}`,
     );
   });
 });

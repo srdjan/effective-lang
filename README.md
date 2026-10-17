@@ -207,6 +207,8 @@ Each function and constant has a body table. The table maps a syntax node id to 
 
 The table also maps a node id to a fact that lowering needs. A call node has the fact `call`, `perform`, `error-construction`, `brand-construction`, `unbrand`, `some`, `fail`, `retry`, `provide`, or `builtin`. A `builtin` fact carries the closed function type of a collection operation. A bracket literal has a fact that selects array or tuple IR. A field read, an arrow, a block binding, a pattern, and a catch handler have facts too.
 
+A field read and a record update see through a brand of a record type, and an update keeps the brand.
+
 A module constant needs a pure initializer with empty sets. The `initialization` value lists the constants in a safe order. It also lists the dependencies of each constant and every dependency cycle.
 
 `typeAt(check, path, offset)` returns text for the innermost checked node at an offset. A function name gives its signature, for example `getUser(id): User fails StoreUnavailable | UserMissing uses Users.find`. Any other node gives its type and its sets. Sets print in sorted identity order.

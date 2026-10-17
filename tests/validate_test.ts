@@ -1358,3 +1358,23 @@ Deno.test("compatibility: the lift applies only at the top of a value position",
   assert(same(ENV, pure, pure));
   assert(!same(ENV, pure, effect));
 });
+
+Deno.test("a field read and a record update through a record brand validate", () => {
+  const lowered = lowerText(`
+type UserId = Brand<string>
+type User = Brand<{ id: UserId, name: string, active: boolean, nickname?: string }>
+const nameOf = (user: User): string => user.name
+const nick = (user: User): string =>
+  match user.nickname {
+    Some(n) => n,
+    None => "none"
+  }
+const activate = (user: User): User => ({ ...user, active: true })
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const mutated = copy(lowered.ir);
+  const nameOf = mutated.declarations.find((d) => d.name === "nameOf");
+  assert(nameOf?.kind === "function" && nameOf.body.kind === "get");
+  setAt(nameOf, "body.field", "missing");
+  assertEquals(codesOf(mutated, lowered.sources), ["validation/002"]);
+});

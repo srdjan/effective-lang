@@ -1883,6 +1883,11 @@ export class BodyChecker {
         : this.table.node(record);
       return recordNode?.kind === "record" ? recordNode.fields : undefined;
     }
+    if (node.kind === "named") {
+      // A brand of a record has the fields of its base.
+      const base = this.table.brandBaseOf(node.id as TypeId);
+      if (base !== undefined) return this.recordFields(base);
+    }
     return undefined;
   }
 

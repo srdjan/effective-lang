@@ -6,6 +6,7 @@ import type {
   Arm,
   ErrorId,
   Expr,
+  Field,
   FunctionType,
   Handler,
   LocalId,
@@ -902,11 +903,25 @@ export class ExprEmitter {
     return [name, ": ", free(kid(value, expected))];
   }
 
-  /** The declared type of a field of a record type. */
+  /** The declared type of a field of a record type or of a brand of a record. */
   private fieldType(type: Type, name: string): Type | undefined {
+    return this.recordFieldsOf(type)?.find((f) => f.name === name)?.type;
+  }
+
+  /** The fields of a record type, seen through aliases and brands of a record. */
+  private recordFieldsOf(
+    type: Type,
+    depth = 0,
+  ): readonly Field[] | undefined {
+    if (depth >= 64) return undefined;
     const resolved = this.scope.resolve(type);
-    if (resolved.kind !== "record") return undefined;
-    return resolved.fields.find((f) => f.name === name)?.type;
+    if (resolved.kind === "record") return resolved.fields;
+    if (resolved.kind !== "named") return undefined;
+    const declaration = this.scope.typeLevelDeclaration(resolved.id);
+    return declaration?.kind === "type" &&
+        declaration.definition.kind === "brand"
+      ? this.recordFieldsOf(declaration.definition.base, depth + 1)
+      : undefined;
   }
 
   private errorFieldType(error: ErrorId, name: string): Type | undefined {
@@ -945,9 +960,9 @@ export class ExprEmitter {
   }
 
   private isOptionalField(type: Type, field: string): boolean {
-    const resolved = this.scope.resolve(type);
-    return resolved.kind === "record" &&
-      resolved.fields.some((f) => f.name === field && f.optional);
+    return this.recordFieldsOf(type)?.some((f) =>
+      f.name === field && f.optional
+    ) ?? false;
   }
 
   private binary(

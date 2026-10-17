@@ -126,6 +126,21 @@ Deno.test("emitting twice gives identical text", () => {
   );
 });
 
+Deno.test("a record brand emits field reads and updates that keep the brand", () => {
+  const emitted = emitFiles(projectFiles("emit/forms"), [
+    "nominal-records.eff",
+  ]).get("nominal-records");
+  assert(emitted !== undefined, "module nominal-records was not emitted");
+  const text = emitted.text;
+  assertStringIncludes(text, '.pipe(Schema.brand("nominal-records#User"))');
+  assertStringIncludes(text, "(user: User): string => user.name;");
+  // An optional field read through the brand becomes an Option.
+  assertStringIncludes(text, "Option.fromUndefinedOr(user.nickname)");
+  // The update is a plain spread; it keeps the brand in the TypeScript type.
+  assertStringIncludes(text, "({ ...user, active: true })");
+  assertStringIncludes(text, "User.make({ id: UserId.make(");
+});
+
 // ------------------------------------------------------------------ names
 
 Deno.test("a module that declares generated names still emits valid names", () => {

@@ -1,0 +1,17 @@
+type UserId = Brand<string>
+
+type User = Brand<{ id: UserId, name: string, active: boolean }>
+
+type Dog = { id: UserId, name: string, active: boolean }
+
+const activate = (user: User): User => ({ ...user, active: true })
+
+const dog: Dog = { id: UserId("d1"), name: "barki", active: false }
+
+const wrong = (): User =>
+  // error: type-mismatch/003
+  activate(dog)
+
+const literal = (): User =>
+  // error: type-mismatch/003
+  ({ id: UserId("u2"), name: "Bo", active: true })
