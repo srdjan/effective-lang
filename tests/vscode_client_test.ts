@@ -1,5 +1,6 @@
 import { assert, assertEquals } from "@std/assert";
 import { KEYWORDS } from "../src/core/lex.ts";
+import { BUILTIN_TYPE_NAMES, PRELUDE_NAMES } from "../src/core/resolve.ts";
 import {
   GENERATED_CHANGED_METHOD,
   GENERATED_SCHEME,
@@ -116,7 +117,9 @@ Deno.test("the grammar names the scope and every lexer keyword", () => {
   assertEquals(grammar.scopeName, "source.effective");
   const words = [
     ...KEYWORDS.keys(),
-    // Contextual words of the parser and the prelude names.
+    ...PRELUDE_NAMES,
+    ...BUILTIN_TYPE_NAMES,
+    // Contextual words of the parser.
     "type",
     "error",
     "service",
@@ -125,15 +128,6 @@ Deno.test("the grammar names the scope and every lexer keyword", () => {
     "fails",
     "uses",
     "from",
-    "map",
-    "filter",
-    "fold",
-    "retry",
-    "provide",
-    "fail",
-    "Some",
-    "None",
-    "unbrand",
   ];
   const matchers = collectMatches(grammar).map((match) => new RegExp(match));
   for (const token of [...words, "|>", "=>"]) {
