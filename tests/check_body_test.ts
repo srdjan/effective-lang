@@ -1235,6 +1235,19 @@ const g = (n: int): string => missing.field
   assertEquals(codes(project), ["unknown-name/001", "unknown-name/001"]);
 });
 
+Deno.test("an unknown operand of -, *, or / gives no cascade", () => {
+  const project = checkText(`
+const a: int = missing - 1
+const b: int = missing * 2
+const c: int = missing / 2
+`);
+  assertEquals(codes(project), [
+    "unknown-name/001",
+    "unknown-name/001",
+    "unknown-name/001",
+  ]);
+});
+
 Deno.test("a declaration with a syntax error does not hide a later declaration", () => {
   const project = checkText(`
 const broken = (n: int): int => n +

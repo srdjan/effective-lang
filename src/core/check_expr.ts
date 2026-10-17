@@ -1691,13 +1691,8 @@ export class BodyChecker {
         return this.finish(node, table.boolean, eff);
       }
       default: {
-        if (either) {
-          return this.finish(
-            node,
-            operator === "+" ? table.error : table.number,
-            eff,
-          );
-        }
+        // An error operand hides whether the result is int or number.
+        if (either) return this.finish(node, table.error, eff);
         if (this.isNumeric(left.type) && this.isNumeric(right.type)) {
           const integral = operator !== "/" &&
             table.isAssignable(left.type, table.int) &&
