@@ -1,6 +1,6 @@
 # Assessment: primitives only inside type definitions (R1), and nominal records (R2)
 
-Status: assessment, 2026-10-17. Compiler: this repository at commit `f755b3f`. The user proposed two rules for the language spec. R2 is done. This document assesses R1 and lists the decisions that R1 needs before an implementation plan.
+Status: done, 2026-10-17. R1 and R2 are in release `v0.2.0` of this repository. Spec draft 0.2 describes both rules (commit `c93e2d3` in `/Users/srdjans/Code/effective`). The assessment below used this repository at commit `f755b3f`.
 
 A Fable subagent reviewed the first draft. Opus accepted all 13 findings.
 
@@ -20,7 +20,7 @@ Commit `f755b3f` fixed an older emitter fault that the R2 review found. A read o
 
 These items stay open after R2:
 
-- The spec text in `/Users/srdjans/Code/effective` does not describe a field read or an update through a brand of a record. The user owns the spec.
+- The spec text in `/Users/srdjans/Code/effective` did not describe a field read or an update through a brand of a record. Spec draft 0.2 added this text.
 - A `match` with a record pattern on a record brand gives `pattern/004`. A record brand as the operation record of `withResource` is rejected. The ledger `docs/phase-a-rules.md` names both as unsupported.
 
 ## 2. R1: the rule
@@ -161,4 +161,4 @@ The user first preferred D32 (c) for every brand. Opus showed that (c) gives a w
 
 ## 8. Next action
 
-Opus writes the implementation plan for R1 in `docs/plans/`, a Fable subagent validates it, and a Sonnet subagent implements it. The user also decides when the spec in `/Users/srdjans/Code/effective` gets the R1 and R2 text.
+None. The R1 plan is `docs/plans/2026-10-17-r1-and-brand-operators.md`, and release `v0.2.0` contains its implementation. Spec draft 0.2 describes R1, R2, and the numeric brand operators. The spec also states the two unsupported cases of section 1 as exclusions of version 0. A change to either exclusion is a new language decision for the user.
