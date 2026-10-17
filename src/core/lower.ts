@@ -460,6 +460,19 @@ class BodyLowerer {
     override: ((args: readonly Expr[]) => EffectSet) | undefined,
   ): Expr {
     const fact = this.required(this.fact(node), "the call fact", node);
+    if (fact.kind === "layer") {
+      if (pre !== undefined || override !== undefined) {
+        throw internal("layer does not accept a pipeline input");
+      }
+      return {
+        kind: "layer",
+        service: this.required(fact.service, "the supplied service", node),
+        acquire: this.expr(
+          this.required(argNodes[1], "the layer acquisition", node),
+        ),
+        ...this.annotation(node),
+      };
+    }
     const callee: Expr | undefined = fact.kind === "call"
       ? this.calleeExpr(calleeNode)
       : undefined;
@@ -622,6 +635,13 @@ class BodyLowerer {
           kind: "update-ref",
           ref: arg(0),
           transform: arg(1),
+          ...annotation,
+        };
+      case "merge-layers":
+        return {
+          kind: "merge-layers",
+          left: arg(0),
+          right: arg(1),
           ...annotation,
         };
       default:

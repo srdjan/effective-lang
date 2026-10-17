@@ -60,6 +60,10 @@ export function childrenOf(expr: Expr): Expr[] {
       return [expr.ref, expr.value];
     case "update-ref":
       return [expr.ref, expr.transform];
+    case "layer":
+      return [expr.acquire];
+    case "merge-layers":
+      return [expr.left, expr.right];
     case "call":
       return [expr.callee, ...expr.arguments];
     case "perform":

@@ -967,7 +967,8 @@ class Parser {
         if (
           (this.isWordAt(this.pos, "Effect") ||
             this.isWordAt(this.pos, "Stream") ||
-            this.isWordAt(this.pos, "Sink")) &&
+            this.isWordAt(this.pos, "Sink") ||
+            this.isWordAt(this.pos, "Layer")) &&
           this.kinds[this.pos + 1] === TokenKind.Lt
         ) {
           this.begin();
@@ -977,7 +978,11 @@ class Parser {
           );
           this.tok();
           const group = this.open("free");
-          this.parseType();
+          if (name === "Layer") {
+            this.begin();
+            this.parseNameSet(true);
+            this.end(SyntaxKind.ProvidesClause);
+          } else this.parseType();
           if (name === "Sink") {
             if (this.kind() === TokenKind.Comma) this.tok();
             else this.missing("`,`");
@@ -1001,6 +1006,8 @@ class Parser {
               ? SyntaxKind.EffectType
               : name === "Stream"
               ? SyntaxKind.StreamType
+              : name === "Layer"
+              ? SyntaxKind.LayerType
               : SyntaxKind.SinkType,
           );
           return;

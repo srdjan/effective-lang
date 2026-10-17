@@ -286,6 +286,7 @@ export class TypeLowerer {
       case SyntaxKind.EffectType:
       case SyntaxKind.StreamType:
       case SyntaxKind.SinkType:
+      case SyntaxKind.LayerType:
         return this.deferredType(node);
       case SyntaxKind.LiteralType:
         return this.literal(node);
@@ -609,6 +610,31 @@ export class TypeLowerer {
     );
     const effects = { failures, requirements };
     const kind = kindOf(this.tree, node);
+    if (kind === SyntaxKind.LayerType) {
+      const provides: CapabilityId[] = [];
+      const clause = kids.find((k) =>
+        kindOf(this.tree, k) === SyntaxKind.ProvidesClause
+      );
+      if (clause !== undefined) {
+        for (const qn of this.kidsOfKind(clause, SyntaxKind.QualifiedName)) {
+          provides.push(...this.capabilitiesOf(qn));
+        }
+      }
+      const provided = sortedUnique(provides);
+      return {
+        ref: this.env.table.provider({
+          provides: provided,
+          execution: "effect",
+          failures,
+          requirements,
+        }),
+        ir: {
+          kind: "provider",
+          provides: provided,
+          acquisition: { execution: "effect", effects },
+        },
+      };
+    }
     if (kind === SyntaxKind.StreamType) {
       return {
         ref: this.env.table.stream(first.ref, failures, requirements),

@@ -864,6 +864,15 @@ export class ExprEmitter {
           callArguments([kid(e.left), kid(e.right)]),
         ]);
       }
+      case "layer":
+        return this.sourceLayer(e);
+      case "merge-layers": {
+        const layer = this.scope.effect("Layer");
+        return emitted([
+          `${layer}.merge`,
+          callArguments([kid(e.left), kid(e.right)]),
+        ]);
+      }
       case "race": {
         const effect = this.scope.effect("Effect");
         return emitted([
@@ -895,6 +904,61 @@ export class ExprEmitter {
       case "update-ref":
         throw internal(`${e.kind} node in a structural position`);
     }
+  }
+
+  private sourceLayer(e: Extract<Expr, { kind: "layer" }>): Emitted {
+    const declaration = this.scope.typeLevelDeclaration(e.service);
+    const acquire = this.functionTypeOf(e.acquire.type);
+    const implementation = acquire === undefined
+      ? undefined
+      : this.scope.resolve(acquire.result);
+    if (declaration?.kind !== "service" || implementation?.kind !== "record") {
+      throw internal("a source layer needs a checked service implementation");
+    }
+    const effect = this.scope.effect("Effect");
+    const layer = this.scope.effect("Layer");
+    const instance = this.scope.temp();
+    const fields: Doc[] = declaration.methods.map((method) => {
+      const field = implementation.fields.find((f) => f.name === method.name);
+      const source = field === undefined
+        ? undefined
+        : this.scope.resolve(field.type);
+      if (source?.kind !== "function") {
+        throw internal(`the layer method ${method.name} is not a function`);
+      }
+      const names = method.type.parameters.map(() => this.scope.temp());
+      const parameters = bracketed(
+        "(",
+        ")",
+        names.map((
+          name,
+          i,
+        ) => [name, ": ", typeDoc(this.scope, method.type.parameters[i])]),
+        false,
+      );
+      const invoke = emitted([
+        instance,
+        ".",
+        method.name,
+        callArguments(names.map((name) => emitted(name))),
+      ]);
+      const body = source.execution === "pure"
+        ? emitted([`${effect}.succeed`, callArguments([invoke])])
+        : invoke;
+      return [method.name, ": ", this.arrow(parameters, body)];
+    });
+    const assembled = this.objectLiteral(fields, []);
+    const mapped = emitted([
+      `${effect}.map`,
+      callArguments([
+        this.suspended(e.acquire),
+        emitted(this.arrow(`(${instance})`, assembled)),
+      ]),
+    ]);
+    return emitted([
+      `${layer}.effect`,
+      callArguments([emitted(this.scope.nameOf(e.service)), mapped]),
+    ]);
   }
 
   private literal(value: string | number | boolean | null): Doc {

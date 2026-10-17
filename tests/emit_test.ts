@@ -110,6 +110,21 @@ export const count = (): Int => {
   assertStringIncludes(output, "Ref.get(ref)");
 });
 
+Deno.test("source Layers emit service acquisition and merge", () => {
+  const output = oneModule(`
+service First { one(): Int }
+service Second { two(): Int }
+const first = layer(First, () => ({ one: () => 1 }))
+const second = layer(Second, () => ({ two: () => 2 }))
+const both: Layer<First | Second> = mergeLayers(first, second)
+export const main = (): Int => provide(both, () => First.one() + Second.two())
+type Int = int
+`);
+  assertStringIncludes(output, "Layer.effect(");
+  assertStringIncludes(output, "Layer.merge(first, second)");
+  assertStringIncludes(output, "Effect.provide(");
+});
+
 Deno.test("defer stores an Effect and run executes it in an effect function", () => {
   const output = oneModule(`
 error Stop = {}

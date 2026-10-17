@@ -179,6 +179,23 @@ const count = (): Int => {
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
 });
 
+Deno.test("source Layers validate acquisition and disjoint service sets", () => {
+  const lowered = lowerText(`
+service First { one(): Int }
+service Second { two(): Int }
+const first = layer(First, () => ({ one: () => 1 }))
+const second = layer(Second, () => ({ two: () => 2 }))
+const both: Layer<First | Second> = mergeLayers(first, second)
+type Int = int
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const overlap = copy(lowered.ir);
+  const both = overlap.declarations.find((d) => d.name === "both");
+  assert(both?.kind === "constant" && both.value.kind === "merge-layers");
+  (both.value as { right: unknown }).right = both.value.left;
+  assert(codesOf(overlap, lowered.sources).includes("validation/006"));
+});
+
 Deno.test("with-resource validation rejects scoped escape and channel mutation", () => {
   const lowered = lowerText(`
 error Stop = {}

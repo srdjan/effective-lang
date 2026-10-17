@@ -131,6 +131,8 @@ export type Expr =
   | Node<{ kind: "get-ref"; ref: Expr }>
   | Node<{ kind: "set-ref"; ref: Expr; value: Expr }>
   | Node<{ kind: "update-ref"; ref: Expr; transform: Expr }>
+  | Node<{ kind: "layer"; service: ServiceId; acquire: Expr }>
+  | Node<{ kind: "merge-layers"; left: Expr; right: Expr }>
   | Node<{ kind: "perform"; capability: CapabilityId; arguments: readonly Expr[] }>
   | Node<{ kind: "block"; steps: readonly Step[]; result: Expr }>
   | Node<{ kind: "if"; condition: Expr; then: Expr; else: Expr }>

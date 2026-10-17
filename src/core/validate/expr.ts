@@ -421,6 +421,10 @@ export class BodyValidator {
       case "set-ref":
       case "update-ref":
         return this.refOperation(e, path);
+      case "layer":
+        return this.layer(e, path);
+      case "merge-layers":
+        return this.mergeLayers(e, path);
       case "perform":
         return this.perform(e, path);
       case "block":
@@ -1500,6 +1504,10 @@ export class BodyValidator {
             return [e.ref, e.value];
           case "update-ref":
             return [e.ref, e.transform];
+          case "layer":
+            return [e.acquire];
+          case "merge-layers":
+            return [e.left, e.right];
           case "defer":
           case "retry":
             return [e.job];
@@ -1971,6 +1979,117 @@ export class BodyValidator {
       type: UNIT,
       match: "exact",
       active: combine([ref, transform, EFFECT_ONLY]),
+    };
+  }
+
+  private layer(e: Extract<Expr, { kind: "layer" }>, path: string): Comp {
+    const acquire = this.check(e.acquire, `${path}.acquire`);
+    const service = this.ctx.world.services.get(e.service);
+    const fn = asFunction(this.env, acquire.type);
+    if (
+      service === undefined || fn === undefined || fn.parameters.length !== 0 ||
+      e.acquire.kind !== "closure"
+    ) {
+      this.add(
+        AREA.control,
+        path,
+        "layer needs a declared service and inline zero-argument callback",
+        e.span,
+      );
+      return this.poison();
+    }
+    const implementation = unfold(this.env, fn.result);
+    if (
+      implementation.kind !== "record" ||
+      implementation.fields.length !== service.methods.length
+    ) {
+      this.add(
+        AREA.types,
+        `${path}.acquire`,
+        "layer must return exactly the service methods",
+        e.acquire.span,
+      );
+      return this.poison();
+    }
+    for (const method of service.methods) {
+      const field = implementation.fields.find((f) => f.name === method.name);
+      if (
+        field === undefined || field.optional ||
+        !fits(this.env, field.type, method.type)
+      ) {
+        this.add(
+          AREA.types,
+          `${path}.acquire`,
+          `layer method ${method.name} does not fit its service contract`,
+          e.acquire.span,
+        );
+      }
+    }
+    const provides = service.methods.map((m) => m.id).sort();
+    if (fn.effects.requirements.some((r) => provides.includes(r))) {
+      this.add(
+        AREA.control,
+        path,
+        "layer acquisition requires a method it provides",
+        e.span,
+      );
+    }
+    return {
+      type: {
+        kind: "provider",
+        provides,
+        acquisition: { execution: "effect", effects: fn.effects },
+      },
+      match: "exact",
+      active: combine([acquire]),
+    };
+  }
+
+  private mergeLayers(
+    e: Extract<Expr, { kind: "merge-layers" }>,
+    path: string,
+  ): Comp {
+    const left = this.check(e.left, `${path}.left`);
+    const right = this.check(e.right, `${path}.right`);
+    const a = unfold(this.env, left.type);
+    const b = unfold(this.env, right.type);
+    if (a.kind !== "provider" || b.kind !== "provider") {
+      this.add(AREA.types, path, "mergeLayers needs two Layer values", e.span);
+      return this.poison();
+    }
+    const services = new Set(
+      a.provides.map((id) => id.slice(0, id.lastIndexOf("."))),
+    );
+    if (
+      b.provides.some((id) => services.has(id.slice(0, id.lastIndexOf("."))))
+    ) {
+      this.add(
+        AREA.control,
+        path,
+        "mergeLayers cannot provide one service twice",
+        e.span,
+      );
+    }
+    return {
+      type: {
+        kind: "provider",
+        provides: sortedUnique([...a.provides, ...b.provides]),
+        acquisition: {
+          execution: "effect",
+          effects: {
+            failures: sortedUnique([
+              ...a.acquisition.effects.failures,
+              ...b.acquisition.effects.failures,
+            ]),
+            requirements: sortedUnique([
+              ...a.acquisition.effects.requirements,
+              ...b.acquisition.effects.requirements,
+            ]),
+          },
+        },
+      },
+      match: "exact",
+      active: combine([left, right]),
     };
   }
 

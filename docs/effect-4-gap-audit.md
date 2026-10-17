@@ -19,6 +19,10 @@ Update, 2026-10-17: `fixtures/host-adapter-files/` demonstrates a typed
 `effect/FileSystem` host adapter with Node services, input validation, and
 nominal error translation. The CLI's target check pins the Node platform
 package to 4.0.5. This covers one operation, not general ecosystem parity.
+Update, 2026-10-17: source `Layer<Services,E,R>`, `layer`, `mergeLayers`, and
+expression-valued `provide` now compile. Acquisition channels are retained,
+and overlapping service sets are rejected. The original coverage map below
+predates this slice.
 
 Update, 2026-10-17: the pipeline validation defect described below was fixed
 in phase 1 of the [implementation plan](plans/2026-10-17-effect4-gap-closure.md).

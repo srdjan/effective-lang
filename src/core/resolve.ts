@@ -61,6 +61,8 @@ export type PreludeName =
   | "getRef"
   | "setRef"
   | "updateRef"
+  | "layer"
+  | "mergeLayers"
   | "unbrand"
   | "Some"
   | "None"
@@ -87,6 +89,8 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "getRef",
   "setRef",
   "updateRef",
+  "layer",
+  "mergeLayers",
   "unbrand",
   "Some",
   "None",
@@ -852,9 +856,13 @@ class Resolver {
       case SyntaxKind.EffectType:
       case SyntaxKind.StreamType:
       case SyntaxKind.SinkType:
+      case SyntaxKind.LayerType:
         for (const kid of this.kids(node)) {
           const k = kindOf(this.tree, kid);
-          if (k === SyntaxKind.FailsClause || k === SyntaxKind.UsesClause) {
+          if (
+            k === SyntaxKind.FailsClause || k === SyntaxKind.UsesClause ||
+            k === SyntaxKind.ProvidesClause
+          ) {
             this.clause(kid);
           } else this.resolveType(kid);
         }
@@ -969,6 +977,32 @@ class Resolver {
       case SyntaxKind.CallExpr: {
         const kids = this.kids(node);
         if (kids.length > 0) this.expr(kids[0], "callee");
+        if (
+          kids[0] !== undefined &&
+          kindOf(this.tree, kids[0]) === SyntaxKind.NameExpr &&
+          nodeText(this.tree, kids[0]) === "layer" &&
+          kids[1] !== undefined &&
+          kindOf(this.tree, kids[1]) === SyntaxKind.ArgList
+        ) {
+          const args = this.kids(kids[1]);
+          const first = args[0];
+          if (
+            first !== undefined &&
+            kindOf(this.tree, first) === SyntaxKind.NameExpr
+          ) {
+            const found = this.lookupValue(
+              nodeText(this.tree, first),
+              this.span(first),
+            );
+            if (
+              found?.tag === "module" && found.binding.target.kind === "service"
+            ) {
+              this.set(first, found.binding.target);
+            } else this.expr(first, "value");
+          } else if (first !== undefined) this.expr(first, "value");
+          for (const arg of args.slice(1)) this.expr(arg, "value");
+          return;
+        }
         for (const arg of kids.slice(1)) this.expr(arg, "value");
         return;
       }

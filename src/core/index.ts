@@ -87,6 +87,7 @@ const TYPE_KINDS: ReadonlySet<SyntaxKind> = new Set([
   SyntaxKind.EffectType,
   SyntaxKind.StreamType,
   SyntaxKind.SinkType,
+  SyntaxKind.LayerType,
   SyntaxKind.LiteralType,
   SyntaxKind.RecordType,
   SyntaxKind.TupleType,

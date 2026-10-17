@@ -556,6 +556,67 @@ console.log(JSON.stringify({ value: await Effect.runPromise(main()) }));
     assertEquals(result, { value: 4 });
   });
 });
+Deno.test("source Layers merge and provide their declared services", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "service First { one(): Int }",
+        "service Second { two(): Int }",
+        "const first = layer(First, () => ({ one: () => 1 }))",
+        "const second = layer(Second, () => ({ two: () => 2 }))",
+        "const both: Layer<First | Second> = mergeLayers(first, second)",
+        "export const main = (): Int => provide(both, () => First.one() + Second.two())",
+        "type Int = int",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect } from "effect";
+import { main } from "./main.ts";
+console.log(JSON.stringify({ value: await Effect.runPromise(main()) }));
+`,
+    );
+    assertEquals(result, { value: 3 });
+  });
+});
+Deno.test("source Layer acquisition carries its failure and service requirement", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "export error Stop = {}",
+        "export service Source { next(): Int fails Stop }",
+        "service First { one(): Int }",
+        "const first: Layer<First, Stop, Source.next> = layer(First, () => {",
+        "  const value = Source.next()",
+        "  ({ one: () => value })",
+        "})",
+        "export const main = (): Int fails Stop uses Source.next => provide(first, () => First.one())",
+        "type Int = int",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer } from "effect";
+import { Source, main } from "./main.ts";
+const SourceLive = Layer.succeed(Source)({ next: () => Effect.succeed(9) });
+console.log(JSON.stringify({ value: await Effect.runPromise(main().pipe(Effect.provide(SourceLive))) }));
+`,
+    );
+    assertEquals(result, { value: 9 });
+  });
+});
 Deno.test("stream pull releases a scoped operation on failure and interruption", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
