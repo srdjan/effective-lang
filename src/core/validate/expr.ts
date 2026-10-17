@@ -414,6 +414,8 @@ export class BodyValidator {
         return this.bufferStream(e, path);
       case "merge-streams":
         return this.mergeStreams(e, path);
+      case "race":
+        return this.race(e, path);
       case "perform":
         return this.perform(e, path);
       case "block":
@@ -1483,6 +1485,8 @@ export class BodyValidator {
             return [e.stream];
           case "merge-streams":
             return [e.left, e.right];
+          case "race":
+            return [e.left, e.right];
           case "defer":
           case "retry":
             return [e.job];
@@ -1840,6 +1844,40 @@ export class BodyValidator {
       type: {
         kind: "stream",
         element: aFitsB ? b.element : a.element,
+        effects: {
+          failures: sortedUnique([
+            ...a.effects.failures,
+            ...b.effects.failures,
+          ]),
+          requirements: sortedUnique([
+            ...a.effects.requirements,
+            ...b.effects.requirements,
+          ]),
+        },
+      },
+      match: "exact",
+      active: combine([left, right]),
+    };
+  }
+
+  private race(e: Extract<Expr, { kind: "race" }>, path: string): Comp {
+    const left = this.check(e.left, `${path}.left`);
+    const right = this.check(e.right, `${path}.right`);
+    const a = unfold(this.env, left.type);
+    const b = unfold(this.env, right.type);
+    if (a.kind !== "effect" || b.kind !== "effect") {
+      this.add(AREA.types, path, "race needs two Effect values", e.span);
+      return this.poison();
+    }
+    const aFitsB = fits(this.env, a.result, b.result);
+    const bFitsA = fits(this.env, b.result, a.result);
+    if (!aFitsB && !bFitsA) {
+      this.add(AREA.types, path, "race needs compatible success types", e.span);
+    }
+    return {
+      type: {
+        kind: "effect",
+        result: aFitsB ? b.result : a.result,
         effects: {
           failures: sortedUnique([
             ...a.effects.failures,

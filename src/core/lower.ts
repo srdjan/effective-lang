@@ -609,6 +609,8 @@ class BodyLowerer {
           right: arg(1),
           ...annotation,
         };
+      case "race":
+        return { kind: "race", left: arg(0), right: arg(1), ...annotation };
       default:
         throw internal(
           `the fact ${fact.kind} is no call at ${this.describe(node)}`,

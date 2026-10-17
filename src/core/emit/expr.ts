@@ -864,6 +864,13 @@ export class ExprEmitter {
           callArguments([kid(e.left), kid(e.right)]),
         ]);
       }
+      case "race": {
+        const effect = this.scope.effect("Effect");
+        return emitted([
+          `${effect}.race`,
+          callArguments([kid(e.left), kid(e.right)]),
+        ]);
+      }
       case "call":
         return this.nonLeafCall(e, kid);
       case "block":

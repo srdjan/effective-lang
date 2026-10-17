@@ -84,6 +84,16 @@ type Int = int
   assertStringIncludes(output, "Stream.merge(");
 });
 
+Deno.test("a source race emits Effect.race and executes only when run", () => {
+  const output = oneModule(`
+type Int = int
+export const choose = (): Int =>
+  run(race(defer(() => 1), defer(() => 2)))
+`);
+  assertStringIncludes(output, "Effect.race(");
+  assertStringIncludes(output, "Effect.suspend(");
+});
+
 Deno.test("defer stores an Effect and run executes it in an effect function", () => {
   const output = oneModule(`
 error Stop = {}

@@ -9,6 +9,9 @@ Most source features in the coverage map below remain implementation gaps.
 Update, 2026-10-17: `bufferStream` and `mergeStreams` now compile to Effect 4
 streams. A slow runtime test covers deferred production and per-source order.
 The coverage map and original probes remain a snapshot until a full re-audit.
+Update, 2026-10-17: `race` now accepts compatible first-class Effect values.
+The runtime regression confirms loser interruption and finalizer completion.
+Source fiber handles and general concurrency remain gaps.
 
 Update, 2026-10-17: the pipeline validation defect described below was fixed
 in phase 1 of the [implementation plan](plans/2026-10-17-effect4-gap-closure.md).

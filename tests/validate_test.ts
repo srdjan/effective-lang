@@ -151,6 +151,22 @@ type Int = int
   assert(codesOf(wrong, lowered.sources).includes("validation/006"));
 });
 
+Deno.test("race validates its result and deferred effect channels", () => {
+  const lowered = lowerText(`
+error Stop = {}
+service Source { next(): Int fails Stop }
+const choice = race(defer(() => Source.next()), defer(() => 2))
+type Int = int
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const wrong = copy(lowered.ir);
+  const choice = wrong.declarations.find((d) => d.name === "choice");
+  assert(choice?.kind === "constant" && choice.value.kind === "race");
+  (choice.value.type as unknown as { effects: { failures: string[] } }).effects
+    .failures = [];
+  assert(codesOf(wrong, lowered.sources).includes("validation/002"));
+});
+
 Deno.test("with-resource validation rejects scoped escape and channel mutation", () => {
   const lowered = lowerText(`
 error Stop = {}

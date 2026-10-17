@@ -50,6 +50,8 @@ export function childrenOf(expr: Expr): Expr[] {
       return [expr.stream];
     case "merge-streams":
       return [expr.left, expr.right];
+    case "race":
+      return [expr.left, expr.right];
     case "call":
       return [expr.callee, ...expr.arguments];
     case "perform":

@@ -56,6 +56,7 @@ export type PreludeName =
   | "runStream"
   | "bufferStream"
   | "mergeStreams"
+  | "race"
   | "unbrand"
   | "Some"
   | "None"
@@ -77,6 +78,7 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "runStream",
   "bufferStream",
   "mergeStreams",
+  "race",
   "unbrand",
   "Some",
   "None",

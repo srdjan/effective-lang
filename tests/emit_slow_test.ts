@@ -489,6 +489,45 @@ console.log(JSON.stringify({ before, produced, first: output.filter((n) => n < 1
     });
   });
 });
+Deno.test("a source race interrupts its losing fiber and waits for cleanup", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "export service Source {",
+        "  slow(): Int",
+        "  fast(): Int",
+        "}",
+        "export const main = (): Int uses Source.slow | Source.fast =>",
+        "  run(race(defer(() => Source.slow()), defer(() => Source.fast())))",
+        "type Int = int",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer } from "effect";
+import { Source, main } from "./main.ts";
+let started = 0;
+let released = 0;
+const SourceLive = Layer.succeed(Source)({
+  slow: () => Effect.sync(() => { started++; return 0; }).pipe(
+    Effect.flatMap(() => Effect.never),
+    Effect.onInterrupt(() => Effect.sync(() => { released++; })),
+  ),
+  fast: () => Effect.sleep("20 millis").pipe(Effect.as(7)),
+});
+const value = await Effect.runPromise(main().pipe(Effect.provide(SourceLive)));
+console.log(JSON.stringify({ value, started, released }));
+`,
+    );
+    assertEquals(result, { value: 7, started: 1, released: 1 });
+  });
+});
 Deno.test("stream pull releases a scoped operation on failure and interruption", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

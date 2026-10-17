@@ -851,6 +851,8 @@ export class BodyChecker {
         return this.bufferStreamCall(node, args);
       case "mergeStreams":
         return this.mergeStreamsCall(node, args);
+      case "race":
+        return this.raceCall(node, args);
       case "unbrand":
         return this.unbrandCall(node, args);
       case "Some":
@@ -1594,6 +1596,41 @@ export class BodyChecker {
       ...a.requirements,
       ...b.requirements,
     ]);
+    return this.finish(node, type, combine([left, right]));
+  }
+
+  private raceCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "race" });
+    if (!this.arity(node, "race", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((a) => this.argInfo(a))),
+      );
+    }
+    this.noPipeline("race", args);
+    const left = this.argInfo(args[0]);
+    const right = this.argInfo(args[1]);
+    const a = this.table.node(this.table.unfold(left.type));
+    const b = this.table.node(this.table.unfold(right.type));
+    if (a.kind !== "effect" || b.kind !== "effect") {
+      this.report("type-mismatch/010", "`race` needs two Effect values", node);
+      return this.finish(node, this.table.error, combine([left, right]));
+    }
+    const aFitsB = this.table.isAssignable(a.result, b.result);
+    const bFitsA = this.table.isAssignable(b.result, a.result);
+    if (!aFitsB && !bFitsA) {
+      this.report(
+        "type-mismatch/010",
+        "`race` needs compatible success types",
+        node,
+      );
+    }
+    const type = this.table.effect(
+      aFitsB ? b.result : a.result,
+      [...a.failures, ...b.failures],
+      [...a.requirements, ...b.requirements],
+    );
     return this.finish(node, type, combine([left, right]));
   }
 
