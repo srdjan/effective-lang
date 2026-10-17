@@ -568,10 +568,12 @@ class Parser {
   /**
    * Guards the recursive entry points. A construct nested deeper than the limit
    * is reported and skipped, so the recursion stays bounded and never overflows.
+   * The skip covers one token or one balanced group, so the enclosing levels and
+   * the later declarations still parse.
    */
   private enter(): boolean {
     if (this.depth >= MAX_NESTING) {
-      this.skipJunk(() => false, "; nesting is too deep");
+      this.skipJunk(() => true, "; nesting is too deep");
       return false;
     }
     this.depth++;

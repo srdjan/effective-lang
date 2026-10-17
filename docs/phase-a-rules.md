@@ -13,7 +13,7 @@ the implementer picks the stricter rule and records it here.
 | Union continuation | A newline before `\|` does not continue a type; a newline after `\|` does |
 | `fails` and `uses` on a new line | Continue a clause only when an identifier follows |
 | `Some(_)` | Accepted; `_` is the binding name |
-| Nesting depth | 512 levels of expressions and types; deeper input is `syntax/009` |
+| Nesting depth | 512 levels of expressions and types; a parenthesis counts two levels. Deeper input is `syntax/009`, and the parser skips only the one group at the limit |
 | Parenthesized types | `(A \| B)[]` and the empty tuple type are accepted |
 
 ## Projects and names (A2)

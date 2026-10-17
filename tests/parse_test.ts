@@ -481,3 +481,14 @@ Deno.test("nesting up to 100 levels parses; deeper input is reported and never o
     parseChecked(text.repeat(50000));
   }
 });
+
+Deno.test("too deep a nesting does not hide the later declarations", () => {
+  const text = "const x = " + "(".repeat(300) + "1" + ")".repeat(300) + "\n" +
+    "const y = )\n" +
+    "const z = 1\n";
+  const result = parseChecked(text);
+  assertEquals(
+    result.diagnostics.map((d) => [d.code, d.span.start]),
+    [["syntax/009", 266], ["syntax/008", text.indexOf("const y = )") + 10]],
+  );
+});
