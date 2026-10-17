@@ -229,7 +229,7 @@ export const DIAGNOSTIC_CODES = {
   "declaration/002": {
     category: "declaration",
     description:
-      "A declaration or binding uses a name that the prelude or the builtin types reserve.",
+      "A declaration or binding uses a name that the prelude, the builtin types, or the generated TypeScript reserve.",
   },
   "declaration/003": {
     category: "declaration",

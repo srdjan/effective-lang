@@ -23,6 +23,7 @@ the implementer picks the stricter rule and records it here.
 | --- | --- |
 | Namespace | One namespace per module for types, errors, services, providers, constants, and imports |
 | Prelude names | Neither modules nor locals may declare them; modules also may not declare builtin type names |
+| Target names | Neither modules nor locals may declare `undefined`, `Number`, `RangeError`, `ReadonlyArray`, `any`, `bigint`, `object`, or `symbol` (`declaration/002`), because the generated TypeScript needs them. Fields and service methods may use them. Decision 1 of 2026-10-17 |
 | Shared scopes | A block after a parameter list, pattern, or handler shares its scope, so a redeclaration is `declaration/001` |
 | Early outer use | A block that uses an outer name and later binds the same name is `declaration/004` |
 | Own initializer | `const x = x` is `unknown-name/001` |

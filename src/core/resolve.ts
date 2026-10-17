@@ -91,6 +91,23 @@ export const BUILTIN_TYPE_NAMES: ReadonlySet<string> = new Set<
   "Brand",
 ]);
 
+/**
+ * Names that the generated TypeScript needs, so no declaration or binding may
+ * take them. The emitter prints the globals `undefined`, `Number`, `RangeError`,
+ * and `ReadonlyArray`. TypeScript rejects `any`, `bigint`, `object`, and
+ * `symbol` as the name of a type or a class.
+ */
+export const TARGET_NAMES: ReadonlySet<string> = new Set([
+  "undefined",
+  "Number",
+  "RangeError",
+  "ReadonlyArray",
+  "any",
+  "bigint",
+  "object",
+  "symbol",
+]);
+
 function asPrelude(name: string): PreludeName | undefined {
   return PRELUDE_NAMES.has(name) ? name as PreludeName : undefined;
 }
@@ -292,6 +309,12 @@ class Resolver {
         `\`${name}\` is a reserved prelude or builtin name and cannot be declared`,
         binding.span,
       );
+    } else if (TARGET_NAMES.has(name)) {
+      this.report(
+        "declaration/002",
+        `\`${name}\` is reserved because the generated TypeScript needs it`,
+        binding.span,
+      );
     }
     const existing = this.namespace.get(name);
     if (existing !== undefined) {
@@ -428,6 +451,12 @@ class Resolver {
       this.report(
         "declaration/002",
         `\`${name}\` is a reserved prelude name and cannot be a binding`,
+        span,
+      );
+    } else if (TARGET_NAMES.has(name)) {
+      this.report(
+        "declaration/002",
+        `\`${name}\` is reserved because the generated TypeScript needs it`,
         span,
       );
     }

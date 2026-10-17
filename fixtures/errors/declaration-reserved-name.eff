@@ -6,3 +6,15 @@ type string = { x: int }
 
 // error: declaration/002
 const h = (filter: int): int => filter
+
+// The generated TypeScript needs these names.
+// error: declaration/002
+const Number = "x"
+
+// error: declaration/002
+type any = { x: int }
+
+// error: declaration/002
+const k = (undefined: int): int => 1
+
+type Fields = { object: int, symbol: string }
