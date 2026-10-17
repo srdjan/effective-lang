@@ -169,3 +169,16 @@ export const longElse = (s: string): string => match s {
   "mid" => "2",
   _ => "a very long else string literal that pushes the chain past eighty columns"
 }
+export const ifFirst = (s: string): int =>
+  if (s === "a very long string literal that pushes the selector test past eighty columns") { 1 } else if (s === "b") { 2 } else { 4 }
+export const ifLessFirst = (n: int): int =>
+  if (n < 1234567890 + 1234567890 + 1234567890 + 1234567890 + 1234567890 + 12345) { 1 } else { 4 }
+export const ifAndFirst = (s: string, t: string): int =>
+  if (s === "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" && t === "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb") { 1 } else { 4 }
+export const firstSubject: string = "x"
+export const firstAtEq: int = if (firstSubject === "a very long string literal that pushes the selector test past eighty columns") { 1 } else { 4 }
+export const firstInBlock = (s: string): int => {
+  const y = 1;
+  if (s === "a very long string literal that pushes the selector test past eighty columns") { y } else { 4 }
+}
+export const ifFirstFits = (s: string): int => if (s === "a very long string literal that pushes the selector test past ei") { 1 } else { 4 }

@@ -284,17 +284,18 @@ const COMPARISONS: ReadonlySet<string> = new Set([
   ">=",
 ]);
 
+/** True when the run is one comparison of two operands, such as `a === b`. */
+function isComparison(run: Run | undefined): run is Run {
+  return run !== undefined && run.operands.length === 2 &&
+    COMPARISONS.has(run.operators[0]);
+}
+
 /** A test of a conditional after the first. A comparison of two operands can split. */
 function laterTest(test: Emitted, open: Doc): LaterTest {
   const doc: Doc = [open, testDoc(test, 2)];
   const run = test.run;
-  const operator = run?.operators[0];
-  if (
-    run === undefined || run.operands.length !== 2 || operator === undefined ||
-    !COMPARISONS.has(operator)
-  ) {
-    return { doc, split: undefined };
-  }
+  if (!isComparison(run)) return { doc, split: undefined };
+  const operator = run.operators[0];
   const ends = run.top === undefined ? undefined : spanEnds(run.top);
   return {
     doc,
@@ -944,6 +945,7 @@ export class ExprEmitter {
     const rest = otherwise.condChain;
     // A test that breaks keeps its lines one level deeper than the `?` line.
     // After a `return` or `=` that is two levels, as the body of an arrow one.
+    // A comparison of two operands keeps two levels in a flush body too.
     const chain: CondChain = rest === undefined
       ? {
         tests: [condition],
@@ -967,7 +969,7 @@ export class ExprEmitter {
     }
     return emitted(condDoc(chain, 2), PREC.conditional, {
       ...brace,
-      flush: condDoc(chain, 1),
+      flush: condDoc(chain, isComparison(condition.run) ? 2 : 1),
     });
   }
 
