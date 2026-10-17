@@ -1,7 +1,7 @@
 # Disagreement audit, 2026-10-17
 
-Status: the user chose option (a) for the six decisions on 2026-10-17. Five
-are done. D23 follows the plan `docs/plans/2026-10-17-d21-d23.md`. This
+Status: the user chose option (a) for the six decisions on 2026-10-17. All six
+are done. D21 and D23 followed the plan `docs/plans/2026-10-17-d21-d23.md`. This
 ledger lists each disagreement that the audit found between the code, the
 tests, and the documents. Each item has a status: done (with its commit),
 rejected (with a reason), or decision (it waits for the user).
@@ -10,8 +10,8 @@ Method: Opus read every document. Five read-only agents checked the claims of
 one area each against the code, with probes. Opus reproduced each code defect
 again with a probe before the fix. Each code fix has a regression test that
 fails without the fix, except C11 and C12. Baseline: `deno task check` passed
-with 871 fast tests and 26 slow tests. At the end it passed with 879 fast tests
-and 27 slow tests.
+with 871 fast tests and 26 slow tests. At the end it passed with 883 fast tests
+and 28 slow tests.
 
 ## Code defects
 
@@ -31,7 +31,7 @@ and 27 slow tests.
 | C12 | The message for `!x` says to write `0 - x` | Wrong advice for a boolean | High | done, 2ace490 |
 | C13 | Every `deno` command warns that `exports` is missing | `name` and `version` in `deno.json`, commit dc0687b | High | done, 2aae498 and c3c0286 (D22) |
 | C14 | The grammar test copies the prelude names by hand | A new prelude name passes unnoticed | High | done, 82e83fa |
-| C15 | A string of 80 characters in a `match` arm is not a `deno fmt` fixed point | The ledger records the form. The README now says that user source can reach it | High | planned (D23) |
+| C15 | A string of 80 characters in a `match` arm is not a `deno fmt` fixed point | The ledger records the form. The README now says that user source can reach it | High | done for the first arm, a691b71 (D23). A later arm is N5 |
 
 ## Document corrections
 
@@ -72,8 +72,9 @@ guide and code comments). The STE checker passes on every changed document.
 | --- | --- | --- |
 | N1 | No CI exists, but D5 places `tsc` and the validator in CI | done, 81be512 (D24). The workflow has not run, because nothing is pushed |
 | N2 | Decide whether the eight book targets become goldens | done, 731e76e (D25) |
-| N3 | Long names and module paths break the `deno fmt` fixed point in six forms besides C15 | planned (D23) |
+| N3 | Long names and module paths break the `deno fmt` fixed point in six forms besides C15 | done, a691b71 (D23). Six forms of very long identifiers stay out of scope |
 | N4 | `deno publish --dry-run` fails: the repository has no license file | open; publication is not part of this audit |
+| N5 | A selector test longer than 80 columns in a match arm after the first is not a `deno fmt` fixed point. `deno fmt` joins the earlier links on the first line | decision: model it, or keep it as a known limit |
 
 ## Decisions of the user
 
