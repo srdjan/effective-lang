@@ -38,7 +38,6 @@
   /* The error underline. It reaches 3:1 against --code-bg. */
   --code-error: #ff8a8a;
   --code-raised: #1f2b4d;
-  --code-border: #5b6275;
   --code-selection: #2b3a62;
   --code-active-line: rgba(244, 244, 242, 0.06);
   --font: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
@@ -218,6 +217,23 @@ nav {
 
 [role="tab"]:focus-visible {
   outline-offset: -6px;
+}
+
+/* Hover feedback for the tabs and the problem rows. These controls are used
+   often, so they get a short color change and no scale on press. */
+[role="tab"],
+.problem {
+  transition-property: background-color, color;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+
+@media (hover: hover) {
+  [role="tab"][aria-selected="false"]:hover,
+  .problem:hover {
+    background: var(--surface);
+    color: var(--ink);
+  }
 }
 
 #views [role="tab"] {

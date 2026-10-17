@@ -162,11 +162,16 @@ const theme: Extension = EditorView.theme({
     backgroundColor: "var(--code-raised)",
     color: "var(--code-ink)",
   },
+  // A white ring gives the lift on the dark pane. The transparent border keeps
+  // an edge in forced-colors mode. `overflow: hidden` clips the square bar of a
+  // diagnostic to the rounded corners.
   ".cm-tooltip": {
     backgroundColor: "var(--code-raised)",
     color: "var(--code-ink)",
-    border: "1px solid var(--code-border)",
+    border: "1px solid transparent",
     borderRadius: "4px",
+    boxShadow: "0 0 0 1px oklch(1 0 0 / 0.08)",
+    overflow: "hidden",
   },
   ".cm-tooltip-lint": { padding: "0", margin: "0" },
   ".cm-diagnostic-error": { borderLeft: "5px solid var(--code-error)" },
