@@ -67,6 +67,9 @@ export type PreludeName =
   | "codec"
   | "decode"
   | "encode"
+  | "withFiber"
+  | "joinFiber"
+  | "interruptFiber"
   | "unbrand"
   | "Some"
   | "None"
@@ -99,6 +102,9 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "codec",
   "decode",
   "encode",
+  "withFiber",
+  "joinFiber",
+  "interruptFiber",
   "unbrand",
   "Some",
   "None",
@@ -120,7 +126,8 @@ export type BuiltinTypeName =
   | "Brand"
   | "Ref"
   | "RetrySchedule"
-  | "Codec";
+  | "Codec"
+  | "Fiber";
 
 export const BUILTIN_TYPE_NAMES: ReadonlySet<string> = new Set<
   BuiltinTypeName
@@ -137,6 +144,7 @@ export const BUILTIN_TYPE_NAMES: ReadonlySet<string> = new Set<
   "Ref",
   "RetrySchedule",
   "Codec",
+  "Fiber",
 ]);
 
 /**

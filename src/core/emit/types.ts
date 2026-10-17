@@ -189,6 +189,14 @@ export function typeDoc(scope: Scope, type: Type): Doc {
         "> }",
       ];
     }
+    case "fiber":
+      return [
+        `${scope.effect("Fiber")}.Fiber<`,
+        typeDoc(scope, type.result),
+        ", ",
+        failureUnion(scope, type.failures) ?? "never",
+        ">",
+      ];
     case "record": {
       if (type.fields.length === 0) return "{}";
       const fields = type.fields.map((f) => [
@@ -332,6 +340,7 @@ export function schemaDoc(scope: Scope, type: Type): Doc {
     case "ref":
     case "retry-schedule":
     case "codec":
+    case "fiber":
       throw unsupported("a deferred or function type has no schema");
   }
 }

@@ -434,6 +434,11 @@ export class BodyValidator {
       case "decode":
       case "encode":
         return this.codecOperation(e, path);
+      case "with-fiber":
+        return this.withFiber(e, path);
+      case "join-fiber":
+      case "interrupt-fiber":
+        return this.fiberOperation(e, path);
       case "perform":
         return this.perform(e, path);
       case "block":
@@ -1524,6 +1529,133 @@ export class BodyValidator {
     };
   }
 
+  private withFiber(
+    e: Extract<Expr, { kind: "with-fiber" }>,
+    path: string,
+  ): Comp {
+    const job = this.check(e.job, `${path}.job`);
+    const use = this.check(e.use, `${path}.use`);
+    const effect = unfold(this.env, job.type);
+    const fn = asFunction(this.env, use.type);
+    if (
+      effect.kind !== "effect" || e.use.kind !== "closure" ||
+      fn === undefined || fn.parameters.length !== 1 ||
+      e.use.parameters[0]?.id !== e.useBinding
+    ) {
+      this.add(
+        AREA.control,
+        path,
+        "with-fiber needs an Effect and one inline use callback",
+        e.span,
+      );
+      return this.poison();
+    }
+    const fiber: Type = {
+      kind: "fiber",
+      result: effect.result,
+      failures: effect.effects.failures,
+    };
+    if (!same(this.env, fn.parameters[0], fiber)) {
+      this.add(
+        AREA.types,
+        `${path}.use`,
+        "fiber use parameter does not match child type",
+        e.use.span,
+      );
+    }
+    if (!this.dataOnly(fn.result)) {
+      this.add(
+        AREA.types,
+        `${path}.use`,
+        "fiber use result must be data only",
+        e.use.span,
+      );
+    }
+    this.fiberReferences(e.use.body, e.useBinding, `${path}.use.body`);
+    return {
+      type: fn.result,
+      match: "exact",
+      active: combine([
+        job,
+        use,
+        {
+          failures: [],
+          requirements: effect.effects.requirements,
+          execution: "effect",
+        },
+        invocationOf(fn),
+        EFFECT_ONLY,
+      ]),
+    };
+  }
+
+  private fiberOperation(
+    e: Extract<Expr, { kind: "join-fiber" | "interrupt-fiber" }>,
+    path: string,
+  ): Comp {
+    const fiber = this.check(e.fiber, `${path}.fiber`);
+    const type = unfold(this.env, fiber.type);
+    if (type.kind !== "fiber") {
+      this.add(
+        AREA.types,
+        `${path}.fiber`,
+        "fiber operation needs a Fiber value",
+        e.fiber.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: e.kind === "join-fiber" ? type.result : UNIT,
+      match: "exact",
+      active: combine([
+        fiber,
+        e.kind === "join-fiber"
+          ? { failures: type.failures, requirements: [], execution: "effect" }
+          : EFFECT_ONLY,
+      ]),
+    };
+  }
+
+  private fiberReferences(body: Expr, id: string, path: string): void {
+    const visit = (
+      value: unknown,
+      parent: Expr | undefined,
+      nested: boolean,
+    ): void => {
+      if (Array.isArray(value)) {
+        value.forEach((item) => visit(item, parent, nested));
+        return;
+      }
+      if (value === null || typeof value !== "object") return;
+      const fields = value as Record<string, unknown>;
+      const expr =
+        "kind" in fields && "type" in fields && "effects" in fields &&
+          "span" in fields
+          ? value as Expr
+          : undefined;
+      if (expr?.kind === "reference" && expr.target === id) {
+        if (
+          nested ||
+          (parent?.kind !== "join-fiber" &&
+            parent?.kind !== "interrupt-fiber") ||
+          parent.fiber !== expr
+        ) {
+          this.add(
+            AREA.control,
+            path,
+            "borrowed fiber may only be joined or interrupted directly",
+            expr.span,
+          );
+        }
+      }
+      for (const [key, child] of Object.entries(fields)) {
+        if (key === "type" || key === "effects" || key === "span") continue;
+        visit(child, expr ?? parent, nested || expr?.kind === "closure");
+      }
+    };
+    visit(body, undefined, false);
+  }
+
   private defer(e: Extract<Expr, { kind: "defer" }>, path: string): Comp {
     const job = this.check(e.job, `${path}.job`);
     const fn = this.jobFunction(job, `${path}.job`, e.job.span, "defer");
@@ -1708,6 +1840,11 @@ export class BodyValidator {
           case "decode":
           case "encode":
             return [e.codec, e.input];
+          case "with-fiber":
+            return [e.job, e.use];
+          case "join-fiber":
+          case "interrupt-fiber":
+            return [e.fiber];
           case "defer":
           case "retry":
             return [e.job];

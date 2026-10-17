@@ -985,6 +985,9 @@ export class ExprEmitter {
       case "catch":
       case "retry":
       case "retry-with-schedule":
+      case "with-fiber":
+      case "join-fiber":
+      case "interrupt-fiber":
       case "provide":
       case "run":
       case "with-resource":
@@ -1605,6 +1608,9 @@ export class ExprEmitter {
       case "fail":
       case "retry":
       case "retry-with-schedule":
+      case "with-fiber":
+      case "join-fiber":
+      case "interrupt-fiber":
       case "provide":
       case "run":
       case "catch":
@@ -1644,6 +1650,11 @@ export class ExprEmitter {
         return [e.ref, e.value];
       case "update-ref":
         return [e.ref, e.transform];
+      case "with-fiber":
+        return [e.job];
+      case "join-fiber":
+      case "interrupt-fiber":
+        return [e.fiber];
       default:
         return [];
     }
@@ -1845,6 +1856,26 @@ export class ExprEmitter {
           `${effect}.retry`,
           callArguments([this.suspended(e.job), this.pure(e.options)]),
         ]);
+      case "with-fiber": {
+        const fiber = this.scope.effect("Fiber");
+        const job = children[0] ?? this.pure(e.job);
+        return emitted([
+          `${effect}.acquireUseRelease`,
+          callArguments([
+            emitted([`${effect}.forkChild`, callArguments([job])]),
+            this.effectCallback(e.use),
+            emitted(`${fiber}.interrupt`),
+          ]),
+        ]);
+      }
+      case "join-fiber":
+      case "interrupt-fiber": {
+        const fiber = this.scope.effect("Fiber");
+        return emitted([
+          `${fiber}.${e.kind === "join-fiber" ? "join" : "interrupt"}`,
+          callArguments([children[0] ?? this.pure(e.fiber)]),
+        ]);
+      }
       case "provide": {
         const job = this.suspended(e.job);
         return emitted([

@@ -570,6 +570,24 @@ class BodyLowerer {
         return { kind: "decode", codec: arg(0), input: arg(1), ...annotation };
       case "encode":
         return { kind: "encode", codec: arg(0), input: arg(1), ...annotation };
+      case "with-fiber": {
+        const job = arg(0);
+        const use = arg(1);
+        if (use.kind !== "closure" || use.parameters[0] === undefined) {
+          throw internal("withFiber needs an inline use callback");
+        }
+        return {
+          kind: "with-fiber",
+          job,
+          use,
+          useBinding: use.parameters[0].id,
+          ...annotation,
+        };
+      }
+      case "join-fiber":
+        return { kind: "join-fiber", fiber: arg(0), ...annotation };
+      case "interrupt-fiber":
+        return { kind: "interrupt-fiber", fiber: arg(0), ...annotation };
       case "provide":
         return {
           kind: "provide",

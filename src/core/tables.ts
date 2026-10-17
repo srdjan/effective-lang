@@ -130,6 +130,7 @@ export type NodeFact =
   | { readonly kind: "merge-layers" }
   | { readonly kind: "retry-schedule" | "retry-with-schedule" }
   | { readonly kind: "codec" | "decode" | "encode" }
+  | { readonly kind: "with-fiber" | "join-fiber" | "interrupt-fiber" }
   /** A bracket literal, classified by its checked contextual type. */
   | { readonly kind: "list"; readonly shape: "array" | "tuple" }
   /** A collection builtin with its closed function type. */

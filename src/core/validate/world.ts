@@ -177,6 +177,10 @@ export function checkTypeIds(
         walk(t.decoded, `${at}.decoded`, depth + 1);
         walk(t.encoded, `${at}.encoded`, depth + 1);
         return;
+      case "fiber":
+        walk(t.result, `${at}.result`, depth + 1);
+        effects(`${at}.effects`, { failures: t.failures, requirements: [] });
+        return;
       case "effect":
         walk(t.result, `${at}.result`, depth + 1);
         effects(`${at}.effects`, t.effects);
@@ -270,6 +274,9 @@ export function checkRecordFields(
       case "codec":
         walk(t.decoded, `${at}.decoded`, depth + 1);
         walk(t.encoded, `${at}.encoded`, depth + 1);
+        return;
+      case "fiber":
+        walk(t.result, `${at}.result`, depth + 1);
         return;
       case "effect":
         walk(t.result, `${at}.result`, depth + 1);
@@ -470,6 +477,9 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
       case "codec":
         reaches(type.decoded, from, depth + 1);
         reaches(type.encoded, from, depth + 1);
+        return;
+      case "fiber":
+        reaches(type.result, from, depth + 1);
         return;
       case "effect":
         reaches(type.result, from, depth + 1);

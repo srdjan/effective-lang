@@ -163,6 +163,10 @@ function assignable(
         assignable(env, t.decoded, s.decoded, false, depth + 1) &&
         assignable(env, s.encoded, t.encoded, false, depth + 1) &&
         assignable(env, t.encoded, s.encoded, false, depth + 1);
+    case "fiber":
+      return s.kind === "fiber" &&
+        assignable(env, s.result, t.result, false, depth + 1) &&
+        sameSet(s.failures, t.failures);
     case "effect":
       return s.kind === "effect" &&
         assignable(env, s.result, t.result, false, depth + 1) &&
@@ -369,6 +373,10 @@ export function show(type: Type): string {
       return `RetrySchedule<${show(type.error)}>`;
     case "codec":
       return `Codec<${show(type.decoded)}, ${show(type.encoded)}>`;
+    case "fiber":
+      return `Fiber<${show(type.result)}, ${
+        type.failures.join(" | ") || "never"
+      }>`;
     case "effect":
       return `Effect<${show(type.result)}, ${
         type.effects.failures.join(" | ") || "never"

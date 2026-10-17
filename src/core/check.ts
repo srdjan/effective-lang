@@ -443,6 +443,35 @@ export class TypeLowerer {
           ir: { kind: "codec", decoded: decoded.ir, encoded: encoded.ir },
         };
       }
+      case "Fiber": {
+        if (args.length !== 2) {
+          this.arity(name, 2, args, node);
+          return this.errorLowered();
+        }
+        const result = this.lower(args[0]);
+        const error = this.lower(args[1]);
+        const failures: ErrorId[] = [];
+        const collect = (type: Type): void => {
+          if (type.kind === "primitive" && type.name === "never") return;
+          if (type.kind === "union") {
+            type.members.forEach(collect);
+          } else if (type.kind === "named" && type.id.startsWith("error:")) {
+            failures.push(type.id as ErrorId);
+          } else {
+            this.report(
+              "type-mismatch/001",
+              "Fiber failure type needs nominal errors or never",
+              this.span(args[1]),
+            );
+          }
+        };
+        collect(error.ir);
+        const unique = sortedUnique(failures);
+        return {
+          ref: table.fiber(result.ref, unique),
+          ir: { kind: "fiber", result: result.ir, failures: unique },
+        };
+      }
       case "Brand":
         for (const arg of args) this.lower(arg);
         this.report(
@@ -829,7 +858,19 @@ export function referencedIds(type: Type, ids: Set<string>): void {
       return;
     case "array":
     case "option":
+    case "ref":
       referencedIds(type.element, ids);
+      return;
+    case "retry-schedule":
+      referencedIds(type.error, ids);
+      return;
+    case "codec":
+      referencedIds(type.decoded, ids);
+      referencedIds(type.encoded, ids);
+      return;
+    case "fiber":
+      referencedIds(type.result, ids);
+      effectIds(type.failures, [], ids);
       return;
     case "effect":
       referencedIds(type.result, ids);

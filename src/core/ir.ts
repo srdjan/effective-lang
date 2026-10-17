@@ -48,6 +48,7 @@ export type Type =
   | { readonly kind: "ref"; readonly element: Type }
   | { readonly kind: "retry-schedule"; readonly error: Type }
   | { readonly kind: "codec"; readonly decoded: Type; readonly encoded: Type }
+  | { readonly kind: "fiber"; readonly result: Type; readonly failures: readonly ErrorId[] }
   | { readonly kind: "effect"; readonly result: Type; readonly effects: Effects }
   | { readonly kind: "stream"; readonly element: Type; readonly effects: Effects }
   | { readonly kind: "sink"; readonly input: Type; readonly result: Type; readonly effects: Effects }
@@ -140,6 +141,9 @@ export type Expr =
   | Node<{ kind: "codec"; decode: Expr; encode: Expr }>
   | Node<{ kind: "decode"; codec: Expr; input: Expr }>
   | Node<{ kind: "encode"; codec: Expr; input: Expr }>
+  | Node<{ kind: "with-fiber"; job: Expr; use: Expr; useBinding: LocalId }>
+  | Node<{ kind: "join-fiber"; fiber: Expr }>
+  | Node<{ kind: "interrupt-fiber"; fiber: Expr }>
   | Node<{ kind: "perform"; capability: CapabilityId; arguments: readonly Expr[] }>
   | Node<{ kind: "block"; steps: readonly Step[]; result: Expr }>
   | Node<{ kind: "if"; condition: Expr; then: Expr; else: Expr }>

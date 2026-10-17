@@ -839,6 +839,11 @@ export class BodyChecker {
       case "decode":
       case "encode":
         return this.codecOperation(node, name, args);
+      case "withFiber":
+        return this.withFiberCall(node, args, expected);
+      case "joinFiber":
+      case "interruptFiber":
+        return this.fiberOperation(node, name, args);
       case "provide":
         return this.provideCall(node, args);
       case "defer":
@@ -1309,6 +1314,167 @@ export class BodyChecker {
       ? this.table.option(name === "decode" ? type.decoded : type.encoded)
       : this.table.error;
     return this.finish(node, result, combine([codec, input]));
+  }
+
+  private withFiberCall(
+    node: NodeId,
+    args: readonly Arg[],
+    expected: TypeRef | undefined,
+  ): NodeInfo {
+    this.fact(node, { kind: "with-fiber" });
+    if (!this.arity(node, "withFiber", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine([...args.map((a) => this.argInfo(a)), EFFECT_ONLY]),
+      );
+    }
+    this.noPipeline("withFiber", args);
+    const job = this.argInfo(args[0]);
+    const effect = this.table.node(this.table.unfold(job.type));
+    if (effect.kind !== "effect") {
+      this.report(
+        "type-mismatch/010",
+        "`withFiber` needs an Effect value",
+        args[0].node,
+      );
+      return this.finish(
+        node,
+        this.table.error,
+        combine([job, this.argInfo(args[1]), EFFECT_ONLY]),
+      );
+    }
+    if (
+      args[1].pre !== undefined ||
+      kindOf(this.tree, args[1].node) !== SyntaxKind.ArrowExpr
+    ) {
+      this.report(
+        "type-mismatch/010",
+        "`withFiber` needs an inline use callback",
+        args[1].node,
+      );
+    }
+    const fiber = this.table.fiber(effect.result, effect.failures);
+    const use = this.callback("withFiber", args[1], [fiber], expected, true);
+    if (!this.dataOnly(use.result)) {
+      this.report(
+        "type-mismatch/010",
+        "the fiber use result must be data only",
+        args[1].node,
+      );
+    }
+    const fact = this.body.facts.get(args[1].node);
+    if (fact?.kind === "arrow" && fact.parameters[0]?.id !== undefined) {
+      const body = this.kids(args[1].node).at(-1);
+      if (body !== undefined) this.scopedFiberUses(body, fact.parameters[0].id);
+    }
+    const useFn = this.functionOf(use.info.type);
+    const invocation: EffectSet = useFn === undefined ? PURE_EFFECTS : {
+      failures: useFn.failures,
+      requirements: useFn.requirements,
+      mode: useFn.execution,
+    };
+    return this.finish(
+      node,
+      use.result,
+      combine([
+        job,
+        use.info,
+        { failures: [], requirements: effect.requirements, mode: "effect" },
+        invocation,
+        EFFECT_ONLY,
+      ]),
+    );
+  }
+
+  private fiberOperation(
+    node: NodeId,
+    name: string,
+    args: readonly Arg[],
+  ): NodeInfo {
+    this.fact(node, {
+      kind: name === "joinFiber" ? "join-fiber" : "interrupt-fiber",
+    });
+    if (!this.arity(node, name, 1, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine([...args.map((a) => this.argInfo(a)), EFFECT_ONLY]),
+      );
+    }
+    const ref = this.argInfo(args[0]);
+    const fiber = this.table.node(this.table.unfold(ref.type));
+    if (fiber.kind !== "fiber") {
+      if (!this.isError(ref.type)) {
+        this.report(
+          "type-mismatch/010",
+          `\`${name}\` needs a Fiber value`,
+          args[0].node,
+        );
+      }
+      return this.finish(node, this.table.error, combine([ref, EFFECT_ONLY]));
+    }
+    return this.finish(
+      node,
+      name === "joinFiber" ? fiber.result : this.table.unit,
+      combine([
+        ref,
+        name === "joinFiber"
+          ? { failures: fiber.failures, requirements: [], mode: "effect" }
+          : EFFECT_ONLY,
+      ]),
+    );
+  }
+
+  private scopedFiberUses(body: NodeId, id: LocalId): void {
+    const visit = (
+      node: NodeId,
+      parent: NodeId | undefined,
+      grandparent: NodeId | undefined,
+      nested: boolean,
+    ): void => {
+      if (kindOf(this.tree, node) === SyntaxKind.NameExpr) {
+        const target = this.targets.get(node);
+        if (target?.kind === "local" && target.id === id) {
+          const call = parent !== undefined &&
+              kindOf(this.tree, parent) === SyntaxKind.CallExpr
+            ? parent
+            : parent !== undefined &&
+                kindOf(this.tree, parent) === SyntaxKind.ArgList &&
+                grandparent !== undefined &&
+                kindOf(this.tree, grandparent) === SyntaxKind.CallExpr
+            ? grandparent
+            : undefined;
+          const callee = call === undefined ? undefined : this.kids(call)[0];
+          const called = callee === undefined
+            ? undefined
+            : this.targets.get(callee);
+          if (
+            nested || callee === undefined ||
+            (parent !== call &&
+              (parent === undefined || this.kids(parent).length !== 1 ||
+                this.kids(parent)[0] !== node)) ||
+            called?.kind !== "builtin" ||
+            (called.name !== "joinFiber" && called.name !== "interruptFiber")
+          ) {
+            this.report(
+              "type-mismatch/010",
+              "a borrowed fiber may only be joined or interrupted directly",
+              node,
+            );
+          }
+        }
+      }
+      for (const child of this.kids(node)) {
+        visit(
+          child,
+          node,
+          parent,
+          nested || kindOf(this.tree, node) === SyntaxKind.ArrowExpr,
+        );
+      }
+    };
+    visit(body, undefined, undefined, false);
   }
 
   private deferCall(node: NodeId, args: readonly Arg[]): NodeInfo {

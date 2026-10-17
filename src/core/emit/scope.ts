@@ -35,7 +35,8 @@ export type EffectModule =
   | "Ref"
   | "Schedule"
   | "Duration"
-  | "Cause";
+  | "Cause"
+  | "Fiber";
 
 export type EmitFailureData =
   | {
@@ -399,6 +400,7 @@ export class Scope {
       case "ref":
       case "retry-schedule":
       case "codec":
+      case "fiber":
         return true;
       case "primitive":
       case "literal":

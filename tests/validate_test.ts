@@ -612,6 +612,26 @@ export const shift: Codec<Int, Int> = codec((n: Int): Int => n + 1, (n: Int): In
   assert(codesOf(wrong, sources).includes("validation/006"));
 });
 
+Deno.test("scoped fiber validator checks join failures and handle identity", () => {
+  const { ir, sources } = lowerText(`
+error Stop = {}
+service Jobs { next(): Int fails Stop }
+export const run = (): Int fails Stop uses Jobs.next =>
+  withFiber(defer(() => Jobs.next()), (fiber) => joinFiber(fiber))
+type Int = int
+`);
+  assertEquals(validateModule(ir, sources), []);
+  const wrong = copy(ir);
+  const run = wrong.declarations[decl(wrong, "run")];
+  assert(run.kind === "function" && run.body.kind === "with-fiber");
+  setAt(
+    wrong,
+    `declarations[${decl(wrong, "run")}].body.useBinding`,
+    "local:m#unknown",
+  );
+  assert(codesOf(wrong, sources).includes("validation/006"));
+});
+
 Deno.test("array and contextual tuple literals validate with ordered element effects", () => {
   const { ir, sources } = lowerText(
     [

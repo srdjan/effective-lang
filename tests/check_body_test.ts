@@ -1275,6 +1275,23 @@ type Int = int
   assert(codes(project).includes("execution-mode/001"));
 });
 
+Deno.test("withFiber joins a supervised child and rejects handle escape", () => {
+  const good = checkText(`
+error Stop = {}
+service Jobs { next(): Int fails Stop }
+const run = (): Int fails Stop uses Jobs.next =>
+  withFiber(defer(() => Jobs.next()), (fiber) => joinFiber(fiber))
+type Int = int
+`);
+  assertEquals(messages(good), []);
+  assertEquals(shortIds(fn(good, "m", "run").body!.failures), ["Stop"]);
+  const bad = checkText(`
+const escape = (): Fiber<Int, never> => withFiber(defer(() => 1), (fiber) => fiber)
+type Int = int
+`);
+  assert(codes(bad).includes("type-mismatch/010"));
+});
+
 const HOST = {
   "effective.json": JSON.stringify({
     host: {

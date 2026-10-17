@@ -73,6 +73,11 @@ export function childrenOf(expr: Expr): Expr[] {
     case "decode":
     case "encode":
       return [expr.codec, expr.input];
+    case "with-fiber":
+      return [expr.job, expr.use];
+    case "join-fiber":
+    case "interrupt-fiber":
+      return [expr.fiber];
     case "call":
       return [expr.callee, ...expr.arguments];
     case "perform":

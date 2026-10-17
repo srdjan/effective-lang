@@ -58,6 +58,11 @@ export type TypeNode =
     readonly encoded: TypeRef;
   }
   | {
+    readonly kind: "fiber";
+    readonly result: TypeRef;
+    readonly failures: readonly ErrorId[];
+  }
+  | {
     readonly kind: "effect";
     readonly result: TypeRef;
     readonly failures: readonly ErrorId[];
@@ -246,6 +251,8 @@ export class TypeTable {
         return `z:${node.error}`;
       case "codec":
         return `c:${node.decoded}:${node.encoded}`;
+      case "fiber":
+        return `f:${node.result}:${JSON.stringify(node.failures)}`;
       case "effect":
         return `x:${
           JSON.stringify([node.result, node.failures, node.requirements])
@@ -345,6 +352,14 @@ export class TypeTable {
 
   codec(decoded: TypeRef, encoded: TypeRef): TypeRef {
     return this.intern({ kind: "codec", decoded, encoded });
+  }
+
+  fiber(result: TypeRef, failures: readonly ErrorId[]): TypeRef {
+    return this.intern({
+      kind: "fiber",
+      result,
+      failures: sortedUnique(failures),
+    });
   }
 
   effect(
@@ -597,6 +612,10 @@ export class TypeTable {
         );
         if (tallest === Infinity) return Infinity;
         break;
+      case "fiber":
+        tallest = this.heightWithin(node.result, budget - 1, memo);
+        if (tallest === Infinity) return Infinity;
+        break;
       case "stream":
         tallest = this.heightWithin(node.element, budget - 1, memo);
         if (tallest === Infinity) return Infinity;
@@ -652,6 +671,8 @@ export class TypeTable {
         return this.retrySchedule(this.fromIr(type.error));
       case "codec":
         return this.codec(this.fromIr(type.decoded), this.fromIr(type.encoded));
+      case "fiber":
+        return this.fiber(this.fromIr(type.result), type.failures);
       case "effect":
         return this.effect(
           this.fromIr(type.result),
@@ -742,6 +763,12 @@ export class TypeTable {
           kind: "codec",
           decoded: this.toIr(node.decoded),
           encoded: this.toIr(node.encoded),
+        };
+      case "fiber":
+        return {
+          kind: "fiber",
+          result: this.toIr(node.result),
+          failures: node.failures,
         };
       case "effect":
         return {
@@ -895,6 +922,10 @@ export class TypeTable {
           this.assignable(tn.decoded, sn.decoded, depth + 1) &&
           this.assignable(sn.encoded, tn.encoded, depth + 1) &&
           this.assignable(tn.encoded, sn.encoded, depth + 1);
+      case "fiber":
+        return sn.kind === "fiber" &&
+          this.assignable(sn.result, tn.result, depth + 1) &&
+          sameList(sn.failures, tn.failures);
       case "effect":
         return sn.kind === "effect" &&
           this.assignable(sn.result, tn.result, depth + 1) &&
@@ -989,6 +1020,10 @@ export class TypeTable {
         return `RetrySchedule<${this.show(node.error)}>`;
       case "codec":
         return `Codec<${this.show(node.decoded)}, ${this.show(node.encoded)}>`;
+      case "fiber":
+        return `Fiber<${this.show(node.result)}, ${
+          node.failures.map(idName).join(" | ") || "never"
+        }>`;
       case "effect":
         return `Effect<${this.show(node.result)}, ${
           node.failures.map(idName).join(" | ") || "never"

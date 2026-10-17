@@ -616,6 +616,44 @@ console.log(JSON.stringify({ good: Option.getOrUndefined(good), bad: Option.isNo
     assertEquals(result, { good: 5, bad: true, encoded: 4 });
   });
 });
+Deno.test("withFiber interrupts its child and waits for finalizers", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "export service Source { slow(): Int; wait(): void }",
+        "export const main = (): Int uses Source.slow | Source.wait =>",
+        "  withFiber(defer(() => Source.slow()), (fiber) => { Source.wait(); interruptFiber(fiber); 7 })",
+        "type Int = int",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Deferred, Effect, Layer } from "effect";
+import { Source, main } from "./main.ts";
+let started = 0;
+let released = 0;
+const ready = Effect.runSync(Deferred.make<void>());
+const Live = Layer.succeed(Source)({
+  slow: () => Effect.sync(() => { started++; }).pipe(
+    Effect.andThen(Deferred.succeed(ready, undefined)),
+    Effect.andThen(Effect.never),
+    Effect.onInterrupt(() => Effect.sync(() => { released++; })),
+  ),
+  wait: () => Deferred.await(ready),
+});
+const value = await Effect.runPromise(main().pipe(Effect.provide(Live)));
+console.log(JSON.stringify({ value, started, released }));
+`,
+    );
+    assertEquals(result, { value: 7, started: 1, released: 1 });
+  });
+});
 Deno.test("source Layers merge and provide their declared services", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

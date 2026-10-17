@@ -170,6 +170,20 @@ export const print = (n: Int): Option<Int> => encode(shift, n)
   assertStringIncludes(output, ".encode(");
 });
 
+Deno.test("withFiber emits a supervised child and join", () => {
+  const output = oneModule(`
+error Stop = {}
+service Jobs { next(): Int fails Stop }
+export const run = (): Int fails Stop uses Jobs.next =>
+  withFiber(defer(() => Jobs.next()), (fiber) => joinFiber(fiber))
+type Int = int
+`);
+  assertStringIncludes(output, "Effect.acquireUseRelease(");
+  assertStringIncludes(output, "Effect.forkChild(");
+  assertStringIncludes(output, "Fiber.join(");
+  assertStringIncludes(output, "Fiber.interrupt");
+});
+
 // ------------------------------------------------------------------ golden
 
 Deno.test("each example emits exactly its golden file", () => {
