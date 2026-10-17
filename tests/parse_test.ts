@@ -137,6 +137,22 @@ Deno.test("a pipeline stage is a qualified name with optional arguments", () => 
   assertEquals(countKind(tree, SyntaxKind.PipeExpr), 2);
 });
 
+Deno.test("bracket expressions parse as lossless lists, including trailing commas", () => {
+  const tree = parseClean(
+    'const a = [1, 2,]\nconst b = [1, [2, 3]]\nconst c: [int, string] = [1, "x"]\n',
+  );
+  assertEquals(countKind(tree, SyntaxKind.ListExpr), 4);
+  assertEquals(
+    kindsOfChildren(tree, constInitializer(tree, "a")),
+    ["LiteralExpr", "LiteralExpr"],
+  );
+  const broken = parseChecked("const a = [1,, 2]\nconst b = [1\n");
+  assertEquals(
+    broken.diagnostics.map((d) => d.code),
+    ["syntax/008", "syntax/008"],
+  );
+});
+
 Deno.test("at an open parenthesis the parser chooses an arrow or a grouping", () => {
   const table: [string, SyntaxKind][] = [
     ["(a)", SyntaxKind.ParenExpr],

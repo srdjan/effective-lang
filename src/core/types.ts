@@ -51,6 +51,25 @@ export type TypeNode =
   | { readonly kind: "union"; readonly members: readonly TypeRef[] }
   | { readonly kind: "option"; readonly element: TypeRef }
   | {
+    readonly kind: "effect";
+    readonly result: TypeRef;
+    readonly failures: readonly ErrorId[];
+    readonly requirements: readonly CapabilityId[];
+  }
+  | {
+    readonly kind: "stream";
+    readonly element: TypeRef;
+    readonly failures: readonly ErrorId[];
+    readonly requirements: readonly CapabilityId[];
+  }
+  | {
+    readonly kind: "sink";
+    readonly input: TypeRef;
+    readonly result: TypeRef;
+    readonly failures: readonly ErrorId[];
+    readonly requirements: readonly CapabilityId[];
+  }
+  | {
     readonly kind: "function";
     readonly execution: Execution;
     readonly parameters: readonly TypeRef[];
@@ -214,6 +233,23 @@ export class TypeTable {
         return `u:${JSON.stringify(node.members)}`;
       case "option":
         return `o:${node.element}`;
+      case "effect":
+        return `x:${
+          JSON.stringify([node.result, node.failures, node.requirements])
+        }`;
+      case "stream":
+        return `s:${
+          JSON.stringify([node.element, node.failures, node.requirements])
+        }`;
+      case "sink":
+        return `k:${
+          JSON.stringify([
+            node.input,
+            node.result,
+            node.failures,
+            node.requirements,
+          ])
+        }`;
       case "function":
         return `f:${
           JSON.stringify([
@@ -284,6 +320,47 @@ export class TypeTable {
 
   option(element: TypeRef): TypeRef {
     return this.intern({ kind: "option", element });
+  }
+
+  effect(
+    result: TypeRef,
+    failures: readonly ErrorId[],
+    requirements: readonly CapabilityId[],
+  ): TypeRef {
+    return this.intern({
+      kind: "effect",
+      result,
+      failures: sortedUnique(failures),
+      requirements: sortedUnique(requirements),
+    });
+  }
+
+  stream(
+    element: TypeRef,
+    failures: readonly ErrorId[],
+    requirements: readonly CapabilityId[],
+  ): TypeRef {
+    return this.intern({
+      kind: "stream",
+      element,
+      failures: sortedUnique(failures),
+      requirements: sortedUnique(requirements),
+    });
+  }
+
+  sink(
+    input: TypeRef,
+    result: TypeRef,
+    failures: readonly ErrorId[],
+    requirements: readonly CapabilityId[],
+  ): TypeRef {
+    return this.intern({
+      kind: "sink",
+      input,
+      result,
+      failures: sortedUnique(failures),
+      requirements: sortedUnique(requirements),
+    });
   }
 
   /**
@@ -476,6 +553,23 @@ export class TypeTable {
         }
         break;
       }
+      case "effect":
+        tallest = this.heightWithin(node.result, budget - 1, memo);
+        if (tallest === Infinity) return Infinity;
+        break;
+      case "stream":
+        tallest = this.heightWithin(node.element, budget - 1, memo);
+        if (tallest === Infinity) return Infinity;
+        break;
+      case "sink":
+        tallest = this.heightWithin(node.input, budget - 1, memo);
+        if (tallest === Infinity) return Infinity;
+        {
+          const resultHeight = this.heightWithin(node.result, budget - 1, memo);
+          if (resultHeight === Infinity) return Infinity;
+          if (resultHeight > tallest) tallest = resultHeight;
+        }
+        break;
       case "primitive":
       case "literal":
       case "provider":
@@ -512,6 +606,25 @@ export class TypeTable {
         return this.union(type.members.map((m) => this.fromIr(m)));
       case "option":
         return this.option(this.fromIr(type.element));
+      case "effect":
+        return this.effect(
+          this.fromIr(type.result),
+          type.effects.failures,
+          type.effects.requirements,
+        );
+      case "stream":
+        return this.stream(
+          this.fromIr(type.element),
+          type.effects.failures,
+          type.effects.requirements,
+        );
+      case "sink":
+        return this.sink(
+          this.fromIr(type.input),
+          this.fromIr(type.result),
+          type.effects.failures,
+          type.effects.requirements,
+        );
       case "function":
         return this.fromIrFunction(type);
       case "provider":
@@ -574,6 +687,28 @@ export class TypeTable {
       }
       case "option":
         return { kind: "option", element: this.toIr(node.element) };
+      case "effect":
+        return {
+          kind: "effect",
+          result: this.toIr(node.result),
+          effects: {
+            failures: node.failures,
+            requirements: node.requirements,
+          },
+        };
+      case "stream":
+        return {
+          kind: "stream",
+          element: this.toIr(node.element),
+          effects: { failures: node.failures, requirements: node.requirements },
+        };
+      case "sink":
+        return {
+          kind: "sink",
+          input: this.toIr(node.input),
+          result: this.toIr(node.result),
+          effects: { failures: node.failures, requirements: node.requirements },
+        };
       case "function":
         return this.toIrFunction(ref);
       case "provider":
@@ -690,6 +825,22 @@ export class TypeTable {
       case "option":
         return sn.kind === "option" &&
           this.assignable(sn.element, tn.element, depth + 1);
+      case "effect":
+        return sn.kind === "effect" &&
+          this.assignable(sn.result, tn.result, depth + 1) &&
+          isSubset(sn.failures, tn.failures) &&
+          isSubset(sn.requirements, tn.requirements);
+      case "stream":
+        return sn.kind === "stream" &&
+          this.assignable(sn.element, tn.element, depth + 1) &&
+          isSubset(sn.failures, tn.failures) &&
+          isSubset(sn.requirements, tn.requirements);
+      case "sink":
+        return sn.kind === "sink" &&
+          this.assignable(tn.input, sn.input, depth + 1) &&
+          this.assignable(sn.result, tn.result, depth + 1) &&
+          isSubset(sn.failures, tn.failures) &&
+          isSubset(sn.requirements, tn.requirements);
       case "tuple":
         if (sn.kind !== "tuple" || sn.elements.length !== tn.elements.length) {
           return false;
@@ -762,6 +913,18 @@ export class TypeTable {
         return node.members.map((m) => this.show(m)).join(" | ");
       case "option":
         return `Option<${this.show(node.element)}>`;
+      case "effect":
+        return `Effect<${this.show(node.result)}, ${
+          node.failures.map(idName).join(" | ") || "never"
+        }, ${node.requirements.map(idName).join(" | ") || "never"}>`;
+      case "stream":
+        return `Stream<${this.show(node.element)}, ${
+          node.failures.map(idName).join(" | ") || "never"
+        }, ${node.requirements.map(idName).join(" | ") || "never"}>`;
+      case "sink":
+        return `Sink<${this.show(node.input)}, ${this.show(node.result)}, ${
+          node.failures.map(idName).join(" | ") || "never"
+        }, ${node.requirements.map(idName).join(" | ") || "never"}>`;
       case "function": {
         const parameters = node.parameters.map((p) => this.show(p)).join(", ");
         const fails = node.failures.length === 0

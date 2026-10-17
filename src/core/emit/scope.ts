@@ -24,7 +24,14 @@ import { normalizeRelative, type ProjectConfig } from "../project.ts";
 import { collectBinderNames } from "./walk.ts";
 
 /** The imports from the `effect` package. */
-export type EffectModule = "Effect" | "Context" | "Layer" | "Option" | "Schema";
+export type EffectModule =
+  | "Effect"
+  | "Context"
+  | "Layer"
+  | "Option"
+  | "Schema"
+  | "Stream"
+  | "Sink";
 
 export type EmitFailureData =
   | {
@@ -381,6 +388,9 @@ export class Scope {
   containsFunction(type: Type): boolean {
     switch (type.kind) {
       case "function":
+      case "effect":
+      case "stream":
+      case "sink":
       case "provider":
         return true;
       case "primitive":

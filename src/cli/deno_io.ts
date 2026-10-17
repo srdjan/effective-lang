@@ -112,14 +112,35 @@ async function denoCheck(
 
 /** The quiet time after the last file event before a rebuild starts. */
 export const WATCH_DEBOUNCE_MS = 100;
+/** A fallback rescan when the platform does not deliver file system events. */
+const WATCH_POLL_MS = 1_000;
 
 async function* sourceEvents(root: string): AsyncGenerator<readonly string[]> {
   const absolute = denoFs.absolute(root);
   const prefix = absolute.endsWith("/") ? absolute : `${absolute}/`;
   const watcher = Deno.watchFs(absolute, { recursive: true });
+  const iterator = watcher[Symbol.asyncIterator]();
+  let pending = iterator.next();
   try {
-    for await (const event of watcher) {
-      const relative = event.paths
+    while (true) {
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      const poll = new Promise<"poll">((resolve) => {
+        timeout = setTimeout(() => resolve("poll"), WATCH_POLL_MS);
+      });
+      let result: IteratorResult<Deno.FsEvent> | "poll";
+      try {
+        result = await Promise.race([pending, poll]);
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (result === "poll") {
+        // The watch loop rescans, but an unchanged project prints nothing.
+        yield [];
+        continue;
+      }
+      if (result.done) return;
+      pending = iterator.next();
+      const relative = result.value.paths
         .filter((path) => path.startsWith(prefix))
         .map((path) => path.slice(prefix.length))
         .filter(isSourcePath);

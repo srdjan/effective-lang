@@ -162,6 +162,11 @@ export const DIAGNOSTIC_CODES = {
     description:
       "A parameter of a local function has no type annotation, and the context gives no function type for it.",
   },
+  "type-mismatch/012": {
+    category: "type-mismatch",
+    description:
+      "A bracket literal lacks an expected type for an empty list or has incompatible element types or tuple length.",
+  },
   "failure-contract/001": {
     category: "failure-contract",
     description:

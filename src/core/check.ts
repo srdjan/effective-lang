@@ -282,6 +282,10 @@ export class TypeLowerer {
     switch (kindOf(this.tree, node)) {
       case SyntaxKind.NamedType:
         return this.named(node);
+      case SyntaxKind.EffectType:
+      case SyntaxKind.StreamType:
+      case SyntaxKind.SinkType:
+        return this.deferredType(node);
       case SyntaxKind.LiteralType:
         return this.literal(node);
       case SyntaxKind.RecordType:
@@ -579,6 +583,41 @@ export class TypeLowerer {
     );
   }
 
+  private deferredType(node: NodeId): Lowered {
+    const kids = this.kids(node);
+    const typeNodes = kids.filter((k) => isTypeKind(kindOf(this.tree, k)));
+    const first = typeNodes[0] === undefined
+      ? this.errorLowered()
+      : this.lower(typeNodes[0]);
+    const failures = this.failures(
+      kids.find((k) => kindOf(this.tree, k) === SyntaxKind.FailsClause),
+    );
+    const requirements = this.requirements(
+      kids.find((k) => kindOf(this.tree, k) === SyntaxKind.UsesClause),
+    );
+    const effects = { failures, requirements };
+    const kind = kindOf(this.tree, node);
+    if (kind === SyntaxKind.StreamType) {
+      return {
+        ref: this.env.table.stream(first.ref, failures, requirements),
+        ir: { kind: "stream", element: first.ir, effects },
+      };
+    }
+    if (kind === SyntaxKind.SinkType) {
+      const second = typeNodes[1] === undefined
+        ? this.errorLowered()
+        : this.lower(typeNodes[1]);
+      return {
+        ref: this.env.table.sink(first.ref, second.ref, failures, requirements),
+        ir: { kind: "sink", input: first.ir, result: second.ir, effects },
+      };
+    }
+    return {
+      ref: this.env.table.effect(first.ref, failures, requirements),
+      ir: { kind: "effect", result: first.ir, effects },
+    };
+  }
+
   functionOf(
     execution: Execution,
     parameters: readonly Lowered[],
@@ -723,6 +762,19 @@ export function referencedIds(type: Type, ids: Set<string>): void {
     case "array":
     case "option":
       referencedIds(type.element, ids);
+      return;
+    case "effect":
+      referencedIds(type.result, ids);
+      effectIds(type.effects.failures, type.effects.requirements, ids);
+      return;
+    case "stream":
+      referencedIds(type.element, ids);
+      effectIds(type.effects.failures, type.effects.requirements, ids);
+      return;
+    case "sink":
+      referencedIds(type.input, ids);
+      referencedIds(type.result, ids);
+      effectIds(type.effects.failures, type.effects.requirements, ids);
       return;
     case "tuple":
       for (const element of type.elements) referencedIds(element, ids);

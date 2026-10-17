@@ -964,6 +964,47 @@ class Parser {
     const k = this.kind();
     switch (k) {
       case TokenKind.Ident: {
+        if (
+          (this.isWordAt(this.pos, "Effect") ||
+            this.isWordAt(this.pos, "Stream") ||
+            this.isWordAt(this.pos, "Sink")) &&
+          this.kinds[this.pos + 1] === TokenKind.Lt
+        ) {
+          this.begin();
+          const name = this.text.slice(
+            this.starts[this.pos],
+            this.ends[this.pos],
+          );
+          this.tok();
+          const group = this.open("free");
+          this.parseType();
+          if (name === "Sink") {
+            if (this.kind() === TokenKind.Comma) this.tok();
+            else this.missing("`,`");
+            this.parseType();
+          }
+          if (this.kind() === TokenKind.Comma) {
+            this.tok();
+            this.begin();
+            this.parseNameSet(false);
+            this.end(SyntaxKind.FailsClause);
+            if (this.kind() === TokenKind.Comma) {
+              this.tok();
+              this.begin();
+              this.parseNameSet(true);
+              this.end(SyntaxKind.UsesClause);
+            }
+          }
+          this.close(group, TokenKind.Gt, "`>`");
+          this.end(
+            name === "Effect"
+              ? SyntaxKind.EffectType
+              : name === "Stream"
+              ? SyntaxKind.StreamType
+              : SyntaxKind.SinkType,
+          );
+          return;
+        }
         this.begin();
         this.parseName("type");
         if (this.kind() === TokenKind.Lt) {
@@ -1167,6 +1208,14 @@ class Parser {
       case TokenKind.LBrace:
         this.parseRecordExpr();
         return;
+      case TokenKind.LBracket: {
+        this.begin();
+        const group = this.open("free");
+        this.parseCommaList(TokenKind.RBracket, () => this.parseExpr());
+        this.close(group, TokenKind.RBracket, "`]`");
+        this.end(SyntaxKind.ListExpr);
+        return;
+      }
       case TokenKind.KwMatch:
         this.parseMatch();
         return;

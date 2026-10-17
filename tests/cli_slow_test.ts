@@ -176,6 +176,129 @@ Deno.test("build --tsc maps a wrong host module to the import in the .eff file",
   });
 });
 
+Deno.test("build --validate --tsc accepts an effectful retry pipeline", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      "service Jobs { next(): () => int }\n" +
+        "export const run = (): int uses Jobs.next => Jobs.next() |> retry({ times: 1 })\n",
+    );
+    const checked = await effective(["check", dir]);
+    assertEquals(checked.code, 0, checked.stdout);
+    assertEquals(checked.stdout, "");
+    const built = await effective(["build", dir, "--validate", "--tsc"]);
+    assertEquals(built.code, 0, `${built.stdout}\n${built.stderr}`);
+    assertEquals(built.stdout, "");
+    assert(built.stderr.includes("1 module, 0 diagnostics"), built.stderr);
+  });
+});
+
+Deno.test("build --validate --tsc accepts stored Effect values", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "error Stop = {}",
+        "service Counter { next(): int fails Stop }",
+        "export const make = (): Effect<int, Stop, Counter.next> => defer(() => Counter.next())",
+        "export const use = (stored: Effect<int, Stop, Counter.next>): int fails Stop uses Counter.next => run(stored)",
+        "",
+      ].join("\n"),
+    );
+    const built = await effective(["build", dir, "--validate", "--tsc"]);
+    assertEquals(built.code, 0, built.stdout + built.stderr);
+  });
+});
+
+Deno.test("build --validate --tsc accepts array and tuple literals", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      "service S { read(): int }\n" +
+        'export const pair = (): [int, string] => [1, "a"]\n' +
+        "export const blank = (): int[] => []\n" +
+        "export const loaded = (): int[] uses S.read => [S.read(), 2]\n",
+    );
+    const built = await effective(["build", dir, "--validate", "--tsc"]);
+    assertEquals(built.code, 0, `${built.stdout}\n${built.stderr}`);
+    assertEquals(built.stdout, "");
+    const emitted = Deno.readTextFileSync(`${dir}/main.ts`);
+    assert(emitted.includes("readonly [number, string]"));
+    assert(emitted.includes('[1, "a"]'));
+    assert(emitted.includes("return [yield* S.use(($s) => $s.read()), 2]"));
+  });
+});
+
+Deno.test("build --validate --tsc accepts sequential traverse", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/traverse/", FIXTURES), dir);
+    const built = await effective(["build", dir, "--validate", "--tsc"]);
+    assertEquals(built.code, 0, `${built.stdout}\n${built.stderr}`);
+    assertEquals(built.stdout, "");
+    assert(
+      Deno.readTextFileSync(`${dir}/traverse.ts`).includes("Effect.forEach"),
+    );
+  });
+});
+
+Deno.test("build --validate --tsc accepts scoped operation records", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "service Files { open(): { read: () => string, close: () => void } }",
+        "export const load = (): string uses Files.open =>",
+        "  withResource(() => Files.open(), (file) => file.read(), (file) => file.close())",
+        "",
+      ].join("\n"),
+    );
+    const built = await effective(["build", dir, "--validate", "--tsc"]);
+    assertEquals(built.code, 0, built.stderr);
+    assert(
+      Deno.readTextFileSync(`${dir}/main.ts`).includes(
+        "Effect.acquireUseRelease",
+      ),
+    );
+  });
+});
+
+Deno.test("build --validate --tsc accepts bounded traversal", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      "export const f = (): int[] => traverse([1, 2], (n) => n + 1, { concurrency: 2 })\n",
+    );
+    const built = await effective(["build", dir, "--validate", "--tsc"]);
+    assertEquals(built.code, 0, built.stderr);
+    assert(Deno.readTextFileSync(`${dir}/main.ts`).includes("concurrency: 2"));
+  });
+});
+
+Deno.test("build --validate --tsc accepts an incremental stream and sink", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "service Source { next(state: int): Option<[int, int]> }",
+        "service Consumer { accept(value: int): void }",
+        "const stream = unfold(0, (state) => Source.next(state))",
+        "const sink = sinkForEach((value: int) => Consumer.accept(value))",
+        "export const main = (): void uses Source.next | Consumer.accept => runStream(stream, sink)",
+        "",
+      ].join("\n"),
+    );
+    const built = await effective(["build", dir, "--validate", "--tsc"]);
+    assertEquals(built.code, 0, built.stderr);
+    assert(Deno.readTextFileSync(`${dir}/main.ts`).includes("Stream.unfold"));
+  });
+});
+
 Deno.test("watch rebuilds when a source changes and prints the rechecked modules", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("examples/", FIXTURES), dir);

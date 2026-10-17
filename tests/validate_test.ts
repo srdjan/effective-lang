@@ -100,6 +100,114 @@ function lowerText(
   return { ir: result.value, sources: new Map([["m.eff", text]]) };
 }
 
+Deno.test("Effect construction and execution validate independently", () => {
+  const lowered = lowerText(`
+error Stop = {}
+service Counter { next(): int fails Stop }
+const make = (): Effect<int, Stop, Counter.next> =>
+  defer(() => Counter.next())
+const use = (stored: Effect<int, Stop, Counter.next>): int fails Stop uses Counter.next =>
+  run(stored)
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const mutated = copy(lowered.ir);
+  const make = mutated.declarations.find((d) => d.name === "make");
+  assert(make?.kind === "function" && make.body.kind === "defer");
+  setAt(make, "body.type.effects.requirements", []);
+  assert(codesOf(mutated, lowered.sources).includes("validation/002"));
+  const changedFailure = copy(lowered.ir);
+  const changedMake = changedFailure.declarations.find((d) =>
+    d.name === "make"
+  );
+  assert(changedMake?.kind === "function" && changedMake.body.kind === "defer");
+  setAt(changedMake, "body.type.effects.failures", []);
+  assert(codesOf(changedFailure, lowered.sources).includes("validation/002"));
+});
+
+Deno.test("run as a pipeline stage validates locally", () => {
+  const lowered = lowerText(
+    "const f = (stored: Effect<int>): int => stored |> run",
+  );
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+});
+
+Deno.test("with-resource validation rejects scoped escape and channel mutation", () => {
+  const lowered = lowerText(`
+error Stop = {}
+service Files { open(): { read: () => string fails Stop, close: () => void } }
+const load = (): string fails Stop uses Files.open =>
+  withResource(() => Files.open(), (file) => file.read(), (file) => file.close())
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const wrongId = copy(lowered.ir);
+  const one = wrongId.declarations.find((d) => d.name === "load");
+  assert(one?.kind === "function" && one.body.kind === "with-resource");
+  (one.body as { useBinding: string }).useBinding = "local:m#missing";
+  assert(codesOf(wrongId, lowered.sources).includes("validation/006"));
+
+  const escaped = copy(lowered.ir);
+  const two = escaped.declarations.find((d) => d.name === "load");
+  assert(two?.kind === "function" && two.body.kind === "with-resource");
+  const use = two.body.use;
+  assert(use.kind === "closure" && use.body.kind === "call");
+  const operation = use.body.callee;
+  assert(operation.kind === "get" && operation.record.kind === "reference");
+  (use as { body: typeof operation.record }).body = operation.record;
+  assert(codesOf(escaped, lowered.sources).includes("validation/006"));
+
+  const muted = copy(lowered.ir);
+  const three = muted.declarations.find((d) => d.name === "load");
+  assert(three?.kind === "function" && three.body.kind === "with-resource");
+  (three.body as unknown as { effects: { failures: string[] } }).effects
+    .failures = [];
+  assert(codesOf(muted, lowered.sources).includes("validation/003"));
+});
+
+Deno.test("bounded traversal validation rejects a mutated concurrency bound", () => {
+  const lowered = lowerText(
+    "const f = (): int[] => traverse([1, 2], (n) => n, { concurrency: 2 })",
+  );
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const changed = copy(lowered.ir);
+  const functionDecl = changed.declarations.find((d) => d.name === "f");
+  assert(
+    functionDecl?.kind === "function" && functionDecl.body.kind === "call",
+  );
+  const options = functionDecl.body.arguments[2];
+  assert(
+    options?.kind === "record" && options.fields[0]?.value.kind === "literal",
+  );
+  (options.fields[0].value as { value: number }).value = 0;
+  assert(codesOf(changed, lowered.sources).includes("validation/006"));
+});
+
+Deno.test("stream validation recomputes deferred and active channels", () => {
+  const lowered = lowerText(`
+error Stop = {}
+service Source { next(state: int): Option<[int, int]> fails Stop }
+service Consumer { accept(value: int): void fails Stop }
+const numbers = unfold(0, (state) => Source.next(state))
+const sink = sinkForEach((value: int) => Consumer.accept(value))
+const main = (): void fails Stop uses Source.next | Consumer.accept => runStream(numbers, sink)
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const missingDeferred = copy(lowered.ir);
+  const numbers = missingDeferred.declarations.find((d) =>
+    d.name === "numbers"
+  );
+  assert(numbers?.kind === "constant" && numbers.value.kind === "unfold");
+  (numbers.value.type as unknown as { effects: { failures: string[] } }).effects
+    .failures = [];
+  assert(codesOf(missingDeferred, lowered.sources).includes("validation/002"));
+
+  const missingActive = copy(lowered.ir);
+  const main = missingActive.declarations.find((d) => d.name === "main");
+  assert(main?.kind === "function" && main.body.kind === "run-stream");
+  (main.body as unknown as { effects: { requirements: string[] } }).effects
+    .requirements = [];
+  assert(codesOf(missingActive, lowered.sources).includes("validation/003"));
+});
+
 function codesOf(ir: unknown, sources: ReadonlyMap<string, string>): string[] {
   return [
     ...new Set(validateModule(ir as ModuleIR, sources).map((d) => d.code)),
@@ -249,6 +357,35 @@ function lowerFiles(
 }
 
 const EXTRA_PROGRAMS: Readonly<Record<string, Record<string, string>>> = {
+  "incremental stream and sink": {
+    "effective.json": "{}",
+    "m.eff": `
+service Source { next(state: int): Option<[int, int]> }
+service Consumer { accept(value: int): void }
+const source = unfold(0, (state) => Source.next(state))
+const mapped = mapEffect(source, (value) => value + 1)
+const sink = sinkForEach((value: int) => Consumer.accept(value))
+export const main = (): void uses Source.next | Consumer.accept => runStream(mapped, sink)
+`,
+  },
+  "bounded traversal": {
+    "effective.json": "{}",
+    "m.eff": `
+error Stop = {}
+service S { step(n: int): int fails Stop }
+export const f = (): int[] fails Stop uses S.step =>
+  traverse([1, 2], (n) => S.step(n), { concurrency: 2 })
+`,
+  },
+  "scoped operation records": {
+    "effective.json": "{}",
+    "m.eff": `
+error Stop = {}
+service Files { open(): { read: () => string fails Stop, close: () => void } }
+export const load = (): string fails Stop uses Files.open =>
+  withResource(() => Files.open(), (file) => file.read(), (file) => file.close())
+`,
+  },
   "block-local functions, optional fields, and boolean operators": {
     "effective.json": "{}",
     "m.eff": `
@@ -317,20 +454,88 @@ for (const [title, files] of Object.entries(EXTRA_PROGRAMS)) {
   });
 }
 
-Deno.test("known limit of part A4: a retry stage with an effectful left value is reported", () => {
+Deno.test("a retry stage with an effectful left value validates locally", () => {
   const { ir, sources } = lowerText(
     [
-      "service S { mk(): () => int }",
+      "service S {",
+      "  mk(): () => int",
+      "  n(): int",
+      "}",
+      "const plus = (x: int, y: int): int => x + y",
       "export const f = (): int uses S.mk => S.mk() |> retry({ times: 2 })",
       "export const g = (): int uses S.mk => retry(S.mk(), { times: 2 })",
+      "export const h = (): int uses S.mk | S.n => S.mk() |> retry({ times: 2 }) |> plus(S.n())",
       "",
     ].join("\n"),
   );
-  const found = validateModule(ir, sources);
-  assertEquals(found.map((d) => d.code), ["validation/003"]);
-  assert(
-    found[0].message.startsWith(`declarations[${decl(ir, "f")}].body.result`),
+  assertEquals(validateModule(ir, sources), []);
+  const f = ir.declarations[decl(ir, "f")];
+  assert(f.kind === "function" && f.body.kind === "block");
+  assertEquals(f.body.result.effects.requirements, []);
+  assertEquals(f.body.effects.requirements, ["cap:m#S.mk"]);
+  const wrong = copy(ir);
+  setAt(
+    wrong,
+    `declarations[${decl(wrong, "f")}].body.result.effects.requirements`,
+    ["cap:m#S.mk"],
   );
+  assertEquals(codesOf(wrong, sources), ["validation/003"]);
+});
+
+Deno.test("array and contextual tuple literals validate with ordered element effects", () => {
+  const { ir, sources } = lowerText(
+    [
+      "service S { read(): int }",
+      "const inferred = [1, 2]",
+      "export const numbers = (): int[] => inferred",
+      'export const pair = (): [int, string] => [1, "a"]',
+      "export const blank = (): int[] => []",
+      "export const nested = (): int[][] => [[1, 2], [3]]",
+      "export const loaded = (): int[] uses S.read => [S.read(), 2]",
+      "",
+    ].join("\n"),
+  );
+  assertEquals(validateModule(ir, sources), []);
+  const pair = ir.declarations[decl(ir, "pair")];
+  assert(pair.kind === "function" && pair.body.kind === "tuple");
+  assertEquals(pair.body.elements.length, 2);
+  const source = sources.get("m.eff");
+  assert(source !== undefined);
+  assertEquals(
+    source.slice(pair.body.span.start, pair.body.span.end),
+    '[1, "a"]',
+  );
+  const loaded = ir.declarations[decl(ir, "loaded")];
+  assert(loaded.kind === "function" && loaded.body.kind === "array");
+  assertEquals(loaded.body.elements[0].kind, "perform");
+  assertEquals(loaded.body.effects.requirements, ["cap:m#S.read"]);
+});
+
+Deno.test("traverse validates callback effects in direct and pipeline calls", () => {
+  const { ir, sources } = lowerText(
+    [
+      "service S {",
+      "  all(): int[]",
+      "  step(n: int): int",
+      "}",
+      "export const direct = (xs: int[]): int[] uses S.step => traverse(xs, (n) => S.step(n))",
+      "export const piped = (xs: int[]): int[] uses S.step => xs |> traverse((n) => S.step(n))",
+      "export const loaded = (): int[] uses S.all | S.step => S.all() |> traverse((n) => S.step(n))",
+      "export const pure = (xs: int[]): int[] => traverse(xs, (n) => n + 1)",
+      "",
+    ].join("\n"),
+  );
+  assertEquals(validateModule(ir, sources), []);
+  const direct = ir.declarations[decl(ir, "direct")];
+  assert(direct.kind === "function" && direct.body.kind === "call");
+  assertEquals(direct.body.effects.requirements, ["cap:m#S.step"]);
+  const wrong = copy(ir);
+  setAt(
+    wrong,
+    `declarations[${decl(wrong, "direct")}].body.effects.requirements`,
+    [],
+  );
+  assertEquals(codesOf(wrong, sources), ["validation/003"]);
 });
 
 Deno.test("a provider with acquisition failures validates with zero diagnostics", () => {
@@ -345,7 +550,7 @@ Deno.test("a provider with acquisition failures validates with zero diagnostics"
     "db.eff":
       "export error Down = { why: string }\nexport service Db { q(): int fails Down }\n",
     "m.eff":
-      'import { Db, Down } from "./db.eff"\nimport { DbLive } from "host:providers"\nexport const g = (): int fails Down => provide(DbLive, () => Db.q())\n',
+      'import { Db, Down } from "./db.eff"\nimport { DbLive } from "host:providers"\nexport const g = (): int fails Down => provide(DbLive, () => Db.q())\nexport const h = (): int fails Down => DbLive |> provide(() => Db.q())\n',
   }, ["db.eff", "m.eff"]);
   assertEquals(lowered.modules.size, 2);
   for (const [name, ir] of lowered.modules) {

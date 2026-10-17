@@ -28,6 +28,59 @@ function indexOfOrFail(text: string, needle: string): number {
   return at;
 }
 
+Deno.test("withResource emits acquireUseRelease with suspended callbacks", () => {
+  const output = oneModule(`
+service Files { open(): { read: () => string, close: () => void } }
+export const load = (): string uses Files.open =>
+  withResource(() => Files.open(), (file) => file.read(), (file) => file.close())
+`);
+  assertStringIncludes(output, "Effect.acquireUseRelease(");
+  assertStringIncludes(output, "Effect.suspend(() =>");
+  assertStringIncludes(output, "file.read()");
+  assertStringIncludes(output, "file.close()");
+});
+
+Deno.test("bounded traverse passes the concurrency literal to Effect.forEach", () => {
+  const output = oneModule(
+    `const f = (): int[] => traverse([1, 2], (n) => n + 1, { concurrency: 2 })`,
+  );
+  assertStringIncludes(output, "Effect.forEach([1, 2]");
+  assertStringIncludes(output, "concurrency: 2");
+});
+
+Deno.test("stream operations emit the Effect 4 Stream and Sink APIs", () => {
+  const output = oneModule(`
+service Source { next(state: int): Option<[int, int]> }
+service Consumer { accept(value: int): void }
+const source = unfold(0, (state) => Source.next(state))
+const mapped = mapEffect(source, (value) => value + 1)
+const sink = sinkForEach((value: int) => Consumer.accept(value))
+export const main = (): void uses Source.next | Consumer.accept => runStream(mapped, sink)
+`);
+  assertStringIncludes(output, "Stream.unfold(");
+  assertStringIncludes(output, "Option.getOrUndefined");
+  assertStringIncludes(output, "Stream.mapEffect(");
+  assertStringIncludes(output, "Sink.forEach(");
+  assertStringIncludes(output, "Stream.run(mapped, sink)");
+});
+
+Deno.test("defer stores an Effect and run executes it in an effect function", () => {
+  const output = oneModule(`
+error Stop = {}
+service Counter { next(): int fails Stop }
+export const make = (): Effect<int, Stop, Counter.next> =>
+  defer(() => Counter.next())
+export const twice = (stored: Effect<int, Stop, Counter.next>): int fails Stop uses Counter.next => {
+  const first = run(stored)
+  const second = run(stored)
+  first + second
+}
+`);
+  assertStringIncludes(output, "Effect.suspend(");
+  assertStringIncludes(output, "yield* stored");
+  assertStringIncludes(output, "Effect.Effect<number, Stop, Counter>");
+});
+
 // ------------------------------------------------------------------ golden
 
 Deno.test("each example emits exactly its golden file", () => {
@@ -46,6 +99,18 @@ Deno.test("each example emits exactly its golden file", () => {
     assertEquals(module.text, golden, `golden file ${name}.ts differs`);
     assertEquals(module.path, `${name}.ts`);
   }
+});
+
+Deno.test("traverse emits exactly its golden file", () => {
+  const emitted = emitFiles(
+    projectFiles("emit/traverse"),
+    ["traverse.eff"],
+  ).get("traverse");
+  assert(emitted !== undefined);
+  assertEquals(
+    emitted.text,
+    Deno.readTextFileSync(new URL("golden/traverse.ts", FIXTURES)),
+  );
 });
 
 Deno.test("emitting twice gives identical text", () => {

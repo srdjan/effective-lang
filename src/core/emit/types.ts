@@ -83,6 +83,21 @@ export function effectTypeDoc(
   return [`${effect}.Effect`, typeArguments(args)];
 }
 
+function deferredArguments(
+  scope: Scope,
+  results: readonly Doc[],
+  effects: Effects,
+): Doc {
+  const failures = failureUnion(scope, effects.failures);
+  const requirements = requirementUnion(scope, effects.requirements);
+  const args: Doc[] = [...results];
+  if (failures !== undefined || requirements !== undefined) {
+    args.push(failures ?? "never");
+  }
+  if (requirements !== undefined) args.push(requirements);
+  return typeArguments(args);
+}
+
 /** `Layer.Layer<S1 | S2, E, Rq>` for a provider type. */
 export function layerTypeDoc(
   scope: Scope,
@@ -178,6 +193,24 @@ export function typeDoc(scope: Scope, type: Type): Doc {
       );
     case "function":
       return functionTypeDoc(scope, type);
+    case "effect":
+      return effectTypeDoc(scope, typeDoc(scope, type.result), type.effects);
+    case "stream":
+      return [
+        `${scope.effect("Stream")}.Stream`,
+        deferredArguments(scope, [typeDoc(scope, type.element)], type.effects),
+      ];
+    case "sink":
+      return [
+        `${scope.effect("Sink")}.Sink`,
+        typeArguments([
+          typeDoc(scope, type.result),
+          typeDoc(scope, type.input),
+          "never",
+          failureUnion(scope, type.effects.failures) ?? "never",
+          requirementUnion(scope, type.effects.requirements) ?? "never",
+        ]),
+      ];
     case "provider":
       return layerTypeDoc(scope, type.provides, type.acquisition.effects);
   }
@@ -271,7 +304,10 @@ export function schemaDoc(scope: Scope, type: Type): Doc {
       ];
     }
     case "function":
+    case "effect":
+    case "stream":
+    case "sink":
     case "provider":
-      throw unsupported("a function or provider type has no schema");
+      throw unsupported("a deferred or function type has no schema");
   }
 }

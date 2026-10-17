@@ -66,6 +66,196 @@ function shortIds(ids: readonly string[]): string[] {
   return ids.map((id) => id.slice(id.indexOf("#") + 1));
 }
 
+Deno.test("withResource combines acquisition, use, and release contracts", () => {
+  const project = checkText(`
+error OpenError = {}
+error ReadError = {}
+error CloseError = {}
+service Files {
+  open(): { read: () => string fails ReadError, close: () => void fails CloseError } fails OpenError
+}
+const load = (): string fails OpenError | ReadError | CloseError uses Files.open =>
+  withResource(() => Files.open(), (file) => file.read(), (file) => file.close())
+`);
+  assertEquals(messages(project), []);
+  const type = project.table.node(fn(project, "m", "load").type);
+  assert(type.kind === "function");
+  assertEquals(shortIds(type.failures), [
+    "CloseError",
+    "OpenError",
+    "ReadError",
+  ]);
+  assertEquals(shortIds(type.requirements), ["Files.open"]);
+  assertEquals(type.execution, "effect");
+});
+
+Deno.test("bounded traverse keeps callback failure and requirement channels", () => {
+  const project = checkText(`
+error Stop = {}
+service S { step(n: int): int fails Stop }
+const f = (): int[] fails Stop uses S.step =>
+  traverse([1, 2], (n) => S.step(n), { concurrency: 2 })
+`);
+  assertEquals(messages(project), []);
+  const type = project.table.node(fn(project, "m", "f").type);
+  assert(type.kind === "function");
+  assertEquals(shortIds(type.failures), ["Stop"]);
+  assertEquals(shortIds(type.requirements), ["S.step"]);
+});
+
+Deno.test("Stream and Sink defer channels until runStream", () => {
+  const project = checkText(`
+error Stop = {}
+service Source { next(state: int): Option<[int, int]> fails Stop }
+service Consumer { accept(value: int): void fails Stop }
+const numbers: Stream<int, Stop, Source.next> = unfold(0, (state) => Source.next(state))
+const sink: Sink<int, void, Stop, Consumer.accept> = sinkForEach((value: int) => Consumer.accept(value))
+const main = (): void fails Stop uses Source.next | Consumer.accept => runStream(numbers, sink)
+`);
+  assertEquals(messages(project), []);
+  const main = project.table.node(fn(project, "m", "main").type);
+  assert(main.kind === "function");
+  assertEquals(shortIds(main.failures), ["Stop"]);
+  assertEquals(shortIds(main.requirements), ["Consumer.accept", "Source.next"]);
+  assertEquals(main.execution, "effect");
+});
+
+Deno.test("runStream rejects an incompatible sink input", () => {
+  const project = checkText(`
+const numbers = unfold(0, (n: int): Option<[int, int]> => None)
+const sink = sinkForEach((s: string): void => {})
+const main = (): void => runStream(numbers, sink)
+`);
+  assert(
+    codes(project).includes("type-mismatch/003"),
+    messages(project).join("\n"),
+  );
+});
+
+Deno.test("stream constructors require inline callbacks", () => {
+  const project = checkText(`
+const next = (n: int): Option<[int, int]> => None
+const numbers = unfold(0, next)
+`);
+  assert(
+    codes(project).includes("type-mismatch/010"),
+    messages(project).join("\n"),
+  );
+});
+
+Deno.test("bounded traverse requires a positive safe integer literal", () => {
+  for (
+    const option of [
+      "{ concurrency: 0 }",
+      "{ concurrency: -1 }",
+      "{ concurrency: 1.5 }",
+      "{ concurrency: 9007199254740992 }",
+      "{ other: 2 }",
+      "{ concurrency: 2, other: 3 }",
+    ]
+  ) {
+    const project = checkText(
+      `const f = (): int[] => traverse([1], (n) => n, ${option})`,
+    );
+    assert(
+      codes(project).includes("type-mismatch/010") ||
+        (option === "{ concurrency: -1 }" &&
+          codes(project).includes("syntax/010")),
+      `${option}: ${messages(project)}`,
+    );
+  }
+});
+
+Deno.test("withResource rejects escaped operation records and fields", () => {
+  const prefix =
+    `service Files { open(): { read: () => string, close: () => void } }\n`;
+  for (
+    const use of [
+      "file",
+      "{ const saved = { saved: file }; saved }",
+      "file.read",
+      "{ const copy = file; copy.read() }",
+      "() => file.read()",
+    ]
+  ) {
+    const project = checkText(
+      `${prefix}const bad = () => withResource(() => Files.open(), (file) => ${use}, (file) => file.close())`,
+    );
+    assert(
+      messages(project).some((m) =>
+        m.includes("a scoped operation record may only")
+      ),
+      `${use}: ${messages(project)}`,
+    );
+  }
+});
+
+Deno.test("withResource rejects operation records and results containing capabilities", () => {
+  const programs = [
+    `service Files { open(): { bad: () => () => string } }\nconst bad = () => withResource(() => Files.open(), (file) => file.bad(), (file) => file.bad())`,
+    `service Files { open(): { read: () => string, close: () => void } }\nconst bad = () => withResource(() => Files.open(), (file) => () => file.read(), (file) => file.close())`,
+  ];
+  for (const program of programs) {
+    const project = checkText(program);
+    assert(
+      codes(project).includes("type-mismatch/010"),
+      messages(project).join("\n"),
+    );
+  }
+});
+
+Deno.test("Effect values defer channels until run and preserve them through bindings", () => {
+  const project = checkText(`
+error Stop = {}
+service Counter { next(): int fails Stop }
+const make = (): Effect<int, Stop, Counter.next> =>
+  defer(() => Counter.next())
+const stored: Effect<int, Stop, Counter.next> = make()
+const twice = (): int fails Stop uses Counter.next => {
+  const first = run(stored)
+  const second = run(stored)
+  first + second
+}
+`);
+  assertEquals(messages(project), []);
+  const make = fn(project, "m", "make");
+  const twice = fn(project, "m", "twice");
+  const makeType = project.table.node(make.type);
+  const twiceType = project.table.node(twice.type);
+  assert(makeType.kind === "function");
+  assert(twiceType.kind === "function");
+  assertEquals(makeType.failures, []);
+  assertEquals(makeType.requirements, []);
+  assertEquals(shortIds(twiceType.failures), ["Stop"]);
+  assertEquals(shortIds(twiceType.requirements), ["Counter.next"]);
+});
+
+Deno.test("run rejects a non-Effect value", () => {
+  const project = checkText("const f = (): int => run(1)");
+  assertEquals(codes(project).includes("type-mismatch/010"), true);
+});
+
+Deno.test("Effect channels accept explicit never and default to empty", () => {
+  const project = checkText(`
+const make = (): Effect<int, never, never> => defer(() => 1)
+const use = (value: Effect<int>): int => run(value)
+`);
+  assertEquals(messages(project), []);
+});
+
+Deno.test("run requires deferred failures and requirements in the caller contract", () => {
+  const project = checkText(`
+error Stop = {}
+service Counter { next(): int fails Stop }
+const make = (): Effect<int, Stop, Counter.next> => defer(() => Counter.next())
+const missing = (): int => run(make())
+`);
+  assertEquals(codes(project), [
+    "failure-contract/001",
+    "requirement-contract/001",
+  ]);
+});
+
 /** The facts of a function body in node order. */
 function factsOf(
   project: CheckedProject,
@@ -388,6 +578,25 @@ service S { a(): int }
 const f = (xs: int[]): int[] uses S.a => map(xs, (x) => S.a())
 `);
   assertEquals(codes(project), ["execution-mode/001"]);
+});
+
+Deno.test("traverse carries callback failures and requirements", () => {
+  const project = checkText(`
+error Stop = { at: int }
+service S { step(n: int): int fails Stop }
+const good = (xs: int[]): int[] fails Stop uses S.step =>
+  traverse(xs, (n) => S.step(n))
+const missing = (xs: int[]): int[] =>
+  xs |> traverse((n) => S.step(n))
+`);
+  assertEquals(codes(project), [
+    "failure-contract/001",
+    "requirement-contract/001",
+  ]);
+  assertEquals(shortIds(fn(project, "m", "good").body!.failures), ["Stop"]);
+  assertEquals(shortIds(fn(project, "m", "good").body!.requirements), [
+    "S.step",
+  ]);
 });
 
 Deno.test("a parameter of function type is effectful and cannot be a pure callback", () => {

@@ -1,0 +1,11 @@
+const empty =
+  // error: type-mismatch/012
+  []
+
+const mixed =
+  // error: type-mismatch/012
+  [1, "a"]
+
+const short: [int, string] =
+  // error: type-mismatch/012
+  [1]

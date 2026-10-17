@@ -485,6 +485,8 @@ export class BodyChecker {
         return this.pipe(node, expected);
       case SyntaxKind.RecordExpr:
         return this.recordExpr(node, expected);
+      case SyntaxKind.ListExpr:
+        return this.listExpr(node, expected);
       case SyntaxKind.Block:
         return this.block(node, expected);
       case SyntaxKind.IfExpr:
@@ -831,6 +833,20 @@ export class BodyChecker {
         return this.retryCall(node, args);
       case "provide":
         return this.provideCall(node, args);
+      case "defer":
+        return this.deferCall(node, args);
+      case "run":
+        return this.runCall(node, args);
+      case "withResource":
+        return this.withResourceCall(node, args, expected);
+      case "unfold":
+        return this.unfoldCall(node, args);
+      case "mapEffect":
+        return this.mapEffectCall(node, args);
+      case "sinkForEach":
+        return this.sinkForEachCall(node, args);
+      case "runStream":
+        return this.runStreamCall(node, args);
       case "unbrand":
         return this.unbrandCall(node, args);
       case "Some":
@@ -838,6 +854,7 @@ export class BodyChecker {
       case "map":
       case "filter":
       case "fold":
+      case "traverse":
         return this.collectionCall(node, name, args, expected);
       default: {
         const infos = args.map((a) => this.argInfo(a));
@@ -1039,6 +1056,437 @@ export class BodyChecker {
     );
   }
 
+  private deferCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "defer" });
+    if (!this.arity(node, "defer", 1, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((a) => this.argInfo(a))),
+      );
+    }
+    const job = this.argInfo(args[0]);
+    const fn = this.jobFunction("defer", args[0], job);
+    return this.finish(
+      node,
+      fn === undefined
+        ? this.table.error
+        : this.table.effect(fn.result, fn.failures, fn.requirements),
+      job,
+    );
+  }
+
+  private runCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "run" });
+    if (!this.arity(node, "run", 1, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine([...args.map((a) => this.argInfo(a)), EFFECT_ONLY]),
+      );
+    }
+    const value = this.argInfo(args[0]);
+    const type = this.table.node(this.table.unfold(value.type));
+    if (type.kind !== "effect") {
+      if (!this.isError(value.type)) {
+        this.report(
+          "type-mismatch/010",
+          `\`run\` needs an Effect value, but the argument has type ${
+            this.show(value.type)
+          }`,
+          args[0].node,
+        );
+      }
+      return this.finish(node, this.table.error, combine([value, EFFECT_ONLY]));
+    }
+    return this.finish(
+      node,
+      type.result,
+      combine([
+        value,
+        {
+          failures: type.failures,
+          requirements: type.requirements,
+          mode: "effect",
+        },
+      ]),
+    );
+  }
+
+  /** A scoped handle is usable only as `handle.operation(...)`. */
+  private scopedUses(body: NodeId, id: LocalId): void {
+    const visit = (
+      node: NodeId,
+      parent: NodeId | undefined,
+      grandparent: NodeId | undefined,
+      nested: boolean,
+    ): void => {
+      if (kindOf(this.tree, node) === SyntaxKind.NameExpr) {
+        const target = this.targets.get(node);
+        if (target?.kind === "local" && target.id === id) {
+          const directField = parent !== undefined &&
+            kindOf(this.tree, parent) === SyntaxKind.FieldExpr &&
+            this.kids(parent)[0] === node;
+          const directCall = grandparent !== undefined &&
+            kindOf(this.tree, grandparent) === SyntaxKind.CallExpr &&
+            this.kids(grandparent)[0] === parent;
+          if (nested || !directField || !directCall) {
+            this.report(
+              "type-mismatch/010",
+              "a scoped operation record may only be used as the direct receiver of an operation call",
+              node,
+            );
+          }
+        }
+      }
+      for (const child of this.kids(node)) {
+        visit(
+          child,
+          node,
+          parent,
+          nested || kindOf(this.tree, node) === SyntaxKind.ArrowExpr,
+        );
+      }
+    };
+    visit(body, undefined, undefined, false);
+  }
+
+  private dataOnly(ref: TypeRef, seen = new Set<TypeRef>()): boolean {
+    const unfolded = this.table.unfold(ref);
+    if (seen.has(unfolded)) return true;
+    seen.add(unfolded);
+    const type = this.table.node(unfolded);
+    switch (type.kind) {
+      case "primitive":
+        return type.name !== "unknown";
+      case "literal":
+        return true;
+      case "record":
+        return type.fields.every((f) => this.dataOnly(f.type, seen));
+      case "array":
+      case "option":
+        return this.dataOnly(type.element, seen);
+      case "tuple":
+        return type.elements.every((element) => this.dataOnly(element, seen));
+      case "union":
+        return type.members.every((member) => this.dataOnly(member, seen));
+      case "named": {
+        const record = type.id.startsWith("error:")
+          ? this.table.errorRecordOf(type.id as ErrorId)
+          : this.table.brandBaseOf(type.id as TypeId);
+        return record !== undefined && this.dataOnly(record, seen);
+      }
+      default:
+        return false;
+    }
+  }
+
+  private operationRecord(ref: TypeRef, node: NodeId): boolean {
+    const type = this.table.node(this.table.unfold(ref));
+    if (
+      type.kind !== "record" || type.fields.length === 0 ||
+      type.fields.some((f) => f.optional)
+    ) {
+      this.report(
+        "type-mismatch/010",
+        "acquisition must return a nonempty record of required operations",
+        node,
+      );
+      return false;
+    }
+    let valid = true;
+    for (const field of type.fields) {
+      const fn = this.functionOf(field.type);
+      if (
+        fn === undefined || !fn.parameters.every((p) => this.dataOnly(p)) ||
+        !this.dataOnly(fn.result)
+      ) {
+        this.report(
+          "type-mismatch/010",
+          `operation ${field.name} must take and return data-only values`,
+          node,
+        );
+        valid = false;
+      }
+    }
+    return valid;
+  }
+
+  private withResourceCall(
+    node: NodeId,
+    args: readonly Arg[],
+    expected: TypeRef | undefined,
+  ): NodeInfo {
+    this.fact(node, { kind: "with-resource" });
+    if (!this.arity(node, "withResource", 3, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((a) => this.argInfo(a))),
+      );
+    }
+    for (const arg of args) {
+      if (
+        arg.pre !== undefined ||
+        kindOf(this.tree, arg.node) !== SyntaxKind.ArrowExpr
+      ) {
+        this.report(
+          "type-mismatch/010",
+          "withResource requires three inline arrow callbacks",
+          arg.node,
+        );
+      }
+    }
+    const acquire = this.callback("withResource", args[0], [], undefined, true);
+    this.operationRecord(acquire.result, args[0].node);
+    const use = this.callback(
+      "withResource",
+      args[1],
+      [acquire.result],
+      expected,
+      true,
+    );
+    const release = this.callback(
+      "withResource",
+      args[2],
+      [acquire.result],
+      this.table.unit,
+      true,
+    );
+    this.fits(
+      args[2].node,
+      release.result,
+      this.table.unit,
+      "the release result",
+    );
+    if (!this.dataOnly(use.result)) {
+      this.report(
+        "type-mismatch/010",
+        "the use result must be data only",
+        args[1].node,
+      );
+    }
+    for (const arg of [args[1], args[2]]) {
+      const fact = this.body.facts.get(arg.node);
+      if (fact?.kind === "arrow" && fact.parameters[0]?.id !== undefined) {
+        const body = this.kids(arg.node).at(-1);
+        if (body !== undefined) this.scopedUses(body, fact.parameters[0].id);
+      }
+    }
+    const invoked = [acquire.info, use.info, release.info].map((info) => {
+      const fn = this.functionOf(info.type);
+      return fn === undefined ? PURE_EFFECTS : {
+        failures: fn.failures,
+        requirements: fn.requirements,
+        mode: fn.execution,
+      };
+    });
+    return this.finish(
+      node,
+      use.result,
+      combine([
+        acquire.info,
+        use.info,
+        release.info,
+        ...invoked,
+        EFFECT_ONLY,
+      ]),
+    );
+  }
+
+  private noPipeline(name: string, args: readonly Arg[]): void {
+    if (args[0]?.pre !== undefined) {
+      this.report(
+        "type-mismatch/010",
+        `\`${name}\` requires direct call syntax`,
+        args[0].node,
+      );
+    }
+  }
+
+  private inlineStreamCallback(name: string, arg: Arg): void {
+    if (
+      arg.pre !== undefined ||
+      kindOf(this.tree, arg.node) !== SyntaxKind.ArrowExpr
+    ) {
+      this.report(
+        "type-mismatch/010",
+        `\`${name}\` requires an inline arrow callback`,
+        arg.node,
+      );
+    }
+  }
+
+  private unfoldCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "unfold" });
+    if (!this.arity(node, "unfold", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((a) => this.argInfo(a))),
+      );
+    }
+    this.noPipeline("unfold", args);
+    this.inlineStreamCallback("unfold", args[1]);
+    const seed = this.argInfo(args[0]);
+    const state = this.widen(seed.type);
+    const next = this.callback("unfold", args[1], [state], undefined, true);
+    const fn = this.functionOf(next.info.type);
+    const option = this.table.node(this.table.unfold(next.result));
+    const pair = option.kind === "option"
+      ? this.table.node(this.table.unfold(option.element))
+      : undefined;
+    let element = this.table.error;
+    if (pair?.kind !== "tuple" || pair.elements.length !== 2) {
+      if (!this.isError(next.result)) {
+        this.report(
+          "type-mismatch/010",
+          "`unfold` callback must return Option<[Element, State]>",
+          args[1].node,
+        );
+      }
+    } else {
+      element = pair.elements[0];
+      this.fits(args[1].node, pair.elements[1], state, "the next stream state");
+    }
+    const type = this.table.stream(
+      element,
+      fn?.failures ?? [],
+      fn?.requirements ?? [],
+    );
+    return this.finish(node, type, combine([seed, next.info]));
+  }
+
+  private mapEffectCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "map-effect" });
+    if (!this.arity(node, "mapEffect", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((a) => this.argInfo(a))),
+      );
+    }
+    this.noPipeline("mapEffect", args);
+    this.inlineStreamCallback("mapEffect", args[1]);
+    const stream = this.argInfo(args[0]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`mapEffect` needs a Stream value",
+        args[0].node,
+      );
+    }
+    const element = source.kind === "stream"
+      ? source.element
+      : this.table.error;
+    const transform = this.callback(
+      "mapEffect",
+      args[1],
+      [element],
+      undefined,
+      true,
+    );
+    const fn = this.functionOf(transform.info.type);
+    const type = this.table.stream(
+      transform.result,
+      [
+        ...(source.kind === "stream" ? source.failures : []),
+        ...(fn?.failures ?? []),
+      ],
+      [
+        ...(source.kind === "stream" ? source.requirements : []),
+        ...(fn?.requirements ?? []),
+      ],
+    );
+    return this.finish(node, type, combine([stream, transform.info]));
+  }
+
+  private sinkForEachCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "sink-for-each" });
+    if (!this.arity(node, "sinkForEach", 1, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((a) => this.argInfo(a))),
+      );
+    }
+    this.noPipeline("sinkForEach", args);
+    this.inlineStreamCallback("sinkForEach", args[0]);
+    const consume = this.argInfo(args[0]);
+    const fn = this.functionOf(consume.type);
+    if (fn === undefined || fn.parameters.length !== 1) {
+      if (!this.isError(consume.type)) {
+        this.report(
+          "type-mismatch/010",
+          "`sinkForEach` needs a one-argument callback with an annotated input",
+          args[0].node,
+        );
+      }
+      return this.finish(node, this.table.error, consume);
+    }
+    this.fits(
+      args[0].node,
+      fn.result,
+      this.table.unit,
+      "the sink callback result",
+    );
+    const type = this.table.sink(
+      fn.parameters[0],
+      this.table.unit,
+      fn.failures,
+      fn.requirements,
+    );
+    return this.finish(node, type, consume);
+  }
+
+  private runStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "run-stream" });
+    if (!this.arity(node, "runStream", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine([...args.map((a) => this.argInfo(a)), EFFECT_ONLY]),
+      );
+    }
+    this.noPipeline("runStream", args);
+    const stream = this.argInfo(args[0]);
+    const sink = this.argInfo(args[1]);
+    const producer = this.table.node(this.table.unfold(stream.type));
+    const consumer = this.table.node(this.table.unfold(sink.type));
+    if (producer.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`runStream` needs a Stream as its first argument",
+        args[0].node,
+      );
+    }
+    if (consumer.kind !== "sink" && !this.isError(sink.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`runStream` needs a Sink as its second argument",
+        args[1].node,
+      );
+    }
+    if (producer.kind !== "stream" || consumer.kind !== "sink") {
+      return this.finish(
+        node,
+        this.table.error,
+        combine([stream, sink, EFFECT_ONLY]),
+      );
+    }
+    this.fits(args[1].node, producer.element, consumer.input, "the sink input");
+    return this.finish(
+      node,
+      consumer.result,
+      combine([stream, sink, {
+        failures: [...producer.failures, ...consumer.failures],
+        requirements: [...producer.requirements, ...consumer.requirements],
+        mode: "effect",
+      }]),
+    );
+  }
+
   private provideCall(node: NodeId, args: readonly Arg[]): NodeInfo {
     if (!this.arity(node, "provide", 2, args)) {
       this.fact(node, { kind: "provide", provider: undefined });
@@ -1112,15 +1560,15 @@ export class BodyChecker {
   }
 
   /**
-   * Checks a callback of `map`, `filter`, or `fold`. An inline arrow is checked
-   * with the parameter types from the context. The callback must be pure with
-   * empty sets. Returns the callback info and its result type.
+   * Checks a collection callback. An inline arrow receives its parameter
+   * types from the context. Only traverse permits invocation effects.
    */
   private callback(
     name: string,
     arg: Arg,
     parameters: readonly TypeRef[],
     resultHint: TypeRef | undefined,
+    allowEffects = false,
   ): { readonly info: NodeInfo; readonly result: TypeRef } {
     const info = arg.pre === undefined &&
         kindOf(this.tree, arg.node) === SyntaxKind.ArrowExpr
@@ -1160,8 +1608,9 @@ export class BodyChecker {
       });
     }
     if (
-      fn.execution !== "pure" || fn.failures.length > 0 ||
-      fn.requirements.length > 0
+      !allowEffects &&
+      (fn.execution !== "pure" || fn.failures.length > 0 ||
+        fn.requirements.length > 0)
     ) {
       this.report(
         "execution-mode/001",
@@ -1185,9 +1634,42 @@ export class BodyChecker {
     });
   }
 
+  private concurrencyBound(arg: Arg): number | undefined {
+    const bad = (): undefined => {
+      this.report(
+        "type-mismatch/010",
+        "`traverse` needs `{ concurrency: N }`, where N is a positive safe integer literal",
+        arg.node,
+      );
+      return undefined;
+    };
+    if (
+      arg.pre !== undefined ||
+      kindOf(this.tree, arg.node) !== SyntaxKind.RecordExpr
+    ) return bad();
+    const fields = this.kids(arg.node);
+    if (
+      fields.length !== 1 ||
+      kindOf(this.tree, fields[0]) !== SyntaxKind.RecordField
+    ) return bad();
+    const parts = this.kids(fields[0]);
+    const name = parts.find((p) => kindOf(this.tree, p) === SyntaxKind.Name);
+    const value = parts.find((p) => p !== name);
+    if (
+      name === undefined || value === undefined ||
+      nameTextOf(this.tree, name) !== "concurrency" ||
+      kindOf(this.tree, value) !== SyntaxKind.LiteralExpr
+    ) return bad();
+    const number = literalOf(this.tree, value);
+    return typeof number === "number" && Number.isSafeInteger(number) &&
+        number > 0
+      ? number
+      : bad();
+  }
+
   private collectionCall(
     node: NodeId,
-    name: "map" | "filter" | "fold",
+    name: "map" | "filter" | "fold" | "traverse",
     args: readonly Arg[],
     expected: TypeRef | undefined,
   ): NodeInfo {
@@ -1196,7 +1678,16 @@ export class BodyChecker {
       const infos = args.map((a) => this.argInfo(a));
       return this.finish(node, this.table.error, combine(infos));
     };
-    if (!this.arity(node, name, count, args)) return unspecialized();
+    if (name === "traverse") {
+      if (args.length !== 2 && args.length !== 3) {
+        this.report(
+          "type-mismatch/004",
+          "`traverse` takes two arguments and an optional concurrency record",
+          node,
+        );
+        return unspecialized();
+      }
+    } else if (!this.arity(node, name, count, args)) return unspecialized();
 
     const xs = this.argInfo(args[0]);
     const element = this.arrayElement(name, args[0], xs);
@@ -1205,7 +1696,42 @@ export class BodyChecker {
     let result: TypeRef;
     let specialized: TypeRef;
 
-    if (name === "map") {
+    if (name === "traverse") {
+      const cb = this.callback(name, args[1], [element], undefined, true);
+      infos.push(cb.info);
+      if (args[2] !== undefined) {
+        this.concurrencyBound(args[2]);
+        infos.push(this.argInfo(args[2]));
+      }
+      const fn = this.functionOf(cb.info.type);
+      const failures = fn?.failures ?? [];
+      const requirements = fn?.requirements ?? [];
+      const callbackType = table.function({
+        execution: "effect",
+        parameters: [element],
+        result: cb.result,
+        failures,
+        requirements,
+      });
+      result = table.array(cb.result);
+      specialized = table.function({
+        execution: "effect",
+        parameters: args.length === 3
+          ? [
+            table.array(element),
+            callbackType,
+            table.record([{
+              name: "concurrency",
+              type: table.int,
+              optional: false,
+            }]),
+          ]
+          : [table.array(element), callbackType],
+        result,
+        failures,
+        requirements,
+      });
+    } else if (name === "map") {
       const cb = this.callback(name, args[1], [element], undefined);
       infos.push(cb.info);
       result = table.array(cb.result);
@@ -1251,7 +1777,20 @@ export class BodyChecker {
       specialized,
       ir: table.toIrFunction(specialized),
     });
-    return this.finish(node, result, combine(infos));
+    const invocation = name === "traverse"
+      ? this.table.node(specialized)
+      : undefined;
+    return this.finish(
+      node,
+      result,
+      invocation?.kind === "function"
+        ? combine([...infos, {
+          failures: invocation.failures,
+          requirements: invocation.requirements,
+          mode: invocation.execution,
+        }])
+        : combine(infos),
+    );
   }
 
   // -------------------------------------------------------------- pipelines
@@ -1386,6 +1925,73 @@ export class BodyChecker {
       return this.recordUpdate(node, first, fields.slice(1));
     }
     return this.recordConstruction(node, fields, expected);
+  }
+
+  private listExpr(node: NodeId, expected: TypeRef | undefined): NodeInfo {
+    const table = this.table;
+    const target = expected === undefined
+      ? undefined
+      : table.node(table.unfold(expected));
+    const elements = this.kids(node);
+    if (target?.kind === "tuple") {
+      this.fact(node, { kind: "list", shape: "tuple" });
+      if (elements.length !== target.elements.length) {
+        this.report(
+          "type-mismatch/012",
+          `the tuple needs ${target.elements.length} elements, but ${elements.length} are given`,
+          node,
+        );
+      }
+      const infos = elements.map((element, i) => {
+        const hint = target.elements[i];
+        const info = this.expr(element, hint);
+        this.fits(element, info.type, hint, `tuple element ${i + 1}`);
+        return info;
+      });
+      return this.finish(node, expected!, combine(infos));
+    }
+
+    this.fact(node, { kind: "list", shape: "array" });
+    const hint = target?.kind === "array" ? target.element : undefined;
+    const infos = elements.map((element, i) => {
+      const info = this.expr(element, hint);
+      if (hint !== undefined) {
+        this.fits(element, info.type, hint, `array element ${i + 1}`);
+      }
+      return info;
+    });
+    if (hint !== undefined) {
+      return this.finish(node, expected!, combine(infos));
+    }
+    if (infos.length === 0) {
+      this.report(
+        "type-mismatch/012",
+        "an empty list needs an expected array or tuple type",
+        node,
+      );
+      return this.finish(node, table.array(table.error), PURE_EFFECTS);
+    }
+    let element = this.widen(infos[0].type);
+    for (let i = 1; i < infos.length; i++) {
+      const next = this.widen(infos[i].type);
+      if (this.isError(element) || this.isError(next)) {
+        element = table.error;
+      } else if (table.isAssignable(next, element)) {
+        continue;
+      } else if (table.isAssignable(element, next)) {
+        element = next;
+      } else {
+        this.report(
+          "type-mismatch/012",
+          `list element ${i + 1} has type ${
+            this.show(next)
+          }, which has no common array element type with ${this.show(element)}`,
+          elements[i],
+        );
+        element = table.error;
+      }
+    }
+    return this.finish(node, table.array(element), combine(infos));
   }
 
   /** The label, label node, and value node of a record field. */

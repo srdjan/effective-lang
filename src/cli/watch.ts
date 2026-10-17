@@ -47,9 +47,18 @@ export async function watchLoop(
     }
   };
   await round(first);
-  io.stderr(`watching ${session.root}\n`);
-  for await (const _batch of events) {
-    await round(session.sync());
+  const iterator = events[Symbol.asyncIterator]();
+  let next = iterator.next();
+  try {
+    io.stderr(`watching ${session.root}\n`);
+    while (true) {
+      const event = await next;
+      if (event.done) break;
+      await round(session.sync());
+      next = iterator.next();
+    }
+  } finally {
+    await iterator.return?.();
   }
   return { builds };
 }

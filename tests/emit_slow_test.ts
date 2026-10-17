@@ -199,6 +199,386 @@ Deno.test("the emitted forms and name-collision modules pass deno check", async 
 
 // ------------------------------------------------------------------ runtime
 
+Deno.test("withResource releases after success, typed failure, and interruption", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "export error Stop = {}",
+        "export service Files {",
+        "  open(): { read: () => string fails Stop, wait: () => void, close: () => void }",
+        "}",
+        "export const load = (): string fails Stop uses Files.open =>",
+        "  withResource(() => Files.open(), (file) => file.read(), (file) => file.close())",
+        "export const block = (): void uses Files.open =>",
+        "  withResource(() => Files.open(), (file) => file.wait(), (file) => file.close())",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Deferred, Effect, Exit, Fiber, Layer } from "effect";
+import { Files, Stop, block, load } from "./main.ts";
+
+const events: string[] = [];
+let fail = false;
+let started: Deferred.Deferred<void> | undefined;
+const Live = Layer.succeed(Files)({
+  open: () => Effect.sync(() => {
+    events.push("acquire");
+    return {
+      read: () => fail
+        ? Effect.sync(() => { events.push("read"); }).pipe(Effect.andThen(Effect.fail(new Stop({}))))
+        : Effect.sync(() => { events.push("read"); return "ok"; }),
+      wait: () => Effect.sync(() => { events.push("wait"); }).pipe(
+        Effect.andThen(Deferred.succeed(started!, undefined)),
+        Effect.andThen(Effect.never),
+      ),
+      close: () => Effect.sync(() => { events.push("release"); }),
+    };
+  }),
+});
+
+const success = Effect.runSync(load().pipe(Effect.provide(Live)));
+fail = true;
+const failed = Effect.runSyncExit(load().pipe(Effect.provide(Live)));
+const typedFailure = Exit.isFailure(failed);
+await Effect.runPromise(Effect.gen(function* () {
+  started = yield* Deferred.make<void>();
+  const fiber = yield* Effect.forkChild(block().pipe(Effect.provide(Live)));
+  yield* Deferred.await(started);
+  yield* Fiber.interrupt(fiber);
+  events.push("interrupted");
+}));
+console.log(JSON.stringify({ success, typedFailure, events }));
+`,
+    );
+    assertEquals(result, {
+      success: "ok",
+      typedFailure: true,
+      events: [
+        "acquire",
+        "read",
+        "release",
+        "acquire",
+        "read",
+        "release",
+        "acquire",
+        "wait",
+        "release",
+        "interrupted",
+      ],
+    });
+  });
+});
+
+Deno.test("bounded traverse limits jobs and waits for scoped finalizers", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "export error Stop = {}",
+        "export service Jobs {",
+        "  open(n: int): { work: () => int fails Stop, close: () => void }",
+        "}",
+        "export const bounded = (xs: int[]): int[] fails Stop uses Jobs.open =>",
+        "  traverse(xs, (n) => withResource(() => Jobs.open(n), (job) => job.work(), (job) => job.close()), { concurrency: 2 })",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Deferred, Effect, Exit, Fiber, Layer } from "effect";
+import { Jobs, Stop, bounded } from "./main.ts";
+
+type Gate = Deferred.Deferred<void>;
+let gates: Gate[] = [];
+let ready: Gate[] = [];
+let policy: "success" | "failure" | "interrupt" = "success";
+let active = 0;
+let maximum = 0;
+const started: number[] = [];
+const released: number[] = [];
+const Live = Layer.succeed(Jobs)({
+  open: (n) => Effect.sync(() => {
+    started.push(n);
+    active++;
+    maximum = Math.max(maximum, active);
+    return {
+      work: () => policy === "success"
+        ? Deferred.succeed(ready[n - 1]!, undefined).pipe(
+          Effect.andThen(Deferred.await(gates[n - 1]!)), Effect.as(n * 2),
+        )
+        : n === 2 && policy === "failure"
+        ? Deferred.succeed(ready[1]!, undefined).pipe(
+          Effect.andThen(Deferred.await(gates[1]!)),
+          Effect.andThen(Effect.fail(new Stop({}))),
+        )
+        : n === 2
+        ? Deferred.succeed(ready[1]!, undefined).pipe(Effect.andThen(Effect.never))
+        : Effect.never,
+      close: () => Effect.sync(() => { released.push(n); active--; }),
+    };
+  }),
+});
+
+const makeGates = () => Effect.forEach([1, 2, 3, 4], () => Deferred.make<void>());
+const ordered = await Effect.runPromise(Effect.gen(function* () {
+  gates = yield* makeGates();
+  ready = yield* makeGates();
+  const fiber = yield* Effect.forkChild(bounded([1, 2, 3, 4]).pipe(Effect.provide(Live)));
+  yield* Deferred.await(ready[0]!);
+  yield* Deferred.await(ready[1]!);
+  yield* Deferred.succeed(gates[1]!, undefined);
+  yield* Deferred.await(ready[2]!);
+  yield* Deferred.succeed(gates[0]!, undefined);
+  yield* Deferred.await(ready[3]!);
+  yield* Deferred.succeed(gates[3]!, undefined);
+  yield* Deferred.succeed(gates[2]!, undefined);
+  return yield* Fiber.join(fiber);
+}));
+const success = { ordered, maximum, active };
+started.length = 0; released.length = 0; maximum = 0; policy = "failure";
+const failed = await Effect.runPromise(Effect.gen(function* () {
+  gates = yield* makeGates();
+  ready = yield* makeGates();
+  const fiber = yield* Effect.forkChild(bounded([1, 2, 3]).pipe(Effect.provide(Live)));
+  yield* Deferred.await(ready[1]!);
+  yield* Deferred.succeed(gates[1]!, undefined);
+  return yield* Fiber.await(fiber);
+}));
+const failure = { failed: Exit.isFailure(failed), started: [...started], released: [...released].sort(), active };
+started.length = 0; released.length = 0; policy = "interrupt";
+await Effect.runPromise(Effect.gen(function* () {
+  gates = yield* makeGates();
+  ready = yield* makeGates();
+  const fiber = yield* Effect.forkChild(bounded([1, 2, 3]).pipe(Effect.provide(Live)));
+  yield* Deferred.await(ready[1]!);
+  yield* Fiber.interrupt(fiber);
+}));
+const interruption = { started: [...started], released: [...released].sort(), active };
+console.log(JSON.stringify({ success, failure, interruption }));
+`,
+    );
+    assertEquals(result, {
+      success: { ordered: [2, 4, 6, 8], maximum: 2, active: 0 },
+      failure: { failed: true, started: [1, 2], released: [1, 2], active: 0 },
+      interruption: { started: [1, 2], released: [1, 2], active: 0 },
+    });
+  });
+});
+Deno.test("source-authored streams pull incrementally through an effectful sink", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "export error Stop = {}",
+        "export service Source { next(state: int): Option<[int, int]> fails Stop }",
+        "export service Transform { double(value: int): int fails Stop }",
+        "export service Consumer { accept(value: int): void fails Stop }",
+        "const numbers: Stream<int, Stop, Source.next> = unfold(0, (state) => Source.next(state))",
+        "const doubled: Stream<int, Stop, Source.next | Transform.double> = mapEffect(numbers, (value) => Transform.double(value))",
+        "const consume: Sink<int, void, Stop, Consumer.accept> = sinkForEach((value: int) => Consumer.accept(value))",
+        "export const main = (): void fails Stop uses Source.next | Transform.double | Consumer.accept => runStream(doubled, consume)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer, Option } from "effect";
+import { Consumer, Source, Transform, main } from "./main.ts";
+
+let produced = 0;
+let consumed = 0;
+let maximumAhead = 0;
+const output: number[] = [];
+const SourceLive = Layer.succeed(Source)({
+  next: (state) => Effect.sync(() => {
+    if (state === 4) return Option.none();
+    produced++;
+    maximumAhead = Math.max(maximumAhead, produced - consumed);
+    return Option.some([state, state + 1] as const);
+  }),
+});
+const TransformLive = Layer.succeed(Transform)({
+  double: (value) => Effect.succeed(value * 2),
+});
+const ConsumerLive = Layer.succeed(Consumer)({
+  accept: (value) => Effect.sync(() => { output.push(value); consumed++; }),
+});
+const before = produced;
+await Effect.runPromise(main().pipe(Effect.provide(Layer.mergeAll(
+  SourceLive, TransformLive, ConsumerLive,
+))));
+console.log(JSON.stringify({ before, produced, consumed, maximumAhead, output }));
+`,
+    );
+    assertEquals(result, {
+      before: 0,
+      produced: 4,
+      consumed: 4,
+      maximumAhead: 1,
+      output: [0, 2, 4, 6],
+    });
+  });
+});
+Deno.test("stream pull releases a scoped operation on failure and interruption", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "export error Stop = {}",
+        "export service Source { open(state: int): { next: () => Option<[int, int]> fails Stop, close: () => void } }",
+        "const numbers = unfold(0, (state) => withResource(() => Source.open(state), (source) => source.next(), (source) => source.close()))",
+        "const sink = sinkForEach((value: int) => {})",
+        "export const main = (): void fails Stop uses Source.open => runStream(numbers, sink)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Deferred, Effect, Exit, Fiber, Layer } from "effect";
+import { Source, Stop, main } from "./main.ts";
+
+const events: string[] = [];
+let interrupt = false;
+let started: Deferred.Deferred<void> | undefined;
+const Live = Layer.succeed(Source)({
+  open: () => Effect.sync(() => {
+    events.push("acquire");
+    return {
+      next: () => interrupt
+        ? Deferred.succeed(started!, undefined).pipe(Effect.andThen(Effect.never))
+        : Effect.fail(new Stop({})),
+      close: () => Effect.sync(() => { events.push("release"); }),
+    };
+  }),
+});
+const failed = Effect.runSyncExit(main().pipe(Effect.provide(Live)));
+const failure = { failed: Exit.isFailure(failed), events: [...events] };
+events.length = 0;
+interrupt = true;
+await Effect.runPromise(Effect.gen(function* () {
+  started = yield* Deferred.make<void>();
+  const fiber = yield* Effect.forkChild(main().pipe(Effect.provide(Live)));
+  yield* Deferred.await(started);
+  yield* Fiber.interrupt(fiber);
+  events.push("interrupted");
+}));
+console.log(JSON.stringify({ failure, interruption: events }));
+`,
+    );
+    assertEquals(result, {
+      failure: { failed: true, events: ["acquire", "release"] },
+      interruption: ["acquire", "release", "interrupted"],
+    });
+  });
+});
+
+Deno.test("stored Effect values run twice after deferred construction", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "error Stop = {}",
+        "export service Counter { next(): int fails Stop }",
+        "export service Factory { produce(): Effect<int, Stop, Counter.next> }",
+        "export const make = (): Effect<int, Stop, Counter.next> => defer(() => Counter.next())",
+        "export const fromHost = (): int fails Stop uses Counter.next | Factory.produce => run(Factory.produce())",
+        "export const twice = (stored: Effect<int, Stop, Counter.next>): int fails Stop uses Counter.next => {",
+        "  const first = run(stored)",
+        "  const second = run(stored)",
+        "  first + second",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer } from "effect";
+import { Counter, make, twice } from "./main.ts";
+
+let calls = 0;
+const Live = Layer.succeed(Counter)({
+  next: () => Effect.sync(() => ++calls),
+});
+const stored = make();
+const before = calls;
+const sum = Effect.runSync(twice(stored).pipe(Effect.provide(Live)));
+console.log(JSON.stringify({ before, sum, calls }));
+`,
+    );
+    assertEquals(result, { before: 0, sum: 3, calls: 2 });
+  });
+});
+
+Deno.test("traverse runs sequentially and stops after a typed callback failure", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "error Stop = { at: int }",
+        "service Probe { step(n: int): int fails Stop }",
+        "export const run = (xs: int[]): int[] fails Stop uses Probe.step => traverse(xs, (n) => Probe.step(n))",
+        "export const pure = (xs: int[]): int[] => traverse(xs, (n) => n + 1)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    const result = await runScript(
+      dir,
+      `
+import { Cause, Effect, Exit, Layer, Result } from "effect";
+import { Probe, Stop, run, pure } from "./main.ts";
+
+const calls: number[] = [];
+const Live = Layer.succeed(Probe)({
+  step: (n) => Effect.gen(function* () {
+    calls.push(n);
+    if (n === 3) return yield* Effect.fail(new Stop({ at: n }));
+    return n * 2;
+  }),
+});
+const empty = Effect.runSync(run([]).pipe(Effect.provide(Live)));
+const success = Effect.runSync(run([1, 2]).pipe(Effect.provide(Live)));
+const failed = Effect.runSyncExit(run([1, 2, 3, 4]).pipe(Effect.provide(Live)));
+const found = Exit.isFailure(failed) ? Cause.findError(failed.cause) : undefined;
+const stoppedAt = found !== undefined && Result.isSuccess(found) &&
+    found.success instanceof Stop ? found.success.at : null;
+console.log(JSON.stringify({ empty, success, stoppedAt, calls, pure: Effect.runSync(pure([1, 2])) }));
+`,
+    );
+    assertEquals(result, {
+      empty: [],
+      success: [2, 4],
+      stoppedAt: 3,
+      calls: [1, 2, 1, 2, 3],
+      pure: [2, 3],
+    });
+  });
+});
+
 Deno.test("the emitted examples run: main, a provided fallback, collections, and pay", async () => {
   await withTemporary(async (dir) => {
     buildExamples(dir);
@@ -384,9 +764,12 @@ Deno.test("deno fmt does not exclude the golden files, and it accepts them uncha
   const root = new URL("../", import.meta.url).pathname;
   const run = await deno(root, ["fmt", "--check", "fixtures/golden"]);
   assertEquals(run.code, 0, `deno fmt --check failed:\n${run.stderr}`);
+  const goldenCount =
+    [...Deno.readDirSync(new URL("../fixtures/golden/", import.meta.url))]
+      .filter((entry) => entry.isFile && entry.name.endsWith(".ts")).length;
   assert(
-    run.stderr.includes("Checked 5 files"),
-    `deno fmt did not check the five golden files:\n${run.stderr}`,
+    run.stderr.includes(`Checked ${goldenCount} files`),
+    `deno fmt did not check all ${goldenCount} golden files:\n${run.stderr}`,
   );
 });
 

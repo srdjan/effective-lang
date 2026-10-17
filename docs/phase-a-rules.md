@@ -14,7 +14,7 @@ the implementer picks the stricter rule and records it here.
 | `fails` and `uses` on a new line | Continue a clause only when an identifier follows |
 | `Some(_)` | Accepted; `_` is the binding name |
 | Nesting depth | 512 levels of expressions and types; a parenthesis counts two levels. Deeper input is `syntax/009`, and the parser skips only the one group at the limit |
-| Array and tuple literals | The spec grammar has none, so `[1, 2]` is `syntax/008`. The IR `array` and `tuple` nodes have no source form yet |
+| Array and tuple literals | Brackets form a list expression. An expected tuple type checks each position and length; otherwise an expected array checks its elements. Without context, a nonempty homogeneous list infers an array, while `[]` and heterogeneous lists get `type-mismatch/012`. Trailing commas are accepted |
 | Parenthesized types | `(A \| B)[]` and the empty tuple type are accepted |
 
 ## Projects and names (A2)
@@ -22,7 +22,7 @@ the implementer picks the stricter rule and records it here.
 | Rule | Choice |
 | --- | --- |
 | Namespace | One namespace per module for types, errors, services, providers, constants, and imports |
-| Prelude names | Neither modules nor locals may declare them; modules also may not declare builtin type names |
+| Prelude names | Neither modules nor locals may declare them, except `run`: an existing binding with that name shadows the Effect execution builtin. Modules also may not declare builtin type names. `Effect<...>` is parsed as a type application without reserving `Effect` as a value name |
 | Target names | Neither modules nor locals may declare `undefined`, `Number`, `RangeError`, `ReadonlyArray`, `any`, `bigint`, `object`, or `symbol` (`declaration/002`), because the generated TypeScript needs them. Fields and service methods may use them. Decision 1 of 2026-10-17 |
 | Shared scopes | A block after a parameter list, pattern, or handler shares its scope, so a redeclaration is `declaration/001` |
 | Early outer use | A block that uses an outer name and later binds the same name is `declaration/004` |
@@ -38,6 +38,7 @@ the implementer picks the stricter rule and records it here.
 | Private parameters | A module function parameter needs an annotation when nothing supplies its type (`declaration/011`) |
 | Function types in type syntax | Execution defaults to `effect` |
 | Provider compatibility | Equal `provides`, compatible execution, acquisition sets as subsets |
+| Effect value compatibility | `Effect<A, E, R>` checks `A` covariantly and requires the source's deferred failure and requirement sets to be subsets of the target's sets. Omitted sets and `never` mean empty sets |
 | Interface hash | Ignores spans, so comments do not change it. A body edit changes it only when it flips the mode of an exported function, because the payload holds each exported function type with its mode |
 | Interface payload | Also carries the declarations of other modules that the exports reach, so the hash covers them |
 | Type depth | A type declaration deeper than 128 levels, counting aliases, is `declaration/012`, and the alias becomes the error type. The comparison caps are 1536 |
@@ -53,6 +54,10 @@ the implementer picks the stricter rule and records it here.
 | Mode fixed point | Round cap 32 (`execution-mode/004`) |
 | Equality | Compares string, numeric, boolean, or one primitive brand; records and options are rejected |
 | `retry` form | The second argument must be the literal record `{ times: N }` |
+| `traverse` | `traverse(items, callback)` invokes the callback sequentially. An optional literal `{ concurrency: N }` with positive safe integer N runs at most N callbacks simultaneously, preserves input order, interrupts active siblings after a typed failure, and waits for scoped finalizers. Callback invocation failures and requirements remain active. `map`, `filter`, and `fold` keep their pure-callback rule |
+| `defer` and `run` | `defer(job)` stores the invocation of a zero-argument function without running it. Constructing the value carries only effects of evaluating the job expression. Each `run(value)` executes the stored Effect and activates its deferred failures and requirements, even when both sets are empty |
+| `withResource` | Three inline callbacks acquire, use, and release a scoped operation record. Acquisition takes no arguments. Use and release take the record; use returns data only, release returns `void`. Operation fields are required functions whose arguments and results are data only. A scoped parameter may occur only as the direct receiver of an operation call, including no nested closure capture. Callback invocation failures and requirements combine and mode is effectful. The backend uses `Effect.acquireUseRelease` |
+| Streams and sinks | `Stream<A,E,R>` and `Sink<I,O,E,R>` carry deferred channels. Direct calls to `unfold`, `mapEffect`, and `sinkForEach` use inline arrows; the consumer arrow needs an annotated input. `unfold` callback returns `Option<[Element, State]>`, `mapEffect` combines deferred channels, and `runStream` activates stream and sink channels. Pull demand has no prefetch; each sink completion permits the next pull |
 | Broken declarations | Checked for side tables; their body diagnostics are suppressed until the syntax is fixed |
 | Effect type order | Sorted identity order everywhere, including `typeAt` |
 
@@ -62,7 +67,7 @@ the implementer picks the stricter rule and records it here.
 | --- | --- |
 | Error construction | The argument must be a record literal without a spread (`type-mismatch/010`), because the IR `error` node lists its fields |
 | Pipeline stage sets | A stage call carries its arguments and its invocation only; the left value's sets sit on its `$p` binding |
-| Known limit | A `retry` or `provide` stage whose left value is effectful keeps the checker's sets, so the validator may report it |
+| Control pipeline stages | `retry`, `provide`, `defer`, and `run` record their own active effects locally; the left value's evaluation stays on its binding |
 | Pipeline binding names | `$p<n>` skips every `<n>` whose name an identifier of the module uses, so a source local `$p1` is not captured |
 | Prelude value names | `$builtin/<name>/<hash>`, the text after `#` in the id |
 | Declaration order in IR | Source order by span start |
@@ -71,8 +76,8 @@ the implementer picks the stricter rule and records it here.
 
 | Rule | Choice |
 | --- | --- |
-| Pure-to-effect lift | A pure function fits an effect function type only directly in a value position; the emitter wraps it there. Nested in a record, array, option, tuple, union, result, or parameter, the execution must match |
-| Pure job of `retry` or `provide` | The emitter lifts it as in a value position: `Effect.suspend(() => Effect.succeed(x))` |
+| Pure-to-effect lift | A pure function fits an effect function type only directly in a value position; the emitter wraps it there. Nested in a record, array, option, tuple, union, Effect value, result, or parameter, the execution must match |
+| Pure job of `retry`, `provide`, or `defer` | The emitter lifts it as in a value position: `Effect.suspend(() => Effect.succeed(x))` |
 | Hoisting | Trivial children stay inline: literals, references, `None`, closures, and a record, array, tuple, error, update, field read, brand, unbrand, or `Some` whose parts are trivial |
 | Service method parameters | Named `a`, `b`, `c` in emitted service shapes, because the IR has no parameter names |
 | Reached declarations | Declarations that an exported signature reaches are exported in TypeScript, even when the source keeps them private |

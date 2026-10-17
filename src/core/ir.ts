@@ -45,6 +45,9 @@ export type Type =
   | { readonly kind: "tuple"; readonly elements: readonly Type[] }
   | { readonly kind: "union"; readonly members: readonly Type[] }
   | { readonly kind: "option"; readonly element: Type }
+  | { readonly kind: "effect"; readonly result: Type; readonly effects: Effects }
+  | { readonly kind: "stream"; readonly element: Type; readonly effects: Effects }
+  | { readonly kind: "sink"; readonly input: Type; readonly result: Type; readonly effects: Effects }
   | FunctionType
   | {
       readonly kind: "provider";
@@ -113,6 +116,13 @@ export type Expr =
   | Node<{ kind: "error"; error: ErrorId; fields: readonly { readonly name: string; readonly value: Expr }[] }>
   | Node<{ kind: "closure"; parameters: readonly Parameter[]; body: Expr }>
   | Node<{ kind: "call"; callee: Expr; arguments: readonly Expr[] }>
+  | Node<{ kind: "defer"; job: Expr }>
+  | Node<{ kind: "run"; value: Expr }>
+  | Node<{ kind: "with-resource"; acquire: Expr; use: Expr; release: Expr; useBinding: LocalId; releaseBinding: LocalId }>
+  | Node<{ kind: "unfold"; seed: Expr; next: Expr }>
+  | Node<{ kind: "map-effect"; stream: Expr; transform: Expr }>
+  | Node<{ kind: "sink-for-each"; consume: Expr }>
+  | Node<{ kind: "run-stream"; stream: Expr; sink: Expr }>
   | Node<{ kind: "perform"; capability: CapabilityId; arguments: readonly Expr[] }>
   | Node<{ kind: "block"; steps: readonly Step[]; result: Expr }>
   | Node<{ kind: "if"; condition: Expr; then: Expr; else: Expr }>

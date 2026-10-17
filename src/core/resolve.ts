@@ -47,23 +47,39 @@ export type PreludeName =
   | "fail"
   | "retry"
   | "provide"
+  | "defer"
+  | "run"
+  | "withResource"
+  | "unfold"
+  | "mapEffect"
+  | "sinkForEach"
+  | "runStream"
   | "unbrand"
   | "Some"
   | "None"
   | "map"
   | "filter"
-  | "fold";
+  | "fold"
+  | "traverse";
 
 export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "fail",
   "retry",
   "provide",
+  "defer",
+  "run",
+  "withResource",
+  "unfold",
+  "mapEffect",
+  "sinkForEach",
+  "runStream",
   "unbrand",
   "Some",
   "None",
   "map",
   "filter",
   "fold",
+  "traverse",
 ]);
 
 export type BuiltinTypeName =
@@ -303,7 +319,12 @@ class Resolver {
     binding: Binding,
     nameNode: NodeId,
   ): void {
-    if (PRELUDE_NAMES.has(name) || BUILTIN_TYPE_NAMES.has(name)) {
+    // Existing programs use `run` as a value name. A binding shadows the new
+    // prelude operation; lookupValue already checks bindings first.
+    if (
+      (PRELUDE_NAMES.has(name) && name !== "run") ||
+      BUILTIN_TYPE_NAMES.has(name)
+    ) {
       this.report(
         "declaration/002",
         `\`${name}\` is a reserved prelude or builtin name and cannot be declared`,
@@ -447,7 +468,7 @@ class Resolver {
     const name = nameTextOf(this.tree, nameNode);
     if (name === undefined) return undefined;
     const span = this.span(nameNode);
-    if (PRELUDE_NAMES.has(name)) {
+    if (PRELUDE_NAMES.has(name) && name !== "run") {
       this.report(
         "declaration/002",
         `\`${name}\` is a reserved prelude name and cannot be a binding`,
@@ -812,6 +833,16 @@ class Resolver {
           } else this.resolveType(kid);
         }
         return;
+      case SyntaxKind.EffectType:
+      case SyntaxKind.StreamType:
+      case SyntaxKind.SinkType:
+        for (const kid of this.kids(node)) {
+          const k = kindOf(this.tree, kid);
+          if (k === SyntaxKind.FailsClause || k === SyntaxKind.UsesClause) {
+            this.clause(kid);
+          } else this.resolveType(kid);
+        }
+        return;
       case SyntaxKind.TypeArgs:
       case SyntaxKind.TupleType:
       case SyntaxKind.ArrayType:
@@ -843,10 +874,12 @@ class Resolver {
     const kind = kindOf(this.tree, node);
     if (kind === SyntaxKind.FailsClause) {
       for (const name of this.kidsOfKind(node, SyntaxKind.Name)) {
+        if (nameTextOf(this.tree, name) === "never") continue;
         this.errorRef(name);
       }
     } else if (kind === SyntaxKind.UsesClause) {
       for (const qn of this.kidsOfKind(node, SyntaxKind.QualifiedName)) {
+        if (nodeText(this.tree, qn) === "never") continue;
         this.qualified(qn, "uses");
       }
     } else if (kind === SyntaxKind.ProvidesClause) {
@@ -960,6 +993,7 @@ class Resolver {
       case SyntaxKind.ParenExpr:
       case SyntaxKind.BinaryExpr:
       case SyntaxKind.ArgList:
+      case SyntaxKind.ListExpr:
       case SyntaxKind.IfExpr:
         for (const kid of this.kids(node)) this.expr(kid, "value");
         return;

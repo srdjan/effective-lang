@@ -77,13 +77,13 @@
     },
     "builtin-types": {
       "name": "support.type.builtin.effective",
-      "match": "\\b(?:string|boolean|int|number|void|never|unknown|Option|Brand)\\b"
+      "match": "\\b(?:string|boolean|int|number|void|never|unknown|Option|Brand|Effect|Stream|Sink)\\b"
     },
     "builtin-functions": {
       "patterns": [
         {
           "name": "support.function.builtin.effective",
-          "match": "\\b(?:map|filter|fold|retry|provide|fail|unbrand)\\b"
+          "match": "\\b(?:map|filter|fold|traverse|retry|provide|defer|run|withResource|unfold|mapEffect|sinkForEach|runStream|fail|unbrand)\\b"
         },
         {
           "name": "support.constant.builtin.effective",

@@ -30,9 +30,22 @@ export function childrenOf(expr: Expr): Expr[] {
     case "brand":
     case "unbrand":
     case "some":
+    case "run":
       return [expr.value];
     case "closure":
       return [expr.body];
+    case "defer":
+      return [expr.job];
+    case "with-resource":
+      return [expr.acquire, expr.use, expr.release];
+    case "unfold":
+      return [expr.seed, expr.next];
+    case "map-effect":
+      return [expr.stream, expr.transform];
+    case "sink-for-each":
+      return [expr.consume];
+    case "run-stream":
+      return [expr.stream, expr.sink];
     case "call":
       return [expr.callee, ...expr.arguments];
     case "perform":

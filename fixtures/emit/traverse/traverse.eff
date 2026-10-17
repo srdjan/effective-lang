@@ -1,0 +1,9 @@
+service Counter {
+  next(n: int): int
+}
+
+export const sequence = (xs: int[]): int[] uses Counter.next =>
+  xs |> traverse((n) => Counter.next(n))
+
+export const raised = (xs: int[]): int[] =>
+  traverse(xs, (n) => n + 1)

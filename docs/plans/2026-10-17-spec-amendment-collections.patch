@@ -1,0 +1,34 @@
+--- public/effective-spec.html
++++ public/effective-spec.html
+@@ -79,4 +79,6 @@
+ <p>Record construction rejects missing required fields, duplicate fields, and unknown fields. Contextual typing preserves expected literal alternatives.</p>
+ <p>Record updates construct a new value. One spread may appear first, followed by replacement fields. The original record remains unchanged.</p>
++<p>A bracket expression constructs an immutable list. An expected tuple type requires the exact element count and checks each element against its position. Otherwise an expected array type checks every element against its element type. Without an expected type, a nonempty homogeneous list infers an array after literal widening. An empty list or elements without a common array element type require a contextual type. A trailing comma is allowed.</p>
++<p>List elements evaluate once from left to right. A failed element stops evaluation. Their active failures and requirements combine in the list expression. The typed IR retains whether the expression is an array or tuple; the Effect backend emits a JavaScript array for either shape.</p>
+ <figure data-ui class="code" data-tabs data-check="spec-activate" data-check-requires="spec-types"><figcaption>A pure function that copies a record</figcaption><div class="code-panel" data-tab="Effective"><pre tabindex="0"><code class="language-effective">const activate = (user: User): User =&gt;
+   ({ ...user, active: true })</code></pre></div><div class="code-panel" data-tab="Effect-TS"><pre tabindex="0"><code class="language-typescript">const activate = (user: User): User =&gt;
+@@ -207,8 +209,9 @@
+ <p>Version 0 excludes inline lambda stages, placeholders, spread arguments, and runtime record-member stages.</p>
+ <p>The pipeline operator has lower precedence than arithmetic, comparisons, and boolean operators. Parentheses may override grouping.</p>
+-<p>The prelude supplies map, filter, and fold. Their callbacks require pure execution mode and empty failure and requirement sets.</p>
++<p>The prelude supplies map, filter, fold, and traverse. The callbacks of map, filter, and fold require pure execution mode and empty failure and requirement sets. The callback of traverse may be pure or effectful.</p>
+ <p>map transforms each element. filter selects elements through a boolean predicate. Both visit elements once from left to right and preserve order.</p>
+ <p>fold(items, initial, callback) invokes callback(state, item) from left to right. Its result retains the accumulator type. An empty array returns initial.</p>
+-<p>Empty arrays produce empty results for map and filter. A defect stops traversal. Effectful traversal remains outside version 0.</p>
++<p>Empty arrays produce empty results for map and filter. A defect stops traversal.</p>
++<p>traverse(items, callback) invokes the callback once per item from left to right and returns an array in input order. It is effectful even when the callback is pure. Its active failure and requirement sets include those of callback invocation. An empty array invokes no callbacks. A typed callback failure stops traversal before later items. The Effect backend uses Effect.forEach without a concurrency option; a pure callback is lifted into an Effect callback.</p>
+ <p>An unbodied callback parameter defaults to effect mode. It cannot pass the pure collection callback check, even when its effect sets are empty.</p>
+ <p>The transpiler specializes builtin rules before IR serialization. Each distinct closed builtin type receives a unique synthetic ValueId and a closed prelude interface.</p><nav class="section-nav" aria-label="Navigation for section 8"><a href="#execution">Previous: Execution order and mode</a><a href="#matching">Next: Pattern matching</a></nav></section><section class="section" id="matching" aria-labelledby="heading-matching"><h2 id="heading-matching">Pattern matching</h2><figure data-ui class="code" data-tabs data-check="spec-match" data-check-requires="spec-types"><figcaption>Match on an option and choose with if</figcaption><div class="code-panel" data-tab="Effective"><pre tabindex="0"><code class="language-effective">const label = (found: Option&lt;User&gt;): string =&gt;
+@@ -376,4 +379,5 @@
+                option, brand, and function types
+ block        = &quot;{&quot; (binding | expression)* &quot;}&quot;
++listExpr     = &quot;[&quot; [expression (&quot;,&quot; expression)* [&quot;,&quot;]] &quot;]&quot;
+ matchExpr    = &quot;match&quot; expression &quot;{&quot; arm (&quot;,&quot; arm)* [&quot;,&quot;] &quot;}&quot;
+ arm          = pattern &quot;=&gt;&quot; expression
+@@ -400,5 +404,5 @@
+ <p>Acceptance fixtures must check evaluation order, single evaluation, branch selection, failure propagation, explicit contracts, closure deferral, retry, and provider resolution.</p>
+ <p>Pipeline fixtures must verify argument placement, stage order, short-circuiting after failure, and source locations for generated bindings.</p>
+-<p>Collection fixtures must verify callback purity, order, empty arrays, and distinct closed builtin identities.</p>
++<p>Collection fixtures must verify callback purity for map, filter, and fold; callback effects for traverse; order; empty arrays; and distinct closed builtin identities.</p>
+ <p>Backend fixtures must compare values, typed failures, and operation traces. A future Effect target also requires strict TypeScript checking and runtime checks.</p>
+ <p>Delivered checks cover document consistency, the manual log IR fixture, and strict TypeScript checks of every illustrative Effect-TS tab. No Effective execution or translation-equivalence check exists.</p><nav class="section-nav" aria-label="Navigation for section 16"><a href="#grammar">Previous: Surface grammar</a><a href="#examples">Next: Examples and deferred work</a></nav></section><section class="section" id="examples" aria-labelledby="heading-examples"><h2 id="heading-examples">Examples and deferred work</h2><div class="table-wrap"><table><thead><tr><th scope="col">Example</th><th scope="col">Purpose</th></tr></thead><tbody><tr><td><a href="effective-examples/log.eff">effective-examples/log.eff</a></td><td>A service declaration and one direct call.</td></tr><tr><td><a href="effective-examples/collections.eff">effective-examples/collections.eff</a></td><td>Pure data-first collection pipelines.</td></tr><tr><td><a href="effective-examples/pay.eff">effective-examples/pay.eff</a></td><td>A complete payment workflow with matching, retry, and immutable updates.</td></tr><tr><td><a href="effective-examples/users.eff">effective-examples/users.eff</a></td><td>Lookup, update, recovery, and collection transformation in a reusable module.</td></tr><tr><td><a href="effective-examples/main.eff">effective-examples/main.eff</a></td><td>A separate application module that provides the imported user service.</td></tr></tbody></table></div>

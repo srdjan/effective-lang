@@ -56,6 +56,19 @@ function namedIn(type: Type, out: Set<DeclarationId>): void {
     case "option":
       namedIn(type.element, out);
       return;
+    case "effect":
+      namedIn(type.result, out);
+      effectsIn(type.effects.failures, type.effects.requirements, out);
+      return;
+    case "stream":
+      namedIn(type.element, out);
+      effectsIn(type.effects.failures, type.effects.requirements, out);
+      return;
+    case "sink":
+      namedIn(type.input, out);
+      namedIn(type.result, out);
+      effectsIn(type.effects.failures, type.effects.requirements, out);
+      return;
     case "tuple":
       for (const t of type.elements) namedIn(t, out);
       return;

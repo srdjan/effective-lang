@@ -84,6 +84,9 @@ export interface FileIndex {
 
 const TYPE_KINDS: ReadonlySet<SyntaxKind> = new Set([
   SyntaxKind.NamedType,
+  SyntaxKind.EffectType,
+  SyntaxKind.StreamType,
+  SyntaxKind.SinkType,
   SyntaxKind.LiteralType,
   SyntaxKind.RecordType,
   SyntaxKind.TupleType,

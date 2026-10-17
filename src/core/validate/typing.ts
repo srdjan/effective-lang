@@ -149,6 +149,22 @@ function assignable(
     case "option":
       return s.kind === "option" &&
         assignable(env, s.element, t.element, false, depth + 1);
+    case "effect":
+      return s.kind === "effect" &&
+        assignable(env, s.result, t.result, false, depth + 1) &&
+        isSubset(s.effects.failures, t.effects.failures) &&
+        isSubset(s.effects.requirements, t.effects.requirements);
+    case "stream":
+      return s.kind === "stream" &&
+        assignable(env, s.element, t.element, false, depth + 1) &&
+        isSubset(s.effects.failures, t.effects.failures) &&
+        isSubset(s.effects.requirements, t.effects.requirements);
+    case "sink":
+      return s.kind === "sink" &&
+        assignable(env, t.input, s.input, false, depth + 1) &&
+        assignable(env, s.result, t.result, false, depth + 1) &&
+        isSubset(s.effects.failures, t.effects.failures) &&
+        isSubset(s.effects.requirements, t.effects.requirements);
     case "tuple":
       if (s.kind !== "tuple" || s.elements.length !== t.elements.length) {
         return false;
@@ -310,6 +326,18 @@ export function show(type: Type): string {
       return type.members.map(show).join(" | ");
     case "option":
       return `Option<${show(type.element)}>`;
+    case "effect":
+      return `Effect<${show(type.result)}, ${
+        type.effects.failures.join(" | ") || "never"
+      }, ${type.effects.requirements.join(" | ") || "never"}>`;
+    case "stream":
+      return `Stream<${show(type.element)}, ${
+        type.effects.failures.join(" | ") || "never"
+      }, ${type.effects.requirements.join(" | ") || "never"}>`;
+    case "sink":
+      return `Sink<${show(type.input)}, ${show(type.result)}, ${
+        type.effects.failures.join(" | ") || "never"
+      }, ${type.effects.requirements.join(" | ") || "never"}>`;
     case "function": {
       const fails = type.effects.failures.length === 0
         ? ""

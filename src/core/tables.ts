@@ -114,10 +114,19 @@ export type NodeFact =
   | { readonly kind: "fail" }
   | { readonly kind: "retry"; readonly times: number | undefined }
   | { readonly kind: "provide"; readonly provider: ValueId | undefined }
-  /** `map`, `filter`, or `fold` with its closed function type. */
+  | { readonly kind: "defer" }
+  | { readonly kind: "run" }
+  | { readonly kind: "with-resource" }
+  | { readonly kind: "unfold" }
+  | { readonly kind: "map-effect" }
+  | { readonly kind: "sink-for-each" }
+  | { readonly kind: "run-stream" }
+  /** A bracket literal, classified by its checked contextual type. */
+  | { readonly kind: "list"; readonly shape: "array" | "tuple" }
+  /** A collection builtin with its closed function type. */
   | {
     readonly kind: "builtin";
-    readonly name: "map" | "filter" | "fold";
+    readonly name: "map" | "filter" | "fold" | "traverse";
     readonly specialized: TypeRef;
     readonly ir: FunctionType;
   }

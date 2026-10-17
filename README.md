@@ -14,6 +14,16 @@ Part A3a adds the declaration level of the checker. It adds the type intern tabl
 
 Part A3b adds body checking. It checks every function and constant body, infers effects and execution modes, and checks contracts, patterns, `try` and `catch`, `retry`, and `provide`. It builds the module initialization graph and the `typeAt` query. It adds the codes `type-mismatch/003` to `type-mismatch/011`, `failure-contract/001` to `/003`, `requirement-contract/001`, `execution-mode/001` to `/004`, `pattern/001` to `/004`, and `module/004`.
 
+Collection literals use brackets: `[1, 2]` infers an array, while an expected tuple type checks each position. `[]` needs an expected array or tuple type. An uncontextualized heterogeneous list gives `type-mismatch/012`.
+
+`traverse(items, callback)` maps an array sequentially with an effectful callback. An optional literal `{ concurrency: N }` with positive safe integer N runs at most N callbacks simultaneously, returns results in input order, and waits for scoped finalizers after failure or interruption. Callback failures and service requirements enter the enclosing contract. `map`, `filter`, and `fold` still require pure callbacks.
+
+`Effect<A, E, R>` stores a computation with result type `A`, typed failures `E`, and service method requirements `R`. `defer(() => job())` constructs it without running the job. `run(value)` executes it and adds its failures and requirements to the caller's contract. Empty channels may be omitted or written as `never`. A source binding named `run` shadows the prelude operation.
+
+`withResource(acquire, use, release)` composes a scoped resource through three inline callbacks. Acquisition returns a record of operations, and use and release call its fields directly. The checker rejects returning, capturing, storing, or passing the record; operation arguments and results and the use result must contain data only. The generated Effect runs release after success, failure, defect, or interruption. A host adapter implements the record's operations.
+
+`Stream<A, E, R>` and `Sink<I, O, E, R>` hold deferred producer and consumer channels. `unfold(seed, callback)` creates a pull stream, `mapEffect(stream, callback)` transforms it, `sinkForEach(callback)` consumes values, and `runStream(stream, sink)` executes the pipeline. These callbacks use inline arrows. The producer starts on consumption and stays at most one item ahead of the sink. This is the first stream slice; buffered and concurrent stream operations remain separate work.
+
 Part A4 lowers a checked module to typed IR and serializes it. It adds a synchronous SHA-256 for builtin identities.
 
 Part A6a adds the Effect-TS emitter. It turns the IR of each module into the text of one TypeScript module. It adds the five golden files, the host module `users-live.ts`, and the slow tests that check and run the emitted code. Part A7 adds the command-line tool.
@@ -195,7 +205,7 @@ For each module, the result holds `declarations`, `functions`, `constants`, `mod
 
 Each function and constant has a body table. The table maps a syntax node id to `{ type, failures, requirements, mode }`. The failure and requirement sets are sorted. The table maps each local identity to its type.
 
-The table also maps a node id to a fact that lowering needs. A call node has the fact `call`, `perform`, `error-construction`, `brand-construction`, `unbrand`, `some`, `fail`, `retry`, `provide`, or `builtin`. A `builtin` fact carries the closed function type of the `map`, `filter`, or `fold` use. A field read, an arrow, a block binding, a pattern, and a catch handler have facts too.
+The table also maps a node id to a fact that lowering needs. A call node has the fact `call`, `perform`, `error-construction`, `brand-construction`, `unbrand`, `some`, `fail`, `retry`, `provide`, or `builtin`. A `builtin` fact carries the closed function type of a collection operation. A bracket literal has a fact that selects array or tuple IR. A field read, an arrow, a block binding, a pattern, and a catch handler have facts too.
 
 A module constant needs a pure initializer with empty sets. The `initialization` value lists the constants in a safe order. It also lists the dependencies of each constant and every dependency cycle.
 
@@ -209,7 +219,7 @@ A declaration with a syntax error is checked, but its body diagnostics are not p
 
 `lowerProject(checked)` does this for every `.eff` module. A `.effi` module has no entry, because it emits nothing.
 
-The IR holds the declarations in source order, the sorted export identities, and one `Import` for each import declaration. The `module` of an `Import` is the module name for a relative import. It is the import string, such as `host:providers`, for a host import. A module that uses `map`, `filter`, or `fold` has one more `Import` with the module `effective:prelude`.
+The IR holds the declarations in source order, the sorted export identities, and one `Import` for each import declaration. The `module` of an `Import` is the module name for a relative import. It is the import string, such as `host:providers`, for a host import. A module that uses `map`, `filter`, `fold`, or `traverse` has one more `Import` with the module `effective:prelude`.
 
 Each distinct closed instance of a builtin gets the identity `value:<module>#$builtin/<name>/<hash>`. The hash is the first 12 hex digits of the SHA-256 of the canonical JSON of the closed function type. A pipeline lowers to a block with the generated bindings `$p1`, `$p2`, and so on. A generated binding and each reference to it carry the span of the left expression. Each call carries the span of its stage.
 
@@ -226,8 +236,6 @@ The validator recomputes types, failure sets, requirement sets, and execution mo
 Each code names a validation area. `validation/001` is Identity, `002` is Types, `003` is Contracts, `004` is Execution, `005` is Recovery, `006` is Control, `007` is Initialization, and `008` is Serialization. The registry in `src/core/diagnostics.ts` describes each code.
 
 A mutation fixture in `fixtures/validate/` is a lowered example IR with one change. `manifest.json` names the expected code, the IR path, and the source texts of each fixture. Run `deno task validate:update` to write them again. A test compares the files on disk with the regenerated files.
-
-Known limit: a `retry` or `provide` pipeline stage with an effectful left value keeps the checker sets in the lowered IR. The validator reports it when those sets differ from the sets of the job. No example uses that form.
 
 ## Using the emitter
 
@@ -322,7 +330,7 @@ The tool skips `deno check` when the build has an error. A `host-boundary` resul
 
 A line that belongs to no diagnostic goes to stderr. Any `deno check` diagnostic gives exit code 1.
 
-`watch` reads the root again after each batch of file events. It gives the program the files that changed. When no file changed, it prints nothing. A batch joins the events that arrive within 100 milliseconds of the previous event.
+`watch` reads the root again after each batch of file events and every second as a fallback when the platform does not deliver events. It gives the program the files that changed. When no file changed, it prints nothing. A batch joins the events that arrive within 100 milliseconds of the previous event.
 
 After each build, `watch` prints `rechecked: <modules>` to stderr, then the diagnostics. A broken `effective.json` prints an error, and the loop goes on. At start, a broken `effective.json` gives exit code 2. The loop takes its event source as a parameter, so a fast test drives it with a fake source.
 

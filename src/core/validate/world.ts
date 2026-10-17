@@ -166,6 +166,19 @@ export function checkTypeIds(
       case "option":
         walk(t.element, `${at}.element`, depth + 1);
         return;
+      case "effect":
+        walk(t.result, `${at}.result`, depth + 1);
+        effects(`${at}.effects`, t.effects);
+        return;
+      case "stream":
+        walk(t.element, `${at}.element`, depth + 1);
+        effects(`${at}.effects`, t.effects);
+        return;
+      case "sink":
+        walk(t.input, `${at}.input`, depth + 1);
+        walk(t.result, `${at}.result`, depth + 1);
+        effects(`${at}.effects`, t.effects);
+        return;
       case "tuple":
         t.elements.forEach((e, i) =>
           walk(e, `${at}.elements[${i}]`, depth + 1)
@@ -238,6 +251,16 @@ export function checkRecordFields(
       case "array":
       case "option":
         walk(t.element, `${at}.element`, depth + 1);
+        return;
+      case "effect":
+        walk(t.result, `${at}.result`, depth + 1);
+        return;
+      case "stream":
+        walk(t.element, `${at}.element`, depth + 1);
+        return;
+      case "sink":
+        walk(t.input, `${at}.input`, depth + 1);
+        walk(t.result, `${at}.result`, depth + 1);
         return;
       case "tuple":
         t.elements.forEach((e, i) =>
@@ -421,6 +444,16 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
       case "option":
         reaches(type.element, from, depth + 1);
         return;
+      case "effect":
+        reaches(type.result, from, depth + 1);
+        return;
+      case "stream":
+        reaches(type.element, from, depth + 1);
+        return;
+      case "sink":
+        reaches(type.input, from, depth + 1);
+        reaches(type.result, from, depth + 1);
+        return;
       case "tuple":
         type.elements.forEach((e) => reaches(e, from, depth + 1));
         return;
@@ -466,7 +499,8 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
 
 // ------------------------------------------------------------------ imports
 
-const BUILTIN_ID = /^value:(.+)#\$builtin\/(map|filter|fold)\/[0-9a-f]+$/;
+const BUILTIN_ID =
+  /^value:(.+)#\$builtin\/(map|filter|fold|traverse)\/[0-9a-f]+$/;
 
 function checkBuiltinShape(
   ctx: Ctx,
@@ -500,26 +534,57 @@ function checkBuiltinShape(
       );
     }
   };
-  quiet(type, path);
+  if (name !== "traverse") quiet(type, path);
   const wrong = (what: string): void =>
     report.add(AREA.types, path, `the builtin ${name} ${what}`, span);
-  const count = name === "fold" ? 3 : 2;
-  if (type.parameters.length !== count) {
-    wrong(`takes ${count} parameters, recorded ${type.parameters.length}`);
+  const count = type.parameters.length;
+  const validCount = name === "fold"
+    ? count === 3
+    : name === "traverse"
+    ? count === 2 || count === 3
+    : count === 2;
+  if (!validCount) {
+    wrong(`has an invalid parameter count ${count}`);
     return;
+  }
+  if (name === "traverse" && count === 3) {
+    const options = unfold(env, type.parameters[2]);
+    const field = options.kind === "record" && options.fields.length === 1
+      ? options.fields[0]
+      : undefined;
+    if (
+      field?.name !== "concurrency" || field.optional ||
+      !same(env, field.type, { kind: "primitive", name: "int" })
+    ) {
+      wrong("requires a concurrency options record as its third parameter");
+    }
   }
   const first = unfold(env, type.parameters[0]);
   if (first.kind !== "array") {
     wrong("takes an array as its first parameter");
     return;
   }
-  const callbackType = type.parameters[count - 1];
+  const callbackIndex = name === "fold" ? 2 : 1;
+  const callbackType = type.parameters[callbackIndex];
   const callback = unfold(env, callbackType);
   if (callback.kind !== "function") {
     wrong("takes a function as its last parameter");
     return;
   }
-  quiet(callback, `${path}.parameters[${count - 1}]`);
+  if (name !== "traverse") {
+    quiet(callback, `${path}.parameters[${callbackIndex}]`);
+  } else if (
+    type.execution !== "effect" || callback.execution !== "effect" ||
+    !sameSet(type.effects.failures, callback.effects.failures) ||
+    !sameSet(type.effects.requirements, callback.effects.requirements)
+  ) {
+    report.add(
+      AREA.contracts,
+      path,
+      "traverse invokes an effect callback and carries its failures and requirements",
+      span,
+    );
+  }
   if (name === "fold") {
     const accumulator = type.parameters[1];
     const ok = callback.parameters.length === 2 &&
@@ -537,7 +602,7 @@ function checkBuiltinShape(
     return;
   }
   const result = unfold(env, type.result);
-  if (name === "map") {
+  if (name === "map" || name === "traverse") {
     if (
       result.kind !== "array" || !same(env, result.element, callback.result)
     ) {

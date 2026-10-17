@@ -395,6 +395,20 @@ export class BodyValidator {
         return this.closure(e, path);
       case "call":
         return this.call(e, path);
+      case "defer":
+        return this.defer(e, path);
+      case "run":
+        return this.run(e, path);
+      case "with-resource":
+        return this.withResource(e, path);
+      case "unfold":
+        return this.unfoldStream(e, path);
+      case "map-effect":
+        return this.mapEffect(e, path);
+      case "sink-for-each":
+        return this.sinkForEach(e, path);
+      case "run-stream":
+        return this.runStream(e, path);
       case "perform":
         return this.perform(e, path);
       case "block":
@@ -845,7 +859,7 @@ export class BodyValidator {
     parameters: readonly Type[],
     path: string,
     span: Span,
-    builtin: boolean,
+    builtin: string | undefined,
   ): void {
     if (outs.length !== parameters.length) {
       this.add(
@@ -857,7 +871,7 @@ export class BodyValidator {
       return;
     }
     outs.forEach((o, i) => {
-      if (builtin) {
+      if (builtin !== undefined && builtin !== "traverse") {
         const fn = asFunction(this.env, o.type);
         if (
           fn !== undefined &&
@@ -905,8 +919,9 @@ export class BodyValidator {
         active: combine([callee, ...outs]),
       };
     }
-    const builtin = e.callee.kind === "reference" &&
-      this.ctx.world.builtins.has(e.callee.target);
+    const builtin = e.callee.kind === "reference"
+      ? this.ctx.world.builtins.get(e.callee.target)?.split("/")[1]
+      : undefined;
     this.checkArguments(
       e.arguments,
       outs,
@@ -915,6 +930,41 @@ export class BodyValidator {
       e.span,
       builtin,
     );
+    if (builtin === "traverse" && (outs.length === 2 || outs.length === 3)) {
+      const callback = asFunction(this.env, outs[1].type);
+      if (
+        fn.execution !== "effect" || callback === undefined ||
+        !sameSet(fn.effects.failures, callback.effects.failures) ||
+        !sameSet(fn.effects.requirements, callback.effects.requirements)
+      ) {
+        this.add(
+          AREA.contracts,
+          path,
+          "traverse must invoke the callback with its declared failures and requirements",
+          e.span,
+        );
+      }
+      if (outs.length === 3) {
+        const options = e.arguments[2];
+        const field = options?.kind === "record" && options.fields.length === 1
+          ? options.fields[0]
+          : undefined;
+        const value = field?.value;
+        if (
+          field?.name !== "concurrency" || value?.kind !== "literal" ||
+          typeof value.value !== "number" ||
+          !Number.isSafeInteger(value.value) ||
+          value.value <= 0
+        ) {
+          this.add(
+            AREA.control,
+            `${path}.arguments[2]`,
+            "traverse needs a positive safe integer concurrency literal",
+            options?.span ?? e.span,
+          );
+        }
+      }
+    }
     return {
       type: fn.result,
       match: "exact",
@@ -937,7 +987,14 @@ export class BodyValidator {
       return this.poison();
     }
     const fn = method.type;
-    this.checkArguments(e.arguments, outs, fn.parameters, path, e.span, false);
+    this.checkArguments(
+      e.arguments,
+      outs,
+      fn.parameters,
+      path,
+      e.span,
+      undefined,
+    );
     return {
       type: fn.result,
       match: "exact",
@@ -1257,6 +1314,468 @@ export class BodyValidator {
       type: fn.result,
       match: "exact",
       active: combine([job, invocationOf(fn), EFFECT_ONLY]),
+    };
+  }
+
+  private defer(e: Extract<Expr, { kind: "defer" }>, path: string): Comp {
+    const job = this.check(e.job, `${path}.job`);
+    const fn = this.jobFunction(job, `${path}.job`, e.job.span, "defer");
+    if (fn === undefined) return this.poison();
+    return {
+      type: { kind: "effect", result: fn.result, effects: fn.effects },
+      match: "exact",
+      active: combine([job]),
+    };
+  }
+
+  private run(e: Extract<Expr, { kind: "run" }>, path: string): Comp {
+    const value = this.check(e.value, `${path}.value`);
+    const type = unfold(this.env, value.type);
+    if (type.kind !== "effect") {
+      this.add(
+        AREA.control,
+        `${path}.value`,
+        `run needs an Effect value, but the expression has type ${
+          show(value.type)
+        }`,
+        e.value.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: type.result,
+      match: "exact",
+      active: combine([
+        value,
+        {
+          failures: type.effects.failures,
+          requirements: type.effects.requirements,
+          execution: "effect",
+        },
+      ]),
+    };
+  }
+
+  private dataOnly(type: Type, seen = new Set<Type>()): boolean {
+    const value = unfold(this.env, type);
+    if (seen.has(value)) return true;
+    seen.add(value);
+    switch (value.kind) {
+      case "primitive":
+        return value.name !== "unknown";
+      case "literal":
+        return true;
+      case "record":
+        return value.fields.every((f) => this.dataOnly(f.type, seen));
+      case "array":
+      case "option":
+        return this.dataOnly(value.element, seen);
+      case "tuple":
+        return value.elements.every((t) => this.dataOnly(t, seen));
+      case "union":
+        return value.members.every((t) => this.dataOnly(t, seen));
+      case "named": {
+        const nested = this.env.brands.get(value.id) ??
+          (this.env.errors.has(value.id)
+            ? {
+              kind: "record" as const,
+              fields: this.env.errors.get(value.id)!,
+            }
+            : undefined);
+        return nested !== undefined && this.dataOnly(nested, seen);
+      }
+      default:
+        return false;
+    }
+  }
+
+  private checkOperationRecord(type: Type, path: string, span: Span): void {
+    const value = unfold(this.env, type);
+    if (
+      value.kind !== "record" || value.fields.length === 0 ||
+      value.fields.some((f) => f.optional)
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "acquisition must return a nonempty record of required operations",
+        span,
+      );
+      return;
+    }
+    for (const field of value.fields) {
+      const fn = asFunction(this.env, field.type);
+      if (
+        fn === undefined || !fn.parameters.every((p) => this.dataOnly(p)) ||
+        !this.dataOnly(fn.result)
+      ) {
+        this.add(
+          AREA.types,
+          `${path}.${field.name}`,
+          "an operation must take and return data-only values",
+          span,
+        );
+      }
+    }
+  }
+
+  private scopedReferences(body: Expr, id: string, path: string): void {
+    const visit = (
+      e: Expr,
+      parent: Expr | undefined,
+      grandparent: Expr | undefined,
+      nested: boolean,
+    ): void => {
+      if (e.kind === "reference" && e.target === id) {
+        if (
+          nested || parent?.kind !== "get" || parent.record !== e ||
+          grandparent?.kind !== "call" || grandparent.callee !== parent
+        ) {
+          this.add(
+            AREA.control,
+            path,
+            "a scoped operation record may only be the direct receiver of an operation call",
+            e.span,
+          );
+        }
+      }
+      const children: Expr[] = (() => {
+        switch (e.kind) {
+          case "literal":
+          case "reference":
+          case "none":
+            return [];
+          case "record":
+          case "error":
+            return e.fields.map((f) => f.value);
+          case "array":
+          case "tuple":
+            return [...e.elements];
+          case "get":
+            return [e.record];
+          case "update":
+            return [e.record, ...e.fields.map((f) => f.value)];
+          case "brand":
+          case "unbrand":
+          case "some":
+          case "run":
+            return [e.value];
+          case "closure":
+            return [e.body];
+          case "call":
+            return [e.callee, ...e.arguments];
+          case "with-resource":
+            return [e.acquire, e.use, e.release];
+          case "unfold":
+            return [e.seed, e.next];
+          case "map-effect":
+            return [e.stream, e.transform];
+          case "sink-for-each":
+            return [e.consume];
+          case "run-stream":
+            return [e.stream, e.sink];
+          case "defer":
+          case "retry":
+            return [e.job];
+          case "perform":
+            return [...e.arguments];
+          case "block":
+            return [...e.steps.map((s) => s.value), e.result];
+          case "if":
+            return [e.condition, e.then, e.else];
+          case "match":
+            return [e.subject, ...e.arms.map((a) => a.body)];
+          case "fail":
+            return [e.error];
+          case "catch":
+            return [e.body, ...e.handlers.map((h) => h.body)];
+          case "provide":
+            return [e.provider, e.job];
+          case "binary":
+            return [e.left, e.right];
+        }
+      })();
+      for (const child of children) {
+        visit(child, e, parent, nested || e.kind === "closure");
+      }
+    };
+    visit(body, undefined, undefined, false);
+  }
+
+  private withResource(
+    e: Extract<Expr, { kind: "with-resource" }>,
+    path: string,
+  ): Comp {
+    const acquire = this.check(e.acquire, `${path}.acquire`);
+    const use = this.check(e.use, `${path}.use`);
+    const release = this.check(e.release, `${path}.release`);
+    const a = asFunction(this.env, acquire.type);
+    const u = asFunction(this.env, use.type);
+    const r = asFunction(this.env, release.type);
+    if (
+      e.acquire.kind !== "closure" || e.use.kind !== "closure" ||
+      e.release.kind !== "closure" || a === undefined || u === undefined ||
+      r === undefined
+    ) {
+      this.add(
+        AREA.control,
+        path,
+        "with-resource requires three inline closures",
+        e.span,
+      );
+      return this.poison();
+    }
+    if (
+      a.parameters.length !== 0 || u.parameters.length !== 1 ||
+      r.parameters.length !== 1 ||
+      e.use.parameters[0]?.id !== e.useBinding ||
+      e.release.parameters[0]?.id !== e.releaseBinding
+    ) {
+      this.add(
+        AREA.control,
+        path,
+        "with-resource callback arity or scoped identity is invalid",
+        e.span,
+      );
+      return this.poison();
+    }
+    this.checkOperationRecord(
+      a.result,
+      `${path}.acquire.type.result`,
+      e.acquire.span,
+    );
+    if (
+      !same(this.env, a.result, u.parameters[0]) ||
+      !same(this.env, a.result, r.parameters[0])
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "use and release must accept the acquired operation record",
+        e.span,
+      );
+    }
+    if (!fits(this.env, r.result, UNIT)) {
+      this.add(
+        AREA.types,
+        `${path}.release.type.result`,
+        "release must return void",
+        e.release.span,
+      );
+    }
+    if (!this.dataOnly(u.result)) {
+      this.add(
+        AREA.types,
+        `${path}.use.type.result`,
+        "use must return data only",
+        e.use.span,
+      );
+    }
+    this.scopedReferences(e.use.body, e.useBinding, `${path}.use.body`);
+    this.scopedReferences(
+      e.release.body,
+      e.releaseBinding,
+      `${path}.release.body`,
+    );
+    return {
+      type: u.result,
+      match: "exact",
+      active: combine([
+        acquire,
+        use,
+        release,
+        invocationOf(a),
+        invocationOf(u),
+        invocationOf(r),
+        EFFECT_ONLY,
+      ]),
+    };
+  }
+
+  private streamState(type: Type): Type {
+    const value = unfold(this.env, type);
+    if (value.kind !== "literal") return type;
+    return typeof value.value === "string"
+      ? STRING
+      : typeof value.value === "boolean"
+      ? BOOLEAN
+      : Number.isSafeInteger(value.value)
+      ? INT
+      : NUMBER;
+  }
+
+  private unfoldStream(
+    e: Extract<Expr, { kind: "unfold" }>,
+    path: string,
+  ): Comp {
+    const seed = this.check(e.seed, `${path}.seed`);
+    const next = this.check(e.next, `${path}.next`);
+    const fn = asFunction(this.env, next.type);
+    if (e.next.kind !== "closure") {
+      this.add(
+        AREA.control,
+        `${path}.next`,
+        "unfold requires an inline closure",
+        e.next.span,
+      );
+    }
+    const state = this.streamState(seed.type);
+    if (
+      fn === undefined || fn.parameters.length !== 1 ||
+      !fits(this.env, state, fn.parameters[0])
+    ) {
+      this.add(
+        AREA.types,
+        `${path}.next`,
+        "unfold needs a callback accepting the state",
+        e.next.span,
+      );
+      return this.poison();
+    }
+    const option = unfold(this.env, fn.result);
+    const pair = option.kind === "option"
+      ? unfold(this.env, option.element)
+      : undefined;
+    if (
+      pair?.kind !== "tuple" || pair.elements.length !== 2 ||
+      !fits(this.env, pair.elements[1], state)
+    ) {
+      this.add(
+        AREA.types,
+        `${path}.next`,
+        "unfold callback must return Option<[Element, State]>",
+        e.next.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: { kind: "stream", element: pair.elements[0], effects: fn.effects },
+      match: "exact",
+      active: combine([seed, next]),
+    };
+  }
+
+  private mapEffect(
+    e: Extract<Expr, { kind: "map-effect" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const transform = this.check(e.transform, `${path}.transform`);
+    const source = unfold(this.env, stream.type);
+    const fn = asFunction(this.env, transform.type);
+    if (e.transform.kind !== "closure") {
+      this.add(
+        AREA.control,
+        `${path}.transform`,
+        "mapEffect requires an inline closure",
+        e.transform.span,
+      );
+    }
+    if (
+      source.kind !== "stream" || fn === undefined ||
+      fn.parameters.length !== 1 ||
+      !fits(this.env, source.element, fn.parameters[0])
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "mapEffect needs a Stream and an element callback",
+        e.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: {
+        kind: "stream",
+        element: fn.result,
+        effects: {
+          failures: sortedUnique([
+            ...source.effects.failures,
+            ...fn.effects.failures,
+          ]),
+          requirements: sortedUnique([
+            ...source.effects.requirements,
+            ...fn.effects.requirements,
+          ]),
+        },
+      },
+      match: "exact",
+      active: combine([stream, transform]),
+    };
+  }
+
+  private sinkForEach(
+    e: Extract<Expr, { kind: "sink-for-each" }>,
+    path: string,
+  ): Comp {
+    const consume = this.check(e.consume, `${path}.consume`);
+    const fn = asFunction(this.env, consume.type);
+    if (e.consume.kind !== "closure") {
+      this.add(
+        AREA.control,
+        `${path}.consume`,
+        "sinkForEach requires an inline closure",
+        e.consume.span,
+      );
+    }
+    if (
+      fn === undefined || fn.parameters.length !== 1 ||
+      !fits(this.env, fn.result, UNIT)
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "sinkForEach needs a one-argument void callback",
+        e.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: {
+        kind: "sink",
+        input: fn.parameters[0],
+        result: UNIT,
+        effects: fn.effects,
+      },
+      match: "exact",
+      active: combine([consume]),
+    };
+  }
+
+  private runStream(
+    e: Extract<Expr, { kind: "run-stream" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const sink = this.check(e.sink, `${path}.sink`);
+    const source = unfold(this.env, stream.type);
+    const consumer = unfold(this.env, sink.type);
+    if (
+      source.kind !== "stream" || consumer.kind !== "sink" ||
+      !fits(this.env, source.element, consumer.input)
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "runStream needs compatible Stream and Sink values",
+        e.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: consumer.result,
+      match: "exact",
+      active: combine([stream, sink, {
+        failures: sortedUnique([
+          ...source.effects.failures,
+          ...consumer.effects.failures,
+        ]),
+        requirements: sortedUnique([
+          ...source.effects.requirements,
+          ...consumer.effects.requirements,
+        ]),
+        execution: "effect",
+      }]),
     };
   }
 

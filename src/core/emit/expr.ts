@@ -799,6 +799,52 @@ export class ExprEmitter {
         ]);
       case "closure":
         return this.closure(e, true);
+      case "defer": {
+        const effect = this.scope.effect("Effect");
+        const from = this.functionTypeOf(e.job.type);
+        const job = from !== undefined && from.execution === "pure"
+          ? this.fit(e.job, { ...from, execution: "effect" }, mode)
+          : kid(e.job);
+        return emitted([`${effect}.suspend`, callArguments([job])]);
+      }
+      case "unfold": {
+        const stream = this.scope.effect("Stream");
+        const effect = this.scope.effect("Effect");
+        const option = this.scope.effect("Option");
+        const state = this.scope.temp();
+        const callback = this.effectCallback(e.next);
+        const next = emitted([
+          `${effect}.map`,
+          callArguments([
+            emitted([
+              at(callback, PREC.member),
+              callArguments([emitted(state)]),
+            ]),
+            emitted(`${option}.getOrUndefined`),
+          ]),
+        ]);
+        return emitted([
+          `${stream}.unfold`,
+          callArguments([
+            kid(e.seed),
+            emitted(this.arrow(`(${state})`, next)),
+          ]),
+        ]);
+      }
+      case "map-effect": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.mapEffect`,
+          callArguments([kid(e.stream), this.effectCallback(e.transform)]),
+        ]);
+      }
+      case "sink-for-each": {
+        const sink = this.scope.effect("Sink");
+        return emitted([
+          `${sink}.forEach`,
+          callArguments([this.effectCallback(e.consume)]),
+        ]);
+      }
       case "call":
         return this.nonLeafCall(e, kid);
       case "block":
@@ -814,6 +860,9 @@ export class ExprEmitter {
       case "catch":
       case "retry":
       case "provide":
+      case "run":
+      case "with-resource":
+      case "run-stream":
         throw internal(`${e.kind} node in a structural position`);
     }
   }
@@ -1043,6 +1092,14 @@ export class ExprEmitter {
     return arg.kind === "closure"
       ? this.tag(arg, this.closure(arg, false))
       : kid(arg);
+  }
+
+  private effectCallback(arg: Expr): Emitted {
+    const from = this.functionTypeOf(arg.type);
+    if (from === undefined) {
+      throw internal("a stream callback is not a function");
+    }
+    return this.fit(arg, { ...from, execution: "effect" }, "pure");
   }
 
   private builtinCall(
@@ -1299,7 +1356,10 @@ export class ExprEmitter {
       case "fail":
       case "retry":
       case "provide":
+      case "run":
       case "catch":
+      case "with-resource":
+      case "run-stream":
         return true;
       default:
         return false;
@@ -1310,11 +1370,18 @@ export class ExprEmitter {
   private evaluatedChildren(e: Expr): Expr[] {
     switch (e.kind) {
       case "call":
-        return [e.callee, ...e.arguments];
+        return e.callee.kind === "reference" &&
+            builtinName(e.callee.target) === "traverse"
+          ? [...e.arguments]
+          : [e.callee, ...e.arguments];
       case "perform":
         return [...e.arguments];
       case "fail":
         return [e.error];
+      case "run":
+        return [e.value];
+      case "run-stream":
+        return [e.stream, e.sink];
       default:
         return [];
     }
@@ -1324,10 +1391,13 @@ export class ExprEmitter {
   private expectedChildren(e: Expr): (Type | undefined)[] {
     switch (e.kind) {
       case "call":
-        return [
-          undefined,
-          ...(this.functionTypeOf(e.callee.type)?.parameters ?? []),
-        ];
+        return e.callee.kind === "reference" &&
+            builtinName(e.callee.target) === "traverse"
+          ? [...(this.functionTypeOf(e.callee.type)?.parameters ?? [])]
+          : [
+            undefined,
+            ...(this.functionTypeOf(e.callee.type)?.parameters ?? []),
+          ];
       case "perform": {
         const service = this.scope.typeLevelDeclaration(
           serviceOfCapability(e.capability),
@@ -1420,6 +1490,22 @@ export class ExprEmitter {
     const effect = this.scope.effect("Effect");
     switch (e.kind) {
       case "call":
+        if (
+          e.callee.kind === "reference" &&
+          builtinName(e.callee.target) === "traverse"
+        ) {
+          if (children.length !== 2 && children.length !== 3) {
+            throw internal("traverse needs two or three arguments");
+          }
+          return emitted([
+            `${effect}.forEach(`,
+            free(children[0]),
+            ", ",
+            free(children[1]),
+            ...(children[2] === undefined ? [] : [", ", free(children[2])]),
+            ")",
+          ]);
+        }
         return emitted([
           at(children[0], PREC.member),
           callArguments(children.slice(1)),
@@ -1443,6 +1529,34 @@ export class ExprEmitter {
       }
       case "fail":
         return emitted([`${effect}.fail`, callArguments([children[0]])]);
+      case "run":
+        return children[0];
+      case "run-stream": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.run`,
+          callArguments([children[0], children[1]]),
+        ]);
+      }
+      case "with-resource": {
+        if (
+          e.acquire.kind !== "closure" || e.use.kind !== "closure" ||
+          e.release.kind !== "closure"
+        ) {
+          throw internal("with-resource requires three closures");
+        }
+        const acquire = this.closure(e.acquire, false, true);
+        const use = this.closure(e.use, false, true);
+        const release = this.closure(e.release, false, true);
+        return emitted([
+          `${effect}.acquireUseRelease`,
+          callArguments([
+            emitted([`${effect}.suspend`, callArguments([acquire])]),
+            use,
+            release,
+          ]),
+        ]);
+      }
       case "retry": {
         const job = this.suspended(e.job);
         const options = emitted(`{ times: ${e.times} }`, PREC.member, {

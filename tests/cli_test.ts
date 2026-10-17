@@ -279,8 +279,7 @@ Deno.test("build --validate on the examples reports nothing", async () => {
   assertEquals(r.stdout, "");
 });
 
-Deno.test("build --validate reports a validation diagnostic, exits 1, and writes nothing for that module", async () => {
-  // The known limit of part A4: the validator reports a retry stage with an effectful left value.
+Deno.test("build --validate accepts a retry pipeline with an effectful left value", async () => {
   const files = {
     [`${ROOT}/effective.json`]: "{}",
     [`${ROOT}/m.eff`]: [
@@ -293,9 +292,9 @@ Deno.test("build --validate reports a validation diagnostic, exits 1, and writes
   const without = await run(["build", ROOT], files);
   assertEquals(without.code, 0, without.stderr);
   const r = await run(["build", ROOT, "--validate"], files);
-  assertEquals(r.code, 1);
-  assert(/^m\.eff:\d+:\d+: error validation\/003: /.test(r.stdout), r.stdout);
-  assertEquals(r.m.files.has(`${ROOT}/m.ts`), false);
+  assertEquals(r.code, 0, r.stdout);
+  assertEquals(r.stdout, "");
+  assert(r.m.files.has(`${ROOT}/m.ts`));
   assert(r.m.files.has(`${ROOT}/ok.ts`));
 });
 

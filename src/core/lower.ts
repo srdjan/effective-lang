@@ -61,9 +61,11 @@ import {
 import {
   type BodyTable,
   combine,
+  EFFECT_ONLY,
   type EffectSet,
   type NodeFact,
   type NodeInfo,
+  without,
 } from "./tables.ts";
 import {
   canonicalJson,
@@ -349,6 +351,17 @@ class BodyLowerer {
         return this.pipeline(node);
       case SyntaxKind.RecordExpr:
         return this.record(node);
+      case SyntaxKind.ListExpr: {
+        const fact = this.fact(node);
+        if (fact?.kind !== "list") {
+          throw internal(`no list fact at ${this.describe(node)}`);
+        }
+        return {
+          kind: fact.shape,
+          elements: this.kids(node).map((child) => this.expr(child)),
+          ...this.annotation(node),
+        };
+      }
       case SyntaxKind.Block:
         return this.block(node);
       case SyntaxKind.IfExpr:
@@ -536,6 +549,48 @@ class BodyLowerer {
           job: arg(1),
           ...annotation,
         };
+      case "defer":
+        return { kind: "defer", job: arg(0), ...annotation };
+      case "run":
+        return { kind: "run", value: arg(0), ...annotation };
+      case "with-resource": {
+        const acquire = arg(0);
+        const use = arg(1);
+        const release = arg(2);
+        if (
+          use.kind !== "closure" || release.kind !== "closure" ||
+          use.parameters[0] === undefined || release.parameters[0] === undefined
+        ) {
+          throw internal("withResource needs inline scoped closures");
+        }
+        return {
+          kind: "with-resource",
+          acquire,
+          use,
+          release,
+          useBinding: use.parameters[0].id,
+          releaseBinding: release.parameters[0].id,
+          ...annotation,
+        };
+      }
+      case "unfold":
+        return { kind: "unfold", seed: arg(0), next: arg(1), ...annotation };
+      case "map-effect":
+        return {
+          kind: "map-effect",
+          stream: arg(0),
+          transform: arg(1),
+          ...annotation,
+        };
+      case "sink-for-each":
+        return { kind: "sink-for-each", consume: arg(0), ...annotation };
+      case "run-stream":
+        return {
+          kind: "run-stream",
+          stream: arg(0),
+          sink: arg(1),
+          ...annotation,
+        };
       default:
         throw internal(
           `the fact ${fact.kind} is no call at ${this.describe(node)}`,
@@ -678,7 +733,7 @@ class BodyLowerer {
     const override = isQuiet(leftInfo)
       ? undefined
       : (args: readonly Expr[]) =>
-        this.stageEffects(stage, qualified, leftInfo, args);
+        this.stageEffects(stage, qualified, leftInfo, argNodes, args);
     return this.invoke(stage, qualified, argNodes, pre, override);
   }
 
@@ -686,12 +741,14 @@ class BodyLowerer {
    * The sets of a stage call when its left value moved into a binding. The
    * checker's sets for the stage include the left value. The call in the IR
    * evaluates only a pure reference, so its sets are its arguments plus its own
-   * invocation. A `retry` or `provide` stage keeps the checker's sets.
+   * invocation. Control stages include the deferred job's invocation and any
+   * provider acquisition, but not the already evaluated left value.
    */
   private stageEffects(
     stage: NodeId,
     qualified: NodeId,
     leftInfo: NodeInfo,
+    argNodes: readonly NodeId[],
     args: readonly Expr[],
   ): EffectSet {
     const fact = this.required(this.fact(stage), "the stage fact", stage);
@@ -735,9 +792,70 @@ class BodyLowerer {
         }
         break;
       }
-      case "retry":
-      case "provide":
-        return this.info(stage);
+      case "builtin":
+        parts.push({
+          failures: fact.ir.effects.failures,
+          requirements: fact.ir.effects.requirements,
+          mode: fact.ir.execution,
+        });
+        break;
+      case "retry": {
+        const fn = this.functionOf(leftInfo.type);
+        return combine([
+          setOf(this.required(args[0], "the retry job", stage)),
+          {
+            failures: fn.failures,
+            requirements: fn.requirements,
+            mode: fn.execution,
+          },
+          EFFECT_ONLY,
+        ]);
+      }
+      case "defer":
+        return combine([
+          setOf(this.required(args[0], "the deferred job", stage)),
+        ]);
+      case "run": {
+        const value = this.ctx.types.node(
+          this.ctx.types.unfold(leftInfo.type),
+        );
+        if (value.kind !== "effect") {
+          throw internal("the run stage has no Effect type");
+        }
+        return combine([
+          setOf(this.required(args[0], "the Effect value", stage)),
+          {
+            failures: value.failures,
+            requirements: value.requirements,
+            mode: "effect",
+          },
+        ]);
+      }
+      case "provide": {
+        const provider = this.ctx.types.node(
+          this.ctx.types.unfold(leftInfo.type),
+        );
+        if (provider.kind !== "provider") {
+          throw internal("the provide stage has no provider type");
+        }
+        const job = this.required(argNodes[0], "the provide job", stage);
+        const fn = this.functionOf(this.info(job).type);
+        return combine([
+          setOf(this.required(args[0], "the provider", stage)),
+          setOf(this.required(args[1], "the provide job", stage)),
+          {
+            failures: fn.failures,
+            requirements: without(fn.requirements, provider.provides),
+            mode: fn.execution,
+          },
+          {
+            failures: provider.failures,
+            requirements: provider.requirements,
+            mode: "effect",
+          },
+          EFFECT_ONLY,
+        ]);
+      }
       default:
         break;
     }

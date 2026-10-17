@@ -37,6 +37,9 @@ export enum SyntaxKind {
 
   // Types
   NamedType,
+  EffectType,
+  StreamType,
+  SinkType,
   TypeArgs,
   LiteralType,
   RecordType,
@@ -59,6 +62,7 @@ export enum SyntaxKind {
   PipeExpr,
   PipeStage,
   RecordExpr,
+  ListExpr,
   RecordField,
   ShorthandField,
   SpreadField,
