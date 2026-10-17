@@ -557,6 +557,10 @@ Diagnostics: the `typed-ir.ts` `Diagnostic` extended with `category`,
 
 ### 6.3 Reuse of typed-ir.ts
 
+Update, 2026-10-17: the compiler now emits `light-functional-ir` version 2.
+Version 1 payloads fail independent validation with `validation/008`. The
+following version 1 language describes the original design decision.
+
 Sound to reuse as is: the lowered output of a checked module, the emitter
 input, the validator input, and the wire format. Observation ("Typed IR and
 backends"): the format marker stays `light-functional-ir`, version 1. The

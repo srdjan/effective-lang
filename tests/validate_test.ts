@@ -217,6 +217,23 @@ function codesOf(ir: unknown, sources: ReadonlyMap<string, string>): string[] {
   ].sort();
 }
 
+Deno.test("version 1 IR is rejected with the required wire version", () => {
+  const lowered = lowerText("type Count = int\nconst one = (): Count => 1");
+  const previous = copy(lowered.ir) as unknown as { version: number };
+  previous.version = 1;
+  const diagnostics = validateModule(
+    previous as unknown as ModuleIR,
+    lowered.sources,
+  );
+  assert(
+    diagnostics.some((diagnostic) =>
+      diagnostic.code === "validation/008" &&
+      diagnostic.message.includes("light-functional-ir version 2") &&
+      diagnostic.message.includes("version 1")
+    ),
+  );
+});
+
 /** The index of a declaration by name. */
 function decl(ir: unknown, name: string): number {
   const found = (at(ir, "declarations") as Obj[]).findIndex((d) =>

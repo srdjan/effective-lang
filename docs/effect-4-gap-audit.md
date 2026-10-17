@@ -2,6 +2,10 @@
 
 Research snapshot: 2026-10-17. Compiler: this repository, Deno 2.9.7. Target: `effect@4.0.5`, the version used by `build --tsc` and the slow emitter tests. This is a representative audit of native `.eff` source, not an inventory of every Effect export.
 
+Update, 2026-10-17: language core 1 is specified in design draft 0.3.
+The compiler now emits and validates `light-functional-ir` version 2.
+The source features in the coverage map below remain implementation gaps.
+
 Update, 2026-10-17: the pipeline validation defect described below was fixed
 in phase 1 of the [implementation plan](plans/2026-10-17-effect4-gap-closure.md).
 The original probe is retained as historical evidence. The current

@@ -728,7 +728,7 @@ Deno.test("serialization is canonical JSON with a trailing newline", () => {
   assert(
     text.startsWith('{\n  "declarations": [\n    {\n      "definition": {'),
   );
-  assert(text.endsWith('  "version": 1\n}\n'));
+  assert(text.endsWith('  "version": 2\n}\n'));
   assert(text.includes('"imports": []'));
   // Keys are sorted at every level.
   const reparsed = JSON.parse(text);
