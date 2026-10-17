@@ -1180,11 +1180,14 @@ class Parser {
       case TokenKind.Plus:
       case TokenKind.Bang: {
         this.begin();
+        const hint = k === TokenKind.Minus
+          ? "; write `0 - x` for a negative value"
+          : k === TokenKind.Bang
+          ? "; write `x === false` for a negation"
+          : "";
         this.report(
           "syntax/010",
-          `unary operator ${
-            describeTokenKind(k)
-          } is not supported; write \`0 - x\` for a negative value`,
+          `unary operator ${describeTokenKind(k)} is not supported${hint}`,
           this.starts[this.pos],
           this.ends[this.pos],
         );
