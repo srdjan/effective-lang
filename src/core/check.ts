@@ -1225,6 +1225,12 @@ class ModuleChecker {
       annotation = "binding";
     }
 
+    if (!entry.broken && binding !== undefined) {
+      this.checkBindingFits(arrow, binding, parameters, result, {
+        failures,
+        requirements,
+      });
+    }
     if (!entry.broken) {
       if (entry.exported) {
         if (missing.length > 0 || !explicit) {
@@ -1255,6 +1261,58 @@ class ModuleChecker {
       failures: explicit ? failures : [],
       requirements: explicit ? requirements : [],
     };
+  }
+
+  /**
+   * The arrow of an annotated binding must fit the binding type. The arrow takes
+   * the execution of the binding type, because its body decides its own mode later.
+   */
+  private checkBindingFits(
+    arrow: NodeId,
+    binding: Lowered,
+    parameters: readonly ParameterSignature[],
+    result: Lowered | undefined,
+    effects: {
+      failures: readonly ErrorId[];
+      requirements: readonly CapabilityId[];
+    },
+  ): void {
+    const expected = this.table.show(binding.ref);
+    if (binding.ir.kind !== "function") {
+      this.lowerer.report(
+        "type-mismatch/003",
+        `the value is a function, but ${expected} is expected`,
+        this.lowerer.span(arrow),
+      );
+      return;
+    }
+    if (result === undefined) {
+      // The body infers the result. Only the arity can disagree here.
+      if (parameters.length !== binding.ir.parameters.length) {
+        this.lowerer.report(
+          "type-mismatch/003",
+          `the function takes ${parameters.length} parameters, but ${expected} is expected`,
+          this.lowerer.span(arrow),
+        );
+      }
+      return;
+    }
+    const found = this.table.function({
+      execution: binding.ir.execution,
+      parameters: parameters.map((p) => p.type.ref),
+      result: result.ref,
+      failures: effects.failures,
+      requirements: effects.requirements,
+    });
+    if (!this.table.isAssignable(found, binding.ref)) {
+      this.lowerer.report(
+        "type-mismatch/003",
+        `the function has type ${
+          this.table.show(found)
+        }, but ${expected} is expected`,
+        this.lowerer.span(arrow),
+      );
+    }
   }
 }
 
