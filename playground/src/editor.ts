@@ -13,7 +13,7 @@ import {
   syntaxHighlighting,
 } from "@codemirror/language";
 import { type Diagnostic, setDiagnostics } from "@codemirror/lint";
-import { EditorState, type Extension } from "@codemirror/state";
+import { EditorState, type Extension, type Range } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -29,7 +29,7 @@ import { tags } from "@lezer/highlight";
 import { minimalSetup } from "codemirror";
 import type { PlaygroundDiagnostic, PlaygroundHover } from "./compile.ts";
 import { type HighlightKind, highlightTokens } from "./highlight.ts";
-import { type HoverBlock, hoverLines } from "./model.ts";
+import { type HoverBlock, hoverLines, wrapIndent } from "./model.ts";
 
 /** The answer of the facade for a hover at an offset of the active file. */
 export type HoverSource = (offset: number) => PlaygroundHover | undefined;
@@ -71,6 +71,53 @@ const highlightPlugin = ViewPlugin.fromClass(
     update(update: ViewUpdate): void {
       if (update.docChanged) {
         this.decorations = buildMarks(update.state.doc.toString());
+      }
+    }
+  },
+  { decorations: (plugin) => plugin.decorations },
+);
+
+const indentMarks = new Map<number, Decoration>();
+
+function indentMark(columns: number): Decoration {
+  let mark = indentMarks.get(columns);
+  if (mark === undefined) {
+    mark = Decoration.line({
+      attributes: { style: `--wrap-indent: ${columns}ch` },
+    });
+    indentMarks.set(columns, mark);
+  }
+  return mark;
+}
+
+function buildIndents(view: EditorView): DecorationSet {
+  const ranges: Range<Decoration>[] = [];
+  const { doc, tabSize } = view.state;
+  for (const { from, to } of view.visibleRanges) {
+    for (let pos = from; pos <= to;) {
+      const line = doc.lineAt(pos);
+      ranges.push(indentMark(wrapIndent(line.text, tabSize)).range(line.from));
+      pos = line.to + 1;
+    }
+  }
+  return Decoration.set(ranges);
+}
+
+/**
+ * Sets `--wrap-indent` on each visible line. The theme turns it into a hanging
+ * indent, so a wrapped part of a line starts past the indent of that line.
+ */
+const wrapIndentPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = buildIndents(view);
+    }
+
+    update(update: ViewUpdate): void {
+      if (update.docChanged || update.viewportChanged) {
+        this.decorations = buildIndents(update.view);
       }
     }
   },
@@ -133,6 +180,12 @@ const theme: Extension = EditorView.theme({
   ".cm-content": {
     caretColor: "var(--code-ink)",
     padding: "0.5rem 0",
+  },
+  // A hanging indent: the first part of a line keeps the 6px start of the base
+  // theme, and each wrapped part starts `--wrap-indent` further right.
+  ".cm-line": {
+    paddingLeft: "calc(6px + var(--wrap-indent, 0ch))",
+    textIndent: "calc(-1 * var(--wrap-indent, 0ch))",
   },
   ".cm-cursor, .cm-dropCursor": {
     borderLeftColor: "var(--code-ink)",
@@ -249,6 +302,7 @@ export function sourceExtensions(options: SourceOptions): Extension[] {
     bracketMatching(),
     highlightActiveLine(),
     EditorView.lineWrapping,
+    wrapIndentPlugin,
     EditorView.contentAttributes.of({ "aria-label": "Source code" }),
     highlightPlugin,
     hoverExtension(options.hover),
@@ -266,6 +320,7 @@ export function outputExtensions(): Extension[] {
     syntaxHighlighting(generatedStyle),
     lineNumbers(),
     EditorView.lineWrapping,
+    wrapIndentPlugin,
     EditorView.contentAttributes.of({
       "aria-label": "Generated TypeScript",
       "aria-readonly": "true",

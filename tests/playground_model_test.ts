@@ -14,6 +14,8 @@ import {
   problemItems,
   tabCounts,
   tabFromHash,
+  WRAP_HANG,
+  wrapIndent,
 } from "../playground/src/model.ts";
 
 const PATHS = ["main.eff", "users.eff", "host/providers.effi"];
@@ -142,4 +144,13 @@ Deno.test("hoverLines gives labelled blocks and a one-line cursor text", () => {
     text: BACKEND_UNAVAILABLE,
     code: false,
   });
+});
+
+Deno.test("wrapIndent hangs a wrapped part past the indent of its line", () => {
+  assertEquals(wrapIndent("", 4), WRAP_HANG);
+  assertEquals(wrapIndent("export const main", 4), WRAP_HANG);
+  assertEquals(wrapIndent("  provide(UsersLive)", 4), 2 + WRAP_HANG);
+  assertEquals(wrapIndent("\tx", 4), 4 + WRAP_HANG);
+  assertEquals(wrapIndent(" \tx", 4), 4 + WRAP_HANG);
+  assertEquals(wrapIndent("    ", 4), 4 + WRAP_HANG);
 });

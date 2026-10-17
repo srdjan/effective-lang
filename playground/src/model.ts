@@ -148,3 +148,21 @@ export function hoverLines(hit: PlaygroundHover | undefined): HoverLines {
     cursor: hit.contract.replace(/\s*\n\s*/g, " ").trim(),
   };
 }
+
+/** The extra columns that a wrapped part of a line hangs past its indent. */
+export const WRAP_HANG = 2;
+
+/**
+ * The columns that each wrapped part of `line` starts at: the leading
+ * whitespace of the line plus `WRAP_HANG`. A tab moves to the next multiple of
+ * `tabSize`.
+ */
+export function wrapIndent(line: string, tabSize: number): number {
+  let column = 0;
+  for (const char of line) {
+    if (char === " ") column += 1;
+    else if (char === "\t") column += tabSize - (column % tabSize);
+    else break;
+  }
+  return column + WRAP_HANG;
+}
