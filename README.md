@@ -403,7 +403,7 @@ The playground is a static page in `playground/`. It runs the core in the browse
 
 Run `deno task playground:serve` and open `http://127.0.0.1:8790/`. The task builds the page first. `deno task playground:build [outDir]` only writes the files. The default output directory is `playground/dist/`, which git ignores.
 
-The build uses `deno bundle` with the CodeMirror 6 packages that `deno.json` pins. The highlighter uses the core lexer, so the page and the compiler agree on each token. Below 960 pixels, the page shows one region at a time. The URL hash holds the active file, for example `#host/providers.effi`.
+The build uses `deno bundle` with the CodeMirror 6 packages that `deno.json` pins. The highlighter uses the core lexer, so the page and the compiler agree on each token. Below 720 pixels, the page shows one region at a time. The URL hash holds the active file, for example `#host/providers.effi`.
 
 Fast tests cover the compile facade, the highlighter, and the page model without a browser. The slow test `tests/playground_build_slow_test.ts` runs the build. No automated test covers the page in a browser. On 2026-10-16, a manual browser review at 375 and 1280 pixels passed the checks in `docs/plans/2026-10-16-playground.md`, section 7.
 

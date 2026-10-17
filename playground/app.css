@@ -1,6 +1,6 @@
 /*
   The playground page. The base rules are the narrow layout. The rules inside
-  `@media (min-width: 960px)` add the wide layout. `src/app.ts` uses the same
+  `@media (min-width: 720px)` add the wide layout. `src/app.ts` uses the same
   query through `matchMedia`.
 
   Orange is never text or an outline on white (contrast 2.3:1). It is a fill
@@ -358,7 +358,7 @@ main {
 
 /* Wide layout: Source on the left, Problems above TypeScript on the right. */
 
-@media (min-width: 960px) {
+@media (min-width: 720px) {
   #views {
     display: none;
   }

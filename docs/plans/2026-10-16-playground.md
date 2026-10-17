@@ -8,6 +8,8 @@ revision. Section 11 maps each finding to its resolution.
 Progress, 2026-10-16: G1 to G4 are done. Acceptance checks 1 to 4 pass.
 Check 5 waits for the user. The G3 review found one defect: a badge label
 widened the page at 375 pixels. Commit 886b34b fixes it.
+On 2026-10-16, the user lowered the wide-layout threshold from 960 to 720
+pixels, so the wide layout also works in a half-screen window.
 
 ## 1. Decisions for this phase
 
@@ -250,17 +252,17 @@ overflow, so the editor scrolls and the page does not. The theme also covers
 ### 6.3 Responsive shape
 
 The app shell is the viewport. So the page uses the viewport media query
-`(min-width: 960px)` in CSS, and the script uses the same query through
+`(min-width: 720px)` in CSS, and the script uses the same query through
 `matchMedia`. Write the narrow layout as the base and add the wide layout with
 `min-width` rules.
 
-Narrow mode (below 960 pixels): a view switch `tablist` selects Source,
+Narrow mode (below 720 pixels): a view switch `tablist` selects Source,
 Problems, or TypeScript. The script sets `hidden` on the two inactive regions,
 and it gives each region `role="tabpanel"` and `aria-labelledby`. The Problems
 tab label shows the total count. A click on a Problems item also switches the
 view to Source.
 
-Wide mode (960 pixels and more): the script removes the view switch, `hidden`,
+Wide mode (720 pixels and more): the script removes the view switch, `hidden`,
 `role`, and `aria-labelledby`. Source is on the left. Problems is above
 TypeScript on the right.
 

@@ -34,7 +34,7 @@ const CONFIG_FILE = "effective.json";
 const CURSOR_PAUSE_MS = 300;
 
 /** The width at which the wide layout starts. `app.css` uses the same value. */
-const WIDE_QUERY = "(min-width: 960px)";
+const WIDE_QUERY = "(min-width: 720px)";
 
 type ViewName = "source" | "problems" | "output";
 
