@@ -5,7 +5,15 @@
 // Run `deno task playground:build [outDir]`. The default output directory is
 // `playground/dist` in the repository root.
 
-import { dirname, fromFileUrl, join, relative, resolve } from "@std/path";
+import {
+  dirname,
+  fromFileUrl,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  SEPARATOR,
+} from "@std/path";
 import type { Result } from "../src/core/source.ts";
 
 /** The repository root, found from this file and not from the process cwd. */
@@ -77,10 +85,17 @@ function copyDirectory(from: string, to: string): string[] {
   return written;
 }
 
-/** True when `outDir` is the repository root or one of its parents. */
-function isUnsafe(outDir: string): boolean {
+/**
+ * True when removing `outDir` can delete repository files: the root, one of its
+ * parents, or a directory inside the repository other than `playground/dist`.
+ */
+export function isUnsafe(outDir: string): boolean {
   const fromOutDir = relative(outDir, REPOSITORY_ROOT);
-  return fromOutDir === "" || !fromOutDir.startsWith("..");
+  if (fromOutDir === "" || !fromOutDir.startsWith("..")) return true;
+  const fromRoot = relative(REPOSITORY_ROOT, outDir);
+  if (fromRoot.startsWith("..") || isAbsolute(fromRoot)) return false;
+  const dist = join("playground", "dist");
+  return fromRoot !== dist && !fromRoot.startsWith(dist + SEPARATOR);
 }
 
 /**
@@ -166,7 +181,7 @@ export async function build(
 export function describeBuildError(error: BuildError): string {
   switch (error.tag) {
     case "unsafe-out-dir":
-      return `refusing to remove ${error.outDir}: it holds the repository`;
+      return `refusing to remove ${error.outDir}: it holds repository files`;
     case "bundle-failed":
       return `deno bundle failed with exit code ${error.code}:\n${error.stderr}`;
     case "io":

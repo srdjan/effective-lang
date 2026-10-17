@@ -401,7 +401,7 @@ A fast test, `tests/vscode_client_test.ts`, checks `package.json`, the grammar, 
 
 The playground is a static page in `playground/`. It runs the core in the browser. The examples are editable tabs. The page shows the problems, the generated TypeScript, and a hover with the contract and the backend type. It does not run the generated code. A reload discards the edits.
 
-Run `deno task playground:serve` and open `http://127.0.0.1:8790/`. The task builds the page first. `deno task playground:build [outDir]` only writes the files. The default output directory is `playground/dist/`, which git ignores.
+Run `deno task playground:serve` and open `http://127.0.0.1:8790/`. The task builds the page first. `deno task playground:build [outDir]` only writes the files. The default output directory is `playground/dist/`, which git ignores. The build removes the output directory first, so it refuses every directory of the repository except `playground/dist/`.
 
 The build uses `deno bundle` with the CodeMirror 6 packages that `deno.json` pins. The highlighter uses the core lexer, so the page and the compiler agree on each token. Below 720 pixels, the page shows one region at a time. The URL hash holds the active file, for example `#host/providers.effi`.
 
