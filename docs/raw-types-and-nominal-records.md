@@ -161,4 +161,4 @@ The user first preferred D32 (c) for every brand. Opus showed that (c) gives a w
 
 ## 8. Next action
 
-None. The R1 plan is `docs/plans/2026-10-17-r1-and-brand-operators.md`, and release `v0.2.0` contains its implementation. Spec draft 0.2 describes R1, R2, and the numeric brand operators. The spec also states the two unsupported cases of section 1 as exclusions of version 0. A change to either exclusion is a new language decision for the user.
+None. The R1 plan is `docs/plans/2026-10-17-r1-and-brand-operators.md`, and release `v0.2.0` contains its implementation. Spec draft 0.2 describes R1, R2, and the numeric brand operators. The spec also states the two unsupported cases of section 1 as exclusions of version 0. A change to either exclusion is a new language decision for the user. On 2026-10-17 the user chose to keep both exclusions.
