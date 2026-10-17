@@ -275,6 +275,11 @@ export const DIAGNOSTIC_CODES = {
     description:
       "A parameter of a module-level function, a service method, or a function type has no type annotation.",
   },
+  "declaration/012": {
+    category: "declaration",
+    description:
+      "A type declaration is nested deeper than 128 levels, counting the levels inside its aliases.",
+  },
   "module/001": {
     category: "module",
     description:

@@ -40,6 +40,7 @@ the implementer picks the stricter rule and records it here.
 | Provider compatibility | Equal `provides`, compatible execution, acquisition sets as subsets |
 | Interface hash | Ignores spans, so comments do not change it. A body edit changes it only when it flips the mode of an exported function, because the payload holds each exported function type with its mode |
 | Interface payload | Also carries the declarations of other modules that the exports reach, so the hash covers them |
+| Type depth | A type declaration deeper than 128 levels, counting aliases, is `declaration/012`, and the alias becomes the error type. The comparison caps are 1536 |
 
 ## Expressions, modes, and contracts (A3b)
 

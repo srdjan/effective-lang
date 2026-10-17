@@ -225,3 +225,19 @@ Deno.test("watch rebuilds when a source changes and prints the rechecked modules
     }
   });
 });
+
+Deno.test("build --validate accepts an inline record type 100 levels deep", async () => {
+  await withTemporary(async (dir) => {
+    const record = (leaf: string) =>
+      "{ a: ".repeat(100) + leaf + " }".repeat(100);
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/m.eff`,
+      `export const f = (x: ${record("number")}): int => 1\n` +
+        `export const g = (y: ${record("int")}): int => f(y)\n`,
+    );
+    const run = await effective(["build", dir, "--validate"]);
+    assertEquals(run.code, 0, run.stderr);
+    assert(!run.stderr.includes("validation/"), run.stderr);
+  });
+});

@@ -1337,3 +1337,25 @@ const g = (s: string): Id => s |> Id
     "brand-construction",
   ]);
 });
+
+/** A record type nested `levels` times with the given leaf, as source text. */
+function deepRecord(levels: number, leaf: string): string {
+  return "{ a: ".repeat(levels) + leaf + " }".repeat(levels);
+}
+
+Deno.test("a record type 300 levels deep compares int to number with no diagnostic", () => {
+  const project = checkText(`
+const f = (x: ${deepRecord(300, "number")}): int => 1
+const g = (y: ${deepRecord(300, "int")}): int => f(y)
+`);
+  assertEquals(messages(project), []);
+});
+
+Deno.test("a chain of 5000 aliases gives declaration/012 and no exception", () => {
+  const lines = ["const v = (x: A0): int => 1"];
+  for (let i = 0; i < 4999; i++) lines.push(`type A${i} = A${i + 1}`);
+  lines.push("type A4999 = int");
+  const project = checkText(lines.join("\n"));
+  assert(codes(project).includes("declaration/012"));
+  assert(codes(project).every((code) => code === "declaration/012"));
+});

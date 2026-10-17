@@ -147,7 +147,11 @@ export interface DefinitionSource {
   }[];
 }
 
-const MAX_DEPTH = 256;
+// The bound on the recursion of one comparison. The parser limits written
+// nesting to 512 levels and `declaration/012` limits an alias to 128 levels.
+// So one type is at most about 640 levels deep, and two types give at most
+// about 1280 frames. 1536 leaves room above that.
+const MAX_DEPTH = 1536;
 
 export class TypeTable {
   private readonly nodes: TypeNode[] = [];
@@ -400,6 +404,89 @@ export class TypeTable {
     return this.error;
   }
 
+  /**
+   * True when the type is deeper than `limit` levels. A leaf has depth 1. A
+   * composite type has 1 plus the largest depth of its children. An alias name
+   * has 1 plus the depth of its target, so the levels inside aliases count. The
+   * `memo` holds exact depths of types that fit in the limit. A walk that goes
+   * past the limit stops and memoizes nothing for the nodes it aborted. The
+   * recursion has at most `limit + 1` frames.
+   */
+  exceedsDepth(
+    ref: TypeRef,
+    limit: number,
+    memo: Map<TypeRef, number>,
+  ): boolean {
+    return this.heightWithin(ref, limit, memo) === Infinity;
+  }
+
+  /** The exact height of the type when it is at most `budget`, else `Infinity`. */
+  private heightWithin(
+    ref: TypeRef,
+    budget: number,
+    memo: Map<TypeRef, number>,
+  ): number {
+    const known = memo.get(ref);
+    if (known !== undefined) return known <= budget ? known : Infinity;
+    if (budget < 1) return Infinity;
+    const node = this.node(ref);
+    let tallest = 0;
+    switch (node.kind) {
+      case "named": {
+        const alias = this.aliases.get(node.id as TypeId);
+        if (alias === undefined) break;
+        tallest = this.heightWithin(alias, budget - 1, memo);
+        if (tallest === Infinity) return Infinity;
+        break;
+      }
+      case "record":
+        for (const field of node.fields) {
+          const height = this.heightWithin(field.type, budget - 1, memo);
+          if (height === Infinity) return Infinity;
+          if (height > tallest) tallest = height;
+        }
+        break;
+      case "array":
+      case "option": {
+        tallest = this.heightWithin(node.element, budget - 1, memo);
+        if (tallest === Infinity) return Infinity;
+        break;
+      }
+      case "tuple":
+        for (const element of node.elements) {
+          const height = this.heightWithin(element, budget - 1, memo);
+          if (height === Infinity) return Infinity;
+          if (height > tallest) tallest = height;
+        }
+        break;
+      case "union":
+        for (const member of node.members) {
+          const height = this.heightWithin(member, budget - 1, memo);
+          if (height === Infinity) return Infinity;
+          if (height > tallest) tallest = height;
+        }
+        break;
+      case "function": {
+        tallest = this.heightWithin(node.result, budget - 1, memo);
+        if (tallest === Infinity) return Infinity;
+        for (const parameter of node.parameters) {
+          const height = this.heightWithin(parameter, budget - 1, memo);
+          if (height === Infinity) return Infinity;
+          if (height > tallest) tallest = height;
+        }
+        break;
+      }
+      case "primitive":
+      case "literal":
+      case "provider":
+      case "error":
+        break;
+    }
+    const height = 1 + tallest;
+    memo.set(ref, height);
+    return height;
+  }
+
   // -------------------------------------------------------------- IR conversion
 
   /** Interns an IR type tree. Unions flatten and sort, records sort. */
@@ -559,10 +646,16 @@ export class TypeTable {
       }
     }
     if (sn.kind === "union") {
-      return sn.members.every((m) => this.assignable(m, t, depth + 1));
+      for (const member of sn.members) {
+        if (!this.assignable(member, t, depth + 1)) return false;
+      }
+      return true;
     }
     if (tn.kind === "union") {
-      return tn.members.some((m) => this.assignable(s, m, depth + 1));
+      for (const member of tn.members) {
+        if (this.assignable(s, member, depth + 1)) return true;
+      }
+      return false;
     }
     switch (tn.kind) {
       case "primitive":
@@ -582,12 +675,15 @@ export class TypeTable {
       case "record":
         if (sn.kind !== "record") return false;
         if (sn.fields.length !== tn.fields.length) return false;
-        return sn.fields.every((field, i) => {
+        for (let i = 0; i < sn.fields.length; i++) {
+          const field = sn.fields[i];
           const other = tn.fields[i];
-          return field.name === other.name &&
-            field.optional === other.optional &&
-            this.assignable(field.type, other.type, depth + 1);
-        });
+          if (
+            field.name !== other.name || field.optional !== other.optional ||
+            !this.assignable(field.type, other.type, depth + 1)
+          ) return false;
+        }
+        return true;
       case "array":
         return sn.kind === "array" &&
           this.assignable(sn.element, tn.element, depth + 1);
@@ -595,11 +691,15 @@ export class TypeTable {
         return sn.kind === "option" &&
           this.assignable(sn.element, tn.element, depth + 1);
       case "tuple":
-        return sn.kind === "tuple" &&
-          sn.elements.length === tn.elements.length &&
-          sn.elements.every((e, i) =>
-            this.assignable(e, tn.elements[i], depth + 1)
-          );
+        if (sn.kind !== "tuple" || sn.elements.length !== tn.elements.length) {
+          return false;
+        }
+        for (let i = 0; i < sn.elements.length; i++) {
+          if (!this.assignable(sn.elements[i], tn.elements[i], depth + 1)) {
+            return false;
+          }
+        }
+        return true;
       case "function":
         if (sn.kind !== "function") return false;
         if (sn.parameters.length !== tn.parameters.length) return false;
@@ -612,9 +712,12 @@ export class TypeTable {
         if (!isSubset(sn.failures, tn.failures)) return false;
         if (!isSubset(sn.requirements, tn.requirements)) return false;
         if (!this.assignable(sn.result, tn.result, depth + 1)) return false;
-        return tn.parameters.every((p, i) =>
-          this.assignable(p, sn.parameters[i], depth + 1)
-        );
+        for (let i = 0; i < tn.parameters.length; i++) {
+          if (!this.assignable(tn.parameters[i], sn.parameters[i], depth + 1)) {
+            return false;
+          }
+        }
+        return true;
       case "provider":
         return sn.kind === "provider" &&
           sameList(sn.provides, tn.provides) &&

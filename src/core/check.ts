@@ -785,6 +785,9 @@ function compareText(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
+/** The most levels that a type declaration may have, counting its aliases. */
+const MAX_TYPE_DEPTH = 128;
+
 class ModuleChecker {
   readonly sink: Diagnostic[] = [];
   readonly lowerer: TypeLowerer;
@@ -824,6 +827,7 @@ class ModuleChecker {
       else if (entry.kind === "error") this.checkError(entry);
     }
     this.checkCycles();
+    this.checkDepths();
     for (const entry of entries) {
       if (entry.kind === "service") this.checkService(entry);
     }
@@ -950,7 +954,14 @@ class ModuleChecker {
     let counter = 0;
     const components: TypeNodeInfo[][] = [];
 
-    const visit = (id: string): void => {
+    // An explicit stack of frames replaces the recursion, so that a long chain
+    // of aliases cannot overflow the call stack.
+    interface Frame {
+      readonly id: string;
+      readonly refs: readonly string[];
+      next: number;
+    }
+    const enter = (frames: Frame[], id: string): void => {
       index.set(id, counter);
       low.set(id, counter);
       counter++;
@@ -959,25 +970,41 @@ class ModuleChecker {
       const refs = [...infos.get(id)!.refs].filter((r) => infos.has(r)).sort(
         compareText,
       );
-      for (const next of refs) {
-        if (!index.has(next)) {
-          visit(next);
-          low.set(id, Math.min(low.get(id)!, low.get(next)!));
-        } else if (onStack.has(next)) {
-          low.set(id, Math.min(low.get(id)!, index.get(next)!));
+      frames.push({ id, refs, next: 0 });
+    };
+    const visit = (root: string): void => {
+      const frames: Frame[] = [];
+      enter(frames, root);
+      while (frames.length > 0) {
+        const frame = frames[frames.length - 1];
+        const id = frame.id;
+        if (frame.next < frame.refs.length) {
+          const next = frame.refs[frame.next++];
+          if (!index.has(next)) {
+            enter(frames, next);
+          } else if (onStack.has(next)) {
+            low.set(id, Math.min(low.get(id)!, index.get(next)!));
+          }
+          continue;
+        }
+        frames.pop();
+        if (low.get(id) === index.get(id)) {
+          const component: TypeNodeInfo[] = [];
+          while (true) {
+            const member = stack.pop()!;
+            onStack.delete(member);
+            component.push(infos.get(member)!);
+            if (member === id) break;
+          }
+          const selfLoop = component.length === 1 &&
+            component[0].refs.has(component[0].id);
+          if (component.length > 1 || selfLoop) components.push(component);
+        }
+        const parent = frames[frames.length - 1];
+        if (parent !== undefined) {
+          low.set(parent.id, Math.min(low.get(parent.id)!, low.get(id)!));
         }
       }
-      if (low.get(id) !== index.get(id)) return;
-      const component: TypeNodeInfo[] = [];
-      while (true) {
-        const member = stack.pop()!;
-        onStack.delete(member);
-        component.push(infos.get(member)!);
-        if (member === id) break;
-      }
-      const selfLoop = component.length === 1 &&
-        component[0].refs.has(component[0].id);
-      if (component.length > 1 || selfLoop) components.push(component);
     };
     for (const info of this.typeInfos) {
       if (!index.has(info.id)) visit(info.id);
@@ -1005,6 +1032,28 @@ class ModuleChecker {
           this.table.defineBrand(member.id as TypeId, this.table.error);
         }
       }
+    }
+  }
+
+  /**
+   * A type declaration whose alias is nested deeper than `MAX_TYPE_DEPTH`
+   * levels, counting the levels inside its aliases, gets `declaration/012`. The
+   * alias becomes the error type, so a later comparison never walks the chain.
+   * The walk has a budget, so a cycle cannot loop.
+   */
+  private checkDepths(): void {
+    const memo = new Map<TypeRef, number>();
+    for (const info of this.typeInfos) {
+      if (info.kind !== "alias") continue;
+      const body = this.table.aliasOf(info.id as TypeId);
+      if (body === undefined) continue;
+      if (!this.table.exceedsDepth(body, MAX_TYPE_DEPTH, memo)) continue;
+      this.lowerer.report(
+        "declaration/012",
+        `the type \`${info.name}\` is nested deeper than ${MAX_TYPE_DEPTH} levels, counting the levels inside its aliases`,
+        info.nameSpan,
+      );
+      this.table.defineAlias(info.id as TypeId, this.table.error);
     }
   }
 

@@ -34,7 +34,11 @@ export const BOOLEAN: Type = { kind: "primitive", name: "boolean" };
 export const UNIT: Type = { kind: "primitive", name: "unit" };
 export const NEVER: Type = { kind: "primitive", name: "never" };
 
-const MAX_DEPTH = 64;
+// The bound on the recursion of one comparison. The parser limits written
+// nesting to 512 levels and `declaration/012` limits an alias to 128 levels.
+// So one type is at most about 640 levels deep, and two types give at most
+// about 1280 frames. 1536 leaves room above that.
+const MAX_DEPTH = 1536;
 
 export function isNever(type: Type): boolean {
   return type.kind === "primitive" && type.name === "never";
@@ -56,7 +60,11 @@ export function unfold(env: TypeEnv, type: Type): Type {
 export function members(env: TypeEnv, type: Type, depth = 0): Type[] {
   const unfolded = unfold(env, type);
   if (unfolded.kind === "union" && depth < MAX_DEPTH) {
-    return unfolded.members.flatMap((m) => members(env, m, depth + 1));
+    const out: Type[] = [];
+    for (const member of unfolded.members) {
+      out.push(...members(env, member, depth + 1));
+    }
+    return out;
   }
   return [unfolded];
 }
@@ -100,10 +108,16 @@ function assignable(
     if (alias !== undefined) return assignable(env, s, alias, lift, depth + 1);
   }
   if (s.kind === "union") {
-    return s.members.every((m) => assignable(env, m, t, false, depth + 1));
+    for (const member of s.members) {
+      if (!assignable(env, member, t, false, depth + 1)) return false;
+    }
+    return true;
   }
   if (t.kind === "union") {
-    return t.members.some((m) => assignable(env, s, m, false, depth + 1));
+    for (const member of t.members) {
+      if (assignable(env, s, member, false, depth + 1)) return true;
+    }
+    return false;
   }
   switch (t.kind) {
     case "primitive":
@@ -120,11 +134,14 @@ function assignable(
     case "record": {
       if (s.kind !== "record") return false;
       if (s.fields.length !== t.fields.length) return false;
-      return t.fields.every((tf) => {
+      for (const tf of t.fields) {
         const sf = s.fields.find((f) => f.name === tf.name);
-        return sf !== undefined && sf.optional === tf.optional &&
-          assignable(env, sf.type, tf.type, false, depth + 1);
-      });
+        if (
+          sf === undefined || sf.optional !== tf.optional ||
+          !assignable(env, sf.type, tf.type, false, depth + 1)
+        ) return false;
+      }
+      return true;
     }
     case "array":
       return s.kind === "array" &&
@@ -133,10 +150,15 @@ function assignable(
       return s.kind === "option" &&
         assignable(env, s.element, t.element, false, depth + 1);
     case "tuple":
-      return s.kind === "tuple" && s.elements.length === t.elements.length &&
-        s.elements.every((e, i) =>
-          assignable(env, e, t.elements[i], false, depth + 1)
-        );
+      if (s.kind !== "tuple" || s.elements.length !== t.elements.length) {
+        return false;
+      }
+      for (let i = 0; i < s.elements.length; i++) {
+        if (!assignable(env, s.elements[i], t.elements[i], false, depth + 1)) {
+          return false;
+        }
+      }
+      return true;
     case "function": {
       if (s.kind !== "function") return false;
       if (s.parameters.length !== t.parameters.length) return false;
@@ -149,9 +171,14 @@ function assignable(
         return false;
       }
       if (!assignable(env, s.result, t.result, false, depth + 1)) return false;
-      return t.parameters.every((p, i) =>
-        assignable(env, p, s.parameters[i], false, depth + 1)
-      );
+      for (let i = 0; i < t.parameters.length; i++) {
+        if (
+          !assignable(env, t.parameters[i], s.parameters[i], false, depth + 1)
+        ) {
+          return false;
+        }
+      }
+      return true;
     }
     case "provider":
       return s.kind === "provider" && sameSet(s.provides, t.provides) &&
