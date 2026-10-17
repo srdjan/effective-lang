@@ -28,39 +28,52 @@ export function validateModule(
   sources: ReadonlyMap<string, string>,
 ): readonly Diagnostic[] {
   const report = new Report();
-  const world = buildWorld(ir);
-  const ctx = { world, report };
   const fallback: Span = {
-    source: ir.sources[0] ?? ir.module,
+    source: (Array.isArray(ir.sources) ? ir.sources[0] : undefined) ??
+      ir.module,
     start: 0,
     end: 0,
   };
   // A module that does not have the shape of ModuleIR makes a check throw.
   // The validator reports the shape problem and goes on with the next part.
+  const unexpected = (path: string, span: Span, e: unknown): void => {
+    report.add(
+      AREA.serialization,
+      path,
+      `the IR has an unexpected shape: ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+      span,
+    );
+  };
   const guard = (path: string, span: Span, run: () => void): void => {
     try {
       run();
     } catch (e) {
-      report.add(
-        AREA.serialization,
-        path,
-        `the IR has an unexpected shape: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
-        span,
-      );
+      unexpected(path, span, e);
     }
   };
+  let world: ReturnType<typeof buildWorld>;
+  try {
+    world = buildWorld(ir);
+  } catch (e) {
+    // Every later check reads the world, so none of them can run.
+    unexpected("", fallback, e);
+    return normalizeDiagnostics(report.items);
+  }
+  const ctx = { world, report };
   guard("imports", fallback, () => checkImports(ctx, ir));
   guard("declarations", fallback, () => checkDeclarationHeaders(ctx, ir));
   guard("declarations", fallback, () => checkRecursion(ctx, ir));
   ir.declarations.forEach((d, i) => {
     const path = `declarations[${i}]`;
-    if (d.kind === "function") {
-      guard(path, d.span, () => new BodyValidator(ctx).checkFunction(d, path));
-    } else if (d.kind === "constant") {
-      guard(path, d.span, () => new BodyValidator(ctx).checkConstant(d, path));
-    }
+    guard(path, d?.span ?? fallback, () => {
+      if (d.kind === "function") {
+        new BodyValidator(ctx).checkFunction(d, path);
+      } else if (d.kind === "constant") {
+        new BodyValidator(ctx).checkConstant(d, path);
+      }
+    });
   });
   guard("", fallback, () => checkSerialization(ir, sources, report));
   return normalizeDiagnostics(report.items);

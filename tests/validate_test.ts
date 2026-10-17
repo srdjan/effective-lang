@@ -967,6 +967,18 @@ Deno.test("an IR with a wrong shape gives a diagnostic and not an exception", ()
   assert(codesOf(ir, EXAMPLES.sources).includes("validation/008"));
 });
 
+Deno.test("a wrong shape in a declaration header or an import gives a diagnostic", () => {
+  const nullDeclaration = copy(EXAMPLES.modules.get("log"));
+  setAt(nullDeclaration, "declarations[0]", null);
+  assertEquals(codesOf(nullDeclaration, EXAMPLES.sources), ["validation/008"]);
+  const users = EXAMPLES.modules.get("users");
+  const service = users?.declarations.findIndex((d) => d.kind === "service");
+  assert(service !== undefined && service >= 0);
+  const noMethods = copy(users);
+  setAt(noMethods, `declarations[${service}].methods`, undefined);
+  assertEquals(codesOf(noMethods, EXAMPLES.sources), ["validation/008"]);
+});
+
 // ------------------------------------------------------------------ type compatibility
 
 const ENV: TypeEnv = {
