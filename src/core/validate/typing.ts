@@ -264,6 +264,22 @@ export function isNumeric(env: TypeEnv, type: Type): boolean {
   return fits(env, type, NUMBER) && !isNever(type);
 }
 
+/**
+ * The brand type when the type, after aliases, is a brand of `int` or
+ * `number`. A brand of a literal union or of another brand is not numeric.
+ */
+export function numericBrandOf(env: TypeEnv, type: Type): Type | undefined {
+  const unfolded = unfold(env, type);
+  if (unfolded.kind !== "named") return undefined;
+  const base = env.brands.get(unfolded.id);
+  if (base === undefined) return undefined;
+  const baseType = unfold(env, base);
+  return baseType.kind === "primitive" &&
+      (baseType.name === "int" || baseType.name === "number")
+    ? unfolded
+    : undefined;
+}
+
 export function isStringLike(env: TypeEnv, type: Type): boolean {
   return fits(env, type, STRING) && !isNever(type);
 }

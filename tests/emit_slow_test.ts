@@ -176,6 +176,7 @@ function buildForms(dir: string): string[] {
     "conditional-chains.eff",
     "nominal-records.eff",
     "optional-fields.eff",
+    "brand-operators.eff",
     LONG_NAMES + ".eff",
   ]);
 }
@@ -715,6 +716,46 @@ console.log(JSON.stringify({
   });
 });
 
+Deno.test("brand addition outside the safe range throws, and a throw inside an effect is a defect", async () => {
+  await withTemporary(async (dir) => {
+    buildForms(dir);
+    const result = await runScript(
+      dir,
+      `
+import { Cause, Effect, Exit, Layer } from "effect";
+import { add, bump, Count, Counter, below } from "./brand-operators.ts";
+
+const big = Count.make(Number.MAX_SAFE_INTEGER);
+let thrown: string | undefined;
+try {
+  add(big, Count.make(1));
+} catch (e) {
+  thrown = e instanceof RangeError ? e.message : "other";
+}
+const CounterMemory = Layer.succeed(Counter)({
+  read: () => Effect.succeed(Count.make(Number.MAX_SAFE_INTEGER)),
+});
+const exit = Effect.runSyncExit(
+  bump(Count.make(1)).pipe(Effect.provide(CounterMemory)),
+);
+console.log(JSON.stringify({
+  thrown,
+  sum: add(Count.make(40), Count.make(2)),
+  below: below(Count.make(1), Count.make(2)),
+  defect: Exit.isFailure(exit) && Cause.hasDies(exit.cause) &&
+    !Cause.hasFails(exit.cause),
+}));
+`,
+    );
+    assertEquals(result, {
+      thrown: "int overflow",
+      sum: 42,
+      below: true,
+      defect: true,
+    });
+  });
+});
+
 Deno.test("a pure function lifted into an effect function slot runs", async () => {
   await withTemporary(async (dir) => {
     buildForms(dir);
@@ -782,6 +823,7 @@ Deno.test("the emitted forms are a fixed point of deno fmt", async () => {
       [...generated].sort(),
       [
         LONG_NAMES + ".ts",
+        "brand-operators.ts",
         "conditional-chains.ts",
         "forms.ts",
         "names.ts",
@@ -792,8 +834,8 @@ Deno.test("the emitted forms are a fixed point of deno fmt", async () => {
     const run = await deno(dir, ["fmt", "--check", ...generated]);
     assertEquals(run.code, 0, `deno fmt --check failed:\n${run.stderr}`);
     assert(
-      run.stderr.includes("Checked 6 files"),
-      `deno fmt did not check the six files:\n${run.stderr}`,
+      run.stderr.includes("Checked 7 files"),
+      `deno fmt did not check the seven files:\n${run.stderr}`,
     );
   });
 });

@@ -44,6 +44,7 @@ import {
   members,
   NEVER,
   NUMBER,
+  numericBrandOf,
   same,
   show,
   STRING,
@@ -1837,6 +1838,11 @@ export class BodyValidator {
       );
       return { type: undefined, match: "exact", active };
     };
+    // Two values of one numeric brand compare, add, and subtract (D32).
+    const leftBrand = numericBrandOf(env, left.type);
+    const brand = leftBrand !== undefined && same(env, leftBrand, right.type)
+      ? leftBrand
+      : undefined;
     switch (e.operator) {
       case "&&":
       case "||":
@@ -1847,7 +1853,8 @@ export class BodyValidator {
       case "<=":
       case ">":
       case ">=":
-        return isNumeric(env, left.type) && isNumeric(env, right.type)
+        return brand !== undefined ||
+            isNumeric(env, left.type) && isNumeric(env, right.type)
           ? { type: BOOLEAN, match: "exact", active }
           : mismatch();
       case "===":
@@ -1862,6 +1869,9 @@ export class BodyValidator {
       case "-":
       case "*":
       case "/": {
+        if (brand !== undefined && (e.operator === "+" || e.operator === "-")) {
+          return { type: brand, match: "exact", active };
+        }
         if (isNumeric(env, left.type) && isNumeric(env, right.type)) {
           const integral = e.operator !== "/" && fits(env, left.type, INT) &&
             fits(env, right.type, INT);

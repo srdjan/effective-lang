@@ -767,6 +767,26 @@ Deno.test("types: the result type of an operator is recomputed", () => {
   );
 });
 
+Deno.test("types: two values of one numeric brand compare, add, and subtract", () => {
+  const lowered = lowerText(`
+type Count = Brand<int>
+type Price = Brand<number>
+const sum = (a: Count, b: Count): Count => a + b
+const diff = (a: Price, b: Price): Price => a - b
+const below = (a: Count, b: Count): Bool => a < b
+type Int = int
+type Num = number
+type Text = string
+type Bool = boolean
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const changed = copy(lowered.ir);
+  const sum = changed.declarations.find((d) => d.name === "sum");
+  assert(sum?.kind === "function" && sum.body.kind === "binary");
+  setAt(sum, "body.type", INT);
+  assertEquals(codesOf(changed, lowered.sources), ["validation/002"]);
+});
+
 Deno.test("types: a condition must be boolean", () => {
   assertEquals(
     mutated(

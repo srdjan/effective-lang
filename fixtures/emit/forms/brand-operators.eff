@@ -1,0 +1,19 @@
+type Count = Brand<int>
+type Price = Brand<number>
+
+service Counter {
+  read(): Count
+}
+
+export const add = (a: Count, b: Count): Count => a + b
+export const sub = (a: Count, b: Count): Count => a - b
+export const chain = (a: Count, b: Count, c: Count): Count => a + b - c
+export const addPrice = (a: Price, b: Price): Price => a + b
+export const subPrice = (a: Price, b: Price): Price => a - b
+export const below = (a: Count, b: Count): Bool => a < b
+export const atLeast = (a: Price, b: Price): Bool => a >= b
+export const bump = (a: Count): Count
+  uses Counter.read =>
+  Counter.read() + a
+
+type Bool = boolean

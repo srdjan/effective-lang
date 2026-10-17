@@ -334,6 +334,27 @@ Deno.test("the forms fixture emits the plan's control forms", () => {
   assertStringIncludes(text, "Id.make(s)");
 });
 
+Deno.test("the brand operators fixture wraps a sum or a difference in the brand", () => {
+  const text =
+    emitFiles(projectFiles("emit/forms"), ["brand-operators.eff"]).get(
+      "brand-operators",
+    )?.text ?? "";
+  // A brand of int keeps the $int check inside the brand constructor.
+  assertStringIncludes(text, "Count.make($int(a + b))");
+  assertStringIncludes(text, "Count.make($int(a - b))");
+  assertStringIncludes(text, "Count.make($int(Count.make($int(a + b)) - c))");
+  assertStringIncludes(
+    text,
+    "Count.make($int((yield* Counter.use(($s) => $s.read())) + a))",
+  );
+  // A brand of number has no $int.
+  assertStringIncludes(text, "Price.make(a + b)");
+  assertStringIncludes(text, "Price.make(a - b)");
+  // A comparison needs no brand wrapper.
+  assertStringIncludes(text, "a < b;");
+  assertStringIncludes(text, "a >= b;");
+});
+
 // ------------------------------------------------------------------ formatting
 
 Deno.test("an arrow chain that is too long moves below the equals sign", () => {

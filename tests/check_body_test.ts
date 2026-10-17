@@ -842,6 +842,61 @@ const g = (x: int, y: string): int => x + y
   assertEquals(codes(project), ["type-mismatch/003", "type-mismatch/007"]);
 });
 
+Deno.test("two values of one numeric brand compare, add, and subtract", () => {
+  const project = checkText(`
+type Count = Brand<int>
+type Price = Brand<number>
+const sum = (a: Count, b: Count): Count => a + b
+const diff = (a: Count, b: Count): Count => a - b
+const below = (a: Count, b: Count): Bool => a < b
+const atLeast = (a: Count, b: Count): Bool => a >= b
+const priceSum = (a: Price, b: Price): Price => a + b
+const priceDiff = (a: Price, b: Price): Price => a - b
+const priceAbove = (a: Price, b: Price): Bool => a > b
+const priceAtMost = (a: Price, b: Price): Bool => a <= b
+type Int = int
+type Num = number
+type Text = string
+type Bool = boolean
+`);
+  assertEquals(messages(project), []);
+  const text = project.modules.get("m")!.tree.text;
+  const plus = text.indexOf("a + b") + 2;
+  assertEquals(typeAt(project, "m.eff", plus), "Count");
+  const minus = text.indexOf("a - b") + 2;
+  assertEquals(typeAt(project, "m.eff", minus), "Count");
+  const priceMinus = text.indexOf("a - b", minus + 1) + 2;
+  assertEquals(typeAt(project, "m.eff", priceMinus), "Price");
+});
+
+Deno.test("a brand operator rejects multiplication, division, a plain number, another brand, and a string brand", () => {
+  const project = checkText(`
+type Count = Brand<int>
+type Price = Brand<number>
+type Name = Brand<string>
+const times = (a: Count, b: Count): Count => a * b
+const divide = (a: Count, b: Count): Count => a / b
+const plain = (a: Count): Count => a + 1
+const mixed = (count: Count, price: Price): Price => count + price
+const names = (name: Name): Name => name + name
+type Int = int
+type Num = number
+type Text = string
+type Bool = boolean
+`);
+  assertEquals(codes(project), [
+    "type-mismatch/007",
+    "type-mismatch/007",
+    "type-mismatch/007",
+    "type-mismatch/007",
+    "type-mismatch/007",
+  ]);
+  assertEquals(
+    messages(project)[2],
+    "type-mismatch/007 the operator `+` does not accept operands of type Count and int",
+  );
+});
+
 Deno.test("equality takes compatible primitives, literal unions, and matching brands, and rejects records", () => {
   const project = checkText(`
 type Id = Brand<string>

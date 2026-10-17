@@ -2219,6 +2219,34 @@ export class BodyChecker {
       !this.isError(ref) && ref !== this.table.never;
   }
 
+  /**
+   * The brand id when the type, after aliases, is a brand of `int` or `number`.
+   * A brand of a literal union or of another brand is not numeric.
+   */
+  private numericBrand(ref: TypeRef): TypeId | undefined {
+    const node = this.table.node(this.table.unfold(ref));
+    if (node.kind !== "named") return undefined;
+    const id = node.id as TypeId;
+    const base = this.table.brandBaseOf(id);
+    if (base === undefined) return undefined;
+    const baseNode = this.table.node(this.table.unfold(base));
+    return baseNode.kind === "primitive" &&
+        (baseNode.name === "int" || baseNode.name === "number")
+      ? id
+      : undefined;
+  }
+
+  /** The brand id when both operands have one numeric brand. */
+  private sharedNumericBrand(
+    left: TypeRef,
+    right: TypeRef,
+  ): TypeId | undefined {
+    const brand = this.numericBrand(left);
+    return brand !== undefined && brand === this.numericBrand(right)
+      ? brand
+      : undefined;
+  }
+
   private isString(ref: TypeRef): boolean {
     return this.table.isAssignable(ref, this.table.string) &&
       !this.isError(ref) && ref !== this.table.never;
@@ -2288,7 +2316,9 @@ export class BodyChecker {
       case ">":
       case ">=": {
         if (
-          !either && !(this.isNumeric(left.type) && this.isNumeric(right.type))
+          !either &&
+          !(this.isNumeric(left.type) && this.isNumeric(right.type)) &&
+          this.sharedNumericBrand(left.type, right.type) === undefined
         ) mismatch();
         return this.finish(node, table.boolean, eff);
       }
@@ -2304,6 +2334,12 @@ export class BodyChecker {
       default: {
         // An error operand hides whether the result is int or number.
         if (either) return this.finish(node, table.error, eff);
+        if (operator === "+" || operator === "-") {
+          const brand = this.sharedNumericBrand(left.type, right.type);
+          if (brand !== undefined) {
+            return this.finish(node, table.named(brand), eff);
+          }
+        }
         if (this.isNumeric(left.type) && this.isNumeric(right.type)) {
           const integral = operator !== "/" &&
             table.isAssignable(left.type, table.int) &&
