@@ -56,7 +56,7 @@ Run every command from the repository root.
 ## Layout
 
 ```
-src/core/      The core library. It is synchronous and pure.
+src/core/      The core library. It is synchronous and does no I/O. Program memoizes its queries.
   ir.ts          Typed IR model, copied from the sibling repository effective.
   source.ts      SourceHost, line tables, positions, and span helpers.
   diagnostics.ts Diagnostic type, the registry of codes, sort and dedupe.
@@ -104,7 +104,7 @@ src/core/      The core library. It is synchronous and pure.
     expr.ts        The expression scheme: pure, inGen, asEffect.
     decls.ts       Declarations, their order, and the export rule.
     walk.ts        Traversals of the IR.
-src/cli/       The command-line tool. Only this directory calls Deno APIs, besides the scripts and the slow tests.
+src/cli/       The command-line tool. Deno APIs stay here, in src/lsp/main.ts, bench/, playground/build.ts, playground/serve.ts, scripts/, and tests/.
   main.ts        main(args, io) returns the exit code. The last lines wire the real io.
   args.ts        The command line: commands, root, and flags.
   io.ts          The ports: file system, deno check runner, and watch source.
@@ -205,7 +205,7 @@ A declaration with a syntax error is checked, but its body diagnostics are not p
 
 ## Using the lowering
 
-`lowerModule(checked, module)` returns the typed IR of one module, as a `Result`. The `checked` value comes from `checkProject`. The function returns an error value that names the module in five cases. The cases are an unknown module, a `.effi` file, and a diagnostic. A missing imported interface and a form without IR are the other two.
+`lowerModule(checked, module)` returns the typed IR of one module, as a `Result`. The `checked` value comes from `checkProject`. The function returns an error value that names the module in six cases. The cases are an unknown module, a `.effi` file, and a diagnostic. A missing imported interface, a form without IR, and an internal fault are the other three.
 
 `lowerProject(checked)` does this for every `.eff` module. A `.effi` module has no entry, because it emits nothing.
 
@@ -227,13 +227,13 @@ Each code names a validation area. `validation/001` is Identity, `002` is Types,
 
 A mutation fixture in `fixtures/validate/` is a lowered example IR with one change. `manifest.json` names the expected code, the IR path, and the source texts of each fixture. Run `deno task validate:update` to write them again. A test compares the files on disk with the regenerated files.
 
-Known limit: a `retry` or `provide` pipeline stage with an effectful left value keeps the checker sets in the lowered IR. The validator reports it. No example uses that form.
+Known limit: a `retry` or `provide` pipeline stage with an effectful left value keeps the checker sets in the lowered IR. The validator reports it when those sets differ from the sets of the job. No example uses that form.
 
 ## Using the emitter
 
 `emitModule(ir, { config })` returns the TypeScript text of one module, as a `Result`. The `config` value is the project configuration, `checked.analysis.project.config`. It gives the paths of the host modules. The function reads only the IR and the configuration. It writes no file.
 
-The result holds `module`, `path`, `text`, and `spans`. The `path` is the generated file next to the source, for example `users.ts`. The `spans` list holds the generated range of each printed declaration and expression, with its source span. Part A6b builds the span table and the source map from it.
+The result holds `module`, `path`, `text`, `spans`, and `hostAssertions`. The `path` is the generated file next to the source, for example `users.ts`. The `spans` list holds the generated range of each printed declaration and expression, with its source span. Part A6b builds the span table and the source map from it.
 
 `emitProject(lowered, { config })` emits every module of the map that `lowerProject` returns. A module that did not lower gives a `lowering` error value. Expected failures are error values with the tag `unsupported` or `internal`.
 
@@ -241,7 +241,7 @@ An import of another module becomes a relative `.ts` specifier. A host import be
 
 The emitter adds `export` to each declaration that the source exports and to each declaration that an exported interface reaches. It never renames a source name. It gives its own names, such as `$t0`, `$int`, and `Option$1`, only when no source name is taken.
 
-The printer has one fixed style, and `deno fmt` leaves its output unchanged (decision D12). Two slow tests check this: one runs `deno fmt --check` on `fixtures/golden/`, and one runs it on the emitted programs of `fixtures/emit/forms/`. The printer breaks a long binary expression and an arrow chain with a broken head as `deno fmt` does. The ledger in `docs/phase-a-rules.md` lists the layouts and the two forms that are not yet at a fixed point.
+The printer has one fixed style, and `deno fmt` leaves its output unchanged for the golden files and the emitter test programs (decision D12). Two slow tests check this: one runs `deno fmt --check` on `fixtures/golden/`, and one runs it on the emitted programs of `fixtures/emit/forms/`. The printer breaks a long binary expression and an arrow chain with a broken head as `deno fmt` does. The ledger in `docs/phase-a-rules.md` lists the layouts and the two forms that are not yet at a fixed point. User source can reach the first form: a `match` arm whose selector test is longer than 80 columns, for example a long string literal.
 
 The slow tests copy a fixture project to a temporary directory and build there. They check the emitted code with `deno check` under `effect@4.0.5` with strict settings. They run the emitted code with `deno run`. They need the npm package in the Deno cache, so the first run needs network access.
 
@@ -306,9 +306,9 @@ The root is the project directory with `effective.json`. The modules are the `.e
 
 A diagnostic prints as `path:line:column: error code: message`. The path is relative to the root. The line and the column are one-based, and the column counts UTF-16 code units. The tool sorts the lines by path, position, and code.
 
-The message is one line. Stdout holds only diagnostics. A summary line and all other messages go to stderr.
+The message is one line. Stdout holds only diagnostics, except for `--help`, which prints the usage on stdout. A summary line and all other messages go to stderr.
 
-The exit code is 0 when there is no diagnostic, 1 when there is at least one, and 2 for a usage or configuration error. A usage error is an unknown command or flag, an extra argument, or a missing root directory. A configuration error is a missing or invalid `effective.json`.
+The exit code is 0 when there is no diagnostic. It is 1 when there is at least one diagnostic or a build step fails. It is 2 for a usage or configuration error. A failed build step is a failed write, or a `deno check` that cannot run or that fails with no diagnostic. A usage error is a missing or unknown command, an unknown flag, an extra argument, or a missing root directory. A configuration error is a missing or invalid `effective.json`, or a read error in the root.
 
 `build` writes a module only when it has no error. A module with an error keeps its last good `.ts` and `.ts.map` files. The tool writes a file only when its text changes. `--validate` runs `validateProject` on the lowered IR. A module with a validation diagnostic is not written.
 
@@ -342,7 +342,7 @@ The server announces `positionEncoding: "utf-16"`. It supports these features.
 - Definition. The server resolves types, errors, services, values, providers, service methods, and local bindings. It also finds declarations in `.effi` files. A builtin, a builtin type, and a field have no definition.
 - Document symbols. The result lists the declarations of the file in source order, with service methods as children. A file with syntax errors still has a symbol for each declaration whose name parsed.
 
-Diagnostics follow a fixed order. The server publishes each open document of the project first, sorted by path. It then publishes each closed file whose list changed. A closed file with an unchanged list gets no message.
+Diagnostics follow a fixed order. The server publishes the open documents of the project first, sorted by path. An open document gets a message when the compile used a new version of it or when its list changed. The server then publishes each closed file whose list changed. A file with an unchanged list and no new version gets no message.
 
 ### Custom methods
 
@@ -373,9 +373,9 @@ A project is a directory with an `effective.json` file. When a document opens, t
 
 An open document overrides the disk text of its path. When the document closes, the server reads the disk text again. The client sends `workspace/didChangeWatchedFiles` for changes on disk. The server ignores such an event for an open document, because the editor owns that text.
 
-On `textDocument/didSave` of an `.eff` file, the server compiles first. Then it writes the files of the saved module only. It does not write other modules. A module with an error keeps its last good `.ts` and `.ts.map` files, as `build` does. A write failure goes to `window/logMessage`.
+On `textDocument/didSave` of an `.eff` file, the server does nothing when `writeOnSave` is false. Else it compiles first. Then it writes the files of the saved module only. It does not write other modules. A module with an error keeps its last good `.ts` and `.ts.map` files, as `build` does. A write failure goes to `window/logMessage`.
 
-When `effective.json` is missing or invalid, the server publishes one diagnostic on `effective.json`, at line 0 and character 0. It keeps the last good revision for hover, definition, symbols, and generated text. It keeps the published diagnostics of the other files. The next good update clears the configuration diagnostic. Before the first good revision, each request on the project returns `null`.
+When `effective.json` is missing or invalid, the server publishes one diagnostic on `effective.json`, at line 0 and character 0. It keeps the last good revision for hover, definition, symbols, and generated text. It keeps the published diagnostics of the other files. The next good update clears the configuration diagnostic. Before the first good revision, hover, definition, and generated text return `null`. Document symbols parse the file on its own, and `effective/stats` returns revision 0.
 
 ### Known limits
 
@@ -405,7 +405,7 @@ Run `deno task playground:serve` and open `http://127.0.0.1:8790/`. The task bui
 
 The build uses `deno bundle` with the CodeMirror 6 packages that `deno.json` pins. The highlighter uses the core lexer, so the page and the compiler agree on each token. Below 720 pixels, the page shows one region at a time. The URL hash holds the active file, for example `#host/providers.effi`.
 
-Fast tests cover the compile facade, the highlighter, and the page model without a browser. The slow test `tests/playground_build_slow_test.ts` runs the build. No automated test covers the page in a browser. On 2026-10-16, a manual browser review at 375 and 1280 pixels passed the checks in `docs/plans/2026-10-16-playground.md`, section 7.
+Fast tests cover the compile facade, the highlighter, and the page model without a browser. The slow test `tests/playground_build_slow_test.ts` runs the build. No automated test covers the page in a browser. On 2026-10-16, a manual browser review at 375 and 1280 pixels passed the checks in `docs/plans/2026-10-16-playground.md`, section 7. Three later commits changed the page: the 720 pixel threshold, the hover feedback, and the wrap indent. No review ran after them.
 
 ## Measurements
 
@@ -420,15 +420,15 @@ The harnesses in `bench/` follow the measurement protocol of the design (section
 | `deno task bench --json <file>`                               | Also writes the raw samples to the file.                                                             |
 | `deno run --allow-write bench/generate.ts <size> <directory>` | Writes a synthetic project of the size `small`, `medium`, or `large`.                                |
 
-`--quick` is the default. `--full` changes only the iteration counts, the step counts, and the number of pairs. The three sizes stay the same: 30, 300, and 3000 declarations. The bench task passes `--no-lock`, so the optional variants never change `deno.lock`. The harness leaves nothing in the working tree. It uses temporary directories and removes them.
+`--quick` is the default. `--full` changes only these counts: iterations, steps, warm-ups, M2 edits of each kind, and pairs. The three sizes stay the same: 30, 300, and 3000 declarations. The bench task passes `--no-lock`, so the optional variants never change `deno.lock`. The harness leaves nothing in the working tree. It uses temporary directories and removes them.
 
 ### What each measurement decides
 
-M2 times the whole-module recheck for each stage: lex, parse, index, link, resolve, check, lower, emit, and validate. It also replays a body edit and an interface edit through `Program.update` and prints the modules that each revision checked again. M2 decides whether Phase B needs declaration-level tracking (design section 4.5). It also decides whether typed arrays pay for tokens and whether a Zig port is worth its cost.
+M2 times the whole-module recheck for each stage: lex, parse, index, link, resolve, check, lower, emit, and validate. It also replays a body edit and an interface edit through `Program.update` and prints the modules that each revision checked again. M2 shows which stage costs the time when M1 misses the D9 budget, which is the gate for Phase B (design section 4.5). It also decides whether typed arrays pay for tokens and whether a Zig port is worth its cost.
 
 M5 times a cold `deno check` over the emitted five examples and the three synthetic sizes. It uses the configuration that `effective build --tsc` generates, with `effect` mapped to `npm:effect@4.0.5`. M5 decides the oracle runner and whether `watch --tsc` can default to on.
 
-M5 also tries three optional variants: `tsc` as a cold process, a warm `ts.LanguageService` in the same process, and `tsgo` from `@typescript/native-preview`. The harness installs them into a temporary workspace with `deno install`. The first run needs network access. A variant that cannot run is skipped, and the report names the reason.
+M5 also tries three optional variants: `tsc` as a cold process, a warm `ts.LanguageService` in the same process, and `tsgo` from `@typescript/native-preview`. The harness installs `tsc` and `tsgo` into a temporary workspace with `deno install`. The `ts.LanguageService` variant imports `npm:typescript` into the bench process from the Deno cache. The first run needs network access. A variant that cannot run is skipped, and the report names the reason.
 
 M6 gives the noise floor. Each iteration runs two sides, A and B, of the same build. The order of the sides alternates. The floor is the 90th percentile of the absolute value of `A/B - 1` over the pairs, in percent. A later A/B difference below the floor of its row counts as null. M6 uses the pairs of M2 and M5, so every row of M2 and M5 shows its floor in the column `floor %`.
 
@@ -444,7 +444,7 @@ M1 decides the debounce time and whether the server needs a worker thread or can
 
 M3 counts the work that one edit causes. After each step, the client sends `effective/stats`. M3 reports the median and the maximum of the per-step change in the counts `parses`, `checks`, `lowerings`, and `emits`. It also reports the fraction of steps with an interface change and with a mode change.
 
-M3 runs no hover, so the counts show the compile alone. The counts are exact, so M3 has no noise floor. M3 decides whether Phase B needs declaration-level tracking. It also informs the later review of the mode firewall (D8).
+M3 runs no hover, so the counts show the compile alone. The counts are exact, so M3 has no noise floor. M3 shows whether the recheck of whole modules causes a miss of the D9 budget. It also informs the later review of the mode firewall (D8).
 
 M4 measures the memory of the server over a long script. It runs two servers, A and B, on the medium size. The script repeats the four edit kinds for N steps, and each row starts a new pair of servers. After each step, the client reads `rss` from `effective/stats`. A row shows the peak `rss` of each side and the `rss` after the last step.
 

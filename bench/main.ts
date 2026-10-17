@@ -44,8 +44,8 @@ export interface Options {
 
 export const USAGE =
   `usage: deno task bench [--quick|--full] [m1|m2|m3|m4|m5|m6 ...] [--no-variants] [--json <file>]
-  --quick        small scale, under one minute for each measurement (default)
-  --full         larger iteration counts, nothing else changes
+  --quick        small scale, aimed at under one minute for each measurement (default)
+  --full         larger counts of iterations, steps, warm-ups, and pairs; same sizes
   m1 .. m6       the measurements to run (default: all six)
                  m1, m3, and m4 run the language server as a subprocess
   --no-variants  skip the optional M5 variants (tsc, language service, tsgo)
