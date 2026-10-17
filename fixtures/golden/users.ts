@@ -2,6 +2,12 @@
 
 import { Context, Effect, Option, Schema } from "effect";
 
+export const UserId = Schema.String;
+export type UserId = typeof UserId.Type;
+
+export const Name = Schema.String;
+export type Name = typeof Name.Type;
+
 export const User = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
@@ -20,7 +26,7 @@ export class StoreUnavailable extends Schema.TaggedError<StoreUnavailable>()(
 ) {}
 
 export class Users extends Context.Service<Users, {
-  readonly find: (a: string) => Effect.Effect<
+  readonly find: (a: UserId) => Effect.Effect<
     Option.Option<User>,
     StoreUnavailable
   >;
@@ -28,7 +34,7 @@ export class Users extends Context.Service<Users, {
   readonly all: () => Effect.Effect<ReadonlyArray<User>, StoreUnavailable>;
 }>()("users#Users") {}
 
-export const getUser = (id: string): Effect.Effect<
+export const getUser = (id: UserId): Effect.Effect<
   User,
   StoreUnavailable | UserMissing,
   Users
@@ -40,7 +46,7 @@ export const getUser = (id: string): Effect.Effect<
     });
   });
 
-export const rename = (id: string, name: string): Effect.Effect<
+export const rename = (id: UserId, name: Name): Effect.Effect<
   User,
   StoreUnavailable | UserMissing,
   Users
@@ -52,8 +58,8 @@ export const rename = (id: string, name: string): Effect.Effect<
     return renamed;
   });
 
-export const displayName = (id: string): Effect.Effect<
-  string,
+export const displayName = (id: UserId): Effect.Effect<
+  Name,
   StoreUnavailable,
   Users
 > =>
@@ -66,7 +72,7 @@ export const displayName = (id: string): Effect.Effect<
   );
 
 export const activeNames = (): Effect.Effect<
-  ReadonlyArray<string>,
+  ReadonlyArray<Name>,
   StoreUnavailable,
   Users
 > =>

@@ -1,7 +1,10 @@
-const label = (flag: boolean): string =>
+const label = (flag: Bool): Text =>
   match flag {
     true => "yes",
     _ => "other",
     // error: pattern/002
     false => "no"
   }
+
+type Bool = boolean
+type Text = string

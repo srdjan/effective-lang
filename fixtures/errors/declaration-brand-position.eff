@@ -10,4 +10,7 @@ type Wrapped = (Brand<string>)
 type Pair = { id: Brand<int> }
 
 // error: declaration/008
-export const make: (id: Brand<string>) => int = (id) => 1
+export const make: (id: Brand<Text>) => Int = (id) => 1
+
+type Text = string
+type Int = int

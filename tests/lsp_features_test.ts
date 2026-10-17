@@ -94,10 +94,10 @@ Deno.test("hover on a function name has the contract, the backend type, and the 
   const [contract, backend] = hover.contents.value.split("\n\n");
   assertEquals(
     contract,
-    "```effective\nrename(id: string, name: string): User fails " +
+    "```effective\nrename(id: UserId, name: Name): User fails " +
       "StoreUnavailable | UserMissing uses Users.find | Users.save\n```",
   );
-  assert(backend.startsWith("```typescript\n(id: string, name: string): "));
+  assert(backend.startsWith("```typescript\n(id: UserId, name: Name): "));
   assert(backend.endsWith("\n```"));
 });
 
@@ -143,7 +143,7 @@ Deno.test("hover in a document with no project is null", () => {
   const h = started();
   const orphan = uriOf("/elsewhere/a.eff");
   h.deliver(
-    didOpen(orphan, 1, "export const a = (): int => 1\n"),
+    didOpen(orphan, 1, "export const a = (): Int => 1\n\ntype Int = int\n"),
     request(
       1,
       "textDocument/hover",
@@ -173,7 +173,7 @@ Deno.test("hover on a dirty project answers from the new text", () => {
   );
   const hover = hoverOf(h, 1);
   assert(hover !== null);
-  assertStringIncludes(hover.contents.value, "renameTo(id: string");
+  assertStringIncludes(hover.contents.value, "renameTo(id: UserId");
   assertEquals(hover.range, rangeOf(renamed, "renameTo"));
 });
 
@@ -184,10 +184,10 @@ Deno.test("hover where no node lies is null", () => {
     request(
       1,
       "textDocument/hover",
-      position(USERS, { line: 4, character: 0 }),
+      position(USERS, { line: 7, character: 0 }),
     ),
   );
-  // Line 4 is the closing brace of the type declaration: no checked node.
+  // Line 7 is the closing brace of the type declaration: no checked node.
   assertEquals(result(h.responses(1)[0]), null);
 });
 
@@ -257,6 +257,8 @@ Deno.test("document symbols have kinds, ranges, and service methods", () => {
   assertEquals(
     symbols.map((s) => [s.name, s.kind]),
     [
+      ["UserId", 23],
+      ["Name", 23],
       ["User", 23],
       ["UserMissing", 5],
       ["StoreUnavailable", 5],
@@ -267,12 +269,12 @@ Deno.test("document symbols have kinds, ranges, and service methods", () => {
       ["activeNames", 12],
     ],
   );
-  const rename = symbols[5];
+  const rename = symbols[7];
   assertEquals(rename.selectionRange, rangeOf(USERS_TEXT, "rename"));
   assertEquals(rename.range.start.line, rename.selectionRange.start.line);
   assert(rename.range.end.line > rename.range.start.line);
   assertEquals(rename.children, undefined);
-  const users = symbols[3];
+  const users = symbols[5];
   assertEquals(
     users.children?.map((c) => [c.name, c.kind]),
     [["find", 6], ["save", 6], ["all", 6]],
@@ -289,7 +291,7 @@ Deno.test("document symbols of a closed file come from the disk text", () => {
   h.deliver(
     request(1, "textDocument/documentSymbol", { textDocument: { uri: USERS } }),
   );
-  assertEquals(symbolsOf(h, 1).length, 8);
+  assertEquals(symbolsOf(h, 1).length, 10);
 });
 
 Deno.test("document symbols of a host file that no module imports", () => {
@@ -387,14 +389,16 @@ Deno.test("generatedChanged follows a text change, not an equal text", () => {
 
 Deno.test("a module that never emitted gives null, and a later fix sends a notification", () => {
   const bad = exampleUri("bad.eff");
-  const broken = 'export const x = (): int => "s"\n';
+  const broken = 'export const x = (): Int => "s"\n\ntype Int = int\n';
   const h = started();
   h.deliver(didOpen(bad, 1, broken));
   assertEquals(generated(h, 1, bad), null);
   h.clearSent();
   h.deliver(didChangeFull(bad, 2, broken + "\n"));
   assertEquals(h.notifications("effective/generatedChanged"), []);
-  h.deliver(didChangeFull(bad, 3, "export const x = (): int => 1\n"));
+  h.deliver(
+    didChangeFull(bad, 3, "export const x = (): Int => 1\n\ntype Int = int\n"),
+  );
   assertEquals(h.notifications("effective/generatedChanged"), [{ uri: bad }]);
   const fixed = generated(h, 2, bad);
   assert(fixed !== null && !fixed.stale);

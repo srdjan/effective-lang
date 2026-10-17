@@ -1,5 +1,7 @@
 type User = { name: string }
 
-const bad = (user: User): string =>
+const bad = (user: User): Text =>
   // error: type-mismatch/006
   user.nickname
+
+type Text = string

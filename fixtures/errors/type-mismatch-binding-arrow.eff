@@ -1,12 +1,16 @@
 // A binding type annotation must fit the arrow that it annotates.
 
 // error: type-mismatch/003
-export const wrongResult: (x: int) => string = (x: int): int => x
+export const wrongResult: (x: Int) => Text = (x: Int): Int => x
 
 // error: type-mismatch/003
-export const wrongArity: (x: int, y: int) => int = (x: int): int => x
+export const wrongArity: (x: Int, y: Int) => Int = (x: Int): Int => x
 
 // error: type-mismatch/003
-const notFunction: int = (x: int): int => x
+const notFunction: Int = (x: Int): Int => x
 
-export const fits: (x: int) => number = (x: number): int => 1
+export const fits: (x: Int) => Num = (x: Num): Int => 1
+
+type Int = int
+type Text = string
+type Num = number

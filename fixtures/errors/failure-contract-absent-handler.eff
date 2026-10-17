@@ -1,9 +1,11 @@
 error Missing = { id: string }
 
-const bad = (): string =>
+const bad = (): Text =>
   try {
     "ok"
   } catch {
     // error: failure-contract/002
     Missing(error) => "missing"
   }
+
+type Text = string

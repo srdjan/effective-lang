@@ -22,44 +22,44 @@ error Other = { why: string }
 
 service Store {
   find(id: Id): Option<Profile> fails NotFound
-  count(): int
+  count(): IntVal
   tick(): void
 }
 
-export const extent = (s: Shape): number =>
+export const extent = (s: Shape): NumVal =>
   match s {
     { kind: "circle", ...c } => c.radius,
     { kind: "square", ...q } => q.side
   }
 
-export const extent2 = (s: Shape): number =>
+export const extent2 = (s: Shape): NumVal =>
   match s {
     { kind: "circle" } => 1,
     { kind: "square" } => 2
   }
 
-export const lit = (s: string): int => match s { "a" => 1, "b" => 2, _ => 3 }
-export const bool = (b: boolean): int => match b { true => 1, false => 0 }
-export const mul = (a: int, b: int): int => a * b
-export const arith = (a: int, b: int): int => a * b + a - b
-export const divide = (a: int, b: int): number => a / b
-export const nick = (p: Profile): Option<string> => p.nickname
-export const cond = (b: boolean, x: int): string => if (b) { "a" } else { "b" }
+export const lit = (s: StrVal): IntVal => match s { "a" => 1, "b" => 2, _ => 3 }
+export const bool = (b: BoolVal): IntVal => match b { true => 1, false => 0 }
+export const mul = (a: IntVal, b: IntVal): IntVal => a * b
+export const arith = (a: IntVal, b: IntVal): IntVal => a * b + a - b
+export const divide = (a: IntVal, b: IntVal): NumVal => a / b
+export const nick = (p: Profile): Option<StrVal> => p.nickname
+export const cond = (b: BoolVal, x: IntVal): StrVal => if (b) { "a" } else { "b" }
 export const prof = (p: Profile): Profile => ({ ...p, name: "x" })
-export const blockF = (x: int): int => {
+export const blockF = (x: IntVal): IntVal => {
   const y = x + 1
-  const z: int = y * 2
+  const z: IntVal = y * 2
   z
 }
-export const nestedBlockPure = (o: Option<int>): int =>
+export const nestedBlockPure = (o: Option<IntVal>): IntVal =>
   match o {
     Some(x) => { const y = x + 1
  y },
     None => 0
   }
-export const brand = (s: string): Id => Id(s)
-export const unb = (i: Id): string => unbrand(i)
-export const cbCall = (b: CbBox, x: int): int => b.run(x)
+export const brand = (s: StrVal): Id => Id(s)
+export const unb = (i: Id): StrVal => unbrand(i)
+export const cbCall = (b: CbBox, x: IntVal): IntVal => b.run(x)
 export const mkBox = (): CbBox => ({ run: (n) => n + 1, label: "l" })
 
 export const lookup = (id: Id): Profile
@@ -70,12 +70,12 @@ export const lookup = (id: Id): Profile
     None => fail(NotFound({ id }))
   }
 
-export const both = (id: Id, b: boolean): string
+export const both = (id: Id, b: BoolVal): StrVal
   fails NotFound | Other
   uses Store.find =>
   if (b) { fail(NotFound({ id })) } else { fail(Other({ why: "w" })) }
 
-export const lookup2 = (id: Id, b: boolean): string
+export const lookup2 = (id: Id, b: BoolVal): StrVal
   fails Other
   uses Store.find =>
   try {
@@ -85,32 +85,32 @@ export const lookup2 = (id: Id, b: boolean): string
     Other(o) => "x"
   }
 
-export const hoist = (id: Id, n: int): int
+export const hoist = (id: Id, n: IntVal): IntVal
   fails NotFound
   uses Store.find | Store.count =>
   Store.count() + n
 
-export const hoist2 = (id: Id): int
+export const hoist2 = (id: Id): IntVal
   fails NotFound
   uses Store.find | Store.count =>
   add(lookup(id).tags |> map((t) => 1) |> fold(0, (a, b) => a + b), Store.count())
 
-export const add = (a: int, b: int): int => a + b
+export const add = (a: IntVal, b: IntVal): IntVal => a + b
 
-export const ifEff = (id: Id, b: boolean): string
+export const ifEff = (id: Id, b: BoolVal): StrVal
   fails NotFound
   uses Store.find =>
   if (b) { lookup(id).name } else { "none" }
 
-export const andEff = (a: boolean): boolean
+export const andEff = (a: BoolVal): BoolVal
   uses Store.count =>
   a && Store.count() > 1
 
-export const matchEff = (id: Id): int
+export const matchEff = (id: Id): IntVal
   uses Store.count =>
   match Store.count() { 1 => 10, _ => 20 }
 
-export const nestedEff = (id: Id): int
+export const nestedEff = (id: Id): IntVal
   fails NotFound
   uses Store.find | Store.count => {
   const n = Store.count()
@@ -118,7 +118,7 @@ export const nestedEff = (id: Id): int
   n + 1
 }
 
-export const pureBlockEff = (id: Id): int
+export const pureBlockEff = (id: Id): IntVal
   uses Store.count => {
   const n = Store.count()
   const m = match Some(n) {
@@ -134,54 +134,54 @@ export const unitF = (): void
   Store.tick()
 }
 
-export const retried = (): int
+export const retried = (): IntVal
   uses Store.count =>
   retry(() => Store.count(), { times: 3 })
 
-export const fnArg = (xs: int[]): int[] => xs |> map((x) => x * 2)
-export const total = (xs: string[]): int => xs |> fold(0, (acc, x) => acc + 1)
-const cfg: int = base + 1
-const base: int = 1
-export const useCfg = (): int => cfg
+export const fnArg = (xs: IntVal[]): IntVal[] => xs |> map((x) => x * 2)
+export const total = (xs: StrVal[]): IntVal => xs |> fold(0, (acc, x) => acc + 1)
+const cfg: IntVal = base + 1
+const base: IntVal = 1
+export const useCfg = (): IntVal => cfg
 
-export const applyTwice = (f: Callback, x: int): int => f(f(x))
-const addOne = (n: int): int => n + 1
-export const useLift = (x: int): int => applyTwice(addOne, x)
-export const useLiftClosure = (x: int): int => applyTwice((n) => n * 2, x)
+export const applyTwice = (f: Callback, x: IntVal): IntVal => f(f(x))
+const addOne = (n: IntVal): IntVal => n + 1
+export const useLift = (x: IntVal): IntVal => applyTwice(addOne, x)
+export const useLiftClosure = (x: IntVal): IntVal => applyTwice((n) => n * 2, x)
 
-export const mkEmpty = (): string fails Empty => fail(Empty({}))
+export const mkEmpty = (): StrVal fails Empty => fail(Empty({}))
 export const withNick = (p: Profile): Profile => ({ ...p, nickname: "k" })
-const readCount = (): int uses Store.count => Store.count()
-export const retryNamed = (): int uses Store.count => retry(readCount, { times: 1 })
-const two = (): int => 2
-export const retryPure = (): int => retry(() => 2, { times: 1 })
-export const retryPureNamed = (): int => retry(two, { times: 1 })
-export const caught = (id: Id): string
+const readCount = (): IntVal uses Store.count => Store.count()
+export const retryNamed = (): IntVal uses Store.count => retry(readCount, { times: 1 })
+const two = (): IntVal => 2
+export const retryPure = (): IntVal => retry(() => 2, { times: 1 })
+export const retryPureNamed = (): IntVal => retry(two, { times: 1 })
+export const caught = (id: Id): StrVal
   uses Store.find =>
   try { lookup(id).name } catch { NotFound(e) => "missing" }
-export const pureEval = (x: int): int => {
+export const pureEval = (x: IntVal): IntVal => {
   add(x, 1)
   x
 }
-export const optMatch = (p: Profile): string =>
+export const optMatch = (p: Profile): StrVal =>
   match p.nickname { Some(n) => n, None => "anon" }
-export const statusName = (s: Status): string =>
+export const statusName = (s: Status): StrVal =>
   match s { "pending" => "p", "paid" => "q" }
-export const adder = (n: int): (x: int) => int => (x) => x + n
-export const sumAll = (xs: int[]): int => xs |> fold(0, (a, b) => a + b)
-export const names = (ps: Profile[]): string[] => ps |> map((p) => p.name)
-export const sumRec = (xs: int[]): Acc =>
+export const adder = (n: IntVal): (x: IntVal) => IntVal => (x) => x + n
+export const sumAll = (xs: IntVal[]): IntVal => xs |> fold(0, (a, b) => a + b)
+export const names = (ps: Profile[]): StrVal[] => ps |> map((p) => p.name)
+export const sumRec = (xs: IntVal[]): Acc =>
   xs |> fold({ n: 0, label: "x" }, (acc, x) => ({ n: acc.n + x, label: acc.label }))
-const pair = (a: int, b: int): int uses Store.count => a + b + Store.count()
-export const hoistOrder = (x: int): int uses Store.count => pair(add(x, 1), Store.count())
-export const adderShort = (n: int): (x: int) => int => (x) => x + n
-export const adderBlock = (n: int): (x: int) => int => (x) => {
+const pair = (a: IntVal, b: IntVal): IntVal uses Store.count => a + b + Store.count()
+export const hoistOrder = (x: IntVal): IntVal uses Store.count => pair(add(x, 1), Store.count())
+export const adderShort = (n: IntVal): (x: IntVal) => IntVal => (x) => x + n
+export const adderBlock = (n: IntVal): (x: IntVal) => IntVal => (x) => {
   const y = x + n
   y * 2
 }
-export const statusLong = (s: Status, longerNameForTheSubject: string): string =>
+export const statusLong = (s: Status, longerNameForTheSubject: StrVal): StrVal =>
   match s { "pending" => "pendingpendingpendingpending", "paid" => "paidpaidpaidpaidpaidpaid" }
-export const matchLongEff = (id: Id): int
+export const matchLongEff = (id: Id): IntVal
   uses Store.count | Store.tick =>
   match Store.count() {
     1 => 1000000000,
@@ -189,7 +189,7 @@ export const matchLongEff = (id: Id): int
     3 => 3000000000,
     _ => 4000000000
   }
-export const shapeEff = (s: Shape): int
+export const shapeEff = (s: Shape): IntVal
   uses Store.count =>
   match s {
     { kind: "circle", ...c } => Store.count() + 1,
@@ -202,92 +202,97 @@ type WideF = (z: int) => int
 type WideG = (gammaValueNumberThree: int, delta: int) => int
 type WideH = (zzzz: int, yyyyy: int, xxxxxx: int) => int
 
-export const wideCond = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): boolean =>
+export const wideCond = (alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal, gammaValueNumberThree: IntVal): BoolVal =>
   alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 && alphaValueNumberOne < 1000
 
-export const wideCondBlock = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): boolean => {
-  const first: boolean = alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0
+export const wideCondBlock = (alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal, gammaValueNumberThree: IntVal): BoolVal => {
+  const first: BoolVal = alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0
   first && alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 && alphaValueNumberOne < 1000
 }
 
-export const wideOr = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): boolean =>
+export const wideOr = (alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal, gammaValueNumberThree: IntVal): BoolVal =>
   alphaValueNumberOne > betaValueNumberTwo || betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 || alphaValueNumberOne < 1000 && betaValueNumberTwo > 0
 
-export const wideParens = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): boolean => {
-  const grouped: boolean = (alphaValueNumberOne > betaValueNumberTwo || betaValueNumberTwo > gammaValueNumberThree || gammaValueNumberThree > 0 || alphaValueNumberOne < 1000) && (alphaValueNumberOne > betaValueNumberTwo || betaValueNumberTwo > gammaValueNumberThree)
+export const wideParens = (alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal, gammaValueNumberThree: IntVal): BoolVal => {
+  const grouped: BoolVal = (alphaValueNumberOne > betaValueNumberTwo || betaValueNumberTwo > gammaValueNumberThree || gammaValueNumberThree > 0 || alphaValueNumberOne < 1000) && (alphaValueNumberOne > betaValueNumberTwo || betaValueNumberTwo > gammaValueNumberThree)
   grouped
 }
 
-export const wideIf = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): string =>
+export const wideIf = (alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal, gammaValueNumberThree: IntVal): StrVal =>
   if (alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 && alphaValueNumberOne < 1000) { "a" } else { "b" }
 
-export const wideIfBlock = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): string => {
-  const picked: string = if (alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 && alphaValueNumberOne < 1000) { "a" } else { "b" }
+export const wideIfBlock = (alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal, gammaValueNumberThree: IntVal): StrVal => {
+  const picked: StrVal = if (alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 && alphaValueNumberOne < 1000) { "a" } else { "b" }
   if (alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 && alphaValueNumberOne < 1000) { picked } else { "b" }
 }
 
-export const wideBranches = (alphaValueNumberOne: string, betaValueNumberTwo: string, flag: boolean): string =>
+export const wideBranches = (alphaValueNumberOne: StrVal, betaValueNumberTwo: StrVal, flag: BoolVal): StrVal =>
   if (flag) { alphaValueNumberOne + "-" + betaValueNumberTwo + "-" + alphaValueNumberOne + "-" + betaValueNumberTwo + "-" + alphaValueNumberOne } else { betaValueNumberTwo + "-" + alphaValueNumberOne + "-" + betaValueNumberTwo + "-" + alphaValueNumberOne + "-" + betaValueNumberTwo }
 
-export const wideSum = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): int =>
+export const wideSum = (alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal, gammaValueNumberThree: IntVal): IntVal =>
   alphaValueNumberOne + betaValueNumberTwo + gammaValueNumberThree + alphaValueNumberOne + betaValueNumberTwo + gammaValueNumberThree
 
-export const wideMixed = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): int =>
+export const wideMixed = (alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal, gammaValueNumberThree: IntVal): IntVal =>
   (alphaValueNumberOne + betaValueNumberTwo * gammaValueNumberThree + alphaValueNumberOne * betaValueNumberTwo + gammaValueNumberThree * 10) * 2
 
-export const wideSub = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): int =>
+export const wideSub = (alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal, gammaValueNumberThree: IntVal): IntVal =>
   alphaValueNumberOne - (betaValueNumberTwo - gammaValueNumberThree - alphaValueNumberOne - betaValueNumberTwo - gammaValueNumberThree - alphaValueNumberOne)
 
-export const wideStr = (alphaValueNumberOne: string, betaValueNumberTwo: string, gammaValueNumberThree: string): string =>
+export const wideStr = (alphaValueNumberOne: StrVal, betaValueNumberTwo: StrVal, gammaValueNumberThree: StrVal): StrVal =>
   alphaValueNumberOne + "-" + betaValueNumberTwo + "-" + gammaValueNumberThree + "-" + alphaValueNumberOne + "-" + betaValueNumberTwo
 
-export const wideStrBlock = (alphaValueNumberOne: string, betaValueNumberTwo: string, gammaValueNumberThree: string): string => {
-  const joined: string = alphaValueNumberOne + "-" + betaValueNumberTwo + "-" + gammaValueNumberThree + "-" + alphaValueNumberOne + "-" + betaValueNumberTwo
+export const wideStrBlock = (alphaValueNumberOne: StrVal, betaValueNumberTwo: StrVal, gammaValueNumberThree: StrVal): StrVal => {
+  const joined: StrVal = alphaValueNumberOne + "-" + betaValueNumberTwo + "-" + gammaValueNumberThree + "-" + alphaValueNumberOne + "-" + betaValueNumberTwo
   joined + "-" + alphaValueNumberOne + "-" + betaValueNumberTwo + "-" + gammaValueNumberThree + "-" + alphaValueNumberOne + "-" + betaValueNumberTwo
 }
 
-export const wideRecord = (alphaValueNumberOne: string, betaValueNumberTwo: string, gammaValueNumberThree: string): Acc =>
+export const wideRecord = (alphaValueNumberOne: StrVal, betaValueNumberTwo: StrVal, gammaValueNumberThree: StrVal): Acc =>
   ({ n: 1, label: alphaValueNumberOne + "-" + betaValueNumberTwo + "-" + gammaValueNumberThree + "-" + alphaValueNumberOne + "-" + betaValueNumberTwo })
 
-export const wideFilter = (xs: int[]): int[] =>
+export const wideFilter = (xs: IntVal[]): IntVal[] =>
   xs |> filter((aVeryLongParameterNameThatFillsTheWholeLineXXX) => aVeryLongParameterNameThatFillsTheWholeLineXXX > 10 && aVeryLongParameterNameThatFillsTheWholeLineXXX < 2000)
 
-export const wideMap = (xs: int[]): string[] =>
+export const wideMap = (xs: IntVal[]): StrVal[] =>
   xs |> map((aVeryLongParameterNameThatFillsTheWholeLineXXX) => if (aVeryLongParameterNameThatFillsTheWholeLineXXX > 10 && aVeryLongParameterNameThatFillsTheWholeLineXXX < 2000) { "big" } else { "small" })
 
-export const wideFold = (xs: int[]): int =>
+export const wideFold = (xs: IntVal[]): IntVal =>
   xs |> fold(0, (accumulatorValueNumberOne, currentValueNumberTwo) => accumulatorValueNumberOne + currentValueNumberTwo + accumulatorValueNumberOne + currentValueNumberTwo + 1)
 
-export const wideGenIf = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): string
+export const wideGenIf = (alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal, gammaValueNumberThree: IntVal): StrVal
   uses Store.count =>
   if (alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > Store.count()) { "a" } else { "b" }
 
-export const wideGenAnd = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): boolean
+export const wideGenAnd = (alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal, gammaValueNumberThree: IntVal): BoolVal
   uses Store.count =>
   alphaValueNumberOne > betaValueNumberTwo && Store.count() > 1 && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > Store.count() && alphaValueNumberOne < 1000
 
-export const wideGenSum = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): int
+export const wideGenSum = (alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal, gammaValueNumberThree: IntVal): IntVal
   uses Store.count =>
   alphaValueNumberOne + betaValueNumberTwo + gammaValueNumberThree + Store.count() + alphaValueNumberOne + betaValueNumberTwo
 
-export const wideChain = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): WideG => (gammaValueNumberThree, delta) => alphaValueNumberOne
-export const wideChainLate = (z: int): WideH => (alphaValueNumberOne, betaValueNumberTwo, gammaValueNumberThree) => alphaValueNumberOne
-export const wideChainBlock = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): WideG => (gammaValueNumberThree, delta) => {
+export const wideChain = (alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal, gammaValueNumberThree: IntVal): WideG => (gammaValueNumberThree, delta) => alphaValueNumberOne
+export const wideChainLate = (z: IntVal): WideH => (alphaValueNumberOne, betaValueNumberTwo, gammaValueNumberThree) => alphaValueNumberOne
+export const wideChainBlock = (alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal, gammaValueNumberThree: IntVal): WideG => (gammaValueNumberThree, delta) => {
   const q = alphaValueNumberOne + delta
   q
 }
-export const wideChainBody = (alphaValueNumberOne: int, betaValueNumberTwo: int): WideG => (gammaValueNumberThree, delta) => alphaValueNumberOne + betaValueNumberTwo + gammaValueNumberThree
+export const wideChainBody = (alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal): WideG => (gammaValueNumberThree, delta) => alphaValueNumberOne + betaValueNumberTwo + gammaValueNumberThree
 
-export const wideLocalChain = (n: int): int => {
-  const adder = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int) => (z: int) => alphaValueNumberOne + betaValueNumberTwo + gammaValueNumberThree + z
+export const wideLocalChain = (n: IntVal): IntVal => {
+  const adder = (alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal, gammaValueNumberThree: IntVal) => (z: IntVal) => alphaValueNumberOne + betaValueNumberTwo + gammaValueNumberThree + z
   adder(n, n, n)(n)
 }
 
-const wideArgChain = (xs: int[]) => xs |> map((aVeryLongParameterNameThatFillsTheWholeLineXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) => (q: int) => aVeryLongParameterNameThatFillsTheWholeLineXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX + q)
+const wideArgChain = (xs: IntVal[]) => xs |> map((aVeryLongParameterNameThatFillsTheWholeLineXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) => (q: IntVal) => aVeryLongParameterNameThatFillsTheWholeLineXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX + q)
 
-export const wideElseIf = (alphaValueNumberOne: int, betaValueNumberTwo: int, gammaValueNumberThree: int): string => {
-  const picked: string = if (alphaValueNumberOne > betaValueNumberTwo) { "aaaaaaaaaaaaaaaaaaaaaa" } else if (betaValueNumberTwo > gammaValueNumberThree) { "bbbbbbbbbbbbbbbbbbbbbbb" } else if (gammaValueNumberThree > 100000 && alphaValueNumberOne < 10000000 && betaValueNumberTwo > 100) { "c" } else { "d" }
+export const wideElseIf = (alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal, gammaValueNumberThree: IntVal): StrVal => {
+  const picked: StrVal = if (alphaValueNumberOne > betaValueNumberTwo) { "aaaaaaaaaaaaaaaaaaaaaa" } else if (betaValueNumberTwo > gammaValueNumberThree) { "bbbbbbbbbbbbbbbbbbbbbbb" } else if (gammaValueNumberThree > 100000 && alphaValueNumberOne < 10000000 && betaValueNumberTwo > 100) { "c" } else { "d" }
   if (alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0) { picked } else if (alphaValueNumberOne < betaValueNumberTwo && betaValueNumberTwo < gammaValueNumberThree && gammaValueNumberThree < 0) { "b" } else { "c" }
 }
 
-const wideFoldChain = (xs: int[]) => xs |> fold((q: int) => q, (accumulatorValueNumberOneXXXXXXXXXXXXXXXXX, currentValueNumberTwoXXXXXXXXXXXXXXXXXXXXXX) => (q: int) => q + 1)
+const wideFoldChain = (xs: IntVal[]) => xs |> fold((q: IntVal) => q, (accumulatorValueNumberOneXXXXXXXXXXXXXXXXX, currentValueNumberTwoXXXXXXXXXXXXXXXXXXXXXX) => (q: IntVal) => q + 1)
+
+type IntVal = int
+type NumVal = number
+type StrVal = string
+type BoolVal = boolean

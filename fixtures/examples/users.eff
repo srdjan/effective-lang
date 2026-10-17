@@ -1,3 +1,6 @@
+export type UserId = string
+export type Name = string
+
 export type User = {
   id: string,
   name: string,
@@ -8,12 +11,12 @@ export error UserMissing = { id: string }
 export error StoreUnavailable = { message: string }
 
 export service Users {
-  find(id: string): Option<User> fails StoreUnavailable
+  find(id: UserId): Option<User> fails StoreUnavailable
   save(user: User): void fails StoreUnavailable
   all(): User[] fails StoreUnavailable
 }
 
-export const getUser = (id: string): User
+export const getUser = (id: UserId): User
   fails UserMissing | StoreUnavailable
   uses Users.find =>
   match Users.find(id) {
@@ -21,7 +24,7 @@ export const getUser = (id: string): User
     None => fail(UserMissing({ id }))
   }
 
-export const rename = (id: string, name: string): User
+export const rename = (id: UserId, name: Name): User
   fails UserMissing | StoreUnavailable
   uses Users.find | Users.save => {
   const user = getUser(id)
@@ -30,7 +33,7 @@ export const rename = (id: string, name: string): User
   renamed
 }
 
-export const displayName = (id: string): string
+export const displayName = (id: UserId): Name
   fails StoreUnavailable
   uses Users.find =>
   try {
@@ -39,7 +42,7 @@ export const displayName = (id: string): string
     UserMissing(error) => "Guest"
   }
 
-export const activeNames = (): string[]
+export const activeNames = (): Name[]
   fails StoreUnavailable
   uses Users.all =>
   Users.all()

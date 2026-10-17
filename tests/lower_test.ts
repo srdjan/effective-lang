@@ -235,6 +235,8 @@ Deno.test("declarations keep source order and exports are sorted ids", () => {
   assertEquals(
     ir.declarations.map((d) => `${d.kind} ${d.name}`),
     [
+      "type UserId",
+      "type Name",
       "type User",
       "error UserMissing",
       "error StoreUnavailable",
@@ -246,7 +248,7 @@ Deno.test("declarations keep source order and exports are sorted ids", () => {
     ],
   );
   assertEquals(ir.exports, [...ir.exports].sort());
-  assertEquals(ir.exports.length, 8);
+  assertEquals(ir.exports.length, 10);
 });
 
 // ------------------------------------------------------------------ imports
@@ -257,6 +259,7 @@ Deno.test("main has one import for users and one for the host module", () => {
   const [users, host] = ir.imports;
   assertEquals(users.bindings, [
     { name: "displayName", target: "value:users#displayName" },
+    { name: "Name", target: "type:users#Name" },
     { name: "StoreUnavailable", target: "error:users#StoreUnavailable" },
   ]);
   assert(users.exports.includes("service:users#Users"));
@@ -362,11 +365,12 @@ Deno.test("a pure pipeline in collections binds its base value", () => {
 
 Deno.test("a pipeline binding skips a $p name that the source uses", () => {
   const ir = lowerText(
-    "const add = (a: int, b: int): int => a + b\n" +
-      "export const p = (y: int): int => {\n" +
+    "const add = (a: Int, b: Int): Int => a + b\n" +
+      "export const p = (y: Int): Int => {\n" +
       "  const $p1 = 10\n" +
       "  y |> add($p1)\n" +
-      "}\n",
+      "}\n" +
+      "type Int = int\n",
   );
   const body = functionBody(ir, "p");
   assert(body.kind === "block");
@@ -413,16 +417,17 @@ Deno.test("a stage call excludes the effects of its left value", () => {
   const ir = lowerText(`
 error Boom = { code: int }
 service A {
-  num(): int
+  num(): Int
   boom(): Boom
 }
 service B {
-  twice(x: int): int
+  twice(x: Int): Int
 }
-const id = (x: int): int => x
-const viaPerform = (): int uses A.num | B.twice => A.num() |> B.twice
-const viaFail = (): int fails Boom uses A.boom => A.boom() |> fail
-const viaCall = (): int uses A.num => A.num() |> id
+const id = (x: Int): Int => x
+const viaPerform = (): Int uses A.num | B.twice => A.num() |> B.twice
+const viaFail = (): Int fails Boom uses A.boom => A.boom() |> fail
+const viaCall = (): Int uses A.num => A.num() |> id
+type Int = int
 `);
   const stage = (name: string) => {
     const body = functionBody(ir, name);
@@ -457,14 +462,17 @@ const viaCall = (): int uses A.num => A.num() |> id
 
 const COLLECTIONS = `
 type User = { name: string, active: boolean }
-const names = (users: User[]): string[] =>
+const names = (users: User[]): Text[] =>
   users |> map((user) => user.name)
-const moreNames = (people: User[]): string[] =>
+const moreNames = (people: User[]): Text[] =>
   people |> map((p) => p.name)
-const flags = (users: User[]): boolean[] =>
+const flags = (users: User[]): Bool[] =>
   users |> map((user) => user.active)
-const total = (xs: int[]): int =>
+const total = (xs: Int[]): Int =>
   xs |> fold(0, (sum, x) => sum + x)
+type Int = int
+type Text = string
+type Bool = boolean
 `;
 
 Deno.test("equal closed builtin types share one identity", () => {
@@ -502,9 +510,9 @@ Deno.test("lowering twice gives identical JSON", () => {
 
 Deno.test("an unrelated edit does not change a builtin identity", () => {
   const edited = `// a comment that moves every offset
-const unrelated = (n: int): int => n + 1
+const unrelated = (n: Int): Int => n + 1
 ${COLLECTIONS}
-const later = (n: int): int => n * 2
+const later = (n: Int): Int => n * 2
 `;
   const before = lowerText(COLLECTIONS);
   const after = lowerText(edited);
@@ -514,8 +522,10 @@ const later = (n: int): int => n * 2
 
 Deno.test("a different element type gives a different identity", () => {
   const ir = lowerText(`
-const a = (xs: int[]): int[] => xs |> map((x) => x)
-const b = (xs: string[]): string[] => xs |> map((x) => x)
+const a = (xs: Int[]): Int[] => xs |> map((x) => x)
+const b = (xs: Text[]): Text[] => xs |> map((x) => x)
+type Int = int
+type Text = string
 `);
   assertEquals(preludeExports(ir).length, 2);
 });
@@ -523,7 +533,9 @@ const b = (xs: string[]): string[] => xs |> map((x) => x)
 // ------------------------------------------------------------------ diagnostics
 
 Deno.test("a module with a diagnostic does not lower", () => {
-  const checked = checkText(`const bad = (x: int): string => x`);
+  const checked = checkText(
+    `const bad = (x: Int): Text => x\ntype Int = int\ntype Text = string`,
+  );
   assert(checked.diagnostics.length > 0);
   assertEquals(failure(checked, "m"), {
     tag: "diagnostics",
@@ -534,7 +546,7 @@ Deno.test("a module with a diagnostic does not lower", () => {
 });
 
 Deno.test("a syntax error blocks lowering", () => {
-  const checked = checkText(`const bad = (x: int): int =>`);
+  const checked = checkText(`type Int = int\nconst bad = (x: Int): Int =>`);
   assert(checked.diagnostics.length > 0);
   assertEquals(failure(checked, "m").tag, "diagnostics");
 });
@@ -542,7 +554,8 @@ Deno.test("a syntax error blocks lowering", () => {
 Deno.test("an error built from a non-literal record is a checker error", () => {
   const checked = checkText(`
 error Boom = { code: int }
-const make = (r: { code: int }): Boom => Boom(r)
+const make = (r: { code: Int }): Boom => Boom(r)
+type Int = int
 `);
   assertEquals(checked.diagnostics.map((d) => d.code), ["type-mismatch/010"]);
   assertEquals(failure(checked, "m").tag, "diagnostics");
@@ -557,39 +570,43 @@ type Cfg = { name: string, note?: string }
 error Boom = { code: int }
 error Bust = { reason: string }
 const limit = 10
-const twice: (x: int) => int = (x) => x + x
-const area = (s: Shape): number =>
+const twice: (x: Int) => Int = (x) => x + x
+const area = (s: Shape): Num =>
   match s {
     { kind: "circle", ...c } => c.r * c.r,
     { kind: "square" } => 4
   }
-const label = (o: Option<int>): string =>
+const label = (o: Option<Int>): Text =>
   match o {
     Some(_) => "some",
     None => "none"
   }
-const pick = (n: int): string =>
+const pick = (n: Int): Text =>
   match n { 1 => "one", _ => "many" }
-const code = (e: Boom | Bust): int =>
+const code = (e: Boom | Bust): Int =>
   match e { Boom(b) => b.code, Bust(x) => 0 }
-const wrap = (v: string): Id => Id(v)
-const raw = (i: Id): string => unbrand(i)
+const wrap = (v: Text): Id => Id(v)
+const raw = (i: Id): Text => unbrand(i)
 const nothing = (): void => {
   const x = 1
 }
 const empty = (): void => {}
-const note = (c: Cfg): Option<string> => c.note
-const cmp = (a: int, b: int): boolean => if (a < b) { true } else { a === b }
-const boom = (): int fails Boom => fail(Boom({ code: 1 }))
-const safe = (): int => try { boom() } catch { Boom(e) => e.code }
-const maybe = (): Option<int> => Some(1)
-const none = (): Option<int> => None
+const note = (c: Cfg): Option<Text> => c.note
+const cmp = (a: Int, b: Int): Bool => if (a < b) { true } else { a === b }
+const boom = (): Int fails Boom => fail(Boom({ code: 1 }))
+const safe = (): Int => try { boom() } catch { Boom(e) => e.code }
+const maybe = (): Option<Int> => Some(1)
+const none = (): Option<Int> => None
 const mk = (): Cfg => ({ name: "a" })
 const upd = (c: Cfg): Cfg => ({ ...c, name: "b" })
-const local = (n: int): int => {
-  const add = (m: int) => n + m
+const local = (n: Int): Int => {
+  const add = (m: Int) => n + m
   add(1)
 }
+type Int = int
+type Num = number
+type Text = string
+type Bool = boolean
 `;
 
 Deno.test("every expression kind and pattern kind lowers", () => {
@@ -680,20 +697,21 @@ Deno.test("a const with an arrow value lowers to a function", () => {
   assert(twice?.kind === "function");
   assertEquals(twice.contract, "explicit");
   assertEquals(twice.parameters.map((p) => p.name), ["x"]);
-  assertEquals(twice.type.parameters, [{ kind: "primitive", name: "int" }]);
+  assertEquals(twice.type.parameters, [{ kind: "named", id: "type:m#Int" }]);
   assertEquals(byName.get("limit")?.kind, "constant");
   assertEquals(byName.get("local")?.kind, "function");
 });
 
 Deno.test("a parenthesized expression lowers to its inner node", () => {
-  const source = `const mk = (): { name: string } => ({ name: "a" })`;
+  const source =
+    `const mk = (): { name: Text } => ({ name: "a" })\ntype Text = string`;
   const body = functionBody(lowerText(source), "mk");
   assertEquals(body.kind, "record");
   assertEquals(textOf(source, body.span), `{ name: "a" }`);
 });
 
 Deno.test("an inferred function uses its inferred type", () => {
-  const ir = lowerText(`const inc = (n: int) => n + 1`);
+  const ir = lowerText(`const inc = (n: Int) => n + 1\ntype Int = int`);
   const inc = ir.declarations[0];
   assert(inc.kind === "function");
   assertEquals(inc.contract, "inferred");
@@ -707,7 +725,9 @@ Deno.test("serialization is canonical JSON with a trailing newline", () => {
   const checked = checkProject(diskHost(), "ir", ["example/log.eff"]);
   assert(checked.ok);
   const text = json(lowered(checked.value, "example/log"));
-  assert(text.startsWith('{\n  "declarations": [\n    {\n      "fields": ['));
+  assert(
+    text.startsWith('{\n  "declarations": [\n    {\n      "definition": {'),
+  );
   assert(text.endsWith('  "version": 1\n}\n'));
   assert(text.includes('"imports": []'));
   // Keys are sorted at every level.
@@ -769,7 +789,7 @@ Deno.test("serialization rejects an unsorted or repeated effect set", () => {
 });
 
 Deno.test("serialization rejects a number literal that is not finite", () => {
-  const ir = lowerText(`const one = (): int => 1`);
+  const ir = lowerText(`const one = (): Int => 1\ntype Int = int`);
   const one = ir.declarations[0];
   assert(one.kind === "function" && one.body.kind === "literal");
   for (const value of [Number.NaN, Number.POSITIVE_INFINITY]) {

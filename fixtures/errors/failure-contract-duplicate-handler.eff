@@ -1,9 +1,9 @@
 error Missing = { id: string }
 
-const find = (id: string): string
+const find = (id: Text): Text
   fails Missing => fail(Missing({ id }))
 
-const bad = (id: string): string =>
+const bad = (id: Text): Text =>
   try {
     find(id)
   } catch {
@@ -14,7 +14,7 @@ const bad = (id: string): string =>
 
 error Absent = { id: string }
 
-const twice = (id: string): string =>
+const twice = (id: Text): Text =>
   try {
     find(id)
   } catch {
@@ -24,3 +24,5 @@ const twice = (id: string): string =>
     // error: failure-contract/003
     Absent(second) => "c"
   }
+
+type Text = string

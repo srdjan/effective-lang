@@ -238,11 +238,12 @@ Deno.test("the examples body edit keeps the interface and the modes", () => {
 Deno.test("the body and header edits keep their behavior with the new prologue", () => {
   const project = generateSize("small");
   const original = project.sources.get(project.edit.path) ?? "";
-  assert(original.includes("export const flip = (n: int): int => n + 1"));
+  assert(original.includes("export const flip = (n: Int): Int => n + 1"));
   assert(original.includes("export type Amount = int"));
   assert(original.includes("export const scale = (a: Amount): Amount => a"));
   const body = applyBodyEdit(original, 2);
   replay(allFiles(project), project.edit.path, [body], false, false);
   const header = applyInterfaceEdit(original);
+  assert(header.includes("export const extra: Num = 1"));
   replay(allFiles(project), project.edit.path, [header], true, false);
 });

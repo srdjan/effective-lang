@@ -2,4 +2,6 @@
 // error: unknown-name/002
 import { shown, hidden, absent } from "./lib.eff"
 
-export const main = (): int => shown()
+export const main = (): Int => shown()
+
+type Int = int

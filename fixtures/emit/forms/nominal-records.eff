@@ -17,9 +17,9 @@ type Dog = {
 export const make = (): User =>
   User({ id: UserId("u1"), name: "Ann", active: false })
 
-export const nameOf = (user: User): string => user.name
+export const nameOf = (user: User): Text => user.name
 
-export const nick = (user: User): string =>
+export const nick = (user: User): Text =>
   match user.nickname {
     Some(n) => n,
     None => "none"
@@ -29,3 +29,5 @@ export const activate = (user: User): User =>
   ({ ...user, active: true })
 
 export const plain = (user: User): Dog => unbrand(user)
+
+type Text = string

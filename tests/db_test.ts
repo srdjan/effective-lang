@@ -258,7 +258,9 @@ Deno.test("differential: a sequence of edits equals a run from scratch after eac
   const extra = [
     'import { User } from "./users.eff"',
     "",
-    "export const nameOf = (user: User): string => user.name",
+    "export const nameOf = (user: User): Text => user.name",
+    "",
+    "type Text = string",
     "",
   ].join("\n");
   const added = session.apply({ "extra.eff": extra });
@@ -420,9 +422,10 @@ Deno.test("counts: lowerings and emits count once per module and revision, and n
 
 // ------------------------------------------------------------------ revision delta
 
-const FLIP_PURE = "export const flip = (n: int): int => n + 1\n";
+const FLIP_PURE =
+  "export const flip = (n: Int): Int => n + 1\n\ntype Int = int\n";
 const FLIP_EFFECT =
-  "export const flip = (n: int): int => retry(() => n + 1, { times: 1 })\n";
+  "export const flip = (n: Int): Int => retry(() => n + 1, { times: 1 })\n\ntype Int = int\n";
 
 Deno.test("revisionDelta: no change and a body edit change nothing, an interface edit changes the interface", () => {
   const files = exampleFiles();
@@ -487,7 +490,7 @@ Deno.test("revisionDelta: a module absent from the previous revision, or no prev
     },
   );
   const extra = updated(program, {
-    "extra.eff": "export const one = (): int => 1\n",
+    "extra.eff": "export const one = (): Int => 1\n\ntype Int = int\n",
   });
   assertEquals(revisionDelta(first, extra), {
     interfaceChanged: ["extra"],

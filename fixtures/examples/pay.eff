@@ -1,3 +1,6 @@
+type Cents = int
+type ChargeId = string
+
 type OrderId = Brand<string>
 type Order = {
   id: OrderId,
@@ -14,7 +17,7 @@ service Orders {
 }
 
 service Payments {
-  charge(amount: int): string fails PaymentDeclined
+  charge(amount: Cents): ChargeId fails PaymentDeclined
 }
 
 const findOrder = (id: OrderId): Order

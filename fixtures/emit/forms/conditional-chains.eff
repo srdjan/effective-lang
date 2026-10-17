@@ -2,31 +2,31 @@
 // first does not fit on its own line. The tests check that `deno fmt` leaves
 // the emitted text unchanged. This file is not a golden example. A number in a
 // name is the width in columns that decides between two layouts.
-export const add = (a: int, b: int): int => a + b
+export const add = (a: IntVal, b: IntVal): IntVal => a + b
 
-export const two = (s: string): int => match s {
+export const two = (s: StrVal): IntVal => match s {
   "short" => 1,
   "a very long string literal that pushes the selector test past eighty columns" => 2,
   _ => 4
 }
-export const three = (s: string): int => match s {
+export const three = (s: StrVal): IntVal => match s {
   "short" => 1,
   "mid" => 2,
   "a very long string literal that pushes the selector test past eighty columns" => 3,
   "after" => 5,
   _ => 4
 }
-export const both = (s: string): int => match s {
+export const both = (s: StrVal): IntVal => match s {
   "a very long string literal that pushes the selector test past eighty columns" => 1,
   "another very long string literal that pushes the selector test past eighty" => 2,
   _ => 4
 }
-export const nearly = (s: string): int => match s {
+export const nearly = (s: StrVal): IntVal => match s {
   "short" => 1,
   "a string literal that nearly fits on the first line of the chain" => 2,
   _ => 4
 }
-export const many = (s: string): int => match s {
+export const many = (s: StrVal): IntVal => match s {
   "alpha" => 1,
   "bravo" => 2,
   "charlie" => 3,
@@ -36,59 +36,59 @@ export const many = (s: string): int => match s {
   "a very long string literal that pushes the selector test past eighty columns" => 7,
   _ => 0
 }
-export const wide = (s: string): string => match s {
+export const wide = (s: StrVal): StrVal => match s {
   "short" => "a consequent string that is long enough to matter here",
   "a very long string literal that pushes the selector test past eighty columns" => "b",
   _ => "c"
 }
-export const twice = (s: string): int => match s {
+export const twice = (s: StrVal): IntVal => match s {
   "short" => 1,
   "a very long string literal that pushes the selector test past eighty columns" => 2,
   "mid" => 3,
   "another very long string literal that pushes the selector test past eighty" => 4,
   _ => 0
 }
-export const b52 = (s: string): int => match s {
+export const b52 = (s: StrVal): IntVal => match s {
   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" => 1,
   "a very long string literal that pushes the selector test past eighty columns" => 2,
   _ => 0
 }
-export const b53 = (s: string): int => match s {
+export const b53 = (s: StrVal): IntVal => match s {
   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" => 1,
   "a very long string literal that pushes the selector test past eighty columns" => 2,
   _ => 0
 }
-export const a62 = (s: string): int => match s {
+export const a62 = (s: StrVal): IntVal => match s {
   "short" => 1,
   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" => 2,
   _ => 4
 }
-export const a63 = (s: string): int => match s {
+export const a63 = (s: StrVal): IntVal => match s {
   "short" => 1,
   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" => 2,
   _ => 4
 }
-export const c80 = (s: string): int => match s {
+export const c80 = (s: StrVal): IntVal => match s {
   "alpha" => 1,
   "bravo" => 2,
   "xxxxxxxx" => 3,
   "a very long string literal that pushes the selector test past eighty columns" => 7,
   _ => 0
 }
-export const c81 = (s: string): int => match s {
+export const c81 = (s: StrVal): IntVal => match s {
   "alpha" => 1,
   "bravo" => 2,
   "xxxxxxxxx" => 3,
   "a very long string literal that pushes the selector test past eighty columns" => 7,
   _ => 0
 }
-export const blk = (s: string): int => match s {
+export const blk = (s: StrVal): IntVal => match s {
   "short" => { const y = 1
  y },
   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" => 2,
   _ => 4
 }
-export const inBlock = (s: string): int => {
+export const inBlock = (s: StrVal): IntVal => {
   const n = match s {
     "short" => 1,
     "a very long string literal that pushes the selector test past eighty columns" => 2,
@@ -96,17 +96,17 @@ export const inBlock = (s: string): int => {
   }
   n
 }
-export const inCall = (s: string): int =>
+export const inCall = (s: StrVal): IntVal =>
   add(match s {
     "short" => 1,
     "a very long string literal that pushes the selector test past eighty columns" => 2,
     _ => 4
   }, 1)
-export const d60 = (s: string): int =>
+export const d60 = (s: StrVal): IntVal =>
   add(match s { "short" => 1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" => 2, _ => 4 }, 1)
-export const d61 = (s: string): int =>
+export const d61 = (s: StrVal): IntVal =>
   add(match s { "short" => 1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" => 2, _ => 4 }, 1)
-export const nestedArm = (s: string, t: string): int => match s {
+export const nestedArm = (s: StrVal, t: StrVal): IntVal => match s {
   "outer" => match t {
     "short" => 1,
     "a very long string literal that pushes the selector test past eighty columns" => 2,
@@ -115,21 +115,21 @@ export const nestedArm = (s: string, t: string): int => match s {
   _ => 0
 }
 
-export const ifLater = (s: string): int =>
+export const ifLater = (s: StrVal): IntVal =>
   if (s === "short") { 1 } else if (s === "a very long string literal that pushes the selector test past eighty columns") { 2 } else { 4 }
-export const ifLater80 = (s: string): int =>
+export const ifLater80 = (s: StrVal): IntVal =>
   if (s === "short") { 1 } else if (s === "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") { 2 } else { 4 }
-export const ifLater81 = (s: string): int =>
+export const ifLater81 = (s: StrVal): IntVal =>
   if (s === "short") { 1 } else if (s === "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") { 2 } else { 4 }
-export const ifThree = (s: string): int =>
+export const ifThree = (s: StrVal): IntVal =>
   if (s === "short") { 1 } else if (s === "mid") { 2 } else if (s === "a very long string literal that pushes the selector test past eighty columns") { 3 } else { 4 }
-export const ifBlock = (s: string): int => {
+export const ifBlock = (s: StrVal): IntVal => {
   const n = if (s === "short") { 1 } else if (s === "a very long string literal that pushes the selector test past eighty columns") { 2 } else { 4 }
   n
 }
-export const ifRun = (s: string, alphaValueNumberOne: int, betaValueNumberTwo: int): int =>
+export const ifRun = (s: StrVal, alphaValueNumberOne: IntVal, betaValueNumberTwo: IntVal): IntVal =>
   if (s === "short") { 1 } else if (alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > 1000 && alphaValueNumberOne < 1000) { 2 } else { 4 }
-export const ifLess = (s: string, aVeryLongNumberNameNumberOne: number, aVeryLongNumberNameNumberTwoX: number): int =>
+export const ifLess = (s: StrVal, aVeryLongNumberNameNumberOne: NumVal, aVeryLongNumberNameNumberTwoX: NumVal): IntVal =>
   if (s === "short") { 1 } else if (aVeryLongNumberNameNumberOne < aVeryLongNumberNameNumberTwoX + aVeryLongNumberNameNumberOne) { 2 } else { 4 }
 
 export error Short = { why: string }
@@ -137,48 +137,52 @@ export error AnErrorNameWithFortyCharactersInItXxxxx = { id: string }
 export error Third = { n: int }
 export type Failure = Short | AnErrorNameWithFortyCharactersInItXxxxx | Third
 export type Shape = { kind: "sq", side: int } | { kind: "a-very-long-tag-name-that-is-long-enough-to-break-the-line-xxxxxx", r: int } | { kind: "tri", base: int }
-export const errLater = (e: Failure): string => match e {
+export const errLater = (e: Failure): StrVal => match e {
   Short(a) => a.why,
   AnErrorNameWithFortyCharactersInItXxxxx(b) => b.id,
   Third(c) => "t"
 }
-export const errLaterNoBind = (e: Failure): string => match e {
+export const errLaterNoBind = (e: Failure): StrVal => match e {
   Short(a) => "s",
   AnErrorNameWithFortyCharactersInItXxxxx(b) => "l",
   Third(c) => "t"
 }
-export const tagLater = (s: Shape): int => match s {
+export const tagLater = (s: Shape): IntVal => match s {
   { kind: "sq", ...q } => q.side,
   { kind: "a-very-long-tag-name-that-is-long-enough-to-break-the-line-xxxxxx", ...c } => c.r,
   { kind: "tri", ...t } => t.base
 }
-export const tagLaterNoBind = (s: Shape): int => match s {
+export const tagLaterNoBind = (s: Shape): IntVal => match s {
   { kind: "sq" } => 1,
   { kind: "a-very-long-tag-name-that-is-long-enough-to-break-the-line-xxxxxx" } => 2,
   { kind: "tri" } => 3
 }
-export const objArm = (s: string): { a: int } => match s {
+export const objArm = (s: StrVal): { a: IntVal } => match s {
   "short" => ({ a: 1 }),
   "a very long string literal that pushes the selector test past eighty columns" => ({ a: 2 }),
   _ => ({ a: 4 })
 }
-export const ifOrder = (s: string): int =>
+export const ifOrder = (s: StrVal): IntVal =>
   if (s === "short") { 1 } else if (s === "mid") { 5 } else if (s === "x") { 6 } else if (s === "a very long string literal that pushes the selector test past eighty columns") { 2 } else if (s === "k") { 7 } else { 4 }
-export const longElse = (s: string): string => match s {
+export const longElse = (s: StrVal): StrVal => match s {
   "short" => "1",
   "mid" => "2",
   _ => "a very long else string literal that pushes the chain past eighty columns"
 }
-export const ifFirst = (s: string): int =>
+export const ifFirst = (s: StrVal): IntVal =>
   if (s === "a very long string literal that pushes the selector test past eighty columns") { 1 } else if (s === "b") { 2 } else { 4 }
-export const ifLessFirst = (n: int): int =>
+export const ifLessFirst = (n: IntVal): IntVal =>
   if (n < 1234567890 + 1234567890 + 1234567890 + 1234567890 + 1234567890 + 12345) { 1 } else { 4 }
-export const ifAndFirst = (s: string, t: string): int =>
+export const ifAndFirst = (s: StrVal, t: StrVal): IntVal =>
   if (s === "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" && t === "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb") { 1 } else { 4 }
-export const firstSubject: string = "x"
-export const firstAtEq: int = if (firstSubject === "a very long string literal that pushes the selector test past eighty columns") { 1 } else { 4 }
-export const firstInBlock = (s: string): int => {
+export const firstSubject: StrVal = "x"
+export const firstAtEq: IntVal = if (firstSubject === "a very long string literal that pushes the selector test past eighty columns") { 1 } else { 4 }
+export const firstInBlock = (s: StrVal): IntVal => {
   const y = 1;
   if (s === "a very long string literal that pushes the selector test past eighty columns") { y } else { 4 }
 }
-export const ifFirstFits = (s: string): int => if (s === "a very long string literal that pushes the selector test past ei") { 1 } else { 4 }
+export const ifFirstFits = (s: StrVal): IntVal => if (s === "a very long string literal that pushes the selector test past ei") { 1 } else { 4 }
+
+type IntVal = int
+type StrVal = string
+type NumVal = number

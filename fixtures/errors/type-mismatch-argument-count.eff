@@ -1,5 +1,7 @@
-const id = (x: int): int => x
+const id = (x: Int): Int => x
 
-const bad = (): int =>
+const bad = (): Int =>
   // error: type-mismatch/004
   id(1, 2)
+
+type Int = int

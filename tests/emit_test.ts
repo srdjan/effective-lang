@@ -30,9 +30,10 @@ function indexOfOrFail(text: string, needle: string): number {
 
 Deno.test("withResource emits acquireUseRelease with suspended callbacks", () => {
   const output = oneModule(`
-service Files { open(): { read: () => string, close: () => void } }
-export const load = (): string uses Files.open =>
+service Files { open(): { read: () => Text, close: () => void } }
+export const load = (): Text uses Files.open =>
   withResource(() => Files.open(), (file) => file.read(), (file) => file.close())
+type Text = string
 `);
   assertStringIncludes(output, "Effect.acquireUseRelease(");
   assertStringIncludes(output, "Effect.suspend(() =>");
@@ -42,7 +43,7 @@ export const load = (): string uses Files.open =>
 
 Deno.test("bounded traverse passes the concurrency literal to Effect.forEach", () => {
   const output = oneModule(
-    `const f = (): int[] => traverse([1, 2], (n) => n + 1, { concurrency: 2 })`,
+    `const f = (): Int[] => traverse([1, 2], (n) => n + 1, { concurrency: 2 })\ntype Int = int`,
   );
   assertStringIncludes(output, "Effect.forEach([1, 2]");
   assertStringIncludes(output, "concurrency: 2");
@@ -50,12 +51,13 @@ Deno.test("bounded traverse passes the concurrency literal to Effect.forEach", (
 
 Deno.test("stream operations emit the Effect 4 Stream and Sink APIs", () => {
   const output = oneModule(`
-service Source { next(state: int): Option<[int, int]> }
-service Consumer { accept(value: int): void }
+service Source { next(state: Int): Option<[Int, Int]> }
+service Consumer { accept(value: Int): void }
 const source = unfold(0, (state) => Source.next(state))
 const mapped = mapEffect(source, (value) => value + 1)
-const sink = sinkForEach((value: int) => Consumer.accept(value))
+const sink = sinkForEach((value: Int) => Consumer.accept(value))
 export const main = (): void uses Source.next | Consumer.accept => runStream(mapped, sink)
+type Int = int
 `);
   assertStringIncludes(output, "Stream.unfold(");
   assertStringIncludes(output, "Option.getOrUndefined");
@@ -67,18 +69,19 @@ export const main = (): void uses Source.next | Consumer.accept => runStream(map
 Deno.test("defer stores an Effect and run executes it in an effect function", () => {
   const output = oneModule(`
 error Stop = {}
-service Counter { next(): int fails Stop }
-export const make = (): Effect<int, Stop, Counter.next> =>
+service Counter { next(): Int fails Stop }
+export const make = (): Effect<Int, Stop, Counter.next> =>
   defer(() => Counter.next())
-export const twice = (stored: Effect<int, Stop, Counter.next>): int fails Stop uses Counter.next => {
+export const twice = (stored: Effect<Int, Stop, Counter.next>): Int fails Stop uses Counter.next => {
   const first = run(stored)
   const second = run(stored)
   first + second
 }
+type Int = int
 `);
   assertStringIncludes(output, "Effect.suspend(");
   assertStringIncludes(output, "yield* stored");
-  assertStringIncludes(output, "Effect.Effect<number, Stop, Counter>");
+  assertStringIncludes(output, "Effect.Effect<Int, Stop, Counter>");
 });
 
 // ------------------------------------------------------------------ golden
@@ -133,7 +136,7 @@ Deno.test("a record brand emits field reads and updates that keep the brand", ()
   assert(emitted !== undefined, "module nominal-records was not emitted");
   const text = emitted.text;
   assertStringIncludes(text, '.pipe(Schema.brand("nominal-records#User"))');
-  assertStringIncludes(text, "(user: User): string => user.name;");
+  assertStringIncludes(text, "(user: User): Text => user.name;");
   // An optional field read through the brand becomes an Option.
   assertStringIncludes(text, "Option.fromUndefinedOr(user.nickname)");
   // The update is a plain spread; it keeps the brand in the TypeScript type.
@@ -154,7 +157,7 @@ Deno.test("an optional field read through a union, a brand, or an error becomes 
   );
   assertStringIncludes(text, "Option.fromUndefinedOr(e.detail)");
   // A field that is required in every member stays a plain read.
-  assertStringIncludes(text, "(x: A | B): string => x.kind;");
+  assertStringIncludes(text, "(x: A | B): Text => x.kind;");
 });
 
 // ------------------------------------------------------------------ names
@@ -168,13 +171,13 @@ Deno.test("a module that declares generated names still emits valid names", () =
   // The helper takes the next free name and leaves the source names alone.
   assertStringIncludes(
     text,
-    "const f = ($t0: number, $int: number): number =>",
+    "const f = ($t0: Int, $int: Int): Int =>",
   );
   assertStringIncludes(text, "$int$1($t0 + $int)");
   assertStringIncludes(text, "const $int$1 = (value: number): number =>");
   // The `Option` import gets an alias, and the parameter keeps its name.
   assertStringIncludes(text, "Option as Option$1");
-  assertStringIncludes(text, "(Option: Option$1.Option<number>)");
+  assertStringIncludes(text, "(Option: Option$1.Option<Int>)");
   assertStringIncludes(text, "Option$1.match(Option, {");
   // The selector temporary skips the taken name.
   assertStringIncludes(text, '(($t1) => $t1 === "a" ? 1 : 2)($t0)');
@@ -182,7 +185,7 @@ Deno.test("a module that declares generated names still emits valid names", () =
   assertStringIncludes(text, "Schema as Schema$1");
   assertStringIncludes(text, "const Schema = Schema$1.Struct(");
   assertStringIncludes(text, "Effect as Effect$1");
-  assertStringIncludes(text, "Effect$1.Effect<number, never, Env>");
+  assertStringIncludes(text, "Effect$1.Effect<Int, never, Env>");
   // The service parameter skips the taken name `$s`.
   assertStringIncludes(text, "Env.use(($s$1) => $s$1.get($s))");
 });
@@ -195,7 +198,8 @@ export type Outer = { inner: Inner }
 error Boom = { reason: Reason }
 type Reason = "a" | "b"
 type Inner = { n: int }
-export const make = (n: int): Outer => ({ inner: { n } })
+export const make = (n: Int): Outer => ({ inner: { n } })
+type Int = int
 `);
   assert(
     indexOfOrFail(text, "const Inner =") < indexOfOrFail(text, "const Outer ="),
@@ -207,9 +211,10 @@ export const make = (n: int): Outer => ({ inner: { n } })
 
 Deno.test("a constant that calls a later function is emitted after the function and its inputs", () => {
   const text = oneModule(`
-export const answer: int = twice(base)
-const twice = (x: int): int => x * 2
-const base: int = 21
+export const answer: Int = twice(base)
+const twice = (x: Int): Int => x * 2
+const base: Int = 21
+type Int = int
 `);
   const twice = indexOfOrFail(text, "const twice =");
   const base = indexOfOrFail(text, "const base:");
@@ -222,7 +227,7 @@ Deno.test("a module with an initialization cycle has no IR to emit", () => {
   const checked = checkProject(
     memoryHost({
       "effective.json": "{}",
-      "m.eff": "const a: int = b\nconst b: int = a\n",
+      "m.eff": "const a: Int = b\nconst b: Int = a\ntype Int = int\n",
     }),
     "",
     ["m.eff"],
@@ -253,8 +258,10 @@ Deno.test("every const in a body carries a type annotation", () => {
 });
 
 Deno.test("a module constant and a host assertion carry a type annotation", () => {
-  const text = oneModule("export const answer: int = 21\n");
-  assertStringIncludes(text, "export const answer: number = 21;");
+  const text = oneModule(
+    "export const answer: Int = 21\ntype Int = int\n",
+  );
+  assertStringIncludes(text, "export const answer: Int = 21;");
   const main = emitExamples().get("main")?.text ?? "";
   assertStringIncludes(
     main,
@@ -279,11 +286,12 @@ Deno.test("imports and host modules are rewritten relative to a nested module", 
     }),
     "host/p.effi":
       'import { S } from "../s.eff"\nexport provider L provides S\n',
-    "s.eff": "export service S { f(): int }\n",
+    "s.eff": "export service S { f(): Int }\ntype Int = int\n",
     "sub/m.eff": [
       'import { S } from "../s.eff"',
       'import { L } from "host:p"',
-      "export const g = (): int => provide(L, () => S.f())",
+      "export const g = (): Int => provide(L, () => S.f())",
+      "type Int = int",
       "",
     ].join("\n"),
   }, ["s.eff", "sub/m.eff"]);
@@ -313,17 +321,17 @@ Deno.test("the forms fixture emits the plan's control forms", () => {
   );
   assertStringIncludes(
     text,
-    "const n: number = yield* Store.use(($s) => $s.count());",
+    "const n: IntVal = yield* Store.use(($s) => $s.count());",
   );
   assertStringIncludes(text, "(yield* lookup(id)).name");
   // A leaf with an effectful child hoists it inside a nested Effect.gen.
   assertStringIncludes(text, "const $t0: number = yield* f(x);");
   assertStringIncludes(text, "return yield* f($t0);");
   // A pure child that comes before an effectful child keeps its place.
-  assertStringIncludes(text, "const $t0: number = add(x, 1);");
+  assertStringIncludes(text, "const $t0: IntVal = add(x, 1);");
   assertStringIncludes(
     text,
-    "const $t1: number = yield* Store.use(($s) => $s.count());",
+    "const $t1: IntVal = yield* Store.use(($s) => $s.count());",
   );
   assertStringIncludes(text, "return yield* pair($t0, $t1);");
   // A pure function fits an effect function slot through a wrapper.
@@ -364,15 +372,15 @@ Deno.test("an arrow chain that is too long moves below the equals sign", () => {
   assert(forms !== undefined);
   assertStringIncludes(
     forms.text,
-    "export const adder =\n  (n: number): (a: number) => Effect.Effect<number> => (x: number) =>\n    Effect.succeed($int(x + n));",
+    "export const adder =\n  (n: IntVal): (a: IntVal) => Effect.Effect<IntVal> => (x: IntVal) =>\n    Effect.succeed($int(x + n));",
   );
   // A short chain stays on one line.
   const short = oneModule(
-    "type F = (x: int) => int\nexport const f = (n: int): F => (x) => x\n",
+    "type F = (x: int) => int\nexport const f = (n: Int): F => (x) => x\ntype Int = int\n",
   );
   assertStringIncludes(
     short,
-    "export const f = (n: number): F => (x: number) => Effect.succeed(x);",
+    "export const f = (n: Int): F => (x: number) => Effect.succeed(x);",
   );
 });
 
@@ -395,12 +403,12 @@ Deno.test("a long binary expression breaks after an operator, and a short one st
   // An arrow body: the lines after the first keep the indentation of the first.
   assertStringIncludes(
     forms.text,
-    "): boolean =>\n  alphaValueNumberOne > betaValueNumberTwo &&\n  betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 &&\n  alphaValueNumberOne < 1000;",
+    "): BoolVal =>\n  alphaValueNumberOne > betaValueNumberTwo &&\n  betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 &&\n  alphaValueNumberOne < 1000;",
   );
   // A conditional test: the lines after the first sit one level deeper than `?`.
   assertStringIncludes(
     forms.text,
-    '): string =>\n  alphaValueNumberOne > betaValueNumberTwo &&\n    betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 &&\n    alphaValueNumberOne < 1000\n    ? "a"\n    : "b";',
+    '): StrVal =>\n  alphaValueNumberOne > betaValueNumberTwo &&\n    betaValueNumberTwo > gammaValueNumberThree && gammaValueNumberThree > 0 &&\n    alphaValueNumberOne < 1000\n    ? "a"\n    : "b";',
   );
   // After `return`, the lines after the first sit one level deeper.
   assertStringIncludes(
@@ -427,22 +435,22 @@ Deno.test("an arrow chain whose first parameter list breaks puts each next head 
   assert(forms !== undefined);
   assertStringIncludes(
     forms.text,
-    "  gammaValueNumberThree: number,\n): WideG =>\n(gammaValueNumberThree: number, delta: number) =>\n  Effect.succeed(alphaValueNumberOne);",
+    "  gammaValueNumberThree: IntVal,\n): WideG =>\n(gammaValueNumberThree: number, delta: number) =>\n  Effect.succeed(alphaValueNumberOne);",
   );
   // A later head that breaks does the same, and the body stays on its line.
   assertStringIncludes(
     forms.text,
-    "export const wideChainLate = (z: number): WideH =>\n(\n  alphaValueNumberOne: number,",
+    "export const wideChainLate = (z: IntVal): WideH =>\n(\n  alphaValueNumberOne: number,",
   );
   // In a call argument the arguments break, and the heads align with the first.
   assertStringIncludes(
     forms.text,
-    "    ) =>\n    (q: number) =>\n      $int(",
+    "    ) =>\n    (q: IntVal) =>\n      $int(",
   );
   // A chain that fits below the equals sign keeps its heads on one line.
   assertStringIncludes(
     forms.text,
-    "export const adder =\n  (n: number): (a: number) => Effect.Effect<number> => (x: number) =>\n    Effect.succeed($int(x + n));",
+    "export const adder =\n  (n: IntVal): (a: IntVal) => Effect.Effect<IntVal> => (x: IntVal) =>\n    Effect.succeed($int(x + n));",
   );
 });
 
@@ -474,8 +482,9 @@ Deno.test("span records lie inside the text and cover each declaration", () => {
 });
 
 Deno.test("a flattened run of binary operations keeps one span record for each operation", () => {
-  const source =
-    'export const f = (a: string, b: string, c: string): string => a + "-" + b + "-" + c\n';
+  const declaration =
+    'export const f = (a: StrVal, b: StrVal, c: StrVal): StrVal => a + "-" + b + "-" + c\n';
+  const source = declaration + "type StrVal = string\n";
   const files = { "effective.json": "{}", "m.eff": source };
   const module = emitFiles(files, ["m.eff"]).get("m");
   assert(module !== undefined);
@@ -491,8 +500,8 @@ Deno.test("a flattened run of binary operations keeps one span record for each o
     ['a + "-" + b + "-"', 'a + "-" + b + "-"'],
     ['a + "-" + b + "-" + c', 'a + "-" + b + "-" + c'],
     [
-      'export const f = (a: string, b: string, c: string): string =>\n  a + "-" + b + "-" + c;',
-      source.trimEnd(),
+      'export const f = (a: StrVal, b: StrVal, c: StrVal): StrVal =>\n  a + "-" + b + "-" + c;',
+      declaration.trimEnd(),
     ],
   ]);
 });
@@ -501,7 +510,7 @@ Deno.test("emitProject reports a module that did not lower", () => {
   const checked = checkProject(
     memoryHost({
       "effective.json": "{}",
-      "m.eff": 'export const x: int = "no"\n',
+      "m.eff": 'export const x: Int = "no"\ntype Int = int\n',
     }),
     "",
     ["m.eff"],
@@ -522,9 +531,9 @@ Deno.test("emitModule returns an error value for a host module that the project 
     }),
     "host/p.effi":
       'import { S } from "../s.eff"\nexport provider L provides S\n',
-    "s.eff": "export service S { f(): int }\n",
+    "s.eff": "export service S { f(): Int }\ntype Int = int\n",
     "m.eff":
-      'import { L } from "host:p"\nexport const g = (): int => provide(L, () => 1)\n',
+      'import { L } from "host:p"\nexport const g = (): Int => provide(L, () => 1)\ntype Int = int\n',
   };
   const checked = checkProject(memoryHost(files), "", ["s.eff", "m.eff"]);
   assert(checked.ok);

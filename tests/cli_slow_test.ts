@@ -181,8 +181,9 @@ Deno.test("build --validate --tsc accepts an effectful retry pipeline", async ()
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
-      "service Jobs { next(): () => int }\n" +
-        "export const run = (): int uses Jobs.next => Jobs.next() |> retry({ times: 1 })\n",
+      "service Jobs { next(): () => Int }\n" +
+        "export const run = (): Int uses Jobs.next => Jobs.next() |> retry({ times: 1 })\n" +
+        "\ntype Int = int\n",
     );
     const checked = await effective(["check", dir]);
     assertEquals(checked.code, 0, checked.stdout);
@@ -201,9 +202,11 @@ Deno.test("build --validate --tsc accepts stored Effect values", async () => {
       `${dir}/main.eff`,
       [
         "error Stop = {}",
-        "service Counter { next(): int fails Stop }",
-        "export const make = (): Effect<int, Stop, Counter.next> => defer(() => Counter.next())",
-        "export const use = (stored: Effect<int, Stop, Counter.next>): int fails Stop uses Counter.next => run(stored)",
+        "service Counter { next(): Int fails Stop }",
+        "export const make = (): Effect<Int, Stop, Counter.next> => defer(() => Counter.next())",
+        "export const use = (stored: Effect<Int, Stop, Counter.next>): Int fails Stop uses Counter.next => run(stored)",
+        "",
+        "type Int = int",
         "",
       ].join("\n"),
     );
@@ -217,16 +220,17 @@ Deno.test("build --validate --tsc accepts array and tuple literals", async () =>
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
-      "service S { read(): int }\n" +
-        'export const pair = (): [int, string] => [1, "a"]\n' +
-        "export const blank = (): int[] => []\n" +
-        "export const loaded = (): int[] uses S.read => [S.read(), 2]\n",
+      "service S { read(): Int }\n" +
+        'export const pair = (): [Int, Text] => [1, "a"]\n' +
+        "export const blank = (): Int[] => []\n" +
+        "export const loaded = (): Int[] uses S.read => [S.read(), 2]\n" +
+        "\ntype Int = int\ntype Text = string\n",
     );
     const built = await effective(["build", dir, "--validate", "--tsc"]);
     assertEquals(built.code, 0, `${built.stdout}\n${built.stderr}`);
     assertEquals(built.stdout, "");
     const emitted = Deno.readTextFileSync(`${dir}/main.ts`);
-    assert(emitted.includes("readonly [number, string]"));
+    assert(emitted.includes("readonly [Int, Text]"));
     assert(emitted.includes('[1, "a"]'));
     assert(emitted.includes("return [yield* S.use(($s) => $s.read()), 2]"));
   });
@@ -250,9 +254,11 @@ Deno.test("build --validate --tsc accepts scoped operation records", async () =>
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
-        "service Files { open(): { read: () => string, close: () => void } }",
-        "export const load = (): string uses Files.open =>",
+        "service Files { open(): { read: () => Text, close: () => void } }",
+        "export const load = (): Text uses Files.open =>",
         "  withResource(() => Files.open(), (file) => file.read(), (file) => file.close())",
+        "",
+        "type Text = string",
         "",
       ].join("\n"),
     );
@@ -271,7 +277,8 @@ Deno.test("build --validate --tsc accepts bounded traversal", async () => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
-      "export const f = (): int[] => traverse([1, 2], (n) => n + 1, { concurrency: 2 })\n",
+      "export const f = (): Int[] => traverse([1, 2], (n) => n + 1, { concurrency: 2 })\n" +
+        "\ntype Int = int\n",
     );
     const built = await effective(["build", dir, "--validate", "--tsc"]);
     assertEquals(built.code, 0, built.stderr);
@@ -285,11 +292,13 @@ Deno.test("build --validate --tsc accepts an incremental stream and sink", async
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
-        "service Source { next(state: int): Option<[int, int]> }",
-        "service Consumer { accept(value: int): void }",
+        "service Source { next(state: Int): Option<[Int, Int]> }",
+        "service Consumer { accept(value: Int): void }",
         "const stream = unfold(0, (state) => Source.next(state))",
-        "const sink = sinkForEach((value: int) => Consumer.accept(value))",
+        "const sink = sinkForEach((value: Int) => Consumer.accept(value))",
         "export const main = (): void uses Source.next | Consumer.accept => runStream(stream, sink)",
+        "",
+        "type Int = int",
         "",
       ].join("\n"),
     );
@@ -356,8 +365,9 @@ Deno.test("build --validate accepts an inline record type 100 levels deep", asyn
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/m.eff`,
-      `export const f = (x: ${record("number")}): int => 1\n` +
-        `export const g = (y: ${record("int")}): int => f(y)\n`,
+      `export const f = (x: ${record("Num")}): Int => 1\n` +
+        `export const g = (y: ${record("Int")}): Int => f(y)\n` +
+        "\ntype Int = int\ntype Num = number\n",
     );
     const run = await effective(["build", dir, "--validate"]);
     assertEquals(run.code, 0, run.stderr);

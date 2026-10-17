@@ -4,4 +4,6 @@ export const answer = 42
 // error: declaration/006
 export const label = "ready"
 
-export const typed: int = 42
+export const typed: Int = 42
+
+type Int = int

@@ -1,3 +1,5 @@
-const bad = (n: int): int =>
+const bad = (n: Int): Int =>
   // error: type-mismatch/008
   n(1)
+
+type Int = int

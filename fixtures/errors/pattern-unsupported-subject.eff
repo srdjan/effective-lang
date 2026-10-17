@@ -1,5 +1,8 @@
-const label = (items: int[]): string =>
+const label = (items: Int[]): Text =>
   // error: pattern/004
   match items {
     _ => "any"
   }
+
+type Int = int
+type Text = string

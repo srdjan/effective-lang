@@ -142,7 +142,7 @@ Deno.test("the walk finds .eff files in subdirectories and skips dot directories
   const bad = errorFixture("syntax-unterminated-string.eff");
   const r = await run(["check", ROOT], {
     [`${ROOT}/effective.json`]: "{}",
-    [`${ROOT}/ok.eff`]: "export const one: int = 1\n",
+    [`${ROOT}/ok.eff`]: "export const one: Int = 1\n\ntype Int = int\n",
     [`${ROOT}/deep/er/bad.eff`]: bad,
     [`${ROOT}/.hidden/bad.eff`]: bad,
     [`${ROOT}/node_modules/pkg/bad.eff`]: bad,
@@ -240,7 +240,7 @@ Deno.test("build writes no host interface file and a second build writes nothing
 Deno.test("build writes nothing for a module with an error and keeps its last good file", async () => {
   const files = {
     [`${ROOT}/effective.json`]: "{}",
-    [`${ROOT}/good.eff`]: "export const one = (): int => 1\n",
+    [`${ROOT}/good.eff`]: "export const one = (): Int => 1\n\ntype Int = int\n",
     [`${ROOT}/bad.eff`]: errorFixture("type-mismatch-argument-count.eff"),
     [`${ROOT}/bad.ts`]: "// the last good file\n",
     [`${ROOT}/bad.ts.map`]: "last good map\n",
@@ -283,11 +283,13 @@ Deno.test("build --validate accepts a retry pipeline with an effectful left valu
   const files = {
     [`${ROOT}/effective.json`]: "{}",
     [`${ROOT}/m.eff`]: [
-      "service S { mk(): () => int }",
-      "export const f = (): int uses S.mk => S.mk() |> retry({ times: 2 })",
+      "service S { mk(): () => Int }",
+      "export const f = (): Int uses S.mk => S.mk() |> retry({ times: 2 })",
+      "",
+      "type Int = int",
       "",
     ].join("\n"),
-    [`${ROOT}/ok.eff`]: "export const one = (): int => 1\n",
+    [`${ROOT}/ok.eff`]: "export const one = (): Int => 1\n\ntype Int = int\n",
   };
   const without = await run(["build", ROOT], files);
   assertEquals(without.code, 0, without.stderr);

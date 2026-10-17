@@ -1,8 +1,10 @@
-const outer = (): int => 1
+const outer = (): Int => 1
 
-const f = (): int => {
+const f = (): Int => {
   outer()
   // error: declaration/004
   const outer = 2
   outer
 }
+
+type Int = int

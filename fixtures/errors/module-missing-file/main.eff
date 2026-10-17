@@ -3,4 +3,6 @@ import { a } from "./nothere.eff"
 // error: module/002
 import { b } from "host:nothing"
 
-export const main = (): int => 1
+export const main = (): Int => 1
+
+type Int = int

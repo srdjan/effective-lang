@@ -15,6 +15,40 @@
       "definition": {
         "kind": "alias",
         "type": {
+          "kind": "primitive",
+          "name": "string"
+        }
+      },
+      "id": "type:users#UserId",
+      "kind": "type",
+      "name": "UserId",
+      "span": {
+        "end": 27,
+        "source": "users.eff",
+        "start": 0
+      }
+    },
+    {
+      "definition": {
+        "kind": "alias",
+        "type": {
+          "kind": "primitive",
+          "name": "string"
+        }
+      },
+      "id": "type:users#Name",
+      "kind": "type",
+      "name": "Name",
+      "span": {
+        "end": 53,
+        "source": "users.eff",
+        "start": 28
+      }
+    },
+    {
+      "definition": {
+        "kind": "alias",
+        "type": {
           "fields": [
             {
               "name": "id",
@@ -48,9 +82,9 @@
       "kind": "type",
       "name": "User",
       "span": {
-        "end": 70,
+        "end": 125,
         "source": "users.eff",
-        "start": 0
+        "start": 55
       }
     },
     {
@@ -68,9 +102,9 @@
       "kind": "error",
       "name": "UserMissing",
       "span": {
-        "end": 113,
+        "end": 168,
         "source": "users.eff",
-        "start": 72
+        "start": 127
       }
     },
     {
@@ -88,9 +122,9 @@
       "kind": "error",
       "name": "StoreUnavailable",
       "span": {
-        "end": 165,
+        "end": 220,
         "source": "users.eff",
-        "start": 114
+        "start": 169
       }
     },
     {
@@ -101,9 +135,9 @@
           "id": "cap:users#Users.find",
           "name": "find",
           "span": {
-            "end": 245,
+            "end": 300,
             "source": "users.eff",
-            "start": 192
+            "start": 247
           },
           "type": {
             "effects": {
@@ -116,8 +150,8 @@
             "kind": "function",
             "parameters": [
               {
-                "kind": "primitive",
-                "name": "string"
+                "id": "type:users#UserId",
+                "kind": "named"
               }
             ],
             "result": {
@@ -133,9 +167,9 @@
           "id": "cap:users#Users.save",
           "name": "save",
           "span": {
-            "end": 293,
+            "end": 348,
             "source": "users.eff",
-            "start": 248
+            "start": 303
           },
           "type": {
             "effects": {
@@ -162,9 +196,9 @@
           "id": "cap:users#Users.all",
           "name": "all",
           "span": {
-            "end": 332,
+            "end": 387,
             "source": "users.eff",
-            "start": 296
+            "start": 351
           },
           "type": {
             "effects": {
@@ -188,9 +222,9 @@
       ],
       "name": "Users",
       "span": {
-        "end": 334,
+        "end": 389,
         "source": "users.eff",
-        "start": 167
+        "start": 222
       }
     },
     {
@@ -205,9 +239,9 @@
               "execution": "pure",
               "kind": "reference",
               "span": {
-                "end": 485,
+                "end": 540,
                 "source": "users.eff",
-                "start": 481
+                "start": 536
               },
               "target": "local:users#getUser/user",
               "type": {
@@ -220,9 +254,9 @@
                 "id": "local:users#getUser/user",
                 "name": "user",
                 "span": {
-                  "end": 476,
+                  "end": 531,
                   "source": "users.eff",
-                  "start": 472
+                  "start": 527
                 },
                 "type": {
                   "id": "type:users#User",
@@ -231,9 +265,9 @@
               },
               "kind": "some",
               "span": {
-                "end": 477,
+                "end": 532,
                 "source": "users.eff",
-                "start": 467
+                "start": 522
               }
             }
           },
@@ -263,23 +297,23 @@
                       "execution": "pure",
                       "kind": "reference",
                       "span": {
-                        "end": 520,
+                        "end": 575,
                         "source": "users.eff",
-                        "start": 518
+                        "start": 573
                       },
                       "target": "local:users#getUser/id",
                       "type": {
-                        "kind": "primitive",
-                        "name": "string"
+                        "id": "type:users#UserId",
+                        "kind": "named"
                       }
                     }
                   }
                 ],
                 "kind": "error",
                 "span": {
-                  "end": 523,
+                  "end": 578,
                   "source": "users.eff",
-                  "start": 504
+                  "start": 559
                 },
                 "type": {
                   "id": "error:users#UserMissing",
@@ -289,9 +323,9 @@
               "execution": "effect",
               "kind": "fail",
               "span": {
-                "end": 524,
+                "end": 579,
                 "source": "users.eff",
-                "start": 499
+                "start": 554
               },
               "type": {
                 "kind": "primitive",
@@ -301,9 +335,9 @@
             "pattern": {
               "kind": "none",
               "span": {
-                "end": 495,
+                "end": 550,
                 "source": "users.eff",
-                "start": 491
+                "start": 546
               }
             }
           }
@@ -320,9 +354,9 @@
         "execution": "effect",
         "kind": "match",
         "span": {
-          "end": 528,
+          "end": 583,
           "source": "users.eff",
-          "start": 440
+          "start": 495
         },
         "subject": {
           "arguments": [
@@ -334,14 +368,14 @@
               "execution": "pure",
               "kind": "reference",
               "span": {
-                "end": 459,
+                "end": 514,
                 "source": "users.eff",
-                "start": 457
+                "start": 512
               },
               "target": "local:users#getUser/id",
               "type": {
-                "kind": "primitive",
-                "name": "string"
+                "id": "type:users#UserId",
+                "kind": "named"
               }
             }
           ],
@@ -357,9 +391,9 @@
           "execution": "effect",
           "kind": "perform",
           "span": {
-            "end": 460,
+            "end": 515,
             "source": "users.eff",
-            "start": 446
+            "start": 501
           },
           "type": {
             "element": {
@@ -383,20 +417,20 @@
           "id": "local:users#getUser/id",
           "name": "id",
           "span": {
-            "end": 370,
+            "end": 425,
             "source": "users.eff",
-            "start": 360
+            "start": 415
           },
           "type": {
-            "kind": "primitive",
-            "name": "string"
+            "id": "type:users#UserId",
+            "kind": "named"
           }
         }
       ],
       "span": {
-        "end": 528,
+        "end": 583,
         "source": "users.eff",
-        "start": 336
+        "start": 391
       },
       "type": {
         "effects": {
@@ -412,8 +446,8 @@
         "kind": "function",
         "parameters": [
           {
-            "kind": "primitive",
-            "name": "string"
+            "id": "type:users#UserId",
+            "kind": "named"
           }
         ],
         "result": {
@@ -444,9 +478,9 @@
           "execution": "pure",
           "kind": "reference",
           "span": {
-            "end": 760,
+            "end": 813,
             "source": "users.eff",
-            "start": 753
+            "start": 806
           },
           "target": "local:users#rename/renamed",
           "type": {
@@ -455,9 +489,9 @@
           }
         },
         "span": {
-          "end": 762,
+          "end": 815,
           "source": "users.eff",
-          "start": 658
+          "start": 711
         },
         "steps": [
           {
@@ -465,9 +499,9 @@
               "id": "local:users#rename/user",
               "name": "user",
               "span": {
-                "end": 672,
+                "end": 725,
                 "source": "users.eff",
-                "start": 668
+                "start": 721
               },
               "type": {
                 "id": "type:users#User",
@@ -485,14 +519,14 @@
                   "execution": "pure",
                   "kind": "reference",
                   "span": {
-                    "end": 685,
+                    "end": 738,
                     "source": "users.eff",
-                    "start": 683
+                    "start": 736
                   },
                   "target": "local:users#rename/id",
                   "type": {
-                    "kind": "primitive",
-                    "name": "string"
+                    "id": "type:users#UserId",
+                    "kind": "named"
                   }
                 }
               ],
@@ -504,9 +538,9 @@
                 "execution": "pure",
                 "kind": "reference",
                 "span": {
-                  "end": 682,
+                  "end": 735,
                   "source": "users.eff",
-                  "start": 675
+                  "start": 728
                 },
                 "target": "value:users#getUser",
                 "type": {
@@ -523,8 +557,8 @@
                   "kind": "function",
                   "parameters": [
                     {
-                      "kind": "primitive",
-                      "name": "string"
+                      "id": "type:users#UserId",
+                      "kind": "named"
                     }
                   ],
                   "result": {
@@ -545,9 +579,9 @@
               "execution": "effect",
               "kind": "call",
               "span": {
-                "end": 686,
+                "end": 739,
                 "source": "users.eff",
-                "start": 675
+                "start": 728
               },
               "type": {
                 "id": "type:users#User",
@@ -560,9 +594,9 @@
               "id": "local:users#rename/renamed",
               "name": "renamed",
               "span": {
-                "end": 708,
+                "end": 761,
                 "source": "users.eff",
-                "start": 695
+                "start": 748
               },
               "type": {
                 "id": "type:users#User",
@@ -587,14 +621,14 @@
                     "execution": "pure",
                     "kind": "reference",
                     "span": {
-                      "end": 726,
+                      "end": 779,
                       "source": "users.eff",
-                      "start": 722
+                      "start": 775
                     },
                     "target": "local:users#rename/name",
                     "type": {
-                      "kind": "primitive",
-                      "name": "string"
+                      "id": "type:users#Name",
+                      "kind": "named"
                     }
                   }
                 }
@@ -608,9 +642,9 @@
                 "execution": "pure",
                 "kind": "reference",
                 "span": {
-                  "end": 720,
+                  "end": 773,
                   "source": "users.eff",
-                  "start": 716
+                  "start": 769
                 },
                 "target": "local:users#rename/user",
                 "type": {
@@ -619,9 +653,9 @@
                 }
               },
               "span": {
-                "end": 728,
+                "end": 781,
                 "source": "users.eff",
-                "start": 711
+                "start": 764
               },
               "type": {
                 "id": "type:users#User",
@@ -641,9 +675,9 @@
                   "execution": "pure",
                   "kind": "reference",
                   "span": {
-                    "end": 749,
+                    "end": 802,
                     "source": "users.eff",
-                    "start": 742
+                    "start": 795
                   },
                   "target": "local:users#rename/renamed",
                   "type": {
@@ -664,9 +698,9 @@
               "execution": "effect",
               "kind": "perform",
               "span": {
-                "end": 750,
+                "end": 803,
                 "source": "users.eff",
-                "start": 731
+                "start": 784
               },
               "type": {
                 "kind": "primitive",
@@ -689,33 +723,33 @@
           "id": "local:users#rename/id",
           "name": "id",
           "span": {
-            "end": 563,
+            "end": 618,
             "source": "users.eff",
-            "start": 553
+            "start": 608
           },
           "type": {
-            "kind": "primitive",
-            "name": "string"
+            "id": "type:users#UserId",
+            "kind": "named"
           }
         },
         {
           "id": "local:users#rename/name",
           "name": "name",
           "span": {
-            "end": 577,
+            "end": 630,
             "source": "users.eff",
-            "start": 565
+            "start": 620
           },
           "type": {
-            "kind": "primitive",
-            "name": "string"
+            "id": "type:users#Name",
+            "kind": "named"
           }
         }
       ],
       "span": {
-        "end": 762,
+        "end": 815,
         "source": "users.eff",
-        "start": 530
+        "start": 585
       },
       "type": {
         "effects": {
@@ -732,12 +766,12 @@
         "kind": "function",
         "parameters": [
           {
-            "kind": "primitive",
-            "name": "string"
+            "id": "type:users#UserId",
+            "kind": "named"
           },
           {
-            "kind": "primitive",
-            "name": "string"
+            "id": "type:users#Name",
+            "kind": "named"
           }
         ],
         "result": {
@@ -783,14 +817,14 @@
                   "execution": "pure",
                   "kind": "reference",
                   "span": {
-                    "end": 880,
+                    "end": 931,
                     "source": "users.eff",
-                    "start": 878
+                    "start": 929
                   },
                   "target": "local:users#displayName/id",
                   "type": {
-                    "kind": "primitive",
-                    "name": "string"
+                    "id": "type:users#UserId",
+                    "kind": "named"
                   }
                 }
               ],
@@ -802,9 +836,9 @@
                 "execution": "pure",
                 "kind": "reference",
                 "span": {
-                  "end": 877,
+                  "end": 928,
                   "source": "users.eff",
-                  "start": 870
+                  "start": 921
                 },
                 "target": "value:users#getUser",
                 "type": {
@@ -821,8 +855,8 @@
                   "kind": "function",
                   "parameters": [
                     {
-                      "kind": "primitive",
-                      "name": "string"
+                      "id": "type:users#UserId",
+                      "kind": "named"
                     }
                   ],
                   "result": {
@@ -843,9 +877,9 @@
               "execution": "effect",
               "kind": "call",
               "span": {
-                "end": 881,
+                "end": 932,
                 "source": "users.eff",
-                "start": 870
+                "start": 921
               },
               "type": {
                 "id": "type:users#User",
@@ -853,9 +887,9 @@
               }
             },
             "span": {
-              "end": 886,
+              "end": 937,
               "source": "users.eff",
-              "start": 870
+              "start": 921
             },
             "type": {
               "kind": "primitive",
@@ -863,9 +897,9 @@
             }
           },
           "span": {
-            "end": 890,
+            "end": 941,
             "source": "users.eff",
-            "start": 864
+            "start": 915
           },
           "steps": [],
           "type": {
@@ -888,9 +922,9 @@
               "id": "local:users#displayName/error",
               "name": "error",
               "span": {
-                "end": 920,
+                "end": 971,
                 "source": "users.eff",
-                "start": 915
+                "start": 966
               },
               "type": {
                 "id": "error:users#UserMissing",
@@ -905,9 +939,9 @@
               "execution": "pure",
               "kind": "literal",
               "span": {
-                "end": 932,
+                "end": 983,
                 "source": "users.eff",
-                "start": 925
+                "start": 976
               },
               "type": {
                 "kind": "primitive",
@@ -917,9 +951,9 @@
             },
             "error": "error:users#UserMissing",
             "span": {
-              "end": 932,
+              "end": 983,
               "source": "users.eff",
-              "start": 903
+              "start": 954
             }
           },
           {
@@ -944,9 +978,9 @@
               "execution": "pure",
               "kind": "literal",
               "span": {
-                "end": 932,
+                "end": 983,
                 "source": "users.eff",
-                "start": 925
+                "start": 976
               },
               "type": {
                 "kind": "primitive",
@@ -964,13 +998,13 @@
         ],
         "kind": "catch",
         "span": {
-          "end": 936,
+          "end": 987,
           "source": "users.eff",
-          "start": 860
+          "start": 911
         },
         "type": {
-          "kind": "primitive",
-          "name": "string"
+          "id": "type:users#Name",
+          "kind": "named"
         }
       },
       "contract": "explicit",
@@ -982,20 +1016,20 @@
           "id": "local:users#displayName/id",
           "name": "id",
           "span": {
-            "end": 802,
+            "end": 855,
             "source": "users.eff",
-            "start": 792
+            "start": 845
           },
           "type": {
-            "kind": "primitive",
-            "name": "string"
+            "id": "type:users#UserId",
+            "kind": "named"
           }
         }
       ],
       "span": {
-        "end": 936,
+        "end": 987,
         "source": "users.eff",
-        "start": 764
+        "start": 817
       },
       "type": {
         "effects": {
@@ -1010,13 +1044,13 @@
         "kind": "function",
         "parameters": [
           {
-            "kind": "primitive",
-            "name": "string"
+            "id": "type:users#UserId",
+            "kind": "named"
           }
         ],
         "result": {
-          "kind": "primitive",
-          "name": "string"
+          "id": "type:users#Name",
+          "kind": "named"
         }
       }
     },
@@ -1042,9 +1076,9 @@
               "execution": "pure",
               "kind": "reference",
               "span": {
-                "end": 1073,
+                "end": 1122,
                 "source": "users.eff",
-                "start": 1025
+                "start": 1074
               },
               "target": "local:users#activeNames/$p2",
               "type": {
@@ -1072,9 +1106,9 @@
                   "execution": "pure",
                   "kind": "reference",
                   "span": {
-                    "end": 1099,
+                    "end": 1148,
                     "source": "users.eff",
-                    "start": 1095
+                    "start": 1144
                   },
                   "target": "local:users#activeNames/user/2",
                   "type": {
@@ -1083,9 +1117,9 @@
                   }
                 },
                 "span": {
-                  "end": 1104,
+                  "end": 1153,
                   "source": "users.eff",
-                  "start": 1095
+                  "start": 1144
                 },
                 "type": {
                   "kind": "primitive",
@@ -1103,9 +1137,9 @@
                   "id": "local:users#activeNames/user/2",
                   "name": "user",
                   "span": {
-                    "end": 1090,
+                    "end": 1139,
                     "source": "users.eff",
-                    "start": 1086
+                    "start": 1135
                   },
                   "type": {
                     "id": "type:users#User",
@@ -1114,9 +1148,9 @@
                 }
               ],
               "span": {
-                "end": 1104,
+                "end": 1153,
                 "source": "users.eff",
-                "start": 1085
+                "start": 1134
               },
               "type": {
                 "effects": {
@@ -1146,9 +1180,9 @@
             "execution": "pure",
             "kind": "reference",
             "span": {
-              "end": 1084,
+              "end": 1133,
               "source": "users.eff",
-              "start": 1081
+              "start": 1130
             },
             "target": "value:users#$builtin/map/ddf01438b97c",
             "type": {
@@ -1201,9 +1235,9 @@
           "execution": "pure",
           "kind": "call",
           "span": {
-            "end": 1105,
+            "end": 1154,
             "source": "users.eff",
-            "start": 1081
+            "start": 1130
           },
           "type": {
             "element": {
@@ -1214,9 +1248,9 @@
           }
         },
         "span": {
-          "end": 1105,
+          "end": 1154,
           "source": "users.eff",
-          "start": 1025
+          "start": 1074
         },
         "steps": [
           {
@@ -1224,9 +1258,9 @@
               "id": "local:users#activeNames/$p1",
               "name": "$p1",
               "span": {
-                "end": 1036,
+                "end": 1085,
                 "source": "users.eff",
-                "start": 1025
+                "start": 1074
               },
               "type": {
                 "element": {
@@ -1251,9 +1285,9 @@
               "execution": "effect",
               "kind": "perform",
               "span": {
-                "end": 1036,
+                "end": 1085,
                 "source": "users.eff",
-                "start": 1025
+                "start": 1074
               },
               "type": {
                 "element": {
@@ -1269,9 +1303,9 @@
               "id": "local:users#activeNames/$p2",
               "name": "$p2",
               "span": {
-                "end": 1073,
+                "end": 1122,
                 "source": "users.eff",
-                "start": 1025
+                "start": 1074
               },
               "type": {
                 "element": {
@@ -1292,9 +1326,9 @@
                   "execution": "pure",
                   "kind": "reference",
                   "span": {
-                    "end": 1036,
+                    "end": 1085,
                     "source": "users.eff",
-                    "start": 1025
+                    "start": 1074
                   },
                   "target": "local:users#activeNames/$p1",
                   "type": {
@@ -1322,9 +1356,9 @@
                       "execution": "pure",
                       "kind": "reference",
                       "span": {
-                        "end": 1065,
+                        "end": 1114,
                         "source": "users.eff",
-                        "start": 1061
+                        "start": 1110
                       },
                       "target": "local:users#activeNames/user",
                       "type": {
@@ -1333,9 +1367,9 @@
                       }
                     },
                     "span": {
-                      "end": 1072,
+                      "end": 1121,
                       "source": "users.eff",
-                      "start": 1061
+                      "start": 1110
                     },
                     "type": {
                       "kind": "primitive",
@@ -1353,9 +1387,9 @@
                       "id": "local:users#activeNames/user",
                       "name": "user",
                       "span": {
-                        "end": 1056,
+                        "end": 1105,
                         "source": "users.eff",
-                        "start": 1052
+                        "start": 1101
                       },
                       "type": {
                         "id": "type:users#User",
@@ -1364,9 +1398,9 @@
                     }
                   ],
                   "span": {
-                    "end": 1072,
+                    "end": 1121,
                     "source": "users.eff",
-                    "start": 1051
+                    "start": 1100
                   },
                   "type": {
                     "effects": {
@@ -1396,9 +1430,9 @@
                 "execution": "pure",
                 "kind": "reference",
                 "span": {
-                  "end": 1050,
+                  "end": 1099,
                   "source": "users.eff",
-                  "start": 1044
+                  "start": 1093
                 },
                 "target": "value:users#$builtin/filter/226f72cb20f0",
                 "type": {
@@ -1451,9 +1485,9 @@
               "execution": "pure",
               "kind": "call",
               "span": {
-                "end": 1073,
+                "end": 1122,
                 "source": "users.eff",
-                "start": 1044
+                "start": 1093
               },
               "type": {
                 "element": {
@@ -1479,9 +1513,9 @@
       "name": "activeNames",
       "parameters": [],
       "span": {
-        "end": 1105,
+        "end": 1154,
         "source": "users.eff",
-        "start": 938
+        "start": 989
       },
       "type": {
         "effects": {
@@ -1497,8 +1531,8 @@
         "parameters": [],
         "result": {
           "element": {
-            "kind": "primitive",
-            "name": "string"
+            "id": "type:users#Name",
+            "kind": "named"
           },
           "kind": "array"
         }
@@ -1509,7 +1543,9 @@
     "error:users#StoreUnavailable",
     "error:users#UserMissing",
     "service:users#Users",
+    "type:users#Name",
     "type:users#User",
+    "type:users#UserId",
     "value:users#activeNames",
     "value:users#displayName",
     "value:users#getUser",

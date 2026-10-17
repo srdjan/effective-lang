@@ -1,4 +1,4 @@
-const bad = (n: int): never =>
+const bad = (n: Int): never =>
   // error: type-mismatch/010
   fail(n)
 
@@ -15,3 +15,5 @@ const fromSpread = (): never fails Boom =>
     Boom({ ...record, message: "y" })
   )
 const fine = (): never fails Boom => fail(Boom(({ message: "z" })))
+
+type Int = int

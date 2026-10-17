@@ -261,20 +261,22 @@ Deno.test("UsersLive has a provider type that provides every Users method", () =
   // provider reaches (spec: the complete supporting type graph).
   const payload = interfaceOf(project, "host/providers").payload;
   assertEquals(names(payload.services), ["Users"]);
-  assertEquals(names(payload.types), ["User"]);
+  assertEquals(names(payload.types), ["User", "UserId"]);
   assertEquals(names(payload.errors), ["StoreUnavailable"]);
 });
 
 Deno.test("the users interface lists User, UserMissing, StoreUnavailable, and Users", () => {
   const payload = interfaceOf(checkExamples(), "users").payload;
-  assertEquals(names(payload.types), ["User"]);
+  assertEquals(names(payload.types), ["Name", "User", "UserId"]);
   assertEquals(names(payload.errors), ["StoreUnavailable", "UserMissing"]);
   assertEquals(names(payload.services), ["Users"]);
   assertEquals(payload.exports, [
     "error:users#StoreUnavailable",
     "error:users#UserMissing",
     "service:users#Users",
+    "type:users#Name",
     "type:users#User",
+    "type:users#UserId",
     "value:users#activeNames",
     "value:users#displayName",
     "value:users#getUser",
@@ -291,10 +293,11 @@ Deno.test("the users interface lists User, UserMissing, StoreUnavailable, and Us
 Deno.test("a whole service name in uses expands to all its methods", () => {
   const project = checkText(`
 service Store {
-  get(id: string): string
-  put(id: string, value: string): void
+  get(id: Text): Text
+  put(id: Text, value: Text): void
 }
-export const run = (id: string): string uses Store => Store.get(id)
+export const run = (id: Text): Text uses Store => Store.get(id)
+type Text = string
 `);
   const run = signatureOf(project, "m", "value:m#run");
   assertEquals(run.requirements, ["cap:m#Store.get", "cap:m#Store.put"]);
@@ -304,21 +307,24 @@ Deno.test("methods of a service have effect functions with failures and no requi
   const project = checkText(`
 error Broken = { code: int }
 service Store {
-  get(id: string): string fails Broken
+  get(id: Text): Text fails Broken
 }
+type Text = string
 `);
   const service = project.modules.get("m")!.declarations.services[0];
   assertEquals(service.methods[0].type, {
     kind: "function",
     execution: "effect",
-    parameters: [{ kind: "primitive", name: "string" }],
-    result: { kind: "primitive", name: "string" },
+    parameters: [{ kind: "named", id: "type:m#Text" }],
+    result: { kind: "named", id: "type:m#Text" },
     effects: { failures: ["error:m#Broken"], requirements: [] },
   });
 });
 
 Deno.test("a function without a result annotation has an inferred contract", () => {
-  const project = checkText("const twice = (x: int) => x + x\n");
+  const project = checkText(
+    "const twice = (x: Int) => x + x\ntype Int = int\n",
+  );
   const twice = signatureOf(project, "m", "value:m#twice");
   assertEquals(twice.contract, "inferred");
   assertEquals(twice.result, undefined);
@@ -330,7 +336,7 @@ Deno.test("a function without a result annotation has an inferred contract", () 
 
 Deno.test("a binding annotation that is a function type supplies the signature", () => {
   const project = checkText(
-    "export const add: (a: int, b: int) => int = (a, b) => a + b\n",
+    "export const add: (a: Int, b: Int) => Int = (a, b) => a + b\ntype Int = int\n",
     new Map([["value:m#add", "pure"]]),
   );
   assertEquals(project.diagnostics, []);
@@ -343,18 +349,18 @@ Deno.test("a binding annotation that is a function type supplies the signature",
     kind: "function",
     execution: "pure",
     parameters: [
-      { kind: "primitive", name: "int" },
-      { kind: "primitive", name: "int" },
+      { kind: "named", id: "type:m#Int" },
+      { kind: "named", id: "type:m#Int" },
     ],
-    result: { kind: "primitive", name: "int" },
+    result: { kind: "named", id: "type:m#Int" },
     effects: { failures: [], requirements: [] },
   });
 });
 
 Deno.test("an exported constant takes its interface type from the annotation", () => {
-  const project = checkText("export const limit: int = 10\n");
+  const project = checkText("export const limit: Int = 10\ntype Int = int\n");
   const value = interfaceOf(project, "m").payload.values[0];
-  assertEquals(value.type, { kind: "primitive", name: "int" });
+  assertEquals(value.type, { kind: "named", id: "type:m#Int" });
 });
 
 Deno.test("alias types keep their names, and compatibility unfolds them", () => {
@@ -514,8 +520,8 @@ Deno.test("a header edit that adds a failure changes the users interface hash", 
   const after = checkExamples((files) => {
     const text = files["users.eff"];
     const edited = text.replace(
-      "export const displayName = (id: string): string\n  fails StoreUnavailable",
-      "export const displayName = (id: string): string\n  fails StoreUnavailable | UserMissing",
+      "export const displayName = (id: UserId): Name\n  fails StoreUnavailable",
+      "export const displayName = (id: UserId): Name\n  fails StoreUnavailable | UserMissing",
     );
     assertNotEquals(edited, text);
     files["users.eff"] = edited;
@@ -567,15 +573,17 @@ type Wrapper = { inner: Secret }
 type Unrelated = { value: string }
 error Hidden = { reason: string }
 service Vault {
-  open(w: Wrapper): string
+  open(w: Wrapper): Text
 }
-export const run = (w: Wrapper): string
+export const run = (w: Wrapper): Text
   fails Hidden
   uses Vault.open => Vault.open(w)
+type Text = string
 `);
   assertEquals(project.diagnostics, []);
   const payload = interfaceOf(project, "m").payload;
-  assertEquals(names(payload.types), ["Secret", "Wrapper"]);
+  // Text is the alias that R1 needs for the result; the exported run reaches it.
+  assertEquals(names(payload.types), ["Secret", "Text", "Wrapper"]);
   assertEquals(names(payload.errors), ["Hidden"]);
   assertEquals(names(payload.services), ["Vault"]);
   assertEquals(payload.exports, ["value:m#run"]);
@@ -585,12 +593,14 @@ Deno.test("a private type reached only through a private function stays out", ()
   const project = checkText(
     `
 type Secret = { code: int }
-const helper = (s: Secret): int => 1
-export const run = (): int => 1
+const helper = (s: Secret): Int => 1
+export const run = (): Int => 1
+type Int = int
 `,
     new Map([["value:m#run", "pure"], ["value:m#helper", "pure"]]),
   );
-  assertEquals(interfaceOf(project, "m").payload.types, []);
+  // Only Int, the alias that the exported run names, is reached; Secret stays out.
+  assertEquals(names(interfaceOf(project, "m").payload.types), ["Int"]);
 });
 
 Deno.test("a private type reached through a return type appears", () => {
@@ -615,7 +625,8 @@ export type Wrapper = { inner: Hidden }
 `,
     "b.eff": `
 import { Wrapper } from "./a.eff"
-export const show = (wrapper: Wrapper): int => 1
+export const show = (wrapper: Wrapper): Int => 1
+type Int = int
 `,
   });
   const hashOf = (code: string): string => {
@@ -684,13 +695,15 @@ Deno.test("a service from another module expands through its interface", () => {
     "effective.json": "{}",
     "a.eff": `
 export service Store {
-  get(id: string): string
-  put(id: string, value: string): void
+  get(id: Text): Text
+  put(id: Text, value: Text): void
 }
+type Text = string
 `,
     "b.eff": `
 import { Store } from "./a.eff"
-export const copy = (id: string): string uses Store => Store.get(id)
+export const copy = (id: Text): Text uses Store => Store.get(id)
+type Text = string
 `,
   };
   const project = checkDeclarations(analyzeFiles(files, ["b.eff"]));

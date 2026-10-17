@@ -41,6 +41,12 @@ function spanOf(path: string, needle: string): Span {
 const USERS = "users.eff";
 const USERS_TEXT = FILES[USERS];
 
+/** The span of the name `User` in the declaration `export type User = {`. */
+const USER_TYPE_SPAN: Span = (() => {
+  const at = offsetOf(USERS_TEXT, "User = {");
+  return { source: USERS, start: at, end: at + "User".length };
+})();
+
 // ------------------------------------------------------------------ hover: contract
 
 Deno.test("hover on a function name prints parameter types, failures, and requirements", () => {
@@ -48,7 +54,7 @@ Deno.test("hover on a function name prints parameter types, failures, and requir
   assert(hover !== undefined);
   assertEquals(
     hover.contract,
-    "rename(id: string, name: string): User fails StoreUnavailable | UserMissing uses Users.find | Users.save",
+    "rename(id: UserId, name: Name): User fails StoreUnavailable | UserMissing uses Users.find | Users.save",
   );
   assertEquals(hover.span, spanOf(USERS, "rename"));
   const pure = hoverAt(
@@ -57,17 +63,17 @@ Deno.test("hover on a function name prints parameter types, failures, and requir
     offsetOf(FILES["collections.eff"], "total", 1),
   );
   assert(pure !== undefined);
-  assertEquals(pure.contract, "total(amounts: int[]): int");
+  assertEquals(pure.contract, "total(amounts: Amount[]): Amount");
 });
 
 Deno.test("hover on a constant name prints name: type", () => {
-  const text = "export const limit: int = 3\n";
+  const text = "export const limit: Int = 3\n\ntype Int = int\n";
   const revision = loadModule(text);
   const hover = hoverAt(revision, "m.eff", offsetOf(text, "limit", 1));
   assert(hover !== undefined);
-  assertEquals(hover.contract, "limit: int");
+  assertEquals(hover.contract, "limit: Int");
   assertEquals(hover.span, { source: "m.eff", start: 13, end: 18 });
-  assertEquals(hover.backend, { tag: "type", text: "number" });
+  assertEquals(hover.backend, { tag: "type", text: "Int" });
 });
 
 Deno.test("hover on an expression prints what typeAt prints, and has no backend", () => {
@@ -76,20 +82,20 @@ Deno.test("hover on an expression prints what typeAt prints, and has no backend"
   assert(callee !== undefined);
   assertEquals(
     callee.contract,
-    "(string) => User fails StoreUnavailable | UserMissing uses Users.find",
+    "(UserId) => User fails StoreUnavailable | UserMissing uses Users.find",
   );
   assertEquals(callee.contract, typeAt(examples.checked, USERS, call + 2));
   assertEquals(callee.backend, undefined);
   assertEquals(callee.span, { source: USERS, start: call, end: call + 7 });
   const argument = hoverAt(examples, USERS, call + 9);
   assert(argument !== undefined);
-  assertEquals(argument.contract, "string");
+  assertEquals(argument.contract, "UserId");
   assertEquals(hoverAt(examples, USERS, 0), undefined);
   assertEquals(hoverAt(examples, "nowhere.eff", 0), undefined);
 });
 
 Deno.test("hover prints unknown (error) where the checker prints <error>", () => {
-  const text = "export const g = (): int => nope\n";
+  const text = "export const g = (): Int => nope\n\ntype Int = int\n";
   const revision = loadModule(text);
   assert(revision.diagnostics.length > 0);
   const hover = hoverAt(revision, "m.eff", offsetOf(text, "nope", 1));
@@ -156,7 +162,7 @@ Deno.test("the backend header of rename has the parameter names and the Effect t
   assertEquals(hover?.backend, {
     tag: "type",
     text:
-      "(id: string, name: string): Effect.Effect<User, StoreUnavailable | UserMissing, Users>",
+      "(id: UserId, name: Name): Effect.Effect<User, StoreUnavailable | UserMissing, Users>",
   });
 });
 
@@ -168,24 +174,24 @@ Deno.test("the backend type of a pure function is its plain result type", () => 
   );
   assertEquals(hover?.backend, {
     tag: "type",
-    text: "(amounts: ReadonlyArray<number>): number",
+    text: "(amounts: ReadonlyArray<Amount>): Amount",
   });
 });
 
 Deno.test("an inferred contract prints its backend header from the lowered type", () => {
-  const text = "const bump = (n: int) => n + 1\n";
+  const text = "const bump = (n: Int) => n + 1\n\ntype Int = int\n";
   const revision = loadModule(text);
   assertEquals(revision.diagnostics, []);
   const hover = hoverAt(revision, "m.eff", offsetOf(text, "bump", 1));
-  assertEquals(hover?.contract, "bump(n: int): int");
+  assertEquals(hover?.contract, "bump(n: Int): int");
   assertEquals(hover?.backend, {
     tag: "type",
-    text: "(n: number): number",
+    text: "(n: Int): number",
   });
 });
 
 Deno.test("the backend type is unavailable when the module has an error", () => {
-  const text = "export const g = (): int => nope\n";
+  const text = "export const g = (): Int => nope\n\ntype Int = int\n";
   const revision = loadModule(text);
   const hover = hoverAt(revision, "m.eff", offsetOf(text, "g ="));
   assert(hover !== undefined);
@@ -208,7 +214,7 @@ Deno.test("definition of a parameter goes to the parameter name", () => {
   const found = definitionAt(examples, USERS, at);
   assertEquals(found?.source, USERS);
   const start = found?.start ?? -1;
-  assertEquals(USERS_TEXT.slice(start, start + 7), "id: str");
+  assertEquals(USERS_TEXT.slice(start, start + 7), "id: Use");
   assertEquals(found?.end, start + 2);
 });
 
@@ -235,10 +241,10 @@ Deno.test("definition of an imported value goes to the other module", () => {
 Deno.test("definition of a type goes to the type declaration", () => {
   const at = offsetOf(
     USERS_TEXT,
-    "(id: string): User\n  fails",
-    "(id: string): ".length + 1,
+    "(id: UserId): User\n  fails",
+    "(id: UserId): ".length + 1,
   );
-  assertEquals(definitionAt(examples, USERS, at), spanOf(USERS, "User"));
+  assertEquals(definitionAt(examples, USERS, at), USER_TYPE_SPAN);
 });
 
 Deno.test("definition of an error goes to the error declaration", () => {
@@ -264,7 +270,7 @@ Deno.test("definition of a capability goes to the method of the service", () => 
     "match Users.find(id)",
     "match Users.".length + 1,
   );
-  const expected = spanOf(USERS, "find(id: string)");
+  const expected = spanOf(USERS, "find(id: UserId)");
   assertEquals(definitionAt(examples, USERS, at), {
     ...expected,
     end: expected.start + "find".length,
@@ -333,6 +339,8 @@ Deno.test("documentSymbols lists the declarations in source order with their kin
   assertEquals(
     symbols.map((s) => [s.name, s.kind]),
     [
+      ["UserId", "type"],
+      ["Name", "type"],
       ["User", "type"],
       ["UserMissing", "error"],
       ["StoreUnavailable", "error"],
@@ -348,8 +356,9 @@ Deno.test("documentSymbols lists the declarations in source order with their kin
     service?.children.map((c) => [c.name, c.kind]),
     [["find", "method"], ["save", "method"], ["all", "method"]],
   );
-  assertEquals(symbols[0].nameSpan, spanOf(USERS, "User"));
-  assert(symbols[0].span.end > symbols[0].nameSpan.end);
+  const user = symbols.find((s) => s.name === "User");
+  assertEquals(user?.nameSpan, USER_TYPE_SPAN);
+  assert((user?.span.end ?? 0) > USER_TYPE_SPAN.end);
   assertEquals(
     symbols.every((s) => s.kind === "service" || s.children.length === 0),
     true,
@@ -358,11 +367,12 @@ Deno.test("documentSymbols lists the declarations in source order with their kin
 
 Deno.test("documentSymbols marks a non-arrow const as a constant and a provider as a provider", () => {
   const text =
-    "export const limit: int = 3\nexport const f = (): int => limit\n";
+    "export const limit: Int = 3\nexport const f = (): Int => limit\n\ntype Int = int\n";
   const symbols = documentSymbols(loadModule(text), "m.eff", text);
   assertEquals(symbols.map((s) => [s.name, s.kind]), [
     ["limit", "constant"],
     ["f", "function"],
+    ["Int", "type"],
   ]);
   const host = FILES["host/providers.effi"];
   assertEquals(
@@ -374,12 +384,14 @@ Deno.test("documentSymbols marks a non-arrow const as a constant and a provider 
 });
 
 Deno.test("documentSymbols keeps a declaration with a syntax error when its name parsed", () => {
-  const text = "export const ok = (): int => 1\nexport const broken = (\n";
+  const text =
+    "export const ok = (): Int => 1\ntype Int = int\nexport const broken = (\n";
   const revision = loadModule(text);
   assert(revision.diagnostics.some((d) => d.code.startsWith("syntax/")));
   const symbols = documentSymbols(revision, "m.eff", text);
   assertEquals(symbols.map((s) => [s.name, s.kind]), [
     ["ok", "function"],
+    ["Int", "type"],
     // The arrow did not parse, so the index sees a plain const.
     ["broken", "constant"],
   ]);
@@ -393,7 +405,8 @@ Deno.test("documentSymbols parses the text of a file that the revision lacks or 
     ["UsersLive"],
   );
   // The revision holds the file with other text: the open text wins.
-  const newer = USERS_TEXT + "\nexport const extra = (): int => 1\n";
+  const newer = USERS_TEXT +
+    "\ntype Int = int\nexport const extra = (): Int => 1\n";
   const symbols = documentSymbols(examples, USERS, newer);
   assertEquals(symbols[symbols.length - 1].name, "extra");
   // A file that the revision lacks.

@@ -1,9 +1,11 @@
+type Message = string
+
 error ConsoleUnavailable = { message: string }
 
 service Console {
-  print(message: string): void fails ConsoleUnavailable
+  print(message: Message): void fails ConsoleUnavailable
 }
 
-export const log = (message: string): void
+export const log = (message: Message): void
   fails ConsoleUnavailable
   uses Console.print => Console.print(message)

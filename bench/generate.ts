@@ -74,6 +74,20 @@ export function makeRandom(seed: number): () => number {
 
 // ------------------------------------------------------------------ fixed text
 
+/**
+ * The alias declarations that rule R1 requires. Each generated module declares
+ * them, because a primitive type can occur only inside a type declaration. The
+ * aliases are transparent: `Int` is `int`, `Num` is `number`, `Text` is
+ * `string`.
+ */
+const ALIAS_LINES: readonly string[] = [
+  `type Int = int`,
+  `type Num = number`,
+  `type Text = string`,
+];
+
+const ALIASES = ALIAS_LINES.join("\n");
+
 const BASE = `export type Id = Brand<string>
 export type Status = "open" | "done"
 export type Item = {
@@ -96,8 +110,10 @@ export service Store {
 }
 
 export service Gate {
-  charge(amount: int): string fails Declined
+  charge(amount: Int): Text fails Declined
 }
+
+${ALIASES}
 `;
 
 const CONFIG = `{
@@ -161,13 +177,13 @@ function pick(rng: () => number, low: number, high: number): number {
 const TEMPLATES: readonly Template[] = [
   // A record spread with arithmetic, explicit contract.
   ({ n, rng }) => [
-    `export const rec${n} = (item: Item, by: int): Item =>
+    `export const rec${n} = (item: Item, by: Int): Item =>
   ({ ...item, qty: item.qty + by + ${pick(rng, 1, 99)} })`,
   ],
   // An inferred pure helper and an exported user of it.
   ({ n, rng }) => [
-    `const calc${n} = (x: int, y: int) => x * ${pick(rng, 2, 9)} + y`,
-    `export const use${n} = (x: int): int => calc${n}(x, ${pick(rng, 1, 50)})`,
+    `const calc${n} = (x: Int, y: Int) => x * ${pick(rng, 2, 9)} + y`,
+    `export const use${n} = (x: Int): Int => calc${n}(x, ${pick(rng, 1, 50)})`,
   ],
   // An inferred effectful helper and an exported user with an explicit contract.
   ({ n }) => [
@@ -189,7 +205,7 @@ const TEMPLATES: readonly Template[] = [
   ],
   // A match on a literal union.
   ({ n, rng }) => [
-    `export const label${n} = (s: Status, n: int): string =>
+    `export const label${n} = (s: Status, n: Int): Text =>
   match s {
     "open" => "open${pick(rng, 1, 99)}",
     "done" => "done"
@@ -197,7 +213,7 @@ const TEMPLATES: readonly Template[] = [
   ],
   // A match on a tagged record union.
   ({ n }) => [
-    `export const extent${n} = (s: Shape): number =>
+    `export const extent${n} = (s: Shape): Num =>
   match s {
     { kind: "circle", ...c } => c.radius,
     { kind: "square", ...q } => q.side
@@ -205,7 +221,7 @@ const TEMPLATES: readonly Template[] = [
   ],
   // try and catch around an effectful call.
   ({ n, names }) => [
-    `export const safe${n} = (id: Id): string
+    `export const safe${n} = (id: Id): Text
   uses Store.find =>
   try {
     ${names.get}(id).name
@@ -224,19 +240,19 @@ const TEMPLATES: readonly Template[] = [
   ],
   // A pure pipeline with filter and map.
   ({ n, rng }) => [
-    `export const names${n} = (items: Item[]): string[] =>
+    `export const names${n} = (items: Item[]): Text[] =>
   items
     |> filter((it) => it.qty > ${pick(rng, 1, 99)})
     |> map((it) => it.name)`,
   ],
   // A pure pipeline with fold.
   ({ n, rng }) => [
-    `export const sum${n} = (items: Item[]): int =>
+    `export const sum${n} = (items: Item[]): Int =>
   items |> fold(${pick(rng, 0, 9)}, (acc, it) => acc + it.qty)`,
   ],
   // An effectful pipeline from a service call.
   ({ n, rng }) => [
-    `export const list${n} = (): string[]
+    `export const list${n} = (): Text[]
   uses Store.list =>
   Store.list()
     |> filter((it) => it.qty > ${pick(rng, 1, 99)})
@@ -253,7 +269,7 @@ const TEMPLATES: readonly Template[] = [
   ],
   // A block with bindings and a service call that returns void.
   ({ n, names }) => [
-    `export const upd${n} = (id: Id, name: string): Item
+    `export const upd${n} = (id: Id, name: Text): Item
   fails NotFound
   uses Store.find | Store.save => {
   const item = ${names.get}(id)
@@ -264,7 +280,7 @@ const TEMPLATES: readonly Template[] = [
   ],
   // provide with a provider from the host module.
   ({ n, names }) => [
-    `export const run${n} = (raw: string): string
+    `export const run${n} = (raw: Text): Text
   fails NotFound =>
   provide(StoreLive, () => ${names.get}(Id(raw)).name)`,
   ],
@@ -278,12 +294,12 @@ const TEMPLATES: readonly Template[] = [
   })`,
   ],
   // A constant with an annotation.
-  ({ n, rng }) => [`export const limit${n}: int = ${pick(rng, 1, 9999)}`],
+  ({ n, rng }) => [`export const limit${n}: Int = ${pick(rng, 1, 9999)}`],
   // A conditional and a brand removal.
   ({ n, rng }) => [
-    `export const tier${n} = (n: int): string =>
+    `export const tier${n} = (n: Int): Text =>
   if (n > ${pick(rng, 1, 99)}) { "high" } else { "low" }`,
-    `export const raw${n} = (id: Id): string => unbrand(id)`,
+    `export const raw${n} = (id: Id): Text => unbrand(id)`,
   ],
   // A record type with an optional field and an option field.
   ({ n }) => [
@@ -302,15 +318,15 @@ const TEMPLATES: readonly Template[] = [
   // A function type alias and a function that returns a closure.
   ({ n, rng }) => [
     `export type Op${n} = (n: int) => int`,
-    `export const adder${n} = (by: int): Op${n} => (x) => x + by + ${
+    `export const adder${n} = (by: Int): Op${n} => (x) => x + by + ${
       pick(rng, 1, 9)
     }`,
   ],
   // A call into the previous module.
   ({ n, names }) =>
     names.link === undefined
-      ? [`export const solo${n}: int = ${n}`]
-      : [`export const via${n} = (x: int): int => ${names.link}(x) + 1`],
+      ? [`export const solo${n}: Int = ${n}`]
+      : [`export const via${n} = (x: Int): Int => ${names.link}(x) + 1`],
 ];
 
 // ------------------------------------------------------------------ the project
@@ -341,7 +357,7 @@ function prologue(
     link: previous,
   };
   const declarations = [
-    `export const link${index} = (n: int): int => n + ${index + 1}`,
+    `export const link${index} = (n: Int): Int => n + ${index + 1}`,
     `export const ${names.get} = (id: Id): Item
   fails NotFound
   uses Store.find =>
@@ -354,9 +370,9 @@ function prologue(
   ];
   if (isEditModule) {
     declarations.push(
-      `export const bump = (n: int): int => n + 1`,
-      `export const extra: int = 1`,
-      `export const flip = (n: int): int => n + 1`,
+      `export const bump = (n: Int): Int => n + 1`,
+      `export const extra: Int = 1`,
+      `export const flip = (n: Int): Int => n + 1`,
       `export type Amount = int`,
       `export const scale = (a: Amount): Amount => a`,
     );
@@ -413,7 +429,7 @@ export function generateProject(options: GenerateOptions): GeneratedProject {
     featureModules.push(name);
     sources.set(
       `${name}.eff`,
-      `${importsOf(index)}\n\n${declarations.join("\n\n")}\n`,
+      `${importsOf(index)}\n\n${ALIASES}\n\n${declarations.join("\n\n")}\n`,
     );
   }
 
@@ -425,11 +441,13 @@ export function generateProject(options: GenerateOptions): GeneratedProject {
 import { StoreLive } from "host:providers"
 import { get${last}, link${moduleCount - 1} } from "./${last}.eff"
 
-export const main = (raw: string): string
+${ALIASES}
+
+export const main = (raw: Text): Text
   fails NotFound =>
   provide(StoreLive, () => get${last}(Id(raw)).name)
 
-export const total = (n: int): int => link${moduleCount - 1}(n)
+export const total = (n: Int): Int => link${moduleCount - 1}(n)
 `,
   );
   sources.set("effective.json", CONFIG);
@@ -458,13 +476,15 @@ export function generateSize(size: SizeName, seed = 1): GeneratedProject {
 /**
  * The count of top-level declarations in the feature modules, from the text.
  * A declaration starts at the beginning of a line with `export`, `const`,
- * `type`, `error`, `service`, or `provider`.
+ * `type`, `error`, `service`, or `provider`. The alias lines that each module
+ * holds for rule R1 are not feature declarations, so the count skips them.
  */
 export function countDeclarations(project: GeneratedProject): number {
   let count = 0;
   for (const name of project.featureModules) {
     const text = project.sources.get(`${name}.eff`) ?? "";
     for (const line of text.split("\n")) {
+      if (ALIAS_LINES.includes(line)) continue;
       if (/^(export |const |type |error |service |provider )/.test(line)) {
         count++;
       }
@@ -481,20 +501,21 @@ export function countDeclarations(project: GeneratedProject): number {
  */
 export function applyBodyEdit(text: string, revision: number): string {
   return text.replace(
-    /(export const bump = \(n: int\): int => n \+ )\d+/,
+    /(export const bump = \(n: Int\): Int => n \+ )\d+/,
     `$1${revision}`,
   );
 }
 
 /**
- * An interface edit: toggles the annotated type of `extra` between `int` and
- * `number`. Each call changes the interface hash of the module.
+ * An interface edit: toggles the annotated type of `extra` between the aliases
+ * `Int` and `Num`. The two aliases are different named types, so each call
+ * changes the interface hash of the module.
  */
 export function applyInterfaceEdit(text: string): string {
   return text.replace(
-    /export const extra: (int|number) = 1/,
+    /export const extra: (Int|Num) = 1/,
     (_match, type: string) =>
-      `export const extra: ${type === "int" ? "number" : "int"} = 1`,
+      `export const extra: ${type === "Int" ? "Num" : "Int"} = 1`,
   );
 }
 
@@ -506,7 +527,7 @@ export function applyInterfaceEdit(text: string): string {
  */
 export function applyModeFlipEdit(text: string): string {
   return text.replace(
-    /(export const flip = \(n: int\): int => )(n \+ 1|retry\(\(\) => n \+ 1, \{ times: 1 \}\))/,
+    /(export const flip = \(n: Int\): Int => )(n \+ 1|retry\(\(\) => n \+ 1, \{ times: 1 \}\))/,
     (_match, head: string, body: string) =>
       `${head}${
         body === "n + 1" ? "retry(() => n + 1, { times: 1 })" : "n + 1"

@@ -1,6 +1,23 @@
 {
   "declarations": [
     {
+      "definition": {
+        "kind": "alias",
+        "type": {
+          "kind": "primitive",
+          "name": "string"
+        }
+      },
+      "id": "type:log#Message",
+      "kind": "type",
+      "name": "Message",
+      "span": {
+        "end": 21,
+        "source": "log.eff",
+        "start": 0
+      }
+    },
+    {
       "fields": [
         {
           "name": "message",
@@ -15,9 +32,9 @@
       "kind": "error",
       "name": "ConsoleUnavailable",
       "span": {
-        "end": 46,
+        "end": 69,
         "source": "log.eff",
-        "start": 0
+        "start": 23
       }
     },
     {
@@ -28,9 +45,9 @@
           "id": "cap:log#Console.print",
           "name": "print",
           "span": {
-            "end": 121,
+            "end": 145,
             "source": "log.eff",
-            "start": 68
+            "start": 91
           },
           "type": {
             "effects": {
@@ -43,8 +60,8 @@
             "kind": "function",
             "parameters": [
               {
-                "kind": "primitive",
-                "name": "string"
+                "id": "type:log#Message",
+                "kind": "named"
               }
             ],
             "result": {
@@ -56,9 +73,9 @@
       ],
       "name": "Console",
       "span": {
-        "end": 123,
+        "end": 147,
         "source": "log.eff",
-        "start": 48
+        "start": 71
       }
     },
     {
@@ -72,14 +89,14 @@
             "execution": "pure",
             "kind": "reference",
             "span": {
-              "end": 240,
+              "end": 265,
               "source": "log.eff",
-              "start": 233
+              "start": 258
             },
             "target": "local:log#log/message",
             "type": {
-              "kind": "primitive",
-              "name": "string"
+              "id": "type:log#Message",
+              "kind": "named"
             }
           }
         ],
@@ -95,9 +112,9 @@
         "execution": "pure",
         "kind": "perform",
         "span": {
-          "end": 241,
+          "end": 266,
           "source": "log.eff",
-          "start": 219
+          "start": 244
         },
         "type": {
           "kind": "primitive",
@@ -113,20 +130,20 @@
           "id": "local:log#log/message",
           "name": "message",
           "span": {
-            "end": 160,
+            "end": 185,
             "source": "log.eff",
-            "start": 145
+            "start": 169
           },
           "type": {
-            "kind": "primitive",
-            "name": "string"
+            "id": "type:log#Message",
+            "kind": "named"
           }
         }
       ],
       "span": {
-        "end": 241,
+        "end": 266,
         "source": "log.eff",
-        "start": 125
+        "start": 149
       },
       "type": {
         "effects": {
@@ -141,8 +158,8 @@
         "kind": "function",
         "parameters": [
           {
-            "kind": "primitive",
-            "name": "string"
+            "id": "type:log#Message",
+            "kind": "named"
           }
         ],
         "result": {

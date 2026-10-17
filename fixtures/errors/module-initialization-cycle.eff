@@ -1,4 +1,6 @@
 // error: module/004
-const first: int = second
+const first: Int = second
 
-const second: int = first
+const second: Int = first
+
+type Int = int

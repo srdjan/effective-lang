@@ -1,5 +1,5 @@
 // error: declaration/011
-const helper = (x): int => 1
+const helper = (x): Int => 1
 
 // error: declaration/011
 const inferred = (x) => x
@@ -11,3 +11,5 @@ service Store {
 
 // error: declaration/011
 type Callback = (value) => int
+
+type Int = int

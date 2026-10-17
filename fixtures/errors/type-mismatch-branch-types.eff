@@ -1,2 +1,4 @@
 // error: type-mismatch/009
-const bad = (flag: boolean) => if (flag) { 1 } else { "one" }
+const bad = (flag: Bool) => if (flag) { 1 } else { "one" }
+
+type Bool = boolean

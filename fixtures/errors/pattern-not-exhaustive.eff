@@ -1,5 +1,8 @@
-const label = (found: Option<int>): string =>
+const label = (found: Option<Int>): Text =>
   // error: pattern/001
   match found {
     Some(value) => "some"
   }
+
+type Int = int
+type Text = string

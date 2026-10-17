@@ -7,28 +7,30 @@ type U = Brand<{ kind: "u", nickname?: string }>
 
 export error Oops = { detail?: string }
 
-export const nickOfUnion = (x: A | B): string =>
+export const nickOfUnion = (x: A | B): Text =>
   match x.nickname {
     Some(n) => n,
     None => "none"
   }
 
-export const nickOfNested = (x: ABC): string =>
+export const nickOfNested = (x: ABC): Text =>
   match x.nickname {
     Some(n) => n,
     None => "none"
   }
 
-export const nickOfBrand = (x: U | A): string =>
+export const nickOfBrand = (x: U | A): Text =>
   match x.nickname {
     Some(n) => n,
     None => "none"
   }
 
-export const detailOf = (e: Oops): string =>
+export const detailOf = (e: Oops): Text =>
   match e.detail {
     Some(d) => d,
     None => "none"
   }
 
-export const kindOf = (x: A | B): string => x.kind
+export const kindOf = (x: A | B): Text => x.kind
+
+type Text = string

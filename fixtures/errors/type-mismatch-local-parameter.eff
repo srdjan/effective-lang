@@ -1,5 +1,7 @@
-const bad = (): int => {
+const bad = (): Int => {
   // error: type-mismatch/011
   const f = (x) => 1
   f(2)
 }
+
+type Int = int

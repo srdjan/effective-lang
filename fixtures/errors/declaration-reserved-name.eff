@@ -1,11 +1,11 @@
 // error: declaration/002
-const map = (): int => 1
+const map = (): Int => 1
 
 // error: declaration/002
 type string = { x: int }
 
 // error: declaration/002
-const h = (filter: int): int => filter
+const h = (filter: Int): Int => filter
 
 // The generated TypeScript needs these names.
 // error: declaration/002
@@ -15,6 +15,8 @@ const Number = "x"
 type any = { x: int }
 
 // error: declaration/002
-const k = (undefined: int): int => 1
+const k = (undefined: Int): Int => 1
 
 type Fields = { object: int, symbol: string }
+
+type Int = int

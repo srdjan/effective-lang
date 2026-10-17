@@ -5,4 +5,6 @@ import { b } from "lodash"
 // error: module/001
 import { c } from "../outside.eff"
 
-export const main = (): int => 1
+export const main = (): Int => 1
+
+type Int = int

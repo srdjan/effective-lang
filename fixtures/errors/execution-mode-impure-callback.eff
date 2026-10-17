@@ -1,8 +1,10 @@
 service Counter {
-  next(): int
+  next(): Int
 }
 
-const bad = (xs: int[]): int[]
+const bad = (xs: Int[]): Int[]
   uses Counter.next =>
   // error: execution-mode/001
   map(xs, (x) => Counter.next())
+
+type Int = int

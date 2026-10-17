@@ -2,6 +2,9 @@
 
 import { Context, Effect, Schema } from "effect";
 
+export const Message = Schema.String;
+export type Message = typeof Message.Type;
+
 export class ConsoleUnavailable
   extends Schema.TaggedError<ConsoleUnavailable>()(
     "log#ConsoleUnavailable",
@@ -9,10 +12,10 @@ export class ConsoleUnavailable
   ) {}
 
 export class Console extends Context.Service<Console, {
-  readonly print: (a: string) => Effect.Effect<void, ConsoleUnavailable>;
+  readonly print: (a: Message) => Effect.Effect<void, ConsoleUnavailable>;
 }>()("log#Console") {}
 
-export const log = (message: string): Effect.Effect<
+export const log = (message: Message): Effect.Effect<
   void,
   ConsoleUnavailable,
   Console

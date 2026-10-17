@@ -37,6 +37,8 @@ Deno.test("the index lists the declarations of users.eff with kind and export fl
   assertEquals(
     index.decls.map((d) => `${d.kind} ${d.name} ${d.exported}`),
     [
+      "type UserId true",
+      "type Name true",
       "type User true",
       "error UserMissing true",
       "error StoreUnavailable true",

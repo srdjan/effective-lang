@@ -1,3 +1,5 @@
-const bad = (): int =>
+const bad = (): Int =>
   // error: type-mismatch/007
   1 + "two"
+
+type Int = int

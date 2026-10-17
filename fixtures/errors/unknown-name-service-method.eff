@@ -1,9 +1,11 @@
 service Store {
-  get(id: int): int
+  get(id: Int): Int
 }
 
 // error: unknown-name/003
-const a = (): int uses Store.put => 1
+const a = (): Int uses Store.put => 1
 
 // error: unknown-name/003
-const b = (): int uses Store.get => Store.nope(1)
+const b = (): Int uses Store.get => Store.nope(1)
+
+type Int = int

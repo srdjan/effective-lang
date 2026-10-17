@@ -1,9 +1,11 @@
+type Count = int
+
 service Counter {
-  next(n: int): int
+  next(n: Count): Count
 }
 
-export const sequence = (xs: int[]): int[] uses Counter.next =>
+export const sequence = (xs: Count[]): Count[] uses Counter.next =>
   xs |> traverse((n) => Counter.next(n))
 
-export const raised = (xs: int[]): int[] =>
+export const raised = (xs: Count[]): Count[] =>
   traverse(xs, (n) => n + 1)

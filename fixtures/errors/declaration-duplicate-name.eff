@@ -4,23 +4,25 @@ type A = { x: int }
 type A = { y: int }
 
 // error: declaration/001
-const A = (): int => 1
+const A = (): Int => 1
 
 service S {
-  m(): int
+  m(): Int
   // error: declaration/001
-  m(): int
+  m(): Int
 }
 
 const f = (
-  p: int,
+  p: Int,
   // error: declaration/001
-  p: int
-): int => p
+  p: Int
+): Int => p
 
-const g = (): int => {
+const g = (): Int => {
   const v = 1
   // error: declaration/001
   const v = 2
   v
 }
+
+type Int = int

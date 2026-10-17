@@ -1,3 +1,5 @@
-export const shown = (): int => 1
+export const shown = (): Int => 1
 
-const hidden = (): int => 2
+const hidden = (): Int => 2
+
+type Int = int

@@ -103,11 +103,12 @@ function lowerText(
 Deno.test("Effect construction and execution validate independently", () => {
   const lowered = lowerText(`
 error Stop = {}
-service Counter { next(): int fails Stop }
-const make = (): Effect<int, Stop, Counter.next> =>
+service Counter { next(): Int fails Stop }
+const make = (): Effect<Int, Stop, Counter.next> =>
   defer(() => Counter.next())
-const use = (stored: Effect<int, Stop, Counter.next>): int fails Stop uses Counter.next =>
+const use = (stored: Effect<Int, Stop, Counter.next>): Int fails Stop uses Counter.next =>
   run(stored)
+type Int = int
 `);
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
   const mutated = copy(lowered.ir);
@@ -126,7 +127,7 @@ const use = (stored: Effect<int, Stop, Counter.next>): int fails Stop uses Count
 
 Deno.test("run as a pipeline stage validates locally", () => {
   const lowered = lowerText(
-    "const f = (stored: Effect<int>): int => stored |> run",
+    "const f = (stored: Effect<Int>): Int => stored |> run\ntype Int = int",
   );
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
 });
@@ -134,9 +135,10 @@ Deno.test("run as a pipeline stage validates locally", () => {
 Deno.test("with-resource validation rejects scoped escape and channel mutation", () => {
   const lowered = lowerText(`
 error Stop = {}
-service Files { open(): { read: () => string fails Stop, close: () => void } }
-const load = (): string fails Stop uses Files.open =>
+service Files { open(): { read: () => Text fails Stop, close: () => void } }
+const load = (): Text fails Stop uses Files.open =>
   withResource(() => Files.open(), (file) => file.read(), (file) => file.close())
+type Text = string
 `);
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
   const wrongId = copy(lowered.ir);
@@ -165,7 +167,7 @@ const load = (): string fails Stop uses Files.open =>
 
 Deno.test("bounded traversal validation rejects a mutated concurrency bound", () => {
   const lowered = lowerText(
-    "const f = (): int[] => traverse([1, 2], (n) => n, { concurrency: 2 })",
+    "const f = (): Int[] => traverse([1, 2], (n) => n, { concurrency: 2 })\ntype Int = int",
   );
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
   const changed = copy(lowered.ir);
@@ -184,11 +186,12 @@ Deno.test("bounded traversal validation rejects a mutated concurrency bound", ()
 Deno.test("stream validation recomputes deferred and active channels", () => {
   const lowered = lowerText(`
 error Stop = {}
-service Source { next(state: int): Option<[int, int]> fails Stop }
-service Consumer { accept(value: int): void fails Stop }
+service Source { next(state: Int): Option<[Int, Int]> fails Stop }
+service Consumer { accept(value: Int): void fails Stop }
 const numbers = unfold(0, (state) => Source.next(state))
-const sink = sinkForEach((value: int) => Consumer.accept(value))
+const sink = sinkForEach((value: Int) => Consumer.accept(value))
 const main = (): void fails Stop uses Source.next | Consumer.accept => runStream(numbers, sink)
+type Int = int
 `);
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
   const missingDeferred = copy(lowered.ir);
@@ -360,43 +363,47 @@ const EXTRA_PROGRAMS: Readonly<Record<string, Record<string, string>>> = {
   "incremental stream and sink": {
     "effective.json": "{}",
     "m.eff": `
-service Source { next(state: int): Option<[int, int]> }
-service Consumer { accept(value: int): void }
+service Source { next(state: Int): Option<[Int, Int]> }
+service Consumer { accept(value: Int): void }
 const source = unfold(0, (state) => Source.next(state))
 const mapped = mapEffect(source, (value) => value + 1)
-const sink = sinkForEach((value: int) => Consumer.accept(value))
+const sink = sinkForEach((value: Int) => Consumer.accept(value))
 export const main = (): void uses Source.next | Consumer.accept => runStream(mapped, sink)
+type Int = int
 `,
   },
   "bounded traversal": {
     "effective.json": "{}",
     "m.eff": `
 error Stop = {}
-service S { step(n: int): int fails Stop }
-export const f = (): int[] fails Stop uses S.step =>
+service S { step(n: Int): Int fails Stop }
+export const f = (): Int[] fails Stop uses S.step =>
   traverse([1, 2], (n) => S.step(n), { concurrency: 2 })
+type Int = int
 `,
   },
   "scoped operation records": {
     "effective.json": "{}",
     "m.eff": `
 error Stop = {}
-service Files { open(): { read: () => string fails Stop, close: () => void } }
-export const load = (): string fails Stop uses Files.open =>
+service Files { open(): { read: () => Text fails Stop, close: () => void } }
+export const load = (): Text fails Stop uses Files.open =>
   withResource(() => Files.open(), (file) => file.read(), (file) => file.close())
+type Text = string
 `,
   },
   "block-local functions, optional fields, and boolean operators": {
     "effective.json": "{}",
     "m.eff": `
 type P = { name: string, age?: int }
-export const f = (p: P, xs: int[]): int => {
-  const double = (n: int): int => n * 2
-  const g = (n: int) => double(n) + 1
+export const f = (p: P, xs: Int[]): Int => {
+  const double = (n: Int): Int => n * 2
+  const g = (n: Int) => double(n) + 1
   const total = xs |> map((x) => g(x)) |> fold(0, (a, b) => a + b)
   const nm = match p.age { Some(a) => a, None => 0 }
   if (nm > 3 && total < 100 || false) { total } else { nm }
 }
+type Int = int
 `,
   },
   "error unions in try and match": {
@@ -404,22 +411,28 @@ export const f = (p: P, xs: int[]): int => {
     "m.eff": `
 error A = { a: string }
 error B = { b: int }
-service S { go(): int fails A | B }
-export const f = (): string uses S.go =>
+service S { go(): Int fails A | B }
+export const f = (): Text uses S.go =>
   try { S.go() + 1
  "x" } catch { A(e) => e.a, B(e) => "b" }
-export const h = (e: A | B): string => match e { A(x) => x.a, B(y) => "b" }
+export const h = (e: A | B): Text => match e { A(x) => x.a, B(y) => "b" }
+type Int = int
+type Text = string
 `,
   },
   "options, equality, and mixed arithmetic": {
     "effective.json": "{}",
     "m.eff": `
-export const f = (x: int): Option<int> => Some(x + 1)
-export const g = (): Option<string> => None
-export const h = (o: Option<int>): int => match o { Some(v) => v, None => 0 }
-export const eqs = (a: string, b: string): boolean => a === b || a !== "x"
-export const mixed = (a: int, b: number): number => a + b / 2
-export const strs = (a: string): string => a + "s"
+export const f = (x: Int): Option<Int> => Some(x + 1)
+export const g = (): Option<Text> => None
+export const h = (o: Option<Int>): Int => match o { Some(v) => v, None => 0 }
+export const eqs = (a: Text, b: Text): Bool => a === b || a !== "x"
+export const mixed = (a: Int, b: Num): Num => a + b / 2
+export const strs = (a: Text): Text => a + "s"
+type Int = int
+type Num = number
+type Text = string
+type Bool = boolean
 `,
   },
   "pipeline stages that call, perform, and fail": {
@@ -428,13 +441,14 @@ export const strs = (a: string): string => a + "s"
 error E = { m: string }
 error F = { x: int }
 service S {
-  all(): int[] fails E
-  one(n: int): int
+  all(): Int[] fails E
+  one(n: Int): Int
 }
-const inc = (n: int): int => n + 1
-export const f = (): int[] fails E uses S.all => S.all() |> map(inc)
-export const g = (n: int): int uses S.one => n |> S.one |> inc
-export const k = (): int fails F => F({ x: 1 }) |> fail
+const inc = (n: Int): Int => n + 1
+export const f = (): Int[] fails E uses S.all => S.all() |> map(inc)
+export const g = (n: Int): Int uses S.one => n |> S.one |> inc
+export const k = (): Int fails F => F({ x: 1 }) |> fail
+type Int = int
 `,
   },
 };
@@ -458,13 +472,14 @@ Deno.test("a retry stage with an effectful left value validates locally", () => 
   const { ir, sources } = lowerText(
     [
       "service S {",
-      "  mk(): () => int",
-      "  n(): int",
+      "  mk(): () => Int",
+      "  n(): Int",
       "}",
-      "const plus = (x: int, y: int): int => x + y",
-      "export const f = (): int uses S.mk => S.mk() |> retry({ times: 2 })",
-      "export const g = (): int uses S.mk => retry(S.mk(), { times: 2 })",
-      "export const h = (): int uses S.mk | S.n => S.mk() |> retry({ times: 2 }) |> plus(S.n())",
+      "const plus = (x: Int, y: Int): Int => x + y",
+      "export const f = (): Int uses S.mk => S.mk() |> retry({ times: 2 })",
+      "export const g = (): Int uses S.mk => retry(S.mk(), { times: 2 })",
+      "export const h = (): Int uses S.mk | S.n => S.mk() |> retry({ times: 2 }) |> plus(S.n())",
+      "type Int = int",
       "",
     ].join("\n"),
   );
@@ -485,13 +500,15 @@ Deno.test("a retry stage with an effectful left value validates locally", () => 
 Deno.test("array and contextual tuple literals validate with ordered element effects", () => {
   const { ir, sources } = lowerText(
     [
-      "service S { read(): int }",
+      "service S { read(): Int }",
       "const inferred = [1, 2]",
-      "export const numbers = (): int[] => inferred",
-      'export const pair = (): [int, string] => [1, "a"]',
-      "export const blank = (): int[] => []",
-      "export const nested = (): int[][] => [[1, 2], [3]]",
-      "export const loaded = (): int[] uses S.read => [S.read(), 2]",
+      "export const numbers = (): Int[] => inferred",
+      'export const pair = (): [Int, Text] => [1, "a"]',
+      "export const blank = (): Int[] => []",
+      "export const nested = (): Int[][] => [[1, 2], [3]]",
+      "export const loaded = (): Int[] uses S.read => [S.read(), 2]",
+      "type Int = int",
+      "type Text = string",
       "",
     ].join("\n"),
   );
@@ -515,13 +532,14 @@ Deno.test("traverse validates callback effects in direct and pipeline calls", ()
   const { ir, sources } = lowerText(
     [
       "service S {",
-      "  all(): int[]",
-      "  step(n: int): int",
+      "  all(): Int[]",
+      "  step(n: Int): Int",
       "}",
-      "export const direct = (xs: int[]): int[] uses S.step => traverse(xs, (n) => S.step(n))",
-      "export const piped = (xs: int[]): int[] uses S.step => xs |> traverse((n) => S.step(n))",
-      "export const loaded = (): int[] uses S.all | S.step => S.all() |> traverse((n) => S.step(n))",
-      "export const pure = (xs: int[]): int[] => traverse(xs, (n) => n + 1)",
+      "export const direct = (xs: Int[]): Int[] uses S.step => traverse(xs, (n) => S.step(n))",
+      "export const piped = (xs: Int[]): Int[] uses S.step => xs |> traverse((n) => S.step(n))",
+      "export const loaded = (): Int[] uses S.all | S.step => S.all() |> traverse((n) => S.step(n))",
+      "export const pure = (xs: Int[]): Int[] => traverse(xs, (n) => n + 1)",
+      "type Int = int",
       "",
     ].join("\n"),
   );
@@ -548,9 +566,9 @@ Deno.test("a provider with acquisition failures validates with zero diagnostics"
     "host/providers.effi":
       'import { Db, Down } from "../db.eff"\nexport provider DbLive provides Db fails Down\n',
     "db.eff":
-      "export error Down = { why: string }\nexport service Db { q(): int fails Down }\n",
+      "export error Down = { why: string }\nexport service Db { q(): Int fails Down }\ntype Int = int\n",
     "m.eff":
-      'import { Db, Down } from "./db.eff"\nimport { DbLive } from "host:providers"\nexport const g = (): int fails Down => provide(DbLive, () => Db.q())\nexport const h = (): int fails Down => DbLive |> provide(() => Db.q())\n',
+      'import { Db, Down } from "./db.eff"\nimport { DbLive } from "host:providers"\nexport const g = (): Int fails Down => provide(DbLive, () => Db.q())\nexport const h = (): Int fails Down => DbLive |> provide(() => Db.q())\ntype Int = int\n',
   }, ["db.eff", "m.eff"]);
   assertEquals(lowered.modules.size, 2);
   for (const [name, ir] of lowered.modules) {
@@ -571,9 +589,9 @@ Deno.test("a provider from a host module carries the service it provides", () =>
     }),
     "host/p.effi":
       'import { S } from "../s.eff"\nexport provider L provides S\n',
-    "s.eff": "export service S { f(): int }\n",
+    "s.eff": "export service S { f(): Int }\ntype Int = int\n",
     "m.eff":
-      'import { L } from "host:p"\nexport const g = (): int => provide(L, () => 1)\n',
+      'import { L } from "host:p"\nexport const g = (): Int => provide(L, () => 1)\ntype Int = int\n',
   }, ["s.eff", "m.eff"]);
   const m = lowered.modules.get("m");
   assert(m !== undefined);
@@ -711,7 +729,7 @@ Deno.test("identity: two parameters of one function cannot share a local identit
 
 Deno.test("identity: a local is out of scope after its match arm", () => {
   const { ir, sources } = lowerText(
-    "export const f = (o: Option<int>, p: int): int => match o { Some(x) => x, None => p }",
+    "export const f = (o: Option<Int>, p: Int): Int => match o { Some(x) => x, None => p }\ntype Int = int",
   );
   const copyIr = copy(ir);
   const f = decl(copyIr, "f");
@@ -939,7 +957,7 @@ Deno.test("types: a function parameter type equals its declared parameter type",
 
 Deno.test("types: a recursive type is rejected", () => {
   const { ir, sources } = lowerText(
-    "type A = { n: int }\nexport const f = (a: A): int => a.n",
+    "type A = { n: int }\nexport const f = (a: A): Int => a.n\ntype Int = int",
   );
   const copyIr = copy(ir);
   setAt(copyIr, "declarations[0].definition.type.fields[0].type", {
@@ -1024,7 +1042,7 @@ Deno.test("contracts: provide removes the supplied capabilities", () => {
 
 Deno.test("contracts: an inferred function records exactly its body sets", () => {
   const { ir, sources } = lowerText(
-    "service S { go(): int }\nconst inc = (x: int) => x + S.go()\nexport const f = (x: int): int uses S.go => inc(x)",
+    "service S { go(): Int }\nconst inc = (x: Int) => x + S.go()\nexport const f = (x: Int): Int uses S.go => inc(x)\ntype Int = int",
   );
   assertEquals(codesOf(ir, sources), []);
   const copyIr = copy(ir);
@@ -1179,7 +1197,9 @@ Deno.test("serialization: a span stops at the end of its text", () => {
 });
 
 Deno.test("serialization: a literal must be finite", () => {
-  const { ir, sources } = lowerText("export const f = (): int => 1");
+  const { ir, sources } = lowerText(
+    "export const f = (): Int => 1\ntype Int = int",
+  );
   const copyIr = copy(ir);
   const f = decl(copyIr, "f");
   setAt(copyIr, `declarations[${f}].body.value`, Number.POSITIVE_INFINITY);
@@ -1188,7 +1208,7 @@ Deno.test("serialization: a literal must be finite", () => {
 
 Deno.test("an IR with a wrong shape gives a diagnostic and not an exception", () => {
   const ir = copy(EXAMPLES.modules.get("log"));
-  setAt(ir, "declarations[2].body.arguments", null);
+  setAt(ir, `declarations[${decl(ir, "log")}].body.arguments`, null);
   assert(codesOf(ir, EXAMPLES.sources).includes("validation/008"));
 });
 
@@ -1383,13 +1403,14 @@ Deno.test("a field read and a record update through a record brand validate", ()
   const lowered = lowerText(`
 type UserId = Brand<string>
 type User = Brand<{ id: UserId, name: string, active: boolean, nickname?: string }>
-const nameOf = (user: User): string => user.name
-const nick = (user: User): string =>
+const nameOf = (user: User): Text => user.name
+const nick = (user: User): Text =>
   match user.nickname {
     Some(n) => n,
     None => "none"
   }
 const activate = (user: User): User => ({ ...user, active: true })
+type Text = string
 `);
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
   const mutated = copy(lowered.ir);

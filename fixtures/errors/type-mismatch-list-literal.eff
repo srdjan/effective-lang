@@ -6,6 +6,9 @@ const mixed =
   // error: type-mismatch/012
   [1, "a"]
 
-const short: [int, string] =
+const short: [Int, Text] =
   // error: type-mismatch/012
   [1]
+
+type Int = int
+type Text = string

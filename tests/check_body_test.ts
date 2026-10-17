@@ -72,10 +72,11 @@ error OpenError = {}
 error ReadError = {}
 error CloseError = {}
 service Files {
-  open(): { read: () => string fails ReadError, close: () => void fails CloseError } fails OpenError
+  open(): { read: () => Text fails ReadError, close: () => void fails CloseError } fails OpenError
 }
-const load = (): string fails OpenError | ReadError | CloseError uses Files.open =>
+const load = (): Text fails OpenError | ReadError | CloseError uses Files.open =>
   withResource(() => Files.open(), (file) => file.read(), (file) => file.close())
+type Text = string
 `);
   assertEquals(messages(project), []);
   const type = project.table.node(fn(project, "m", "load").type);
@@ -92,9 +93,10 @@ const load = (): string fails OpenError | ReadError | CloseError uses Files.open
 Deno.test("bounded traverse keeps callback failure and requirement channels", () => {
   const project = checkText(`
 error Stop = {}
-service S { step(n: int): int fails Stop }
-const f = (): int[] fails Stop uses S.step =>
+service S { step(n: Int): Int fails Stop }
+const f = (): Int[] fails Stop uses S.step =>
   traverse([1, 2], (n) => S.step(n), { concurrency: 2 })
+type Int = int
 `);
   assertEquals(messages(project), []);
   const type = project.table.node(fn(project, "m", "f").type);
@@ -106,11 +108,12 @@ const f = (): int[] fails Stop uses S.step =>
 Deno.test("Stream and Sink defer channels until runStream", () => {
   const project = checkText(`
 error Stop = {}
-service Source { next(state: int): Option<[int, int]> fails Stop }
-service Consumer { accept(value: int): void fails Stop }
-const numbers: Stream<int, Stop, Source.next> = unfold(0, (state) => Source.next(state))
-const sink: Sink<int, void, Stop, Consumer.accept> = sinkForEach((value: int) => Consumer.accept(value))
+service Source { next(state: Int): Option<[Int, Int]> fails Stop }
+service Consumer { accept(value: Int): void fails Stop }
+const numbers: Stream<Int, Stop, Source.next> = unfold(0, (state) => Source.next(state))
+const sink: Sink<Int, void, Stop, Consumer.accept> = sinkForEach((value: Int) => Consumer.accept(value))
 const main = (): void fails Stop uses Source.next | Consumer.accept => runStream(numbers, sink)
+type Int = int
 `);
   assertEquals(messages(project), []);
   const main = project.table.node(fn(project, "m", "main").type);
@@ -122,9 +125,11 @@ const main = (): void fails Stop uses Source.next | Consumer.accept => runStream
 
 Deno.test("runStream rejects an incompatible sink input", () => {
   const project = checkText(`
-const numbers = unfold(0, (n: int): Option<[int, int]> => None)
-const sink = sinkForEach((s: string): void => {})
+const numbers = unfold(0, (n: Int): Option<[Int, Int]> => None)
+const sink = sinkForEach((s: Text): void => {})
 const main = (): void => runStream(numbers, sink)
+type Int = int
+type Text = string
 `);
   assert(
     codes(project).includes("type-mismatch/003"),
@@ -134,8 +139,9 @@ const main = (): void => runStream(numbers, sink)
 
 Deno.test("stream constructors require inline callbacks", () => {
   const project = checkText(`
-const next = (n: int): Option<[int, int]> => None
+const next = (n: Int): Option<[Int, Int]> => None
 const numbers = unfold(0, next)
+type Int = int
 `);
   assert(
     codes(project).includes("type-mismatch/010"),
@@ -155,7 +161,7 @@ Deno.test("bounded traverse requires a positive safe integer literal", () => {
     ]
   ) {
     const project = checkText(
-      `const f = (): int[] => traverse([1], (n) => n, ${option})`,
+      `const f = (): Int[] => traverse([1], (n) => n, ${option})\ntype Int = int`,
     );
     assert(
       codes(project).includes("type-mismatch/010") ||
@@ -168,7 +174,7 @@ Deno.test("bounded traverse requires a positive safe integer literal", () => {
 
 Deno.test("withResource rejects escaped operation records and fields", () => {
   const prefix =
-    `service Files { open(): { read: () => string, close: () => void } }\n`;
+    `service Files { open(): { read: () => Text, close: () => void } }\n`;
   for (
     const use of [
       "file",
@@ -179,7 +185,7 @@ Deno.test("withResource rejects escaped operation records and fields", () => {
     ]
   ) {
     const project = checkText(
-      `${prefix}const bad = () => withResource(() => Files.open(), (file) => ${use}, (file) => file.close())`,
+      `${prefix}const bad = () => withResource(() => Files.open(), (file) => ${use}, (file) => file.close())\ntype Text = string`,
     );
     assert(
       messages(project).some((m) =>
@@ -192,8 +198,8 @@ Deno.test("withResource rejects escaped operation records and fields", () => {
 
 Deno.test("withResource rejects operation records and results containing capabilities", () => {
   const programs = [
-    `service Files { open(): { bad: () => () => string } }\nconst bad = () => withResource(() => Files.open(), (file) => file.bad(), (file) => file.bad())`,
-    `service Files { open(): { read: () => string, close: () => void } }\nconst bad = () => withResource(() => Files.open(), (file) => () => file.read(), (file) => file.close())`,
+    `service Files { open(): { bad: () => () => Text } }\nconst bad = () => withResource(() => Files.open(), (file) => file.bad(), (file) => file.bad())\ntype Text = string`,
+    `service Files { open(): { read: () => Text, close: () => void } }\nconst bad = () => withResource(() => Files.open(), (file) => () => file.read(), (file) => file.close())\ntype Text = string`,
   ];
   for (const program of programs) {
     const project = checkText(program);
@@ -207,15 +213,16 @@ Deno.test("withResource rejects operation records and results containing capabil
 Deno.test("Effect values defer channels until run and preserve them through bindings", () => {
   const project = checkText(`
 error Stop = {}
-service Counter { next(): int fails Stop }
-const make = (): Effect<int, Stop, Counter.next> =>
+service Counter { next(): Int fails Stop }
+const make = (): Effect<Int, Stop, Counter.next> =>
   defer(() => Counter.next())
-const stored: Effect<int, Stop, Counter.next> = make()
-const twice = (): int fails Stop uses Counter.next => {
+const stored: Effect<Int, Stop, Counter.next> = make()
+const twice = (): Int fails Stop uses Counter.next => {
   const first = run(stored)
   const second = run(stored)
   first + second
 }
+type Int = int
 `);
   assertEquals(messages(project), []);
   const make = fn(project, "m", "make");
@@ -231,14 +238,15 @@ const twice = (): int fails Stop uses Counter.next => {
 });
 
 Deno.test("run rejects a non-Effect value", () => {
-  const project = checkText("const f = (): int => run(1)");
+  const project = checkText("const f = (): Int => run(1)\ntype Int = int");
   assertEquals(codes(project).includes("type-mismatch/010"), true);
 });
 
 Deno.test("Effect channels accept explicit never and default to empty", () => {
   const project = checkText(`
-const make = (): Effect<int, never, never> => defer(() => 1)
-const use = (value: Effect<int>): int => run(value)
+const make = (): Effect<Int, never, never> => defer(() => 1)
+const use = (value: Effect<Int>): Int => run(value)
+type Int = int
 `);
   assertEquals(messages(project), []);
 });
@@ -246,9 +254,10 @@ const use = (value: Effect<int>): int => run(value)
 Deno.test("run requires deferred failures and requirements in the caller contract", () => {
   const project = checkText(`
 error Stop = {}
-service Counter { next(): int fails Stop }
-const make = (): Effect<int, Stop, Counter.next> => defer(() => Counter.next())
-const missing = (): int => run(make())
+service Counter { next(): Int fails Stop }
+const make = (): Effect<Int, Stop, Counter.next> => defer(() => Counter.next())
+const missing = (): Int => run(make())
+type Int = int
 `);
   assertEquals(codes(project), [
     "failure-contract/001",
@@ -362,10 +371,11 @@ Deno.test("markPaid is pure and keeps the Order type", () => {
   assertEquals(project.table.show(markPaid.result), "Order");
 });
 
-Deno.test("total returns int and is pure", () => {
+Deno.test("total returns Amount, an alias of int, and is pure", () => {
   const project = examples();
   const total = fn(project, "collections", "total");
-  assertEquals(project.table.show(total.result), "int");
+  assertEquals(project.table.show(total.result), "Amount");
+  assert(project.table.isAssignable(total.result, project.table.int));
   assertEquals(total.mode, "pure");
 });
 
@@ -400,7 +410,7 @@ Deno.test("a pipeline stage records the closed builtin specialization", () => {
   assert(fold !== undefined && fold.kind === "builtin");
   assertEquals(
     project.table.show(fold.specialized),
-    "(int[], int, (int, int) => int) => int",
+    "(Amount[], Amount, (Amount, Amount) => Amount) => Amount",
   );
 });
 
@@ -488,11 +498,11 @@ Deno.test("typeAt on an expression prints the type and the sets of the innermost
   const call = text.indexOf("getUser(id)\n  const renamed");
   assertEquals(
     typeAt(project, "users.eff", call + 9),
-    "string",
+    "UserId",
   );
   assertEquals(
     typeAt(project, "users.eff", call + 2),
-    "(string) => User fails StoreUnavailable | UserMissing uses Users.find",
+    "(UserId) => User fails StoreUnavailable | UserMissing uses Users.find",
   );
   assertEquals(typeAt(project, "users.eff", 0), undefined);
   assertEquals(typeAt(project, "nowhere.eff", 0), undefined);
@@ -501,8 +511,9 @@ Deno.test("typeAt on an expression prints the type and the sets of the innermost
 // ------------------------------------------------------------------ contracts
 
 const USERS_BROKEN = `${exampleFiles()["users.eff"]}
-export const broken = (id: string): User
+export const broken = (id: Text): User
   uses Users.find => getUser(id)
+type Text = string
 `;
 
 Deno.test("the invalid example of the spec gives exactly one failure-contract diagnostic", () => {
@@ -517,10 +528,11 @@ Deno.test("the invalid example of the spec gives exactly one failure-contract di
 Deno.test("a body that needs more capabilities than uses lists is a requirement-contract error", () => {
   const project = checkText(`
 service S {
-  a(): int
-  b(): int
+  a(): Int
+  b(): Int
 }
-const f = (): int uses S.a => S.a() + S.b()
+const f = (): Int uses S.a => S.a() + S.b()
+type Int = int
 `);
   assertEquals(codes(project), ["requirement-contract/001"]);
   assert(project.diagnostics[0].message.includes("S.b"));
@@ -529,9 +541,10 @@ const f = (): int uses S.a => S.a() + S.b()
 Deno.test("a declared set may be wider than the body needs", () => {
   const project = checkText(`
 error E = { m: string }
-service S { a(): int }
-const f = (): int fails E uses S.a => 1
-const g = (): int fails E uses S.a => f()
+service S { a(): Int }
+const f = (): Int fails E uses S.a => 1
+const g = (): Int fails E uses S.a => f()
+type Int = int
 `);
   assertEquals(messages(project), []);
   assertEquals(fn(project, "m", "f").mode, "effect");
@@ -541,11 +554,12 @@ const g = (): int fails E uses S.a => f()
 Deno.test("an inferred arrow takes its sets from the body", () => {
   const project = checkText(`
 error E = { m: string }
-const f = (n: int): int fails E => fail(E({ m: "x" }))
-const g = (n: int): int fails E => {
-  const h = (k: int) => f(k)
+const f = (n: Int): Int fails E => fail(E({ m: "x" }))
+const g = (n: Int): Int fails E => {
+  const h = (k: Int) => f(k)
   h(n)
 }
+type Int = int
 `);
   assertEquals(messages(project), []);
 });
@@ -553,19 +567,23 @@ const g = (n: int): int fails E => {
 Deno.test("an arrow with a result annotation is checked against its closed contract", () => {
   const project = checkText(`
 error E = { m: string }
-const f = (n: int): int fails E => fail(E({ m: "x" }))
-const g = (n: int): int fails E => {
-  const h = (k: int): int => f(k)
+const f = (n: Int): Int fails E => fail(E({ m: "x" }))
+const g = (n: Int): Int fails E => {
+  const h = (k: Int): Int => f(k)
   h(n)
 }
+type Int = int
 `);
   assertEquals(codes(project), ["failure-contract/001"]);
 });
 
 Deno.test("function results with a wider declared type accept narrower bodies", () => {
   const project = checkText(`
-const f = (n: int): number => n
-const g = (n: int): int | string => n
+const f = (n: Int): Num => n
+const g = (n: Int): Int | Text => n
+type Int = int
+type Num = number
+type Text = string
 `);
   assertEquals(messages(project), []);
 });
@@ -574,8 +592,9 @@ const g = (n: int): int | string => n
 
 Deno.test("an effectful callback passed to map is an execution-mode error", () => {
   const project = checkText(`
-service S { a(): int }
-const f = (xs: int[]): int[] uses S.a => map(xs, (x) => S.a())
+service S { a(): Int }
+const f = (xs: Int[]): Int[] uses S.a => map(xs, (x) => S.a())
+type Int = int
 `);
   assertEquals(codes(project), ["execution-mode/001"]);
 });
@@ -583,11 +602,12 @@ const f = (xs: int[]): int[] uses S.a => map(xs, (x) => S.a())
 Deno.test("traverse carries callback failures and requirements", () => {
   const project = checkText(`
 error Stop = { at: int }
-service S { step(n: int): int fails Stop }
-const good = (xs: int[]): int[] fails Stop uses S.step =>
+service S { step(n: Int): Int fails Stop }
+const good = (xs: Int[]): Int[] fails Stop uses S.step =>
   traverse(xs, (n) => S.step(n))
-const missing = (xs: int[]): int[] =>
+const missing = (xs: Int[]): Int[] =>
   xs |> traverse((n) => S.step(n))
+type Int = int
 `);
   assertEquals(codes(project), [
     "failure-contract/001",
@@ -601,15 +621,17 @@ const missing = (xs: int[]): int[] =>
 
 Deno.test("a parameter of function type is effectful and cannot be a pure callback", () => {
   const project = checkText(`
-const f = (xs: int[], g: (x: int) => int): int[] => map(xs, g)
+const f = (xs: Int[], g: (x: Int) => Int): Int[] => map(xs, g)
+type Int = int
 `);
   assertEquals(codes(project), ["execution-mode/001"]);
 });
 
 Deno.test("a pure module function may be a callback by reference", () => {
   const project = checkText(`
-const double = (n: int): int => n * 2
-const f = (xs: int[]): int[] => xs |> map(double)
+const double = (n: Int): Int => n * 2
+const f = (xs: Int[]): Int[] => xs |> map(double)
+type Int = int
 `);
   assertEquals(messages(project), []);
   assertEquals(fn(project, "m", "double").mode, "pure");
@@ -617,25 +639,28 @@ const f = (xs: int[]): int[] => xs |> map(double)
 
 Deno.test("an effectful module function cannot be a callback by reference", () => {
   const project = checkText(`
-service S { a(): int }
-const bump = (n: int): int uses S.a => n + S.a()
-const f = (xs: int[]): int[] uses S.a => xs |> map(bump)
+service S { a(): Int }
+const bump = (n: Int): Int uses S.a => n + S.a()
+const f = (xs: Int[]): Int[] uses S.a => xs |> map(bump)
+type Int = int
 `);
   assertEquals(codes(project), ["execution-mode/001"]);
 });
 
 Deno.test("an effectful module constant initializer is an execution-mode error", () => {
   const project = checkText(`
-service S { a(): int }
-const x: int = S.a()
+service S { a(): Int }
+const x: Int = S.a()
+type Int = int
 `);
   assertEquals(codes(project), ["execution-mode/002"]);
 });
 
 Deno.test("a pure function call is allowed in a module constant", () => {
   const project = checkText(`
-const double = (n: int): int => n * 2
-const x: int = double(21)
+const double = (n: Int): Int => n * 2
+const x: Int = double(21)
+type Int = int
 `);
   assertEquals(messages(project), []);
 });
@@ -644,13 +669,15 @@ Deno.test("an imported function keeps the mode from its interface", () => {
   const files = {
     "effective.json": "{}",
     "lib.eff": `
-export const double = (n: int): int => n * 2
-export const loud = (n: int): int => retry(() => n, { times: 1 })
+export const double = (n: Int): Int => n * 2
+export const loud = (n: Int): Int => retry(() => n, { times: 1 })
+type Int = int
 `,
     "main.eff": `
 import { double, loud } from "./lib.eff"
-const a = (xs: int[]): int[] => xs |> map(double)
-const b = (xs: int[]): int[] => xs |> map(loud)
+const a = (xs: Int[]): Int[] => xs |> map(double)
+const b = (xs: Int[]): Int[] => xs |> map(loud)
+type Int = int
 `,
   };
   const project = checkFiles(files, ["main.eff"]);
@@ -669,8 +696,9 @@ const b = (xs: int[]): int[] => xs |> map(loud)
 
 Deno.test("two mutually recursive functions where one performs an effect both end up effect", () => {
   const project = checkText(`
-const ping = (n: int): int => retry(() => pong(n), { times: 1 })
-const pong = (n: int): int => if (n === 0) { 0 } else { ping(n - 1) }
+const ping = (n: Int): Int => retry(() => pong(n), { times: 1 })
+const pong = (n: Int): Int => if (n === 0) { 0 } else { ping(n - 1) }
+type Int = int
 `);
   assertEquals(messages(project), []);
   assertEquals(fn(project, "m", "ping").mode, "effect");
@@ -680,8 +708,10 @@ const pong = (n: int): int => if (n === 0) { 0 } else { ping(n - 1) }
 
 Deno.test("two mutually recursive pure functions stay pure", () => {
   const project = checkText(`
-const even = (n: int): boolean => if (n === 0) { true } else { odd(n - 1) }
-const odd = (n: int): boolean => if (n === 0) { false } else { even(n - 1) }
+const even = (n: Int): Bool => if (n === 0) { true } else { odd(n - 1) }
+const odd = (n: Int): Bool => if (n === 0) { false } else { even(n - 1) }
+type Int = int
+type Bool = boolean
 `);
   assertEquals(messages(project), []);
   assertEquals(fn(project, "m", "even").mode, "pure");
@@ -690,12 +720,14 @@ const odd = (n: int): boolean => if (n === 0) { false } else { even(n - 1) }
 
 Deno.test("a self-recursive explicit function is allowed and an unannotated one is not", () => {
   const ok = checkText(`
-const sum = (n: int): int => if (n === 0) { 0 } else { n + sum(n - 1) }
+const sum = (n: Int): Int => if (n === 0) { 0 } else { n + sum(n - 1) }
+type Int = int
 `);
   assertEquals(messages(ok), []);
   assertEquals(fn(ok, "m", "sum").mode, "pure");
   const bad = checkText(`
-const sum = (n: int) => if (n === 0) { 0 } else { n + sum(n - 1) }
+const sum = (n: Int) => if (n === 0) { 0 } else { n + sum(n - 1) }
+type Int = int
 `);
   assertEquals(codes(bad), ["execution-mode/003"]);
 });
@@ -731,8 +763,9 @@ Deno.test("the mode solver starts pure, converges, and reports a cap hit", () =>
 
 Deno.test("held diagnostics of a recursive group appear once", () => {
   const project = checkText(`
-const ping = (n: int): int => retry(() => pong(n), { times: 1 })
-const pong = (n: int): int => if (n === 0) { "zero" } else { ping(n - 1) }
+const ping = (n: Int): Int => retry(() => pong(n), { times: 1 })
+const pong = (n: Int): Int => if (n === 0) { "zero" } else { ping(n - 1) }
+type Int = int
 `);
   assertEquals(codes(project), ["type-mismatch/003"]);
 });
@@ -741,10 +774,11 @@ const pong = (n: int): int => if (n === 0) { "zero" } else { ping(n - 1) }
 
 Deno.test("the initialization graph orders constants by their eager dependencies", () => {
   const project = checkText(`
-const total: int = double(base)
-const double = (n: int): int => n * scale
-const scale: int = 2
-const base: int = 21
+const total: Int = double(base)
+const double = (n: Int): Int => n * scale
+const scale: Int = 2
+const base: Int = 21
+type Int = int
 `);
   assertEquals(messages(project), []);
   const graph = project.modules.get("m")!.initialization;
@@ -763,16 +797,18 @@ const base: int = 21
 
 Deno.test("a cycle through a function is a module diagnostic", () => {
   const project = checkText(`
-const a: int = f(1)
-const f = (n: int): int => n + a
+const a: Int = f(1)
+const f = (n: Int): Int => n + a
+type Int = int
 `);
   assertEquals(codes(project), ["module/004"]);
 });
 
 Deno.test("a recursive function without a constant in the cycle is no initialization cycle", () => {
   const project = checkText(`
-const total: int = down(3)
-const down = (n: int): int => if (n === 0) { 0 } else { down(n - 1) }
+const total: Int = down(3)
+const down = (n: Int): Int => if (n === 0) { 0 } else { down(n - 1) }
+type Int = int
 `);
   assertEquals(messages(project), []);
 });
@@ -781,10 +817,12 @@ const down = (n: int): int => if (n === 0) { 0 } else { down(n - 1) }
 
 Deno.test("an integral literal is int and a fraction is number", () => {
   const project = checkText(`
-const a = (): int => 3
-const b = (): number => 3
-const c = (): number => 1.5
-const d = (): int => 1.5
+const a = (): Int => 3
+const b = (): Num => 3
+const c = (): Num => 1.5
+const d = (): Int => 1.5
+type Int = int
+type Num = number
 `);
   assertEquals(codes(project), ["type-mismatch/003"]);
 });
@@ -812,10 +850,13 @@ const f = (): Status => {
 
 Deno.test("branches without an expected type widen and need a common type", () => {
   const project = checkText(`
-const f = (flag: boolean) => if (flag) { "a" } else { "b" }
-const g = (flag: boolean): string => f(flag)
-const h = (flag: boolean) => if (flag) { 1 } else { 2.5 }
-const i = (flag: boolean): number => h(flag)
+const f = (flag: Bool) => if (flag) { "a" } else { "b" }
+const g = (flag: Bool): Text => f(flag)
+const h = (flag: Bool) => if (flag) { 1 } else { 2.5 }
+const i = (flag: Bool): Num => h(flag)
+type Num = number
+type Text = string
+type Bool = boolean
 `);
   assertEquals(messages(project), []);
 });
@@ -823,21 +864,27 @@ const i = (flag: boolean): number => h(flag)
 Deno.test("never fits every branch", () => {
   const project = checkText(`
 error E = { m: string }
-const f = (flag: boolean): int fails E =>
+const f = (flag: Bool): Int fails E =>
   if (flag) { 1 } else { fail(E({ m: "no" })) }
+type Int = int
+type Bool = boolean
 `);
   assertEquals(messages(project), []);
 });
 
 Deno.test("arithmetic keeps int, divides to number, and joins strings", () => {
   const project = checkText(`
-const a = (x: int, y: int): int => x + y * 2 - 1
-const b = (x: int, y: int): number => x / y
-const c = (x: int, y: number): number => x + y
-const d = (x: string): string => x + "!"
-const e = (x: int, y: int): boolean => x < y
-const f = (x: int, y: int): int => x / y
-const g = (x: int, y: string): int => x + y
+const a = (x: Int, y: Int): Int => x + y * 2 - 1
+const b = (x: Int, y: Int): Num => x / y
+const c = (x: Int, y: Num): Num => x + y
+const d = (x: Text): Text => x + "!"
+const e = (x: Int, y: Int): Bool => x < y
+const f = (x: Int, y: Int): Int => x / y
+const g = (x: Int, y: Text): Int => x + y
+type Int = int
+type Num = number
+type Text = string
+type Bool = boolean
 `);
   assertEquals(codes(project), ["type-mismatch/003", "type-mismatch/007"]);
 });
@@ -903,12 +950,16 @@ type Id = Brand<string>
 type Other = Brand<string>
 type Point = { x: int }
 type Status = "a" | "b"
-const a = (x: int, y: number): boolean => x === y
-const b = (x: Status): boolean => x === "a"
-const c = (x: Id, y: Id): boolean => x !== y
-const d = (x: Id, y: Other): boolean => x === y
-const e = (x: Point, y: Point): boolean => x === y
-const f = (x: string, y: int): boolean => x === y
+const a = (x: Int, y: Num): Bool => x === y
+const b = (x: Status): Bool => x === "a"
+const c = (x: Id, y: Id): Bool => x !== y
+const d = (x: Id, y: Other): Bool => x === y
+const e = (x: Point, y: Point): Bool => x === y
+const f = (x: Text, y: Int): Bool => x === y
+type Int = int
+type Num = number
+type Text = string
+type Bool = boolean
 `);
   assertEquals(codes(project), [
     "type-mismatch/007",
@@ -919,17 +970,20 @@ const f = (x: string, y: int): boolean => x === y
 
 Deno.test("conditions and boolean operators need boolean operands", () => {
   const project = checkText(`
-const a = (x: int): int => if (x) { 1 } else { 2 }
-const b = (x: boolean, y: boolean): boolean => x && y || x
-const c = (x: boolean, y: int): boolean => x && y
+const a = (x: Int): Int => if (x) { 1 } else { 2 }
+const b = (x: Bool, y: Bool): Bool => x && y || x
+const c = (x: Bool, y: Int): Bool => x && y
+type Int = int
+type Bool = boolean
 `);
   assertEquals(codes(project), ["type-mismatch/007", "type-mismatch/007"]);
 });
 
 Deno.test("short-circuit operators union the effects of both operands", () => {
   const project = checkText(`
-service S { ok(): boolean }
-const f = (x: boolean): boolean uses S.ok => x && S.ok()
+service S { ok(): Bool }
+const f = (x: Bool): Bool uses S.ok => x && S.ok()
+type Bool = boolean
 `);
   assertEquals(messages(project), []);
   assertEquals(shortIds(fn(project, "m", "f").body!.requirements), ["S.ok"]);
@@ -966,7 +1020,8 @@ type User = { name: string, age: int }
 const a = (u: User): User => ({ ...u, age: 4 })
 const b = (u: User): User => ({ ...u, size: 4 })
 const c = (u: User): User => ({ ...u, age: "old" })
-const d = (n: int): int => ({ ...n, age: 1 })
+const d = (n: Int): Int => ({ ...n, age: 1 })
+type Int = int
 `);
   assertEquals(codes(project), [
     "type-mismatch/005",
@@ -978,9 +1033,10 @@ const d = (n: int): int => ({ ...n, age: 1 })
 Deno.test("an optional field reads as Option and a missing field is rejected", () => {
   const project = checkText(`
 type Profile = { name: string, nick?: string }
-const a = (p: Profile): Option<string> => p.nick
-const b = (p: Profile): string => p.nick
-const c = (p: Profile): string => p.name
+const a = (p: Profile): Option<Text> => p.nick
+const b = (p: Profile): Text => p.nick
+const c = (p: Profile): Text => p.name
+type Text = string
 `);
   assertEquals(codes(project), ["type-mismatch/003"]);
   const facts = factsOf(project, "m", "a").filter((f) => f.kind === "field");
@@ -990,8 +1046,9 @@ const c = (p: Profile): string => p.name
 Deno.test("a field of a named error value reads through the error record", () => {
   const project = checkText(`
 error E = { reason: string }
-const f = (e: E): string => e.reason
-const g = (e: E): string => e.other
+const f = (e: E): Text => e.reason
+const g = (e: E): Text => e.other
+type Text = string
 `);
   assertEquals(codes(project), ["type-mismatch/006"]);
 });
@@ -1000,12 +1057,14 @@ Deno.test("brand construction and unbrand follow the nominal rules", () => {
   const project = checkText(`
 type Id = Brand<string>
 type Name = string
-const a = (s: string): Id => Id(s)
-const b = (i: Id): string => unbrand(i)
-const c = (n: int): Id => Id(n)
-const d = (s: string): string => unbrand(s)
-const e = (s: string): Name => Name(s)
-const f = (i: Id): string => i
+const a = (s: Text): Id => Id(s)
+const b = (i: Id): Text => unbrand(i)
+const c = (n: Int): Id => Id(n)
+const d = (s: Text): Text => unbrand(s)
+const e = (s: Text): Name => Name(s)
+const f = (i: Id): Text => i
+type Int = int
+type Text = string
 `);
   assertEquals(codes(project), [
     "type-mismatch/003",
@@ -1020,10 +1079,12 @@ const f = (i: Id): string => i
 Deno.test("Some and None take their type from the expected type", () => {
   const project = checkText(`
 type Status = "a" | "b"
-const a = (): Option<int> => Some(1)
+const a = (): Option<Int> => Some(1)
 const b = (): Option<Status> => Some("a")
-const c = (): Option<int> => None
-const d = (): Option<string> => Some(1)
+const c = (): Option<Int> => None
+const d = (): Option<Text> => Some(1)
+type Int = int
+type Text = string
 `);
   assertEquals(codes(project), ["type-mismatch/003"]);
 });
@@ -1031,9 +1092,11 @@ const d = (): Option<string> => Some(1)
 Deno.test("fail needs a named error value and has type never", () => {
   const project = checkText(`
 error E = { m: string }
-const a = (): int fails E => fail(E({ m: "x" }))
-const b = (e: E): string fails E => fail(e)
-const c = (): int => fail(1)
+const a = (): Int fails E => fail(E({ m: "x" }))
+const b = (e: E): Text fails E => fail(e)
+const c = (): Int => fail(1)
+type Int = int
+type Text = string
 `);
   assertEquals(codes(project), ["type-mismatch/010"]);
 });
@@ -1055,18 +1118,20 @@ const d = (): E => E({ m: "x", n: 1 }, 2)
 
 Deno.test("calls check the callee once, the argument count, and the argument types", () => {
   const project = checkText(`
-const add = (a: int, b: int): int => a + b
-const f = (): int => add(1, 2)
-const g = (): int => add(1)
-const h = (): int => add(1, "2")
-const i = (): int => (add)(1, 2)
+const add = (a: Int, b: Int): Int => a + b
+const f = (): Int => add(1, 2)
+const g = (): Int => add(1)
+const h = (): Int => add(1, "2")
+const i = (): Int => (add)(1, 2)
+type Int = int
 `);
   assertEquals(codes(project), ["type-mismatch/004", "type-mismatch/003"]);
 });
 
 Deno.test("a function-typed parameter can be called and makes the caller effectful", () => {
   const project = checkText(`
-const apply = (f: (n: int) => int, x: int): int => f(x)
+const apply = (f: (n: Int) => Int, x: Int): Int => f(x)
+type Int = int
 `);
   assertEquals(messages(project), []);
   assertEquals(fn(project, "m", "apply").mode, "effect");
@@ -1074,28 +1139,31 @@ const apply = (f: (n: int) => int, x: int): int => f(x)
 
 Deno.test("an inline arrow gets parameter types from the expected function type", () => {
   const project = checkText(`
-const apply = (f: (n: int) => int, x: int): int => f(x)
-const a = (): int => apply((n) => n + 1, 1)
-const b = (): int => apply((n) => "x", 1)
+const apply = (f: (n: Int) => Int, x: Int): Int => f(x)
+const a = (): Int => apply((n) => n + 1, 1)
+const b = (): Int => apply((n) => "x", 1)
+type Int = int
 `);
   assertEquals(codes(project), ["type-mismatch/003"]);
 });
 
 Deno.test("a pipeline evaluates the left value once and passes it first", () => {
   const project = checkText(`
-service S { all(): int[] }
-const add = (a: int, b: int): int => a + b
-const f = (): int => 1 |> add(2)
-const g = (): int[] uses S.all => S.all() |> map((n) => n + 1)
-const h = (x: int): int => x |> add
+service S { all(): Int[] }
+const add = (a: Int, b: Int): Int => a + b
+const f = (): Int => 1 |> add(2)
+const g = (): Int[] uses S.all => S.all() |> map((n) => n + 1)
+const h = (x: Int): Int => x |> add
+type Int = int
 `);
   assertEquals(codes(project), ["type-mismatch/004"]);
 });
 
 Deno.test("a service stage is a perform with the left value as the first argument", () => {
   const project = checkText(`
-service S { put(n: int): void }
-const f = (n: int): void uses S.put => n |> S.put
+service S { put(n: Int): void }
+const f = (n: Int): void uses S.put => n |> S.put
+type Int = int
 `);
   assertEquals(messages(project), []);
   const kinds = factsOf(project, "m", "f").map((f) => f.kind);
@@ -1105,13 +1173,16 @@ const f = (n: int): void uses S.put => n |> S.put
 
 Deno.test("map, filter, and fold check their arguments", () => {
   const project = checkText(`
-const a = (xs: int[]): string[] => xs |> map((n) => "x")
-const b = (xs: int[]): int[] => xs |> filter((n) => n)
-const c = (xs: int[]): int => xs |> fold(0, (s, n) => s + n)
-const d = (xs: int[]): int => xs |> fold(0, (s) => s)
-const e = (n: int): int[] => n |> map((x) => x)
-const f = (xs: string[]): string => xs |> fold("", (s, x) => s + x)
-const g = (xs: int[]): number => xs |> fold(0, (s, n) => s + n)
+const a = (xs: Int[]): Text[] => xs |> map((n) => "x")
+const b = (xs: Int[]): Int[] => xs |> filter((n) => n)
+const c = (xs: Int[]): Int => xs |> fold(0, (s, n) => s + n)
+const d = (xs: Int[]): Int => xs |> fold(0, (s) => s)
+const e = (n: Int): Int[] => n |> map((x) => x)
+const f = (xs: Text[]): Text => xs |> fold("", (s, x) => s + x)
+const g = (xs: Int[]): Num => xs |> fold(0, (s, n) => s + n)
+type Int = int
+type Num = number
+type Text = string
 `);
   assertEquals(codes(project), [
     "type-mismatch/003",
@@ -1122,15 +1193,17 @@ const g = (xs: int[]): number => xs |> fold(0, (s, n) => s + n)
 
 Deno.test("fold takes the widened type of the initial value when no type is expected", () => {
   const project = checkText(`
-const a = (xs: int[]) => xs |> fold(0, (s, n) => s + n)
-const b = (xs: int[]): int => a(xs)
+const a = (xs: Int[]) => xs |> fold(0, (s, n) => s + n)
+const b = (xs: Int[]): Int => a(xs)
+type Int = int
 `);
   assertEquals(messages(project), []);
 });
 
 Deno.test("a builtin used as a plain value is rejected by the resolver, not twice", () => {
   const project = checkText(`
-const f = (xs: int[]): int[] => xs |> map
+const f = (xs: Int[]): Int[] => xs |> map
+type Int = int
 `);
   assertEquals(codes(project), ["type-mismatch/004"]);
 });
@@ -1139,13 +1212,14 @@ const f = (xs: int[]): int[] => xs |> map
 
 Deno.test("retry needs a zero-argument job and a literal times", () => {
   const project = checkText(`
-const job = (): int => 1
-const a = (): int => retry(job, { times: 2 })
-const b = (): int => retry(job, { times: 1.5 })
-const c = (n: int): int => retry(job, { times: n })
-const d = (): int => retry(job, { count: 2 })
-const e = (): int => retry((n: int) => n, { times: 2 })
-const f = (): int => retry(job)
+const job = (): Int => 1
+const a = (): Int => retry(job, { times: 2 })
+const b = (): Int => retry(job, { times: 1.5 })
+const c = (n: Int): Int => retry(job, { times: n })
+const d = (): Int => retry(job, { count: 2 })
+const e = (): Int => retry((n: Int) => n, { times: 2 })
+const f = (): Int => retry(job)
+type Int = int
 `);
   assertEquals(codes(project), [
     "type-mismatch/010",
@@ -1160,8 +1234,9 @@ const f = (): int => retry(job)
 Deno.test("retry unions the construction sets with the job's invocation sets", () => {
   const project = checkText(`
 error E = { m: string }
-service S { a(): int fails E }
-const f = (): int fails E uses S.a => retry(() => S.a(), { times: 0 })
+service S { a(): Int fails E }
+const f = (): Int fails E uses S.a => retry(() => S.a(), { times: 0 })
+type Int = int
 `);
   assertEquals(messages(project), []);
   assertEquals(shortIds(fn(project, "m", "f").body!.failures), ["E"]);
@@ -1176,9 +1251,10 @@ const HOST = {
   "svc.eff": `
 export error Down = { m: string }
 export service Db {
-  read(): int fails Down
-  write(n: int): void
+  read(): Int fails Down
+  write(n: Int): void
 }
+type Int = int
 `,
   "host/providers.effi": `
 import { Db, Down } from "../svc.eff"
@@ -1192,10 +1268,11 @@ Deno.test("provide with a host provider has the callback's failures and the acqu
     "main.eff": `
 import { Db, Down } from "./svc.eff"
 import { DbLive } from "host:providers"
-export const run = (): int fails Down =>
+export const run = (): Int fails Down =>
   provide(DbLive, () => Db.read())
-export const bad = (): int fails Down uses Db.read =>
+export const bad = (): Int fails Down uses Db.read =>
   provide(DbLive, () => Db.read())
+type Int = int
 `,
   }, ["main.eff"]);
   assertEquals(messages(project), []);
@@ -1211,9 +1288,10 @@ Deno.test("provide needs a host provider and a zero-argument job", () => {
     "main.eff": `
 import { Db, Down } from "./svc.eff"
 import { DbLive } from "host:providers"
-export const a = (n: int): int fails Down => provide(n, () => 1)
-export const b = (): int fails Down => provide(DbLive, (n: int) => n)
-export const c = (): int fails Down => provide(DbLive)
+export const a = (n: Int): Int fails Down => provide(n, () => 1)
+export const b = (): Int fails Down => provide(DbLive, (n: Int) => n)
+export const c = (): Int fails Down => provide(DbLive)
+type Int = int
 `,
   }, ["main.eff"]);
   assertEquals(codes(project), [
@@ -1229,8 +1307,9 @@ Deno.test("a provide with empty sets still has effect mode", () => {
     "main.eff": `
 import { Down } from "./svc.eff"
 import { DbLive } from "host:providers"
-export const run = (): int fails Down => provide(DbLive, () => 1)
-const quiet = (): int => provide(DbLive, () => 1)
+export const run = (): Int fails Down => provide(DbLive, () => 1)
+const quiet = (): Int => provide(DbLive, () => 1)
+type Int = int
 `,
   }, ["main.eff"]);
   // quiet fails with Down, which its empty fails clause does not list.
@@ -1245,12 +1324,13 @@ Deno.test("catch removes handled tags and unions the handler sets", () => {
 error A = { m: string }
 error B = { m: string }
 error C = { m: string }
-const raise = (): int fails A | B => fail(A({ m: "x" }))
-const f = (): int fails C =>
+const raise = (): Int fails A | B => fail(A({ m: "x" }))
+const f = (): Int fails C =>
   try { raise() } catch {
     A(a) => 1,
     B(b) => fail(C({ m: b.m }))
   }
+type Int = int
 `);
   assertEquals(messages(project), []);
   assertEquals(shortIds(fn(project, "m", "f").body!.failures), ["C"]);
@@ -1260,11 +1340,12 @@ Deno.test("an unhandled tag continues to the caller", () => {
   const project = checkText(`
 error A = { m: string }
 error B = { m: string }
-const raise = (): int fails A | B => fail(A({ m: "x" }))
-const f = (): int fails A =>
+const raise = (): Int fails A | B => fail(A({ m: "x" }))
+const f = (): Int fails A =>
   try { raise() } catch {
     A(a) => 1
   }
+type Int = int
 `);
   assertEquals(codes(project), ["failure-contract/001"]);
   assert(project.diagnostics[0].message.includes("B"));
@@ -1273,11 +1354,12 @@ const f = (): int fails A =>
 Deno.test("successful and handled paths need a common type", () => {
   const project = checkText(`
 error A = { m: string }
-const raise = (): int fails A => fail(A({ m: "x" }))
-const f = (): int =>
+const raise = (): Int fails A => fail(A({ m: "x" }))
+const f = (): Int =>
   try { raise() } catch {
     A(a) => "none"
   }
+type Int = int
 `);
   assertEquals(codes(project), ["type-mismatch/003"]);
 });
@@ -1285,7 +1367,8 @@ const f = (): int =>
 Deno.test("handlers evaluate as effect mode even when nothing can fail", () => {
   const project = checkText(`
 error A = { m: string }
-const f = (): int => try { 1 } catch { A(a) => 2 }
+const f = (): Int => try { 1 } catch { A(a) => 2 }
+type Int = int
 `);
   assertEquals(codes(project), ["failure-contract/002"]);
   assertEquals(fn(project, "m", "f").mode, "effect");
@@ -1295,10 +1378,11 @@ const f = (): int => try { 1 } catch { A(a) => 2 }
 
 Deno.test("match on an option needs Some and None", () => {
   const project = checkText(`
-const a = (o: Option<int>): int => match o { Some(x) => x, None => 0 }
-const b = (o: Option<int>): int => match o { Some(x) => x }
-const c = (o: Option<int>): int => match o { None => 0, _ => 1 }
-const d = (o: Option<int>): int => match o { Some(x) => x, None => 0, _ => 1 }
+const a = (o: Option<Int>): Int => match o { Some(x) => x, None => 0 }
+const b = (o: Option<Int>): Int => match o { Some(x) => x }
+const c = (o: Option<Int>): Int => match o { None => 0, _ => 1 }
+const d = (o: Option<Int>): Int => match o { Some(x) => x, None => 0, _ => 1 }
+type Int = int
 `);
   assertEquals(codes(project), ["pattern/001", "pattern/002"]);
 });
@@ -1306,12 +1390,14 @@ const d = (o: Option<int>): int => match o { Some(x) => x, None => 0, _ => 1 }
 Deno.test("match on literals and booleans needs every value or a wildcard", () => {
   const project = checkText(`
 type Color = "red" | "green"
-const a = (c: Color): int => match c { "red" => 1, "green" => 2 }
-const b = (c: Color): int => match c { "red" => 1 }
-const c = (b: boolean): int => match b { true => 1, false => 0 }
-const d = (b: boolean): int => match b { true => 1 }
-const e = (c: Color): int => match c { "red" => 1, "green" => 2, "blue" => 3 }
-const f = (c: Color): int => match c { "red" => 1, "red" => 2, "green" => 3 }
+const a = (c: Color): Int => match c { "red" => 1, "green" => 2 }
+const b = (c: Color): Int => match c { "red" => 1 }
+const c = (b: Bool): Int => match b { true => 1, false => 0 }
+const d = (b: Bool): Int => match b { true => 1 }
+const e = (c: Color): Int => match c { "red" => 1, "green" => 2, "blue" => 3 }
+const f = (c: Color): Int => match c { "red" => 1, "red" => 2, "green" => 3 }
+type Int = int
+type Bool = boolean
 `);
   assertEquals(codes(project), [
     "pattern/001",
@@ -1323,10 +1409,12 @@ const f = (c: Color): int => match c { "red" => 1, "red" => 2, "green" => 3 }
 
 Deno.test("match on a primitive needs a final wildcard", () => {
   const project = checkText(`
-const a = (n: int): string => match n { 0 => "zero", _ => "many" }
-const b = (n: int): string => match n { 0 => "zero", 1 => "one" }
-const c = (s: string): int => match s { "a" => 1, _ => 2 }
-const d = (s: string): int => match s { 1 => 1, _ => 2 }
+const a = (n: Int): Text => match n { 0 => "zero", _ => "many" }
+const b = (n: Int): Text => match n { 0 => "zero", 1 => "one" }
+const c = (s: Text): Int => match s { "a" => 1, _ => 2 }
+const d = (s: Text): Int => match s { 1 => 1, _ => 2 }
+type Int = int
+type Text = string
 `);
   assertEquals(codes(project), ["pattern/001", "pattern/003"]);
 });
@@ -1334,26 +1422,27 @@ const d = (s: string): int => match s { 1 => 1, _ => 2 }
 Deno.test("match on a tagged record union binds the narrowed record", () => {
   const project = checkText(`
 type Shape = { kind: "circle", radius: number } | { kind: "square", side: number }
-const extent = (s: Shape): number =>
+const extent = (s: Shape): Num =>
   match s {
     { kind: "circle", ...c } => c.radius,
     { kind: "square", ...q } => q.side
   }
-const missing = (s: Shape): number =>
+const missing = (s: Shape): Num =>
   match s {
     { kind: "circle", ...c } => c.radius
   }
-const wrong = (s: Shape): number =>
+const wrong = (s: Shape): Num =>
   match s {
     { kind: "circle", ...c } => c.side,
     { kind: "square" } => 1
   }
-const foreign = (s: Shape): number =>
+const foreign = (s: Shape): Num =>
   match s {
     { kind: "circle" } => 1,
     { kind: "square" } => 2,
     { kind: "hex" } => 3
   }
+type Num = number
 `);
   assertEquals(codes(project), [
     "pattern/001",
@@ -1373,13 +1462,14 @@ Deno.test("match on an error union uses error patterns", () => {
   const project = checkText(`
 error A = { m: string }
 error B = { n: int }
-const label = (e: A | B): string =>
+const label = (e: A | B): Text =>
   match e {
     A(a) => a.m,
     B(b) => "b"
   }
-const partial = (e: A | B): string => match e { A(a) => a.m }
-const foreign = (e: A): string => match e { B(b) => "b" }
+const partial = (e: A | B): Text => match e { A(a) => a.m }
+const foreign = (e: A): Text => match e { B(b) => "b" }
+type Text = string
 `);
   assertEquals(codes(project), [
     "pattern/001",
@@ -1391,11 +1481,12 @@ const foreign = (e: A): string => match e { B(b) => "b" }
 Deno.test("a match subject evaluates once and its arms union their effects", () => {
   const project = checkText(`
 service S {
-  find(): Option<int>
-  other(): int
+  find(): Option<Int>
+  other(): Int
 }
-const f = (): int uses S.find | S.other =>
+const f = (): Int uses S.find | S.other =>
   match S.find() { Some(x) => x, None => S.other() }
+type Int = int
 `);
   assertEquals(messages(project), []);
   assertEquals(shortIds(fn(project, "m", "f").body!.requirements), [
@@ -1407,8 +1498,9 @@ const f = (): int uses S.find | S.other =>
 Deno.test("constructor patterns without a binding are pattern errors", () => {
   const project = checkText(`
 error A = { m: string }
-const f = (o: Option<int>): int => match o { Some => 1, None => 0 }
-const g = (e: A): int => match e { A => 1 }
+const f = (o: Option<Int>): Int => match o { Some => 1, None => 0 }
+const g = (e: A): Int => match e { A => 1 }
+type Int = int
 `);
   assertEquals(codes(project), [
     "pattern/001",
@@ -1425,24 +1517,26 @@ Deno.test("a block ending with a binding is void and a block binding checks its 
 const a = (): void => {
   const x = 1
 }
-const b = (): int => {
-  const x: int = "s"
+const b = (): Int => {
+  const x: Int = "s"
   x
 }
-const c = (): int => {
+const c = (): Int => {
   const x = 1
 }
 const d = (): void => {}
+type Int = int
 `);
   assertEquals(codes(project), ["type-mismatch/003", "type-mismatch/003"]);
 });
 
 Deno.test("a local function can be called and infers its contract", () => {
   const project = checkText(`
-const f = (n: int): int => {
-  const twice = (k: int) => k * 2
+const f = (n: Int): Int => {
+  const twice = (k: Int) => k * 2
   twice(n)
 }
+type Int = int
 `);
   assertEquals(messages(project), []);
   assertEquals(fn(project, "m", "f").mode, "pure");
@@ -1450,19 +1544,21 @@ const f = (n: int): int => {
 
 Deno.test("a local function cannot call itself", () => {
   const project = checkText(`
-const f = (n: int): int => {
-  const loop = (k: int): int => loop(k)
+const f = (n: Int): Int => {
+  const loop = (k: Int): Int => loop(k)
   loop(n)
 }
+type Int = int
 `);
   assertEquals(codes(project), ["execution-mode/003"]);
 });
 
 Deno.test("creating a closure is pure and invoking it carries the effects", () => {
   const project = checkText(`
-service S { a(): int }
-const f = (): () => int =>
+service S { a(): Int }
+const f = (): () => Int =>
   () => S.a()
+type Int = int
 `);
   // The returned function has the default effect execution of an annotation, so
   // the closure with requirements does not fit a type that lists none.
@@ -1471,11 +1567,12 @@ const f = (): () => int =>
 
 Deno.test("a closure construction has pure mode and empty sets", () => {
   const project = checkText(`
-service S { a(): int }
-const f = (): int uses S.a => {
+service S { a(): Int }
+const f = (): Int uses S.a => {
   const g = () => S.a()
   g()
 }
+type Int = int
 `);
   assertEquals(messages(project), []);
   const table = fn(project, "m", "f").table;
@@ -1493,17 +1590,20 @@ const f = (): int uses S.a => {
 
 Deno.test("an unknown name gives one unknown-name diagnostic and no cascade", () => {
   const project = checkText(`
-const f = (n: int): int => missing(n) + 1
-const g = (n: int): string => missing.field
+const f = (n: Int): Int => missing(n) + 1
+const g = (n: Int): Text => missing.field
+type Int = int
+type Text = string
 `);
   assertEquals(codes(project), ["unknown-name/001", "unknown-name/001"]);
 });
 
 Deno.test("an unknown operand of -, *, or / gives no cascade", () => {
   const project = checkText(`
-const a: int = missing - 1
-const b: int = missing * 2
-const c: int = missing / 2
+const a: Int = missing - 1
+const b: Int = missing * 2
+const c: Int = missing / 2
+type Int = int
 `);
   assertEquals(codes(project), [
     "unknown-name/001",
@@ -1514,8 +1614,9 @@ const c: int = missing / 2
 
 Deno.test("a declaration with a syntax error does not hide a later declaration", () => {
   const project = checkText(`
-const broken = (n: int): int => n +
-const fine = (n: int): int => "text"
+const broken = (n: Int): Int => n +
+const fine = (n: Int): Int => "text"
+type Int = int
 `);
   assert(codes(project).includes("type-mismatch/003"));
   assert(codes(project).some((c) => c.startsWith("syntax/")));
@@ -1567,10 +1668,12 @@ Deno.test("a body edit that keeps the mode leaves the importing module's interfa
 
 Deno.test("a mode change of an exported function changes the interface hash", () => {
   const base = `
-export const f = (n: int): int => n
+export const f = (n: Int): Int => n
+type Int = int
 `;
   const effectful = `
-export const f = (n: int): int => retry(() => n, { times: 1 })
+export const f = (n: Int): Int => retry(() => n, { times: 1 })
+type Int = int
 `;
   const a = checkFiles({ "effective.json": "{}", "m.eff": base }, ["m.eff"]);
   const b = checkFiles({ "effective.json": "{}", "m.eff": effectful }, [
@@ -1581,9 +1684,10 @@ export const f = (n: int): int => retry(() => n, { times: 1 })
 
 Deno.test("a binding annotation with a function type supplies the signature and the mode", () => {
   const project = checkText(`
-const inc: (n: int) => int = (n) => n + 1
-const bad: (n: int) => int = (n) => "x"
-const use = (xs: int[]): int[] => xs |> map(inc)
+const inc: (n: Int) => Int = (n) => n + 1
+const bad: (n: Int) => Int = (n) => "x"
+const use = (xs: Int[]): Int[] => xs |> map(inc)
+type Int = int
 `);
   assertEquals(codes(project), ["type-mismatch/003"]);
   assertEquals(fn(project, "m", "inc").mode, "pure");
@@ -1592,9 +1696,11 @@ const use = (xs: int[]): int[] => xs |> map(inc)
 Deno.test("a service stage with extra arguments and a brand stage are performs and constructions", () => {
   const project = checkText(`
 type Id = Brand<string>
-service S { put(a: int, b: int): void }
-const f = (n: int): void uses S.put => n |> S.put(2)
-const g = (s: string): Id => s |> Id
+service S { put(a: Int, b: Int): void }
+const f = (n: Int): void uses S.put => n |> S.put(2)
+const g = (s: Text): Id => s |> Id
+type Int = int
+type Text = string
 `);
   assertEquals(messages(project), []);
   assertEquals(factsOf(project, "m", "g").map((x) => x.kind), [
@@ -1609,16 +1715,19 @@ function deepRecord(levels: number, leaf: string): string {
 
 Deno.test("a record type 300 levels deep compares int to number with no diagnostic", () => {
   const project = checkText(`
-const f = (x: ${deepRecord(300, "number")}): int => 1
-const g = (y: ${deepRecord(300, "int")}): int => f(y)
+const f = (x: ${deepRecord(300, "Num")}): Int => 1
+const g = (y: ${deepRecord(300, "Int")}): Int => f(y)
+type Int = int
+type Num = number
 `);
   assertEquals(messages(project), []);
 });
 
 Deno.test("a chain of 5000 aliases gives declaration/012 and no exception", () => {
-  const lines = ["const v = (x: A0): int => 1"];
+  const lines = ["const v = (x: A0): Int => 1"];
   for (let i = 0; i < 4999; i++) lines.push(`type A${i} = A${i + 1}`);
   lines.push("type A4999 = int");
+  lines.push("type Int = int");
   const project = checkText(lines.join("\n"));
   assert(codes(project).includes("declaration/012"));
   assert(codes(project).every((code) => code === "declaration/012"));
@@ -1630,13 +1739,14 @@ const NOMINAL_RECORDS = `
 type UserId = Brand<string>
 type User = Brand<{ id: UserId, name: string, active: boolean, nickname?: string }>
 type Dog = { id: UserId, name: string, active: boolean, nickname?: string }
-const nameOf = (user: User): string => user.name
-const nick = (user: User): string =>
+const nameOf = (user: User): Text => user.name
+const nick = (user: User): Text =>
   match user.nickname {
     Some(n) => n,
     None => "none"
   }
 const activate = (user: User): User => ({ ...user, active: true })
+type Text = string
 `;
 
 Deno.test("a field read and a record update see through a brand of a record", () => {

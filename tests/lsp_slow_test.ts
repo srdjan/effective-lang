@@ -160,7 +160,7 @@ Deno.test("the server answers hover, definition, and save, and exits 0", async (
     assert(isRecord(hover.result.contents));
     assertStringIncludes(
       String(hover.result.contents.value),
-      "main(): string fails StoreUnavailable",
+      "main(): Name fails StoreUnavailable",
     );
     // Definition of the call of `displayName`: it lands in `users.eff`.
     const call = positionOf('displayName("u1")', 2);

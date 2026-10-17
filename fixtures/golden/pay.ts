@@ -8,6 +8,12 @@ const $Int = Schema.Finite.check(
   ),
 );
 
+export const Cents = $Int;
+export type Cents = typeof Cents.Type;
+
+export const ChargeId = Schema.String;
+export type ChargeId = typeof ChargeId.Type;
+
 export const OrderId = Schema.String.pipe(Schema.brand("pay#OrderId"));
 export type OrderId = typeof OrderId.Type;
 
@@ -34,7 +40,7 @@ export class Orders extends Context.Service<Orders, {
 }>()("pay#Orders") {}
 
 export class Payments extends Context.Service<Payments, {
-  readonly charge: (a: number) => Effect.Effect<string, PaymentDeclined>;
+  readonly charge: (a: Cents) => Effect.Effect<ChargeId, PaymentDeclined>;
 }>()("pay#Payments") {}
 
 const findOrder = (id: OrderId): Effect.Effect<Order, OrderNotFound, Orders> =>

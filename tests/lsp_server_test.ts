@@ -424,7 +424,7 @@ Deno.test("didClose reads the disk again, so a save while open is not lost", () 
 Deno.test("didClose of a file that is not on disk removes it from the program", () => {
   const h = started();
   const extra = exampleUri("extra.eff");
-  const broken = 'export const x = (): number => "s"\n';
+  const broken = 'export const x = (): Num => "s"\n\ntype Num = number\n';
   h.deliver(didOpen(MAIN, 1, MAIN_TEXT));
   h.deliver(didOpen(extra, 1, broken));
   const found = h.server.projects.lookup(extra);
@@ -455,7 +455,7 @@ Deno.test("watched files: create, change, and delete", () => {
   h.clearSent();
   const path = `${ROOT}/extra.eff`;
   const extra = uriOf(path);
-  const broken = 'export const x = (): number => "s"\n';
+  const broken = 'export const x = (): Num => "s"\n\ntype Num = number\n';
   h.files.set(path, broken);
   h.deliver(watched({ uri: extra, type: 1 }));
   const created = h.published();
@@ -463,7 +463,7 @@ Deno.test("watched files: create, change, and delete", () => {
   assert(!("version" in created[0]));
   assert(created[0].diagnostics.length > 0);
   h.clearSent();
-  h.files.set(path, "export const x = (): number => 1\n");
+  h.files.set(path, "export const x = (): Num => 1\n\ntype Num = number\n");
   h.deliver(watched({ uri: extra, type: 2 }));
   assertEquals(h.published().map(summary), [[extra, undefined, 0]]);
   h.clearSent();
@@ -499,7 +499,10 @@ Deno.test("watched events outside known projects or outside source paths are ign
   const h = started();
   h.deliver(didOpen(MAIN, 1, MAIN_TEXT));
   h.clearSent();
-  h.files.set("/elsewhere/a.eff", "export const a = (): number => 1\n");
+  h.files.set(
+    "/elsewhere/a.eff",
+    "export const a = (): Num => 1\n\ntype Num = number\n",
+  );
   h.files.set(`${ROOT}/notes.txt`, "text");
   h.files.set(`${ROOT}/.cache/hidden.eff`, "this is not valid");
   h.deliver(watched(
@@ -568,7 +571,9 @@ Deno.test("a document outside any project gets no diagnostics and one log messag
   });
   h.start();
   const other = uriOf("/other/a.eff");
-  h.deliver(didOpen(other, 1, 'export const a = (): number => "s"\n'));
+  h.deliver(
+    didOpen(other, 1, 'export const a = (): Num => "s"\n\ntype Num = number\n'),
+  );
   assertEquals(h.published(), []);
   const logs = h.logs();
   assertEquals(logs.length, 1);
@@ -600,7 +605,8 @@ Deno.test("a document in a subdirectory finds the project above it", () => {
   const h = makeHarness({
     files: {
       ...exampleFilesAt(ROOT),
-      [`${ROOT}/sub/deep/z.eff`]: "export const z = (): number => 1\n",
+      [`${ROOT}/sub/deep/z.eff`]:
+        "export const z = (): Num => 1\n\ntype Num = number\n",
     },
   });
   h.start();
@@ -608,7 +614,7 @@ Deno.test("a document in a subdirectory finds the project above it", () => {
     didOpen(
       uriOf(`${ROOT}/sub/deep/z.eff`),
       1,
-      "export const z = (): number => 1\n",
+      "export const z = (): Num => 1\n\ntype Num = number\n",
     ),
   );
   assertEquals(h.published().map(summary), [[
@@ -625,20 +631,27 @@ Deno.test("two projects side by side stay separate", () => {
     files: {
       ...exampleFilesAt(ROOT),
       [`${second}/effective.json`]: "{}",
-      [`${second}/a.eff`]: "export const a = (): number => 1\n",
+      [`${second}/a.eff`]:
+        "export const a = (): Num => 1\n\ntype Num = number\n",
     },
   });
   h.start();
   const a = uriOf(`${second}/a.eff`);
   h.deliver(
     didOpen(MAIN, 1, MAIN_TEXT),
-    didOpen(a, 1, "export const a = (): number => 1\n"),
+    didOpen(a, 1, "export const a = (): Num => 1\n\ntype Num = number\n"),
   );
   assertEquals(h.published().map(summary), [[MAIN, 1, 0], [a, 1, 0]]);
   assertEquals(h.server.projects.projects().map((p) => p.root), [ROOT, second]);
   // An error in one project leaves the other alone.
   h.clearSent();
-  h.deliver(didChangeFull(a, 2, 'export const a = (): number => "s"\n'));
+  h.deliver(
+    didChangeFull(
+      a,
+      2,
+      'export const a = (): Num => "s"\n\ntype Num = number\n',
+    ),
+  );
   const published = h.published();
   assertEquals(uris(published), [a]);
   assert(published[0].diagnostics.length > 0);
@@ -723,7 +736,7 @@ Deno.test("related spans become relatedInformation with a file URI", () => {
   const h = started();
   const dup = exampleUri("dup.eff");
   const text =
-    "export const a = (): number => 1\nexport const a = (): number => 2\n";
+    "export const a = (): Num => 1\nexport const a = (): Num => 2\n\ntype Num = number\n";
   h.deliver(didOpen(dup, 1, text));
   const [published] = h.published();
   assertEquals(published.uri, dup);

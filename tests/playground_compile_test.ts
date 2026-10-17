@@ -21,7 +21,8 @@ const EFF_PATHS = [
   "pay.eff",
   "users.eff",
 ];
-const BAD_USERS = FILES["users.eff"] + 'export const limit: int = 3 + "x"\n';
+const BAD_USERS = FILES["users.eff"] +
+  'export const limit: Int = 3 + "x"\ntype Int = int\n';
 
 function start(): { pg: Playground; first: PlaygroundResult } {
   const pg = createPlayground(FILES, { now: () => 0 });
@@ -137,11 +138,11 @@ Deno.test("hover on rename gives the contract and the backend text", () => {
   assertEquals(hit.to, offsetOf(text, "rename") + "rename".length);
   assertEquals(
     hit.contract,
-    "rename(id: string, name: string): User fails StoreUnavailable | UserMissing uses Users.find | Users.save",
+    "rename(id: UserId, name: Name): User fails StoreUnavailable | UserMissing uses Users.find | Users.save",
   );
   assertEquals(
     hit.backend,
-    "(id: string, name: string): Effect.Effect<User, StoreUnavailable | UserMissing, Users>",
+    "(id: UserId, name: Name): Effect.Effect<User, StoreUnavailable | UserMissing, Users>",
   );
   assertEquals(pg.hover("users.eff", 0), undefined);
 });

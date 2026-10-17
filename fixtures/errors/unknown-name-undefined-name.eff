@@ -1,25 +1,27 @@
 service Store {
-  get(id: int): int
+  get(id: Int): Int
 }
 
 // error: unknown-name/001
 type Box = { value: Nope }
 
 // error: unknown-name/001
-const a = (): int => missing(1)
+const a = (): Int => missing(1)
 
-const b = (): int
+const b = (): Int
   // error: unknown-name/001
   fails Nope => 1
 
 // error: unknown-name/001
-const c = (): int uses Ghost => 1
+const c = (): Int uses Ghost => 1
 
-const d = (): int => {
+const d = (): Int => {
   // error: unknown-name/001
   const x = x
   x
 }
 
 // error: unknown-name/001
-const e = (n: Absent): int => 1
+const e = (n: Absent): Int => 1
+
+type Int = int
