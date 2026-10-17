@@ -70,11 +70,12 @@ guide and code comments). The STE checker passes on every changed document.
 
 | Id | Task | Status |
 | --- | --- | --- |
-| N1 | No CI exists, but D5 places `tsc` and the validator in CI | done, 81be512 (D24). The workflow has not run, because nothing is pushed |
+| N1 | No CI exists, but D5 places `tsc` and the validator in CI | done, 81be512 (D24). N6 removed the workflow |
 | N2 | Decide whether the eight book targets become goldens | done, 731e76e (D25) |
 | N3 | Long names and module paths break the `deno fmt` fixed point in six forms besides C15 | done, a691b71 (D23). Six forms of very long identifiers stay out of scope |
 | N4 | `deno publish --dry-run` fails: the repository has no license file | open; publication is not part of this audit |
 | N5 | A selector test longer than 80 columns in a match arm after the first is not a `deno fmt` fixed point. `deno fmt` joins the earlier links on the first line | decision: model it, or keep it as a known limit |
+| N6 | The user chose no CI on GitHub | done: the workflow is removed, and D24 defines CI as the local gate `deno task check` |
 
 ## Decisions of the user
 

@@ -34,7 +34,7 @@ Decided by the user on 2026-10-16 and 2026-10-17. Each entry took the recommende
 | D21 Type depth (2026-10-17) | A type deeper than the comparison cap gets a named diagnostic, as section 4.6 asks. |
 | D22 Package export (2026-10-17) | `deno.json` exports `./src/core/mod.ts`, the documented public API. |
 | D23 Long selector tests (2026-10-17) | The printer breaks a long selector test after `===`, as `deno fmt` does. |
-| D24 CI (2026-10-17) | A GitHub workflow runs `deno task check` (D5). |
+| D24 CI (2026-10-17, revised the same day) | The project has no hosted CI. In this document, CI is the gate `deno task check`, which runs before each commit (D5). |
 | D25 Book targets (2026-10-17) | The five examples are the golden outputs. The eight book targets are not, because they use short tags (D7) and source order (section 5.4). |
 
 Open: none.
