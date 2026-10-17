@@ -1934,6 +1934,8 @@ export class BodyChecker {
       : this.kidsOfKind(catchNode, SyntaxKind.Handler);
     const protectedSet = new Set<ErrorId>(body.failures);
     const handled = new Set<ErrorId>();
+    // Every error that a handler names, so a repeat is a duplicate even for an absent error.
+    const named = new Set<ErrorId>();
     const handlerInfos: NodeInfo[] = [];
     const branches = [{ node: bodyNode, type: body.type }];
     for (const handler of handlers) {
@@ -1957,7 +1959,9 @@ export class BodyChecker {
         ? bindingTarget.id
         : undefined;
       if (error !== undefined && errorNode !== undefined) {
-        if (handled.has(error)) {
+        const repeated = named.has(error);
+        named.add(error);
+        if (repeated) {
           this.report(
             "failure-contract/003",
             `the error \`${shortName(error)}\` already has a handler`,
