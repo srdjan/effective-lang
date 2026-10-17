@@ -410,6 +410,10 @@ export class BodyValidator {
         return this.sinkForEach(e, path);
       case "run-stream":
         return this.runStream(e, path);
+      case "buffer-stream":
+        return this.bufferStream(e, path);
+      case "merge-streams":
+        return this.mergeStreams(e, path);
       case "perform":
         return this.perform(e, path);
       case "block":
@@ -1475,6 +1479,10 @@ export class BodyValidator {
             return [e.consume];
           case "run-stream":
             return [e.stream, e.sink];
+          case "buffer-stream":
+            return [e.stream];
+          case "merge-streams":
+            return [e.left, e.right];
           case "defer":
           case "retry":
             return [e.job];
@@ -1777,6 +1785,74 @@ export class BodyValidator {
         ]),
         execution: "effect",
       }]),
+    };
+  }
+
+  private bufferStream(
+    e: Extract<Expr, { kind: "buffer-stream" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const source = unfold(this.env, stream.type);
+    if (source.kind !== "stream") {
+      this.add(AREA.types, path, "bufferStream needs a Stream value", e.span);
+      return this.poison();
+    }
+    if (!Number.isSafeInteger(e.capacity) || e.capacity <= 0) {
+      this.add(
+        AREA.control,
+        path,
+        "bufferStream capacity must be a positive safe integer",
+        e.span,
+      );
+    }
+    return { type: source, match: "exact", active: combine([stream]) };
+  }
+
+  private mergeStreams(
+    e: Extract<Expr, { kind: "merge-streams" }>,
+    path: string,
+  ): Comp {
+    const left = this.check(e.left, `${path}.left`);
+    const right = this.check(e.right, `${path}.right`);
+    const a = unfold(this.env, left.type);
+    const b = unfold(this.env, right.type);
+    if (a.kind !== "stream" || b.kind !== "stream") {
+      this.add(
+        AREA.types,
+        path,
+        "mergeStreams needs two Stream values",
+        e.span,
+      );
+      return this.poison();
+    }
+    const aFitsB = fits(this.env, a.element, b.element);
+    const bFitsA = fits(this.env, b.element, a.element);
+    if (!aFitsB && !bFitsA) {
+      this.add(
+        AREA.types,
+        path,
+        "mergeStreams needs compatible element types",
+        e.span,
+      );
+    }
+    return {
+      type: {
+        kind: "stream",
+        element: aFitsB ? b.element : a.element,
+        effects: {
+          failures: sortedUnique([
+            ...a.effects.failures,
+            ...b.effects.failures,
+          ]),
+          requirements: sortedUnique([
+            ...a.effects.requirements,
+            ...b.effects.requirements,
+          ]),
+        },
+      },
+      match: "exact",
+      active: combine([left, right]),
     };
   }
 

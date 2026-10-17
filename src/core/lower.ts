@@ -591,6 +591,24 @@ class BodyLowerer {
           sink: arg(1),
           ...annotation,
         };
+      case "buffer-stream":
+        return {
+          kind: "buffer-stream",
+          stream: arg(0),
+          capacity: this.required(
+            fact.capacity,
+            "the stream buffer capacity",
+            node,
+          ),
+          ...annotation,
+        };
+      case "merge-streams":
+        return {
+          kind: "merge-streams",
+          left: arg(0),
+          right: arg(1),
+          ...annotation,
+        };
       default:
         throw internal(
           `the fact ${fact.kind} is no call at ${this.describe(node)}`,

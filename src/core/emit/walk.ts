@@ -46,6 +46,10 @@ export function childrenOf(expr: Expr): Expr[] {
       return [expr.consume];
     case "run-stream":
       return [expr.stream, expr.sink];
+    case "buffer-stream":
+      return [expr.stream];
+    case "merge-streams":
+      return [expr.left, expr.right];
     case "call":
       return [expr.callee, ...expr.arguments];
     case "perform":

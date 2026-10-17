@@ -123,6 +123,8 @@ export type Expr =
   | Node<{ kind: "map-effect"; stream: Expr; transform: Expr }>
   | Node<{ kind: "sink-for-each"; consume: Expr }>
   | Node<{ kind: "run-stream"; stream: Expr; sink: Expr }>
+  | Node<{ kind: "buffer-stream"; stream: Expr; capacity: number }>
+  | Node<{ kind: "merge-streams"; left: Expr; right: Expr }>
   | Node<{ kind: "perform"; capability: CapabilityId; arguments: readonly Expr[] }>
   | Node<{ kind: "block"; steps: readonly Step[]; result: Expr }>
   | Node<{ kind: "if"; condition: Expr; then: Expr; else: Expr }>

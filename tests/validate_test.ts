@@ -132,6 +132,25 @@ Deno.test("run as a pipeline stage validates locally", () => {
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
 });
 
+Deno.test("stream buffering validates its bound and merged deferred channels", () => {
+  const lowered = lowerText(`
+error Stop = {}
+service Source { next(state: Int): Option<[Int, Int]> fails Stop }
+const first = unfold(0, (state) => Source.next(state))
+const second = unfold(10, (state) => Source.next(state))
+const merged = mergeStreams(bufferStream(first, { capacity: 2 }), second)
+type Int = int
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const wrong = copy(lowered.ir);
+  const merged = wrong.declarations.find((d) => d.name === "merged");
+  assert(merged?.kind === "constant" && merged.value.kind === "merge-streams");
+  const buffered = merged.value.left;
+  assert(buffered.kind === "buffer-stream");
+  (buffered as { capacity: number }).capacity = 0;
+  assert(codesOf(wrong, lowered.sources).includes("validation/006"));
+});
+
 Deno.test("with-resource validation rejects scoped escape and channel mutation", () => {
   const lowered = lowerText(`
 error Stop = {}

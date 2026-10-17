@@ -54,6 +54,8 @@ export type PreludeName =
   | "mapEffect"
   | "sinkForEach"
   | "runStream"
+  | "bufferStream"
+  | "mergeStreams"
   | "unbrand"
   | "Some"
   | "None"
@@ -73,6 +75,8 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "mapEffect",
   "sinkForEach",
   "runStream",
+  "bufferStream",
+  "mergeStreams",
   "unbrand",
   "Some",
   "None",

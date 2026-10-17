@@ -847,6 +847,10 @@ export class BodyChecker {
         return this.sinkForEachCall(node, args);
       case "runStream":
         return this.runStreamCall(node, args);
+      case "bufferStream":
+        return this.bufferStreamCall(node, args);
+      case "mergeStreams":
+        return this.mergeStreamsCall(node, args);
       case "unbrand":
         return this.unbrandCall(node, args);
       case "Some":
@@ -1485,6 +1489,112 @@ export class BodyChecker {
         mode: "effect",
       }]),
     );
+  }
+
+  private bufferStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    if (!this.arity(node, "bufferStream", 2, args)) {
+      this.fact(node, { kind: "buffer-stream", capacity: undefined });
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((a) => this.argInfo(a))),
+      );
+    }
+    this.noPipeline("bufferStream", args);
+    const stream = this.argInfo(args[0]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`bufferStream` needs a Stream value",
+        args[0].node,
+      );
+    }
+    const capacity = this.streamBufferCapacity(args[1]);
+    this.fact(node, { kind: "buffer-stream", capacity });
+    return this.finish(node, stream.type, stream);
+  }
+
+  private streamBufferCapacity(arg: Arg): number | undefined {
+    const bad = (): undefined => {
+      this.report(
+        "type-mismatch/010",
+        "`bufferStream` needs `{ capacity: N }` with a positive safe integer literal",
+        arg.node,
+      );
+      return undefined;
+    };
+    if (
+      arg.pre !== undefined ||
+      kindOf(this.tree, arg.node) !== SyntaxKind.RecordExpr
+    ) return bad();
+    const fields = this.kids(arg.node);
+    if (
+      fields.length !== 1 ||
+      kindOf(this.tree, fields[0]) !== SyntaxKind.RecordField
+    ) return bad();
+    const parts = this.kids(fields[0]);
+    const label = parts.find((k) => kindOf(this.tree, k) === SyntaxKind.Name);
+    const valueNode = parts.find((k) => k !== label);
+    if (
+      label === undefined || valueNode === undefined ||
+      nameTextOf(this.tree, label) !== "capacity" ||
+      kindOf(this.tree, valueNode) !== SyntaxKind.LiteralExpr
+    ) return bad();
+    const value = literalOf(this.tree, valueNode);
+    if (
+      typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0
+    ) return bad();
+    this.finish(valueNode, this.table.int, PURE_EFFECTS);
+    this.finish(
+      arg.node,
+      this.table.record([{
+        name: "capacity",
+        type: this.table.int,
+        optional: false,
+      }]),
+      PURE_EFFECTS,
+    );
+    return value;
+  }
+
+  private mergeStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "merge-streams" });
+    if (!this.arity(node, "mergeStreams", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((a) => this.argInfo(a))),
+      );
+    }
+    this.noPipeline("mergeStreams", args);
+    const left = this.argInfo(args[0]);
+    const right = this.argInfo(args[1]);
+    const a = this.table.node(this.table.unfold(left.type));
+    const b = this.table.node(this.table.unfold(right.type));
+    if (a.kind !== "stream" || b.kind !== "stream") {
+      this.report(
+        "type-mismatch/010",
+        "`mergeStreams` needs two Stream values",
+        node,
+      );
+      return this.finish(node, this.table.error, combine([left, right]));
+    }
+    const aFitsB = this.table.isAssignable(a.element, b.element);
+    const bFitsA = this.table.isAssignable(b.element, a.element);
+    if (!aFitsB && !bFitsA) {
+      this.report(
+        "type-mismatch/010",
+        "`mergeStreams` needs compatible element types",
+        node,
+      );
+    }
+    const element = aFitsB ? b.element : a.element;
+    const type = this.table.stream(element, [...a.failures, ...b.failures], [
+      ...a.requirements,
+      ...b.requirements,
+    ]);
+    return this.finish(node, type, combine([left, right]));
   }
 
   private provideCall(node: NodeId, args: readonly Arg[]): NodeInfo {

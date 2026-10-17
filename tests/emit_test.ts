@@ -66,6 +66,24 @@ type Int = int
   assertStringIncludes(output, "Stream.run(mapped, sink)");
 });
 
+Deno.test("buffered merged streams emit bounded suspending buffers", () => {
+  const output = oneModule(`
+service Source { next(state: Int): Option<[Int, Int]> }
+service Consumer { accept(value: Int): void }
+const first = unfold(0, (state) => Source.next(state))
+const second = unfold(10, (state) => Source.next(state))
+const combined = mergeStreams(bufferStream(first, { capacity: 2 }), second)
+const sink = sinkForEach((value: Int) => Consumer.accept(value))
+export const main = (): void uses Source.next | Consumer.accept => runStream(combined, sink)
+type Int = int
+`);
+  assertStringIncludes(
+    output,
+    'Stream.buffer(first, { capacity: 2, strategy: "suspend" })',
+  );
+  assertStringIncludes(output, "Stream.merge(");
+});
+
 Deno.test("defer stores an Effect and run executes it in an effect function", () => {
   const output = oneModule(`
 error Stop = {}

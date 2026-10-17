@@ -121,6 +121,8 @@ export type NodeFact =
   | { readonly kind: "map-effect" }
   | { readonly kind: "sink-for-each" }
   | { readonly kind: "run-stream" }
+  | { readonly kind: "buffer-stream"; readonly capacity: number | undefined }
+  | { readonly kind: "merge-streams" }
   /** A bracket literal, classified by its checked contextual type. */
   | { readonly kind: "list"; readonly shape: "array" | "tuple" }
   /** A collection builtin with its closed function type. */

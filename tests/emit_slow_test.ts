@@ -440,6 +440,55 @@ console.log(JSON.stringify({ before, produced, consumed, maximumAhead, output })
     });
   });
 });
+Deno.test("buffered merged streams defer production and preserve each source order", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "export service Source { next(state: Int): Option<[Int, Int]> }",
+        "export service Consumer { accept(value: Int): void }",
+        "const first = unfold(0, (state) => Source.next(state))",
+        "const second = unfold(10, (state) => Source.next(state))",
+        "const combined = mergeStreams(bufferStream(first, { capacity: 2 }), second)",
+        "const sink = sinkForEach((value: Int) => Consumer.accept(value))",
+        "export const main = (): void uses Source.next | Consumer.accept => runStream(combined, sink)",
+        "type Int = int",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer, Option } from "effect";
+import { Consumer, Source, main } from "./main.ts";
+let produced = 0;
+const output: number[] = [];
+const SourceLive = Layer.succeed(Source)({
+  next: (state) => Effect.sync(() => {
+    if (state === 3 || state === 13) return Option.none();
+    produced++;
+    return Option.some([state, state + 1] as const);
+  }),
+});
+const ConsumerLive = Layer.succeed(Consumer)({
+  accept: (value) => Effect.sync(() => { output.push(value); }),
+});
+const before = produced;
+await Effect.runPromise(main().pipe(Effect.provide(Layer.merge(SourceLive, ConsumerLive))));
+console.log(JSON.stringify({ before, produced, first: output.filter((n) => n < 10), second: output.filter((n) => n >= 10) }));
+`,
+    );
+    assertEquals(result, {
+      before: 0,
+      produced: 6,
+      first: [0, 1, 2],
+      second: [10, 11, 12],
+    });
+  });
+});
 Deno.test("stream pull releases a scoped operation on failure and interruption", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

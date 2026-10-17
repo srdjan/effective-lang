@@ -847,6 +847,23 @@ export class ExprEmitter {
           callArguments([this.effectCallback(e.consume)]),
         ]);
       }
+      case "buffer-stream": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.buffer`,
+          callArguments([
+            kid(e.stream),
+            emitted(`{ capacity: ${e.capacity}, strategy: "suspend" }`),
+          ]),
+        ]);
+      }
+      case "merge-streams": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.merge`,
+          callArguments([kid(e.left), kid(e.right)]),
+        ]);
+      }
       case "call":
         return this.nonLeafCall(e, kid);
       case "block":
