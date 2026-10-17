@@ -1,7 +1,7 @@
 # Disagreement audit, 2026-10-17
 
-Status: the user chose option (a) for the six decisions on 2026-10-17. Four
-are done. D21 and D23 follow the plan `docs/plans/2026-10-17-d21-d23.md`. This
+Status: the user chose option (a) for the six decisions on 2026-10-17. Five
+are done. D23 follows the plan `docs/plans/2026-10-17-d21-d23.md`. This
 ledger lists each disagreement that the audit found between the code, the
 tests, and the documents. Each item has a status: done (with its commit),
 rejected (with a reason), or decision (it waits for the user).
@@ -23,7 +23,7 @@ and 27 slow tests.
 | C4 | A pure job of `retry` or `provide` emits code that `deno check` rejects | `retry(() => 2, { times: 2 })` gave TS2322 | High | done, 4266474 |
 | C5 | A source name can shadow a global that the emitted code uses | `const Number = "x"` with int `+` gives TS2339. `const undefined = 5` changes a unit result. `type ReadonlyArray` gives TS2315, and `type any` gives TS2457 | High | done, 8e64f9f (D20) |
 | C6 | The nesting-limit recovery skips the rest of the file | 300 nested `(` hid the next two declarations and their error | High | done, c71d41a |
-| C7 | The type comparison has a silent depth cap of 256 | Record types 300 levels deep, `int` to `number`, give a false `type-mismatch/003`. A chain of aliases can exceed any fixed cap | High | planned (D21) |
+| C7 | The type comparison has a silent depth cap of 256 | Record types 300 levels deep, `int` to `number`, give a false `type-mismatch/003`. A chain of aliases can exceed any fixed cap | High | done, a6db2a3 (D21) |
 | C8 | A second handler for an absent error gets `/002`, not `/003` | Probe and fixture | High | done, 4cade14 |
 | C9 | `validateModule` throws on a malformed IR | A `null` declaration gave a TypeError | High | done, fa0757b |
 | C10 | `playground:build <dir>` can delete a source directory | The guard refused only the root and its parents | High | done, 73e310a |
