@@ -1,0 +1,34 @@
+export error AVeryLongErrorNameThatKeepsGoingAndGoing = { id: string }
+export error AnotherLongErrorNameThatKeepsGoingOnAndOn = { why: string }
+export type AVeryLongBrandNameThatKeepsGoingAndGoingOn = Brand<string>
+export type Status = "a-very-long-literal-member-one" | "a-very-long-literal-member-two" | "three"
+export type Shape = { kind: "a-very-long-tag-name-that-is-long-enough-to-break-the-line-xxxxxx", r: int } | { kind: "sq", side: int }
+export service AVeryLongServiceNameThatKeepsGoingAndGoing {
+  find(id: string): string fails AVeryLongErrorNameThatKeepsGoingAndGoing
+}
+export const look = (id: string): string uses AVeryLongServiceNameThatKeepsGoingAndGoing.find =>
+  try { AVeryLongServiceNameThatKeepsGoingAndGoing.find(id) } catch { AVeryLongErrorNameThatKeepsGoingAndGoing(e) => "missing" }
+export const tag = (s: Status): int => match s {
+  "a-very-long-literal-member-one" => 1,
+  "a-very-long-literal-member-two" => 2,
+  "three" => 3
+}
+export const label = (s: string): int => match s {
+  "a very long string literal that pushes the selector test past eighty columns" => 1,
+  "short" => 2,
+  _ => 3
+}
+export const area = (s: Shape): int => match s {
+  { kind: "a-very-long-tag-name-that-is-long-enough-to-break-the-line-xxxxxx", ...c } => c.r,
+  { kind: "sq", ...q } => q.side
+}
+export const say = (): string => "a string literal that is long enough to pass the eighty column limit of the printer"
+export type Failure = AVeryLongErrorNameThatKeepsGoingAndGoing | AnotherLongErrorNameThatKeepsGoingOnAndOn
+export const describe = (e: Failure): string => match e {
+  AVeryLongErrorNameThatKeepsGoingAndGoing(a) => a.id,
+  AnotherLongErrorNameThatKeepsGoingOnAndOn(b) => b.why
+}
+export service Plain {
+  count(): int
+}
+export const total = (): int uses Plain.count => Plain.count()

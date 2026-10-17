@@ -16,6 +16,7 @@ import type {
 import {
   braces,
   bracketed,
+  callWith,
   type Doc,
   group,
   hard,
@@ -260,7 +261,10 @@ export class DeclarationEmitter {
     if (d.definition.kind === "brand") {
       value = [
         schemaDoc(this.scope, d.definition.base),
-        `.pipe(${schema}.brand(${JSON.stringify(tokenOfId(d.id))}))`,
+        callWith(
+          ".pipe",
+          callWith(`${schema}.brand`, JSON.stringify(tokenOfId(d.id))),
+        ),
       ];
     } else {
       value = schemaDoc(this.scope, d.definition.type);
@@ -273,10 +277,14 @@ export class DeclarationEmitter {
       value,
       ";",
       hard,
-      keyword,
-      "type ",
-      d.name,
-      ` = typeof ${d.name}.Type;`,
+      group([
+        keyword,
+        "type ",
+        d.name,
+        " =",
+        indent([line, `typeof ${d.name}.Type`]),
+      ]),
+      ";",
     ];
   }
 
@@ -322,17 +330,22 @@ export class DeclarationEmitter {
       ";",
     ]);
     const members: Doc = methods.length === 0 ? "{}" : braces(methods);
-    return [
-      this.exportKeyword(d.id),
-      "class ",
-      d.name,
-      " extends ",
+    const keyword = this.exportKeyword(d.id);
+    const heritage: Doc = [
+      "extends ",
       `${context}.Service<${d.name}, `,
       members,
-      ">()(",
-      JSON.stringify(tokenOfId(d.id)),
-      ") {}",
+      callWith(">()", JSON.stringify(tokenOfId(d.id))),
+      " {}",
     ];
+    // `deno fmt` moves `extends` to its own line when the first line is too wide.
+    const opening = methods.length === 0 ? "{}>()(" : "{";
+    const first =
+      `${keyword}class ${d.name} extends ${context}.Service<${d.name}, ${opening}`;
+    if (first.length > LINE_WIDTH) {
+      return [`${keyword}class ${d.name}`, indent([hard, heritage])];
+    }
+    return [`${keyword}class ${d.name} `, heritage];
   }
 
   private parameters(declaration: FunctionDecl): Doc {

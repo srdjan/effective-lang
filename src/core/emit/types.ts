@@ -12,6 +12,7 @@ import type {
 } from "../ir.ts";
 import {
   bracketed,
+  callWith,
   type Doc,
   group,
   ifBreak,
@@ -190,7 +191,7 @@ function schemaOfLiterals(
 ): Doc {
   const schema = scope.effect("Schema");
   if (values.length === 1) {
-    return [`${schema}.Literal(${literalText(values[0])})`];
+    return callWith(`${schema}.Literal`, literalText(values[0]));
   }
   return [
     `${schema}.Literals(`,

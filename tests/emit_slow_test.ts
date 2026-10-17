@@ -164,9 +164,13 @@ function buildExamples(dir: string): string[] {
   return build(dir, EXAMPLE_ENTRIES);
 }
 
+/** The forms module in a deep directory, with long names and long strings. */
+const LONG_NAMES =
+  "a-very-long-directory-name-for-the-module-path/and-another-nested-part/long-names";
+
 function buildForms(dir: string): string[] {
   copyDirectory(new URL("emit/forms/", FIXTURES), dir);
-  return build(dir, ["forms.eff", "names.eff"]);
+  return build(dir, ["forms.eff", "names.eff", LONG_NAMES + ".eff"]);
 }
 
 // ------------------------------------------------------------------ type check
@@ -384,12 +388,15 @@ Deno.test("deno fmt does not exclude the golden files, and it accepts them uncha
 Deno.test("the emitted forms are a fixed point of deno fmt", async () => {
   await withTemporary(async (dir) => {
     const generated = buildForms(dir);
-    assertEquals([...generated].sort(), ["forms.ts", "names.ts"]);
+    assertEquals(
+      [...generated].sort(),
+      [LONG_NAMES + ".ts", "forms.ts", "names.ts"],
+    );
     const run = await deno(dir, ["fmt", "--check", ...generated]);
     assertEquals(run.code, 0, `deno fmt --check failed:\n${run.stderr}`);
     assert(
-      run.stderr.includes("Checked 2 files"),
-      `deno fmt did not check both files:\n${run.stderr}`,
+      run.stderr.includes("Checked 3 files"),
+      `deno fmt did not check the three files:\n${run.stderr}`,
     );
   });
 });

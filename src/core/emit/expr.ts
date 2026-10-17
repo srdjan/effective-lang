@@ -361,6 +361,11 @@ function callArguments(args: readonly Emitted[]): Doc {
   ]);
 }
 
+/** `left === right`. When it does not fit, `right` moves down two levels, as `deno fmt` prints it. */
+function equality(left: string, right: Doc): Doc {
+  return group([left, " ===", indent(indent([line, right]))]);
+}
+
 function isIntType(type: Type): boolean {
   return type.kind === "primitive" && type.name === "int";
 }
@@ -1114,21 +1119,17 @@ export class ExprEmitter {
       case "wildcard":
         return undefined;
       case "literal":
-        return [selector, " === ", this.literal(pattern.value)];
+        return equality(selector, this.literal(pattern.value));
       case "error":
-        return [
-          selector,
-          "._tag === ",
+        return equality(
+          `${selector}._tag`,
           JSON.stringify(tokenOfId(pattern.error)),
-        ];
+        );
       case "tag":
-        return [
-          selector,
-          ".",
-          pattern.field,
-          " === ",
+        return equality(
+          `${selector}.${pattern.field}`,
           JSON.stringify(pattern.value),
-        ];
+        );
       case "none":
       case "some":
         throw unsupported(
@@ -1302,10 +1303,11 @@ export class ExprEmitter {
           methodOfCapability(e.capability),
           callArguments(children),
         ]);
+        const bodyGroup: GroupId = {};
         const arrow = emitted(
-          this.arrow(`(${parameter})`, call),
+          this.arrow(`(${parameter})`, call, bodyGroup),
           PREC.yield,
-          { huggable: true },
+          { huggable: true, bodyGroup },
         );
         return emitted([`${service}.use`, callArguments([arrow])]);
       }
@@ -1342,13 +1344,29 @@ export class ExprEmitter {
     return emitted([`${effect}.suspend`, callArguments([value])]);
   }
 
+  /**
+   * `"key": (e) => body`. When the head `"key": (e) =>` does not fit on a
+   * line, `deno fmt` moves the arrow below the key. Else the body moves down.
+   */
+  private handlerEntry(key: string, parameters: string, body: Emitted): Doc {
+    const arrow = this.arrow(parameters, body);
+    if (body.chain !== undefined || body.brace) return [key, ": ", arrow];
+    return alt([
+      [key, ": ", arrow],
+      [key, ": ", parameters, " =>", indent([hard, flush(body)])],
+      [key, ":", indent([hard, arrow])],
+    ]);
+  }
+
   private catchEffect(e: Extract<Expr, { kind: "catch" }>): Emitted {
     const effect = this.scope.effect("Effect");
-    const handlers = e.handlers.map((h: Handler) => [
-      JSON.stringify(tokenOfId(h.error)),
-      ": ",
-      this.arrow(`(${h.binding.name})`, this.asEffect(h.body)),
-    ]);
+    const handlers = e.handlers.map((h: Handler) =>
+      this.handlerEntry(
+        JSON.stringify(tokenOfId(h.error)),
+        `(${h.binding.name})`,
+        this.asEffect(h.body),
+      )
+    );
     const table = emitted(bracketed("{", "}", handlers, true), PREC.member, {
       huggable: true,
     });

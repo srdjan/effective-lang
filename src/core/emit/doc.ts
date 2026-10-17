@@ -170,6 +170,14 @@ export function bracketed(
   ]);
 }
 
+/** A call with one argument: `callee(arg)` when it fits, else the argument on a line of its own with a trailing comma. */
+export function callWith(callee: Doc, arg: Doc): Doc {
+  return [
+    callee,
+    group(["(", indent([soft, arg]), ifBreak(","), soft, ")"]),
+  ];
+}
+
 export interface SpanRecord {
   /** Offsets in UTF-16 code units of the rendered text. The end is exclusive. */
   readonly start: number;
