@@ -15,6 +15,10 @@ Source fiber handles and general concurrency remain gaps.
 Update, 2026-10-17: `Ref<A>` and source make/get/set/update operations now
 compile. Ref is invariant, and update requires a pure callback. A bounded
 concurrency runtime test checks atomic updates.
+Update, 2026-10-17: `fixtures/host-adapter-files/` demonstrates a typed
+`effect/FileSystem` host adapter with Node services, input validation, and
+nominal error translation. The CLI's target check pins the Node platform
+package to 4.0.5. This covers one operation, not general ecosystem parity.
 
 Update, 2026-10-17: the pipeline validation defect described below was fixed
 in phase 1 of the [implementation plan](plans/2026-10-17-effect4-gap-closure.md).

@@ -1,0 +1,11 @@
+export type Path = string
+export type Text = string
+export error FileReadError = { path: Path, message: Text }
+
+export service Files {
+  read(path: Path): Text fails FileReadError
+}
+
+export const load = (path: Path): Text
+  fails FileReadError
+  uses Files.read => Files.read(path)

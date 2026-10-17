@@ -14,7 +14,7 @@ import { formatTscMappings, type TextOf } from "./format.ts";
 /** The version of Effect that the generated code targets. */
 export const EFFECT_SPECIFIER = "npm:effect@4.0.5";
 
-/** The configuration of the generated check: strict, with the `effect` import. */
+/** The configuration of the generated check: strict, with pinned host imports. */
 export function tscConfig(): string {
   return JSON.stringify(
     {
@@ -23,7 +23,10 @@ export function tscConfig(): string {
         exactOptionalPropertyTypes: true,
         noUncheckedIndexedAccess: true,
       },
-      imports: { effect: EFFECT_SPECIFIER },
+      imports: {
+        effect: EFFECT_SPECIFIER,
+        "@effect/platform-node": "npm:@effect/platform-node@4.0.5",
+      },
     },
     null,
     2,

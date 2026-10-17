@@ -1,0 +1,5 @@
+import { load, Path, Text, FileReadError } from "./files.eff"
+import { FilesLive } from "host:providers"
+
+export const main = (path: Path): Text fails FileReadError =>
+  provide(FilesLive, () => load(path))

@@ -1,0 +1,8 @@
+{
+  "host": {
+    "providers": {
+      "interface": "./host/providers.effi",
+      "module": "./files-live.ts"
+    }
+  }
+}

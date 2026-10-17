@@ -4,6 +4,7 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { decodeMappings } from "../src/core/emit/sourcemap.ts";
+import { tscConfig } from "../src/cli/tsc.ts";
 import { FIXTURES } from "./helpers.ts";
 
 const REPOSITORY = new URL("../", import.meta.url).pathname;
@@ -305,6 +306,50 @@ Deno.test("build --validate --tsc accepts an incremental stream and sink", async
     const built = await effective(["build", dir, "--validate", "--tsc"]);
     assertEquals(built.code, 0, built.stderr);
     assert(Deno.readTextFileSync(`${dir}/main.ts`).includes("Stream.unfold"));
+  });
+});
+
+Deno.test("a typed FileSystem host adapter builds and maps package failures", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("host-adapter-files/", FIXTURES), dir);
+    const built = await effective(["build", dir, "--validate", "--tsc"]);
+    assertEquals(built.code, 0, built.stderr);
+    Deno.writeTextFileSync(`${dir}/deno.json`, tscConfig());
+    Deno.writeTextFileSync(`${dir}/sample.txt`, "hello from Effect\n");
+    Deno.writeTextFileSync(
+      `${dir}/run.ts`,
+      `
+import { Effect } from "effect";
+import { main } from "./main.ts";
+const value = await Effect.runPromise(main("./sample.txt"));
+const missing = await Effect.runPromise(Effect.flip(main("./missing.txt")));
+const invalid = await Effect.runPromise(Effect.flip(main("")));
+console.log(JSON.stringify({ value, missing: missing._tag, invalid: invalid.message }));
+`,
+    );
+    const output = await new Deno.Command(Deno.execPath(), {
+      args: [
+        "run",
+        "--allow-read",
+        "--allow-env",
+        "--config",
+        "deno.json",
+        "--check",
+        "run.ts",
+      ],
+      cwd: dir,
+      env: { NO_COLOR: "1" },
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    const stderr = new TextDecoder().decode(output.stderr);
+    assertEquals(output.code, 0, stderr);
+    const result = JSON.parse(new TextDecoder().decode(output.stdout).trim());
+    assertEquals(result, {
+      value: "hello from Effect\n",
+      missing: "files#FileReadError",
+      invalid: "invalid path",
+    });
   });
 });
 

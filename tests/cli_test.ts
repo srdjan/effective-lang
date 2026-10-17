@@ -324,7 +324,10 @@ Deno.test("build --tsc runs deno check over the generated files and the host mod
     "users.ts",
   ]);
   const config = JSON.parse(request.config);
-  assertEquals(config.imports, { effect: "npm:effect@4.0.5" });
+  assertEquals(config.imports, {
+    effect: "npm:effect@4.0.5",
+    "@effect/platform-node": "npm:@effect/platform-node@4.0.5",
+  });
   assertEquals(config.compilerOptions, {
     strict: true,
     exactOptionalPropertyTypes: true,

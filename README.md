@@ -328,7 +328,9 @@ The exit code is 0 when there is no diagnostic. It is 1 when there is at least o
 
 `build` writes a module only when it has no error. A module with an error keeps its last good `.ts` and `.ts.map` files. The tool writes a file only when its text changes. `--validate` runs `validateProject` on the lowered IR. A module with a validation diagnostic is not written.
 
-`--tsc` runs `deno check` with a generated configuration. The configuration sets strict mode, `exactOptionalPropertyTypes`, and `noUncheckedIndexedAccess`. It maps `effect` to `npm:effect@4.0.5`. The tool writes the configuration to a temporary directory and removes it after the run. It passes `--no-lock`, so the project directory gets no new file.
+`--tsc` runs `deno check` with a generated configuration. The configuration sets strict mode, `exactOptionalPropertyTypes`, and `noUncheckedIndexedAccess`. It maps `effect` and `@effect/platform-node` to their pinned 4.0.5 packages. The tool writes the configuration to a temporary directory and removes it after the run. It passes `--no-lock`, so the project directory gets no new file.
+
+The `fixtures/host-adapter-files/` project shows a typed `host:` adapter for `effect/FileSystem`. `files.eff` declares the `Files.read` operation and nominal `FileReadError`. `files-live.ts` validates the path, maps package failures to that error, and supplies the Node file system layer. `deno task effective build fixtures/host-adapter-files --validate --tsc` checks the boundary. The slow CLI test runs a successful read and both missing and invalid paths. Other ecosystem packages still need adapters with their own declared contracts.
 
 The tool skips `deno check` when the build has an error. A `host-boundary` result prints as a normal diagnostic. A host-module error prints as `<hostfile>:<line>:<column>: error host-boundary/001: <message>`. A source error prints at the `.eff` position. A generated error prints at the generated position. Both use the code `TS<number>`.
 
