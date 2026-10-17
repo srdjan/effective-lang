@@ -46,11 +46,17 @@ Decided by the user on 2026-10-16 and 2026-10-17. Each entry took the recommende
 
 Open: none.
 
-Evidence for the D9 budget: one quick run of `deno task bench m1` on
-2026-10-16. Each row had 60 samples from two server processes. On the large
-synthetic size, a body edit had a p90 of 11.4 ms (floor 10.4%). A header, alias,
-or mode-flip edit had a p90 of 47 to 49 ms (floors 4.9% to 9.0%). The maximum of
-those rows was 66 to 80 ms. Measure again with `--full` when the core changes.
+Evidence for the D9 budget: one run of `deno task bench m1 --full` on
+2026-10-17, at commit `fc00ef7`, after rule R1. Each row had 200 samples from two
+server processes. On the large synthetic size, a body edit had a p90 of 11.9 ms
+(floor 12.7%). A header, alias, or mode-flip edit had a p90 of 53 to 59 ms
+(floors 5.0% to 9.6%). The maximum of those rows was 56 to 92 ms.
+
+The quick run of 2026-10-16 gave a p90 of 47 to 49 ms for those three edits.
+Since then, every generated module declares the aliases `Int`, `Num`, and `Text`,
+and the checker has new rules. So the two runs do not compare directly, and the
+cause of the difference is not measured. Measure again with `--full` when the
+core changes.
 
 The user also accepted the suggested answers in section 9 for Q1, Q5, Q8, Q9,
 and Q10. Q2, Q3, Q4, Q6, and Q7 follow from D7, D10, D13, D14, and D6.
