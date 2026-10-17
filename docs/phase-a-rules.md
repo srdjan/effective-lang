@@ -10,7 +10,7 @@ the implementer picks the stricter rule and records it here.
 | --- | --- |
 | Raw control characters in strings | Rejected (`syntax/003`), because JSON rejects them |
 | Leading zeros in numbers | `01` is rejected (`syntax/006`) |
-| Union continuation | A newline before `\|` does not continue a type; a newline after `\|` does |
+| Union continuation | A newline before `\|` does not continue a type; a newline after `\|` does. Inside parentheses a newline is not significant, so `(int` newline `\| string)` continues |
 | `fails` and `uses` on a new line | Continue a clause only when an identifier follows |
 | `Some(_)` | Accepted; `_` is the binding name |
 | Nesting depth | 512 levels of expressions and types; a parenthesis counts two levels. Deeper input is `syntax/009`, and the parser skips only the one group at the limit |
@@ -36,7 +36,7 @@ the implementer picks the stricter rule and records it here.
 | Private parameters | A module function parameter needs an annotation when nothing supplies its type (`declaration/011`) |
 | Function types in type syntax | Execution defaults to `effect` |
 | Provider compatibility | Equal `provides`, compatible execution, acquisition sets as subsets |
-| Interface hash | Ignores spans, so comments and body edits do not change it |
+| Interface hash | Ignores spans, so comments do not change it. A body edit changes it only when it flips the mode of an exported function, because the payload holds each exported function type with its mode |
 | Interface payload | Also carries the declarations of other modules that the exports reach, so the hash covers them |
 
 ## Expressions, modes, and contracts (A3b)
@@ -70,7 +70,7 @@ the implementer picks the stricter rule and records it here.
 | --- | --- |
 | Pure-to-effect lift | A pure function fits an effect function type only directly in a value position; the emitter wraps it there. Nested in a record, array, option, tuple, union, result, or parameter, the execution must match |
 | Pure job of `retry` or `provide` | The emitter lifts it as in a value position: `Effect.suspend(() => Effect.succeed(x))` |
-| Hoisting | Trivial children (literals, references, `None`, closures) stay inline |
+| Hoisting | Trivial children stay inline: literals, references, `None`, closures, and a record, array, tuple, error, update, field read, brand, unbrand, or `Some` whose parts are trivial |
 | Service method parameters | Named `a`, `b`, `c` in emitted service shapes, because the IR has no parameter names |
 | Reached declarations | Declarations that an exported signature reaches are exported in TypeScript, even when the source keeps them private |
 | Generated header | Each file starts with a comment that names its `.eff` source |

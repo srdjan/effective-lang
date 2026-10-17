@@ -10,12 +10,12 @@ Add an entry only after a measurement. A guess is not an entry. Give each entry 
 - Commit: the commit hash of the branch or patch that was measured.
 - Rows: the measurement and the size, for example M2 `check` at `large`.
 - Ratio: the A/B ratio of baseline time to candidate time. A value above 1.00 means that the candidate is faster.
-- Noise floor: the floor of the same row from M6, on the same machine and the same day.
+- Noise floor: the floor of the same row from M6, or from M1 for an M1 row, on the same machine and the same day.
 - Samples: the number of pairs, and the profile (`--quick` or `--full`).
 - Date: the day of the measurement.
 - Verdict: why the idea is rejected. A ratio inside the noise floor is a null result and counts as a non-win.
 
-Keep the entries sorted by date, newest last. Write "Not measured" when no number exists. Do not fill a gap with an estimate. Run `deno task bench` on both builds, side by side, minutes apart.
+Keep the entries sorted by date, newest last. Write "Not measured" when no number exists. Do not fill a gap with an estimate. Until the harness can load two builds (see the gaps), run `deno task bench` on both builds, minutes apart. Such a run does not interleave the sides, so its floor does not include the drift between the runs. Say so in the entry.
 
 ## Rejected ideas
 
@@ -34,3 +34,7 @@ These items are not measured. Each one names the reason.
 - Memory of the compiler stages. M2 and M5 do not measure memory. M4 measures the `rss` of the server only.
 - Core pinning. macOS has no `taskset` equivalent. The runs are not pinned.
 - Garbage collection. The harness does not force a collection between runs. A collection that falls in a timed region is part of the distribution.
+- The cost of the `$int` helper (D14). No harness compares `$int` with plain arithmetic.
+- The size of one module. Every synthetic feature module has 60 declarations, and the sizes change only the number of modules. Design section 4.5 asks for the largest realistic module, which is not measured.
+- The duration of the quick profile. No test or record shows that each measurement ends in less than one minute. M2 and M5 do not print their elapsed time.
+- Few pairs at the quick scale. M5 has two pairs for each target, so its p90 floor is almost the larger of two deviations.
