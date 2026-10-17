@@ -1,0 +1,171 @@
+// Conditional chains for the emitter tests. In most of these, a test after the
+// first does not fit on its own line. The tests check that `deno fmt` leaves
+// the emitted text unchanged. This file is not a golden example. A number in a
+// name is the width in columns that decides between two layouts.
+export const add = (a: int, b: int): int => a + b
+
+export const two = (s: string): int => match s {
+  "short" => 1,
+  "a very long string literal that pushes the selector test past eighty columns" => 2,
+  _ => 4
+}
+export const three = (s: string): int => match s {
+  "short" => 1,
+  "mid" => 2,
+  "a very long string literal that pushes the selector test past eighty columns" => 3,
+  "after" => 5,
+  _ => 4
+}
+export const both = (s: string): int => match s {
+  "a very long string literal that pushes the selector test past eighty columns" => 1,
+  "another very long string literal that pushes the selector test past eighty" => 2,
+  _ => 4
+}
+export const nearly = (s: string): int => match s {
+  "short" => 1,
+  "a string literal that nearly fits on the first line of the chain" => 2,
+  _ => 4
+}
+export const many = (s: string): int => match s {
+  "alpha" => 1,
+  "bravo" => 2,
+  "charlie" => 3,
+  "delta" => 4,
+  "echo-echo" => 5,
+  "foxtrot-foxtrot" => 6,
+  "a very long string literal that pushes the selector test past eighty columns" => 7,
+  _ => 0
+}
+export const wide = (s: string): string => match s {
+  "short" => "a consequent string that is long enough to matter here",
+  "a very long string literal that pushes the selector test past eighty columns" => "b",
+  _ => "c"
+}
+export const twice = (s: string): int => match s {
+  "short" => 1,
+  "a very long string literal that pushes the selector test past eighty columns" => 2,
+  "mid" => 3,
+  "another very long string literal that pushes the selector test past eighty" => 4,
+  _ => 0
+}
+export const b52 = (s: string): int => match s {
+  "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" => 1,
+  "a very long string literal that pushes the selector test past eighty columns" => 2,
+  _ => 0
+}
+export const b53 = (s: string): int => match s {
+  "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" => 1,
+  "a very long string literal that pushes the selector test past eighty columns" => 2,
+  _ => 0
+}
+export const a62 = (s: string): int => match s {
+  "short" => 1,
+  "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" => 2,
+  _ => 4
+}
+export const a63 = (s: string): int => match s {
+  "short" => 1,
+  "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" => 2,
+  _ => 4
+}
+export const c80 = (s: string): int => match s {
+  "alpha" => 1,
+  "bravo" => 2,
+  "xxxxxxxx" => 3,
+  "a very long string literal that pushes the selector test past eighty columns" => 7,
+  _ => 0
+}
+export const c81 = (s: string): int => match s {
+  "alpha" => 1,
+  "bravo" => 2,
+  "xxxxxxxxx" => 3,
+  "a very long string literal that pushes the selector test past eighty columns" => 7,
+  _ => 0
+}
+export const blk = (s: string): int => match s {
+  "short" => { const y = 1
+ y },
+  "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" => 2,
+  _ => 4
+}
+export const inBlock = (s: string): int => {
+  const n = match s {
+    "short" => 1,
+    "a very long string literal that pushes the selector test past eighty columns" => 2,
+    _ => 4
+  }
+  n
+}
+export const inCall = (s: string): int =>
+  add(match s {
+    "short" => 1,
+    "a very long string literal that pushes the selector test past eighty columns" => 2,
+    _ => 4
+  }, 1)
+export const d60 = (s: string): int =>
+  add(match s { "short" => 1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" => 2, _ => 4 }, 1)
+export const d61 = (s: string): int =>
+  add(match s { "short" => 1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" => 2, _ => 4 }, 1)
+export const nestedArm = (s: string, t: string): int => match s {
+  "outer" => match t {
+    "short" => 1,
+    "a very long string literal that pushes the selector test past eighty columns" => 2,
+    _ => 4
+  },
+  _ => 0
+}
+
+export const ifLater = (s: string): int =>
+  if (s === "short") { 1 } else if (s === "a very long string literal that pushes the selector test past eighty columns") { 2 } else { 4 }
+export const ifLater80 = (s: string): int =>
+  if (s === "short") { 1 } else if (s === "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") { 2 } else { 4 }
+export const ifLater81 = (s: string): int =>
+  if (s === "short") { 1 } else if (s === "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") { 2 } else { 4 }
+export const ifThree = (s: string): int =>
+  if (s === "short") { 1 } else if (s === "mid") { 2 } else if (s === "a very long string literal that pushes the selector test past eighty columns") { 3 } else { 4 }
+export const ifBlock = (s: string): int => {
+  const n = if (s === "short") { 1 } else if (s === "a very long string literal that pushes the selector test past eighty columns") { 2 } else { 4 }
+  n
+}
+export const ifRun = (s: string, alphaValueNumberOne: int, betaValueNumberTwo: int): int =>
+  if (s === "short") { 1 } else if (alphaValueNumberOne > betaValueNumberTwo && betaValueNumberTwo > 1000 && alphaValueNumberOne < 1000) { 2 } else { 4 }
+export const ifLess = (s: string, aVeryLongNumberNameNumberOne: number, aVeryLongNumberNameNumberTwoX: number): int =>
+  if (s === "short") { 1 } else if (aVeryLongNumberNameNumberOne < aVeryLongNumberNameNumberTwoX + aVeryLongNumberNameNumberOne) { 2 } else { 4 }
+
+export error Short = { why: string }
+export error AnErrorNameWithFortyCharactersInItXxxxx = { id: string }
+export error Third = { n: int }
+export type Failure = Short | AnErrorNameWithFortyCharactersInItXxxxx | Third
+export type Shape = { kind: "sq", side: int } | { kind: "a-very-long-tag-name-that-is-long-enough-to-break-the-line-xxxxxx", r: int } | { kind: "tri", base: int }
+export const errLater = (e: Failure): string => match e {
+  Short(a) => a.why,
+  AnErrorNameWithFortyCharactersInItXxxxx(b) => b.id,
+  Third(c) => "t"
+}
+export const errLaterNoBind = (e: Failure): string => match e {
+  Short(a) => "s",
+  AnErrorNameWithFortyCharactersInItXxxxx(b) => "l",
+  Third(c) => "t"
+}
+export const tagLater = (s: Shape): int => match s {
+  { kind: "sq", ...q } => q.side,
+  { kind: "a-very-long-tag-name-that-is-long-enough-to-break-the-line-xxxxxx", ...c } => c.r,
+  { kind: "tri", ...t } => t.base
+}
+export const tagLaterNoBind = (s: Shape): int => match s {
+  { kind: "sq" } => 1,
+  { kind: "a-very-long-tag-name-that-is-long-enough-to-break-the-line-xxxxxx" } => 2,
+  { kind: "tri" } => 3
+}
+export const objArm = (s: string): { a: int } => match s {
+  "short" => ({ a: 1 }),
+  "a very long string literal that pushes the selector test past eighty columns" => ({ a: 2 }),
+  _ => ({ a: 4 })
+}
+export const ifOrder = (s: string): int =>
+  if (s === "short") { 1 } else if (s === "mid") { 5 } else if (s === "x") { 6 } else if (s === "a very long string literal that pushes the selector test past eighty columns") { 2 } else if (s === "k") { 7 } else { 4 }
+export const longElse = (s: string): string => match s {
+  "short" => "1",
+  "mid" => "2",
+  _ => "a very long else string literal that pushes the chain past eighty columns"
+}

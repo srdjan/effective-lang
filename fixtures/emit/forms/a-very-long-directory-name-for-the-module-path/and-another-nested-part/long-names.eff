@@ -32,3 +32,8 @@ export service Plain {
   count(): int
 }
 export const total = (): int uses Plain.count => Plain.count()
+export const effLater = (s: string): int uses Plain.count => match s {
+  "short" => Plain.count(),
+  "a very long string literal that pushes the selector test past eighty columns" => 2,
+  _ => 4
+}

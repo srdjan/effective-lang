@@ -243,7 +243,9 @@ The emitter adds `export` to each declaration that the source exports and to eac
 
 The printer has one fixed style, and `deno fmt` leaves its output unchanged for the golden files and the emitter test programs (decision D12). Two slow tests check this: one runs `deno fmt --check` on `fixtures/golden/`, and one runs it on the emitted programs of `fixtures/emit/forms/`. The printer breaks a long binary expression and an arrow chain with a broken head as `deno fmt` does.
 
-The module `long-names.eff` in a deep directory of `fixtures/emit/forms/` has long names and long strings. It covers seven forms that `deno fmt` rewrote: a selector test of a `match` arm, a `Schema.Literal`, a brand, a type alias, and a service header. Two more forms are a `Service.use` arrow and a `catchTags` key. All seven now reach the fixed point. Other forms do not: a selector test after the first arm, and six forms with very long identifiers. The ledger in `docs/phase-a-rules.md` lists them.
+The module `long-names.eff` in a deep directory of `fixtures/emit/forms/` has long names and long strings. It covers seven forms that `deno fmt` rewrote: a selector test of a `match` arm, a `Schema.Literal`, a brand, a type alias, and a service header. Two more forms are a `Service.use` arrow and a `catchTags` key. All seven now reach the fixed point. Other forms do not: a long `===` as the first test of an `if` chain that starts flush, and six forms with very long identifiers. The ledger in `docs/phase-a-rules.md` lists them.
+
+The module `conditional-chains.eff` in `fixtures/emit/forms/` has `match` and `if` chains with a long test after the first. Then `deno fmt` joins the earlier links on the first line when that line fits. The module also has the cases where the join does not happen.
 
 The slow tests copy a fixture project to a temporary directory and build there. They check the emitted code with `deno check` under `effect@4.0.5` with strict settings. They run the emitted code with `deno run`. They need the npm package in the Deno cache, so the first run needs network access.
 

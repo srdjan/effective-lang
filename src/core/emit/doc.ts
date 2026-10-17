@@ -34,6 +34,12 @@ export type Doc =
   | { readonly k: "indent"; readonly d: Doc }
   | { readonly k: "ifbreak"; readonly broken: Doc; readonly flat: Doc }
   | { readonly k: "alt"; readonly options: readonly Doc[] }
+  | {
+    readonly k: "iffits";
+    readonly probe: Doc;
+    readonly whenFits: Doc;
+    readonly otherwise: Doc;
+  }
   | { readonly k: "span"; readonly span: Span; readonly d: Doc }
   | { readonly k: "endspan"; readonly span: Span; readonly start: number }
   | { readonly k: "mark"; readonly key: string; readonly d: Doc }
@@ -107,6 +113,17 @@ export function ifBreak(broken: Doc, flat: Doc = ""): Doc {
  */
 export function alt(options: readonly Doc[]): Doc {
   return { k: "alt", options };
+}
+
+/**
+ * `whenFits` when `probe` fits, else `otherwise`. The printer measures `probe`
+ * in flat mode at the current position and indentation, without the text that
+ * follows the node, and prints nothing for it. A `through` line in `probe`
+ * restarts the measure at the indentation of the next line. The chosen branch
+ * is printed in the current mode.
+ */
+export function ifFits(probe: Doc, whenFits: Doc, otherwise: Doc): Doc {
+  return { k: "iffits", probe, whenFits, otherwise };
 }
 
 /**
@@ -249,6 +266,10 @@ function makeHardCheck(): (doc: Doc) => boolean {
           // A hard line inside an option does not force the group to break.
           result = false;
           break;
+        case "iffits":
+          // The probe prints nothing, so only the two branches count.
+          result = check(doc.whenFits) || check(doc.otherwise);
+          break;
         case "fill":
           result = doc.parts.some(check);
           break;
@@ -265,6 +286,16 @@ function makeHardCheck(): (doc: Doc) => boolean {
     return result;
   };
   return check;
+}
+
+const sharedHardCheck = makeHardCheck();
+
+/**
+ * True when `doc` holds a hard line, or a group that must break, outside an
+ * `alt`. A fit test of an `alt` option stops at such a line.
+ */
+export function hasHardLine(doc: Doc): boolean {
+  return sharedHardCheck(doc);
 }
 
 /** Lays out `doc` at `width` columns. */
@@ -366,6 +397,19 @@ export function render(doc: Doc, width = 80): Rendered {
               doc: cmd.mode === "break"
                 ? d.options[d.options.length - 1]
                 : d.options[0],
+            });
+            break;
+          case "iffits":
+            cmds.push({
+              indent: cmd.indent,
+              mode: cmd.mode,
+              doc: fits(
+                  { indent: cmd.indent, mode: "flat", doc: d.probe },
+                  [],
+                  left,
+                )
+                ? d.whenFits
+                : d.otherwise,
             });
             break;
           case "endspan":
@@ -503,6 +547,19 @@ export function render(doc: Doc, width = 80): Rendered {
           indent: cmd.indent,
           mode: cmd.mode,
           doc: cmd.mode === "break" ? d.broken : d.flat,
+        });
+        break;
+      case "iffits":
+        stack.push({
+          indent: cmd.indent,
+          mode: cmd.mode,
+          doc: fits(
+              { indent: cmd.indent, mode: "flat", doc: d.probe },
+              [],
+              width - column,
+            )
+            ? d.whenFits
+            : d.otherwise,
         });
         break;
       case "alt": {

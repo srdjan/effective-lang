@@ -25,8 +25,10 @@ import {
   group,
   type GroupId,
   hard,
+  hasHardLine,
   ifBreak,
   ifBroke,
+  ifFits,
   indent,
   join,
   line,
@@ -181,23 +183,140 @@ function testDoc(test: Emitted, tail: number): Doc {
   return test.run === undefined ? at(test, PREC.or) : runDoc(test.run, tail);
 }
 
-function condDoc(chain: CondChain, tail: number): Doc {
-  const ends = chain.nested.map(spanEnds);
-  const parts: Doc[] = [line, "? ", chain.arms[0]];
-  for (let i = 1; i < chain.tests.length; i++) {
-    parts.push(
-      line,
-      ": ",
-      ends[i - 1].open,
-      testDoc(chain.tests[i], 2),
+/** A test after the first test of a conditional chain. */
+interface LaterTest {
+  /** The whole test, with the span ends that belong to it. */
+  readonly doc: Doc;
+  /**
+   * Present when the test is `left operator right`. `head` is the text up to
+   * and including the operator. `right` is the last operand. The test is
+   * `head`, a space, and `right` when it is on one line.
+   */
+  readonly split: { readonly head: Doc; readonly right: Doc } | undefined;
+}
+
+/**
+ * A pair prints at least `x ? y : `, 8 columns. So a joined line of 10 pairs
+ * does not fit in 80 columns, and the printer tries no later test.
+ */
+const MAX_JOINED_PAIRS = 10;
+
+/**
+ * The conditional chain `first ? arms[0] : tests[0] ? arms[1] : ... : last`.
+ * `deno fmt` prints every `?` and `:` of the chain at one indentation level.
+ * When a test does not fit on its `: test` line, `deno fmt` joins the pairs
+ * before the test and the left side of the test on the line of `first`, if
+ * that line fits. Then the right side of the test sits two levels deeper than
+ * the chain. It joins at most one test, and not after a pair with a hard line.
+ */
+function conditionalChain(
+  first: Doc,
+  tests: readonly LaterTest[],
+  arms: readonly Doc[],
+  last: Doc,
+): Doc {
+  const broken: Doc = [
+    first,
+    indent([
       line,
       "? ",
-      chain.arms[i],
-    );
+      arms[0],
+      ...tests.flatMap((test, i) => [
+        line,
+        ": ",
+        test.doc,
+        line,
+        "? ",
+        arms[i + 1],
+      ]),
+      line,
+      ": ",
+      last,
+    ]),
+  ];
+  const reach = Math.min(tests.length, MAX_JOINED_PAIRS);
+  if (reach === 0) return group(broken);
+  // `options[k - 1]` is the layout where `tests[k - 1]` joins the first line.
+  // The joined line holds the pairs before it, so it is `prefix` and the left
+  // side. A hard line in `prefix` blocks the join.
+  let prefix: Doc = [first, " ? ", arms[0], " : "];
+  let blocked = hasHardLine(first) || hasHardLine(arms[0]);
+  const options: Doc[] = [];
+  for (let k = 1; k <= reach; k++) {
+    const test = tests[k - 1];
+    const { split } = test;
+    if (split === undefined || blocked) {
+      options.push(broken);
+    } else {
+      const rest: Doc[] = ["? ", arms[k]];
+      for (let j = k; j < tests.length; j++) {
+        rest.push(hard, ": ", tests[j].doc, hard, "? ", arms[j + 1]);
+      }
+      rest.push(hard, ": ", last);
+      options.push(alt([
+        [
+          prefix,
+          split.head,
+          indent(indent([hard, split.right])),
+          group(indent([hard, ...rest])),
+        ],
+        broken,
+      ]));
+    }
+    blocked = blocked || hasHardLine(test.doc) || hasHardLine(arms[k]);
+    prefix = [prefix, test.doc, " ? ", arms[k], " : "];
   }
-  parts.push(line, ": ", chain.last);
-  for (let j = ends.length - 1; j >= 0; j--) parts.push(ends[j].close);
-  return group([testDoc(chain.tests[0], tail), indent(parts)]);
+  let decision: Doc = broken;
+  for (let k = reach; k >= 1; k--) {
+    // Check A: the line `: test` of the broken layout is wider than the page.
+    const probe: Doc = indent([through, ": ", tests[k - 1].doc]);
+    decision = ifFits(probe, decision, options[k - 1]);
+  }
+  return group(ifBreak(decision, broken));
+}
+
+const COMPARISONS: ReadonlySet<string> = new Set([
+  "===",
+  "!==",
+  "<",
+  "<=",
+  ">",
+  ">=",
+]);
+
+/** A test of a conditional after the first. A comparison of two operands can split. */
+function laterTest(test: Emitted, open: Doc): LaterTest {
+  const doc: Doc = [open, testDoc(test, 2)];
+  const run = test.run;
+  const operator = run?.operators[0];
+  if (
+    run === undefined || run.operands.length !== 2 || operator === undefined ||
+    !COMPARISONS.has(operator)
+  ) {
+    return { doc, split: undefined };
+  }
+  const ends = run.top === undefined ? undefined : spanEnds(run.top);
+  return {
+    doc,
+    split: {
+      head: [open, ends?.open ?? "", run.operands[0], ` ${operator}`],
+      right: [run.operands[1], ends?.close ?? ""],
+    },
+  };
+}
+
+function condDoc(chain: CondChain, tail: number): Doc {
+  const ends = chain.nested.map(spanEnds);
+  const tests = chain.tests.slice(1).map((test, i) =>
+    laterTest(test, ends[i].open)
+  );
+  const closes = ends.map((e) => e.close).reverse();
+  return conditionalChain(
+    testDoc(chain.tests[0], tail),
+    tests,
+    chain.arms,
+    [chain.last, ...closes],
+  );
 }
 
 // ------------------------------------------------------------------ binary runs
@@ -364,6 +483,17 @@ function callArguments(args: readonly Emitted[]): Doc {
 /** `left === right`. When it does not fit, `right` moves down two levels, as `deno fmt` prints it. */
 function equality(left: string, right: Doc): Doc {
   return group([left, " ===", indent(indent([line, right]))]);
+}
+
+/** The test of a match arm, with the two sides of its comparison. */
+interface ArmTest {
+  readonly doc: Doc;
+  readonly left: string;
+  readonly right: Doc;
+}
+
+function armEquality(left: string, right: Doc): ArmTest {
+  return { doc: equality(left, right), left, right };
 }
 
 function isIntType(type: Type): boolean {
@@ -1051,7 +1181,7 @@ export class ExprEmitter {
     // The chain is `test ? arm : test ? arm : last`. `deno fmt` prints the
     // nested conditionals of the else branch at the indentation of the first.
     let last: Doc | undefined;
-    let pairs: { readonly test: Doc; readonly arm: Doc }[] = [];
+    let pairs: { readonly test: ArmTest; readonly arm: Doc }[] = [];
     for (let i = arms.length - 1; i >= 0; i--) {
       const arm = arms[i];
       if (last === undefined) {
@@ -1068,20 +1198,18 @@ export class ExprEmitter {
       pairs.unshift({ test, arm: armDoc(arm) });
     }
     if (last === undefined) throw internal("a match has no arm");
-    const chain: Doc = pairs.length === 0 ? last : group([
-      pairs[0].test,
-      indent([
-        ...pairs.flatMap((pair, i) => [
-          ...(i === 0 ? [] : [pair.test]),
-          line,
-          "? ",
-          pair.arm,
-          line,
-          ": ",
-        ]),
-        last,
-      ]),
-    ]);
+    const chain: Doc = pairs.length === 0 ? last : conditionalChain(
+      pairs[0].test.doc,
+      pairs.slice(1).map((pair) => ({
+        doc: pair.test.doc,
+        split: {
+          head: [pair.test.left, " ==="],
+          right: pair.test.right,
+        },
+      })),
+      pairs.map((pair) => pair.arm),
+      last,
+    );
     // When the body of the selector moves down, `deno fmt` also indents the
     // arguments of the call by one more level.
     const bodyGroup: GroupId = {};
@@ -1114,19 +1242,19 @@ export class ExprEmitter {
     }
   }
 
-  private armTest(pattern: Pattern, selector: string): Doc | undefined {
+  private armTest(pattern: Pattern, selector: string): ArmTest | undefined {
     switch (pattern.kind) {
       case "wildcard":
         return undefined;
       case "literal":
-        return equality(selector, this.literal(pattern.value));
+        return armEquality(selector, this.literal(pattern.value));
       case "error":
-        return equality(
+        return armEquality(
           `${selector}._tag`,
           JSON.stringify(tokenOfId(pattern.error)),
         );
       case "tag":
-        return equality(
+        return armEquality(
           `${selector}.${pattern.field}`,
           JSON.stringify(pattern.value),
         );

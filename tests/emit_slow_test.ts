@@ -170,7 +170,12 @@ const LONG_NAMES =
 
 function buildForms(dir: string): string[] {
   copyDirectory(new URL("emit/forms/", FIXTURES), dir);
-  return build(dir, ["forms.eff", "names.eff", LONG_NAMES + ".eff"]);
+  return build(dir, [
+    "forms.eff",
+    "names.eff",
+    "conditional-chains.eff",
+    LONG_NAMES + ".eff",
+  ]);
 }
 
 // ------------------------------------------------------------------ type check
@@ -390,13 +395,18 @@ Deno.test("the emitted forms are a fixed point of deno fmt", async () => {
     const generated = buildForms(dir);
     assertEquals(
       [...generated].sort(),
-      [LONG_NAMES + ".ts", "forms.ts", "names.ts"],
+      [
+        LONG_NAMES + ".ts",
+        "conditional-chains.ts",
+        "forms.ts",
+        "names.ts",
+      ],
     );
     const run = await deno(dir, ["fmt", "--check", ...generated]);
     assertEquals(run.code, 0, `deno fmt --check failed:\n${run.stderr}`);
     assert(
-      run.stderr.includes("Checked 3 files"),
-      `deno fmt did not check the three files:\n${run.stderr}`,
+      run.stderr.includes("Checked 4 files"),
+      `deno fmt did not check the four files:\n${run.stderr}`,
     );
   });
 });

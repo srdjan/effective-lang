@@ -9,8 +9,10 @@ import {
   fill,
   group,
   hard,
+  hasHardLine,
   ifBreak,
   ifBroke,
+  ifFits,
   indent,
   join,
   line,
@@ -163,4 +165,38 @@ Deno.test("an alt option with a through line must fit on every line it measures"
   assertEquals(render(layout("body"), 10).text, "head body");
   assertEquals(render(layout("bodybody"), 10).text, "head =\n  bodybody");
   assertEquals(render(layout("bodybodybody"), 10).text, "fallback");
+});
+
+Deno.test("ifFits picks a branch by the width of a probe that it does not print", () => {
+  const doc = ifFits("12345678", "yes", "no");
+  assertEquals(render(doc, 8).text, "yes");
+  assertEquals(render(doc, 7).text, "no");
+  assertEquals(render(["ab", doc], 10).text, "abyes");
+  assertEquals(render(["abc", doc], 10).text, "abcno");
+});
+
+Deno.test("ifFits measures the probe without the text that follows it", () => {
+  const doc: Doc = [ifFits("1234", "yes", "no"), "tail"];
+  assertEquals(render(doc, 4).text, "yestail");
+});
+
+Deno.test("ifFits restarts the measure at a through line, at the current indentation", () => {
+  const probe: Doc = indent([through, "123456"]);
+  const doc: Doc = indent([hard, "ab", ifFits(probe, "yes", "no")]);
+  assertEquals(render(doc, 10).text, "\n  abyes");
+  assertEquals(render(doc, 9).text, "\n  abno");
+});
+
+Deno.test("a group measures the chosen branch of an ifFits", () => {
+  const doc = group([ifFits("xxxx", "a", "bbbbbbbbbb"), line, "c"]);
+  assertEquals(render(doc, 5).text, "a c");
+  assertEquals(render(doc, 3).text, "bbbbbbbbbb\nc");
+});
+
+Deno.test("the hard-line check looks at both branches of an ifFits and ignores the probe", () => {
+  assertEquals(hasHardLine(ifFits(hard, "a", "b")), false);
+  assertEquals(hasHardLine(ifFits("p", [hard], "b")), true);
+  assertEquals(hasHardLine(ifFits("p", "a", [hard])), true);
+  assertEquals(hasHardLine(group(["a", hard])), true);
+  assertEquals(hasHardLine(alt([[hard], "b"])), false);
 });
