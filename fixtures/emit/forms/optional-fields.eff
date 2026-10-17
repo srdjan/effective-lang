@@ -1,0 +1,34 @@
+type A = { kind: "a", nickname?: string }
+type B = { kind: "b", nickname: string }
+type C = { kind: "c", nickname?: string }
+type AB = A | B
+type ABC = AB | C
+type U = Brand<{ kind: "u", nickname?: string }>
+
+export error Oops = { detail?: string }
+
+export const nickOfUnion = (x: A | B): string =>
+  match x.nickname {
+    Some(n) => n,
+    None => "none"
+  }
+
+export const nickOfNested = (x: ABC): string =>
+  match x.nickname {
+    Some(n) => n,
+    None => "none"
+  }
+
+export const nickOfBrand = (x: U | A): string =>
+  match x.nickname {
+    Some(n) => n,
+    None => "none"
+  }
+
+export const detailOf = (e: Oops): string =>
+  match e.detail {
+    Some(d) => d,
+    None => "none"
+  }
+
+export const kindOf = (x: A | B): string => x.kind

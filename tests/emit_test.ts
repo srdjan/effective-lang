@@ -141,6 +141,22 @@ Deno.test("a record brand emits field reads and updates that keep the brand", ()
   assertStringIncludes(text, "User.make({ id: UserId.make(");
 });
 
+Deno.test("an optional field read through a union, a brand, or an error becomes an Option", () => {
+  const emitted = emitFiles(projectFiles("emit/forms"), [
+    "optional-fields.eff",
+  ]).get("optional-fields");
+  assert(emitted !== undefined, "module optional-fields was not emitted");
+  const text = emitted.text;
+  // nickOfUnion, nickOfNested, and nickOfBrand each read x.nickname once.
+  assertEquals(
+    text.split("Option.fromUndefinedOr(x.nickname)").length - 1,
+    3,
+  );
+  assertStringIncludes(text, "Option.fromUndefinedOr(e.detail)");
+  // A field that is required in every member stays a plain read.
+  assertStringIncludes(text, "(x: A | B): string => x.kind;");
+});
+
 // ------------------------------------------------------------------ names
 
 Deno.test("a module that declares generated names still emits valid names", () => {

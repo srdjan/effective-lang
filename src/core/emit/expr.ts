@@ -959,8 +959,26 @@ export class ExprEmitter {
     });
   }
 
-  private isOptionalField(type: Type, field: string): boolean {
-    return this.recordFieldsOf(type)?.some((f) =>
+  /**
+   * True when one member of the type has the field as optional. The checker
+   * reads an optional field of one union member as an option, so the emitter
+   * looks through unions, aliases, brands of a record, and named errors.
+   */
+  private isOptionalField(type: Type, field: string, depth = 0): boolean {
+    if (depth >= 64) return false;
+    const resolved = this.scope.resolve(type);
+    if (resolved.kind === "union") {
+      return resolved.members.some((member) =>
+        this.isOptionalField(member, field, depth + 1)
+      );
+    }
+    if (resolved.kind === "named") {
+      const declaration = this.scope.typeLevelDeclaration(resolved.id);
+      if (declaration?.kind === "error") {
+        return declaration.fields.some((f) => f.name === field && f.optional);
+      }
+    }
+    return this.recordFieldsOf(resolved)?.some((f) =>
       f.name === field && f.optional
     ) ?? false;
   }
