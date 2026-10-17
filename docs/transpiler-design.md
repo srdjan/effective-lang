@@ -122,14 +122,19 @@ an in-memory virtual document. The disk copy updates on save.
 ```
 edit users.eff
   -> diagnostics on the edited span and on dependents (per change)
-  -> hover on `rename`: "(id: string, name: string): User
-       fails UserMissing | StoreUnavailable uses Users.find | Users.save"
-       and the backend type "Effect.Effect<User, UserMissing | StoreUnavailable, Users>"
+  -> hover on `rename`: "rename(id: string, name: string): User
+       fails StoreUnavailable | UserMissing uses Users.find | Users.save"
+       and the backend type "Effect.Effect<User, StoreUnavailable | UserMissing, Users>"
   -> "Show generated TypeScript" opens a virtual document (per change)
   -> save: users.ts and users.ts.map appear next to users.eff
   -> go-to-definition from users.ts line 12 lands on users.eff `rename`
   -> deno run main.ts runs the generated module
 ```
+
+Correction, 2026-10-17: the sets print in sorted identity order, as the
+Phase A plan (section 6.6) decided. Go-to-definition from a generated `.ts`
+file is not implemented. The LSP plan puts it out of scope, and the README
+lists it as a known limit. The source map exists, so a later phase can add it.
 
 Hover must show two things, because the spec makes them differ. Observation
 ("Typed IR and backends"): the backend's `R` parameter groups requirements by
@@ -159,6 +164,13 @@ Recommendation: keep the core synchronous and pure. Give the LSP driver a
 per-declaration loop with a cancellation token. Move the core into a worker
 only if M1 shows that the main thread stalls.
 
+Deviation, recorded in the LSP plan section 3: the server has no cancellation
+and no per-declaration loop. It handles one message at a time and runs
+`Program.update` as one call, so a result is never stale when the server
+publishes it. The `version` field of `publishDiagnostics` names the document
+version that the revision used. The D9 evidence shows no stall above the
+budget.
+
 ## 3. Deliverable shape and order
 
 ### 3.1 Components
@@ -187,6 +199,10 @@ Recommendation: the first deliverable is the core plus `effective check` and
    identifier and module name (section 9, Q2).
 3. The eight book targets are golden outputs of `build`, and `tsc` accepts them
    under the sibling repository's strict settings against Effect 4.0.5.
+
+Deviation, recorded 2026-10-17: Phase A made the five examples the golden
+outputs (acceptance check 4 of the plan). The eight book targets are not
+goldens and not inputs of M5. No document recorded this before.
 
 The LSP follows at once. At that point the server is an adapter: JSON-RPC over
 stdio, document sync, `publishDiagnostics`, `hover`, `definition`. Document
@@ -329,8 +345,19 @@ tracking: the dependencies are the import graph.
 
 Phase B: declaration granularity. Add dynamic dependency recording to
 `signature`, `checkBody`, `modeGroup`, and `lower`, keyed by `(module, name)`.
-Enter this phase only if measurement M2 shows that the whole-module recheck of
-the largest realistic module misses the budget from D9.
+Enter this phase only if measurement M1 shows that an edit misses the budget
+from D9. M2 and M3 then show whether the whole-module recheck causes the miss
+(D4).
+
+Correction, 2026-10-17: the D9 budget is a time from `didChange` to
+`publishDiagnostics`. Only M1 measures that time, so M1 is the gate, as D9
+says. An earlier text named M2 as the gate. The synthetic sizes do not vary the
+size of one module: every feature module has 60 declarations. The size of the
+largest realistic module is still not measured (`docs/rejected.md`).
+
+The program rechecks a dependent module when the interface hash of any module
+that it reaches changes, not only of a direct import. The reason is that the
+checker reads the type graphs of all reached modules (`src/core/db.ts`).
 
 Inference: Phase A already captures the firewall across modules. Phase B
 captures it inside a module. The size of the realistic module decides whether
@@ -349,7 +376,7 @@ on every edit above the declaration. A name changes only on rename.
 | Hand-written lexer, recursive descent, whole-file token array, `line_starts` table | Yes | Front end shape is language-independent. |
 | Flat scope stacks with base indices | Yes, inside `checkBody` | Block scopes nest; no closure capture analysis is needed. |
 | Hash-consed types with integer ids | Yes | No recursive types in version 0, so every type is stable at creation. |
-| Resource caps with named diagnostics | Yes | Fixpoint rounds, expression nesting depth, diagnostic count. |
+| Resource caps with named diagnostics | Yes | Fixpoint rounds, expression nesting depth, diagnostic count. Phase A has the first two (`execution-mode/004`, `syntax/009`). It has no cap on the diagnostic count. The type comparison has a cap without a diagnostic (audit item C7). |
 | Measurement discipline: checksum gate, interleaved A/B, noise floor, rejected-ideas ledger | Yes | Golden outputs are the checksum. Latency is the metric. |
 | Demand-driven checking with one specialization key | Partly | Checking on demand transfers. The key does not: version 0 has no user generics, and builtin specialization is local to a body. |
 | Whole-program pass structure | Only for `build` | `build` is the degenerate case where every query runs. The editor needs the query shape. |
@@ -427,10 +454,11 @@ version, and the configuration. The IR serialization rule helps. Observation
 
 Three sources of nondeterminism need rules.
 
-1. Union order in `Effect.Effect<A, E, R>`. Recommendation: for explicit
-   contracts, print `E` and `R` in the source order of the `fails` and `uses`
-   clauses. For inferred sets, print them in sorted identity order. The book
-   targets use source order.
+1. Union order in `Effect.Effect<A, E, R>`. Decision of the Phase A plan
+   (section 6.6, commit 8da88fb): print `E` and `R` in sorted identity order
+   for every contract. The emitter reads only the IR, and the IR stores sorted
+   sets, so the source order is not available. An earlier recommendation used
+   source order for explicit contracts, as the book targets do.
 2. Synthetic builtin `ValueId`s (I11). Recommendation: derive each identifier
    from a hash of the closed builtin type, scoped to the module, so that an
    unrelated edit never renumbers them. The spec must confirm the scope (Q1).
@@ -472,8 +500,9 @@ each stage.
 
 ### 6.2 Data structures
 
-Tokens: parallel arrays `kinds`, `starts`, `ends` as typed arrays, plus a
-`line_starts` table per file for offset to line conversion. Observation (skill,
+Tokens: parallel arrays `kinds`, `starts`, `ends` as typed arrays. The
+`lineStarts` table for offset to line conversion is computed on demand from the
+text (`src/core/source.ts`). Observation (skill,
 "Front end"): goose scans on demand and the skill recommends a whole-file token
 array; the speed effect is not measured in goose. In a TypeScript host, typed
 arrays are a cheap choice at the start and a costly retrofit later. Their
@@ -490,8 +519,9 @@ equality is integer equality and type sets sort numerically. Brands and errors
 are nominal by `DeclarationId`. Serialization expands ids back to the
 `typed-ir.ts` `Type` tree.
 
-Effect sets: sorted integer arrays of interned `ErrorId` and `CapabilityId`
-values. Union, difference, and subset are merges over sorted arrays. The spec's
+Effect sets: sorted arrays of `ErrorId` and `CapabilityId` strings. Union,
+difference, and subset are merges over sorted arrays. Correction, 2026-10-17:
+an earlier text said interned integers. Only types are interned. The spec's
 equations ("Equations and validation") are all set operations over these.
 
 Side tables per declaration body: one map from node id to `{ type, effects,
@@ -521,14 +551,17 @@ Not sound as the editor's working representation, for three reasons.
 2. The IR has no error node and no partial module. `Compile` returns
    `Result<ModuleIR, readonly Diagnostic[]>`, all or nothing. An editor needs
    per-declaration results.
-3. Identities are strings such as `value:example/log#log`. The core interns
-   them to integers and prints the strings at serialization.
+3. Identities are strings such as `value:example/log#log`. Phase A keeps them
+   as strings in the core too. Only types are interned to integers.
 
 Two changes to the boundary are proposed. The `Compile` type becomes a
 multi-module driver that takes a module graph and a host registry. The
 single-source form remains as a convenience for the playground. The IR
 exists only for a module whose declarations all check. The editor shows the
 last good generated text with a stale marker while a module has errors.
+
+As built, the driver is `Program` (`src/core/db.ts`). The playground also uses
+`Program`, and no code uses the `Compile` type of `ir.ts`.
 
 ### 6.4 Error recovery and partial results
 
@@ -537,12 +570,16 @@ skill notes that reporting several errors needs a plan for half-set facts.
 This design needs that plan.
 
 Parser recovery synchronizes at declaration keywords at the start of a line:
-`import`, `export`, `type`, `error`, `service`, `const`. Inside a block it
-synchronizes at a newline, a comma, or a closing brace. An unparsable region
-becomes an `error` node with its span. The lexical rules make this cheap.
+`import`, `export`, `type`, `error`, `service`, `provider`, `const`. Inside an
+unclosed bracket, `const` counts only at column 0. Inside a block the parser
+synchronizes at a newline, a `;`, or a closing brace. Inside a comma list it
+synchronizes at a comma or a closing bracket. An unparsable region
+becomes an `error` node with its span.
+
+The lexical rules make this cheap.
 Observation ("Source and lexical rules"): a newline separates declarations and
 block items. Continuation happens only before `fails`, `uses`, an arrow, or
-`|>`.
+`|>`. The Phase A grammar addendum also continues before `else` and `catch`.
 
 Checker recovery gives an `error` node the error type. The error type is
 compatible with every type and contributes empty effect sets and pure mode. A
@@ -589,7 +626,7 @@ shows a need. That escape hatch is a design property, not a plan.
 | Effect 4 API drift (`Context.Service`, `Schema.TaggedError`, `Schema.brand`) | Generated code stops type-checking | Pin `effect@4.0.5`; golden outputs under `tsc` in CI; a version matrix later |
 | Identity encoding in tags and keys (Q2) | Renaming a file renames every persisted `_tag`; readability of `catchTag("...")` | Decide the encoding before the emitter exists (D7) |
 | Mode flip invalidation (I1) | A body edit rechecks importers | Early cutoff on interface value; measure the flip rate (M3); D8 |
-| Synchronous core blocks the LSP loop | Stale hover during a long check | Per-declaration loop with cancellation; worker if M1 shows stalls |
+| Synchronous core blocks the LSP loop | Stale hover during a long check | M1 measures the stall against D9; a per-declaration loop or a worker only if M1 misses the budget (LSP plan section 3) |
 | Memory growth in a long-lived server | Server slows or dies | Release old revisions; measure M4 |
 | `tsc` cost | Slow CI, or a wrongly placed oracle | M5 decides the runner and whether `watch --tsc` can default on |
 | Printer cannot reach a `deno fmt` fixed point | Format-on-save rewrites generated files | Exclude generated files from `deno fmt`, or accept the style difference (D12) |
@@ -628,7 +665,7 @@ measurement, the input, and the decision it informs.
 | M2 | Whole-module recheck time per stage (lex, parse, resolve, check, lower, emit), object arrays against typed arrays for tokens | Same synthetic sizes | Phase B need (section 4.5); typed arrays; any Zig port |
 | M3 | Re-execution counts per query per edit, and the fraction of edits that flip a mode or change an interface | Replayed edit script over the examples and the synthetic module | Phase B need; D8 |
 | M4 | Peak resident memory after N replayed edits in the LSP process | Edit script, three N values | Revision release policy |
-| M5 | `tsc` wall time over the emitted fixtures against Effect 4.0.5: cold `tsc` subprocess, warm `ts.LanguageService` in process, `tsgo` subprocess | The eight book targets and the five examples | Oracle runner; whether `watch --tsc` can default on |
+| M5 | `tsc` wall time over the emitted fixtures against Effect 4.0.5: cold `tsc` subprocess, warm `ts.LanguageService` in process, `tsgo` subprocess | The eight book targets and the five examples. As built: the five examples and the three synthetic sizes, with `deno check` as the baseline and the three runners as optional variants | Oracle runner; whether `watch --tsc` can default on |
 | M6 | Noise floor of M1 and M2 on the user's machine with the same binary on both sides | Same inputs | Which differences count |
 
 Protocol: follow the goose skill's `measurement.md`. Time the whole process for
