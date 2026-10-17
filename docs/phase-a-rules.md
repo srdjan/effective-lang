@@ -69,6 +69,7 @@ the implementer picks the stricter rule and records it here.
 | Rule | Choice |
 | --- | --- |
 | Pure-to-effect lift | A pure function fits an effect function type only directly in a value position; the emitter wraps it there. Nested in a record, array, option, tuple, union, result, or parameter, the execution must match |
+| Pure job of `retry` or `provide` | The emitter lifts it as in a value position: `Effect.suspend(() => Effect.succeed(x))` |
 | Hoisting | Trivial children (literals, references, `None`, closures) stay inline |
 | Service method parameters | Named `a`, `b`, `c` in emitted service shapes, because the IR has no parameter names |
 | Reached declarations | Declarations that an exported signature reaches are exported in TypeScript, even when the source keeps them private |

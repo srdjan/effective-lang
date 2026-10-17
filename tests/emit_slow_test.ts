@@ -342,6 +342,24 @@ console.log(JSON.stringify({
   });
 });
 
+Deno.test("a retry of a pure job runs", async () => {
+  await withTemporary(async (dir) => {
+    buildForms(dir);
+    const result = await runScript(
+      dir,
+      `
+import { Effect } from "effect";
+import { retryPure, retryPureNamed } from "./forms.ts";
+console.log(JSON.stringify({
+  closure: Effect.runSync(retryPure()),
+  named: Effect.runSync(retryPureNamed()),
+}));
+`,
+    );
+    assertEquals(result, { closure: 2, named: 2 });
+  });
+});
+
 // ------------------------------------------------------------------ formatting (A6b)
 
 Deno.test("deno fmt does not exclude the golden files, and it accepts them unchanged", async () => {

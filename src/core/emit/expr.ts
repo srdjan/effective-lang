@@ -1332,9 +1332,14 @@ export class ExprEmitter {
     }
   }
 
+  /** `Effect.suspend(job)`. A pure job is lifted, because `suspend` needs an effect. */
   private suspended(job: Expr): Emitted {
     const effect = this.scope.effect("Effect");
-    return emitted([`${effect}.suspend`, callArguments([this.pure(job)])]);
+    const from = this.functionTypeOf(job.type);
+    const value = from !== undefined && from.execution === "pure"
+      ? this.fit(job, { ...from, execution: "effect" }, "pure")
+      : this.pure(job);
+    return emitted([`${effect}.suspend`, callArguments([value])]);
   }
 
   private catchEffect(e: Extract<Expr, { kind: "catch" }>): Emitted {

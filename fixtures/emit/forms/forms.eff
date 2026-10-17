@@ -153,6 +153,9 @@ export const mkEmpty = (): string fails Empty => fail(Empty({}))
 export const withNick = (p: Profile): Profile => ({ ...p, nickname: "k" })
 const readCount = (): int uses Store.count => Store.count()
 export const retryNamed = (): int uses Store.count => retry(readCount, { times: 1 })
+const two = (): int => 2
+export const retryPure = (): int => retry(() => 2, { times: 1 })
+export const retryPureNamed = (): int => retry(two, { times: 1 })
 export const caught = (id: Id): string
   uses Store.find =>
   try { lookup(id).name } catch { NotFound(e) => "missing" }
