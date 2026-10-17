@@ -1,6 +1,7 @@
 // The editor queries over a revision (LSP plan, sections 5.6 and 5.7): hover
-// text, definition, and document symbols. Each function is pure. It reads the
-// checked modules, the resolution tables, and the lazy IR of a `Revision`, and it
+// text, definition, and document symbols. Each function does no I/O. It reads the
+// checked modules, the resolution tables, and the lazy IR of a `Revision`, which
+// computes and counts the IR on first use (LSP plan 5.11), and it
 // returns core data, not LSP types. `path` is the root-relative path that spans
 // use as their `source`.
 

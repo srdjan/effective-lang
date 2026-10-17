@@ -1,5 +1,5 @@
 // The public API of the core. This file is a list of re-exports. The core is
-// synchronous and pure: it reads files only through `SourceHost`.
+// synchronous and does no I/O: it reads files only through `SourceHost`.
 
 // The program with module cutoff.
 export { Program, Revision, revisionDelta } from "./db.ts";

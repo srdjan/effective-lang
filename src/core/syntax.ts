@@ -15,7 +15,7 @@ export enum SyntaxKind {
   Token,
   /** A zero-width leaf where the parser expected a token or a construct. */
   Missing,
-  /** A region that the parser could not parse. Its children are token leaves. */
+  /** A region that the parser could not parse. Its children are token leaves or the nodes of a skipped construct. */
   Error,
   Module,
 

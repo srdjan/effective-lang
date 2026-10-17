@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-Source code is in `src/core/`. Tests and test helpers are in `tests/`. Test inputs are in `fixtures/`. Design and plans are in `docs/`. The README describes each directory and the fixture conventions.
+The core library is in `src/core/`, the command-line tool in `src/cli/`, and the language server in `src/lsp/`. The VS Code client is in `editors/vscode/`, the browser playground in `playground/`, the measurement harnesses in `bench/`, and the task scripts in `scripts/`. Tests and test helpers are in `tests/`. Test inputs are in `fixtures/`. Design and plans are in `docs/`. The README describes each directory and the fixture conventions.
 
 ## Build, Test, and Development Commands
 
@@ -18,4 +18,4 @@ Tests use `Deno.test` and `@std/assert`. A fast test runs in under one second. A
 
 ## Commit & Pull Request Guidelines
 
-This directory has no Git repository or commit history, so no project-specific commit convention can be inferred. Use short, imperative commit subjects that explain the change. Pull requests should summarize the purpose, list the commands used to verify the change, and link related issues when available. Include screenshots for visible interface changes, and call out any setup or configuration changes reviewers need to reproduce.
+The history uses one commit for each complete unit of work on local `main`. Use a short, imperative subject that explains the change, and a body that gives the reason. Pull requests should summarize the purpose, list the commands used to verify the change, and link related issues when available. Include screenshots for visible interface changes, and call out any setup or configuration changes reviewers need to reproduce.
