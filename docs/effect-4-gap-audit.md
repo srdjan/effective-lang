@@ -7,12 +7,19 @@ The compiler emits and validates `light-functional-ir` version 2. The coverage
 map below reflects the implemented core 1 slices. The probes later in this
 document remain the original audit snapshot.
 
+Update, 2026-10-18: design draft 0.4 adds unbounded `traverse`. The compiler
+accepts only the literal `{ concurrency: "unbounded" }`, validates it in IR,
+and emits `Effect.forEach` with that option. A runtime test covers full startup,
+input-order results, failure and interruption cleanup, and an empty input.
+Homogeneous `Effect.all` work can be expressed by traversing Effect values
+with `run`. Heterogeneous tuple and record collection remain open.
+
 Update, 2026-10-17: `bufferStream` and `mergeStreams` now compile to Effect 4
 streams. A slow runtime test covers deferred production and per-source order.
 The original probes remain the audit snapshot.
 Update, 2026-10-17: `race` now accepts compatible first-class Effect values.
 The runtime regression confirms loser interruption and finalizer completion.
-General unbounded concurrency remains a gap.
+Other unbounded concurrent compositions remain a gap.
 Update, 2026-10-17: `Ref<A>` and source make/get/set/update operations now
 compile. Ref is invariant, and update requires a pure callback. A bounded
 concurrency runtime test checks atomic updates.
@@ -40,14 +47,14 @@ effectful `traverse`. Phase 4 adds first-class `Effect<A,E,R>` values through
 `defer` and `run`. Phase 5 adds scoped operation records through
 `withResource`. Phase 6 adds bounded concurrent `traverse`. Phase 7 adds
 incremental `Stream` and `Sink` values through `unfold`, `mapEffect`,
-`sinkForEach`, and `runStream`. General borrowed scopes, unbounded concurrency,
+`sinkForEach`, and `runStream`. General borrowed scopes and concurrency,
 broader stream combinators and general Effect
 combinators remain native gaps. The original probes below remain the audit
 snapshot and should be read with these updates.
 
 ## Answer and boundary
 
-**Yes. There are valid Effect 4 programs whose behavior and typed API cannot currently be authored in Effective source.** Unbounded concurrent composition, general stream combinators, raw `Scope` values, effectful Schema transformations, and direct ecosystem package APIs remain examples. Effective now supports the selected core 1 forms in the [language spec](../../effective/public/effective-spec.html#core1) and [typed IR](../src/core/ir.ts). Effect's documentation describes the broader [concurrency](https://effect.website/docs/v4/concurrency/basic-concurrency), [stream](https://effect.website/docs/v4/stream/introduction), and [scope](https://effect.website/docs/v4/resource-management/scope) APIs.
+**Yes. There are valid Effect 4 programs whose behavior and typed API cannot currently be authored in Effective source.** Heterogeneous `Effect.all`, general stream combinators, raw `Scope` values, effectful Schema transformations, and direct ecosystem package APIs remain examples. Effective now supports the selected core 1 forms in the [language spec](../../effective/public/effective-spec.html#core1) and [typed IR](../src/core/ir.ts). Effect's documentation describes the broader [concurrency](https://effect.website/docs/v4/concurrency/basic-concurrency), [stream](https://effect.website/docs/v4/stream/introduction), and [scope](https://effect.website/docs/v4/resource-management/scope) APIs.
 
 Here, **native support** means a program can be written in `.eff`, checked with its intended contract, and emitted to equivalent Effect behavior. A host TypeScript module may implement any of these behaviors behind an Effective service, but that implementation is then authored in TypeScript. This distinction matters for ecosystem coverage. The `host:` boundary accepts declared providers, service tags, and opaque types from a registered interface; it does not import arbitrary package functions or Effect constants. `.effi` still rejects `const`, and imports accept only relative `.eff` files or registered `host:` modules. A service method can return a nested Effect value ([parser](../src/core/parse.ts), [project linker](../src/core/project.ts), [emitter](../src/core/emit/decls.ts)).
 
@@ -59,8 +66,8 @@ This is an expressiveness result for the current language and compiler, not a cl
 | --- | --- | --- | --- |
 | Ordinary typed effects, service calls, tagged failures, recovery, and fixed-count retry | **Supported subset.** Effective emits `Effect`, `Context`, `Layer`, `Option`, and `Schema`; its examples cover these forms. | [Examples](../fixtures/examples/), [emitter import set](../src/core/emit/scope.ts#L26), [source control rules](../../effective/public/effective-spec.html#control). | Host supplies the provider and invokes exported entry functions. |
 | First-class Effect values and general combinators | **Partial.** `Effect<A,E,R>`, `defer`, and `run` let source construct, store, pass, return, and execute a typed Effect value. General Effect combinators remain absent. | [IR type model](../src/core/ir.ts#L31), [spec: execution](../../effective/public/effective-spec.html#execution), [Phase 4 runtime test](../tests/emit_slow_test.ts); Effect [the Effect type](https://effect.website/docs/v4/getting-started/the-effect-type). The original probe below predates Phase 4. | Host may expose a specific composed operation as a service method. |
-| Concurrency, racing, fibers, interruption | **Supported core 1 subset.** Bounded `traverse`, `race`, and supervised `withFiber` with join and interruption are native. General unbounded composition remains absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime tests](../tests/emit_slow_test.ts); Effect [concurrency](https://effect.website/docs/v4/concurrency/basic-concurrency) and [fibers](https://effect.website/docs/v4/concurrency/fibers). | A service can expose other concurrent policies. |
-| Effectful collection traversal | **Supported sequentially.** `traverse` accepts effectful callbacks and preserves their failure and requirement sets. `map`, `filter`, and `fold` still require pure callbacks. | [Spec: collections](../../effective/public/effective-spec.html#pipelines), [prelude names](../src/core/resolve.ts#L53), [Phase 3 runtime test](../tests/emit_slow_test.ts); Effect [`forEach`](https://effect.website/docs/v4/code-style/control-flow). The original `filter` probe still fails. | A host service can expose other traversal policies. |
+| Concurrency, racing, fibers, interruption | **Supported core 1 subset.** Bounded and unbounded `traverse`, `race`, and supervised `withFiber` with join and interruption are native. Homogeneous `Effect.all` can use `traverse` over Effect values; heterogeneous tuple and record collection remain absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime tests](../tests/emit_slow_test.ts); Effect [concurrency](https://effect.website/docs/v4/concurrency/basic-concurrency) and [fibers](https://effect.website/docs/v4/concurrency/fibers). | A service can expose other concurrent policies. |
+| Effectful collection traversal | **Supported sequentially and concurrently.** `traverse` accepts effectful callbacks and preserves their failure and requirement sets. `map`, `filter`, and `fold` still require pure callbacks. | [Spec: collections](../../effective/public/effective-spec.html#pipelines), [prelude names](../src/core/resolve.ts#L53), [Phase 3 runtime test](../tests/emit_slow_test.ts); Effect [`forEach`](https://effect.website/docs/v4/code-style/control-flow). The original `filter` probe still fails. | A host service can expose other traversal policies. |
 | Streams and sinks | **Supported core 1 subset.** `unfold`, `mapEffect`, `sinkForEach`, `runStream`, `bufferStream`, and `mergeStreams` are native. Other stream combinators remain absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime tests](../tests/emit_slow_test.ts); Effect [streams](https://effect.website/docs/v4/stream/introduction) and [sinks](https://effect.website/docs/v4/sink/introduction). | A host adapter can expose other stream policies. |
 | Resource scopes and finalizers | **Supported core 1 subset.** `withResource` scopes operation records and opaque host handles; borrow-qualified methods and checked source helpers prevent handle escape. Raw `Scope` composition remains absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [borrow runtime test](../tests/cli_slow_test.ts); Effect [scope](https://effect.website/docs/v4/resource-management/scope). | A host adapter owns the handle and its operations. |
 | Schedules and timed repetition | **Supported core 1 subset.** `retrySchedule` authors a conditional millisecond policy for `retry`. General Schedule operators and cron policies remain absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime test](../tests/emit_slow_test.ts); Effect [schedules](https://effect.website/docs/v4/scheduling/using-schedules). | Host can implement other policies. |
@@ -141,7 +148,7 @@ The fix moved the left expression's active requirements to the block binding and
 
 ## Remaining investigation queue
 
-1. **General concurrency and scope.** Compare unbounded `Effect.all`, `Effect.forkScoped`, and raw `Scope` composition with the bounded and supervised source forms. Keep cancellation and finalizer behavior explicit.
+1. **General concurrency and scope.** Compare heterogeneous `Effect.all`, `Effect.forkScoped`, and raw `Scope` composition with the traversal and supervised source forms. Keep cancellation and finalizer behavior explicit.
 2. **General stream and Schedule APIs.** Identify further operators whose behavior cannot be expressed by `unfold`, `bufferStream`, `mergeStreams`, and `retrySchedule`; require target and runtime witnesses.
 3. **Schema and ecosystem APIs.** Test effectful transformations, recursive schemas, and representative HTTP, SQL, RPC, AI, and observability objects through typed adapters. Preserve failures, requirements, and scoped lifetimes.
 

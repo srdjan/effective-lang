@@ -2497,11 +2497,11 @@ export class BodyChecker {
     });
   }
 
-  private concurrencyBound(arg: Arg): number | undefined {
+  private concurrencyBound(arg: Arg): number | "unbounded" | undefined {
     const bad = (): undefined => {
       this.report(
         "type-mismatch/010",
-        "`traverse` needs `{ concurrency: N }`, where N is a positive safe integer literal",
+        '`traverse` needs `{ concurrency: N }` with a positive safe integer literal, or `{ concurrency: "unbounded" }`',
         arg.node,
       );
       return undefined;
@@ -2523,10 +2523,11 @@ export class BodyChecker {
       nameTextOf(this.tree, name) !== "concurrency" ||
       kindOf(this.tree, value) !== SyntaxKind.LiteralExpr
     ) return bad();
-    const number = literalOf(this.tree, value);
-    return typeof number === "number" && Number.isSafeInteger(number) &&
-        number > 0
-      ? number
+    const literal = literalOf(this.tree, value);
+    if (literal === "unbounded") return literal;
+    return typeof literal === "number" && Number.isSafeInteger(literal) &&
+        literal > 0
+      ? literal
       : bad();
   }
 
@@ -2562,8 +2563,10 @@ export class BodyChecker {
     if (name === "traverse") {
       const cb = this.callback(name, args[1], [element], undefined, true);
       infos.push(cb.info);
+      const concurrency = args[2] === undefined
+        ? undefined
+        : this.concurrencyBound(args[2]);
       if (args[2] !== undefined) {
-        this.concurrencyBound(args[2]);
         infos.push(this.argInfo(args[2]));
       }
       const fn = this.functionOf(cb.info.type);
@@ -2585,7 +2588,7 @@ export class BodyChecker {
             callbackType,
             table.record([{
               name: "concurrency",
-              type: table.int,
+              type: concurrency === "unbounded" ? table.string : table.int,
               optional: false,
             }]),
           ]

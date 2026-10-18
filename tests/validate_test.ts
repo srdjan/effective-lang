@@ -247,6 +247,24 @@ Deno.test("bounded traversal validation rejects a mutated concurrency bound", ()
   assert(codesOf(changed, lowered.sources).includes("validation/006"));
 });
 
+Deno.test("unbounded traversal validation rejects a different string", () => {
+  const lowered = lowerText(
+    'const f = (): Int[] => traverse([1, 2], (n) => n, { concurrency: "unbounded" })\ntype Int = int',
+  );
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const changed = copy(lowered.ir);
+  const functionDecl = changed.declarations.find((d) => d.name === "f");
+  assert(
+    functionDecl?.kind === "function" && functionDecl.body.kind === "call",
+  );
+  const options = functionDecl.body.arguments[2];
+  assert(
+    options?.kind === "record" && options.fields[0]?.value.kind === "literal",
+  );
+  (options.fields[0].value as { value: string }).value = "infinite";
+  assert(codesOf(changed, lowered.sources).includes("validation/006"));
+});
+
 Deno.test("stream validation recomputes deferred and active channels", () => {
   const lowered = lowerText(`
 error Stop = {}

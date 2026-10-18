@@ -49,6 +49,14 @@ Deno.test("bounded traverse passes the concurrency literal to Effect.forEach", (
   assertStringIncludes(output, "concurrency: 2");
 });
 
+Deno.test("unbounded traverse passes its literal to Effect.forEach", () => {
+  const output = oneModule(
+    'const f = (): Int[] => traverse([1, 2], (n) => n + 1, { concurrency: "unbounded" })\ntype Int = int',
+  );
+  assertStringIncludes(output, "Effect.forEach([1, 2]");
+  assertStringIncludes(output, 'concurrency: "unbounded"');
+});
+
 Deno.test("stream operations emit the Effect 4 Stream and Sink APIs", () => {
   const output = oneModule(`
 service Source { next(state: Int): Option<[Int, Int]> }

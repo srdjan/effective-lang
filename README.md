@@ -16,7 +16,7 @@ Part A3b adds body checking. It checks every function and constant body, infers 
 
 Collection literals use brackets: `[1, 2]` infers an array, while an expected tuple type checks each position. `[]` needs an expected array or tuple type. An uncontextualized heterogeneous list gives `type-mismatch/012`.
 
-`traverse(items, callback)` maps an array sequentially with an effectful callback. An optional literal `{ concurrency: N }` with positive safe integer N runs at most N callbacks simultaneously, returns results in input order, and waits for scoped finalizers after failure or interruption. Callback failures and service requirements enter the enclosing contract. `map`, `filter`, and `fold` still require pure callbacks.
+`traverse(items, callback)` maps an array sequentially with an effectful callback. A literal `{ concurrency: N }` runs at most N callbacks simultaneously when N is a positive safe integer; `{ concurrency: "unbounded" }` starts them without a limit. Both return results in input order and wait for scoped finalizers after failure or interruption. Callback failures and service requirements enter the enclosing contract. `map`, `filter`, and `fold` still require pure callbacks.
 
 `Effect<A, E, R>` stores a computation with result type `A`, typed failures `E`, and service method requirements `R`. `defer(() => job())` constructs it without running the job. `run(value)` executes it and adds its failures and requirements to the caller's contract. Empty channels may be omitted or written as `never`. A source binding named `run` shadows the prelude operation.
 

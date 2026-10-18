@@ -149,13 +149,15 @@ type Int = int
   );
 });
 
-Deno.test("bounded traverse requires a positive safe integer literal", () => {
+Deno.test("traverse requires a positive bound or the unbounded literal", () => {
   for (
     const option of [
       "{ concurrency: 0 }",
       "{ concurrency: -1 }",
       "{ concurrency: 1.5 }",
       "{ concurrency: 9007199254740992 }",
+      '{ concurrency: "infinite" }',
+      "{ concurrency: true }",
       "{ other: 2 }",
       "{ concurrency: 2, other: 3 }",
     ]

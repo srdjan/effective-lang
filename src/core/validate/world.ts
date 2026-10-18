@@ -649,7 +649,8 @@ function checkBuiltinShape(
       : undefined;
     if (
       field?.name !== "concurrency" || field.optional ||
-      !same(env, field.type, { kind: "primitive", name: "int" })
+      (!same(env, field.type, { kind: "primitive", name: "int" }) &&
+        !same(env, field.type, { kind: "primitive", name: "string" }))
     ) {
       wrong("requires a concurrency options record as its third parameter");
     }

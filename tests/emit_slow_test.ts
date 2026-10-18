@@ -380,6 +380,126 @@ console.log(JSON.stringify({ success, failure, interruption }));
     });
   });
 });
+
+Deno.test("unbounded traverse starts every job and waits for scoped finalizers", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "export error Stop = {}",
+        "export service Jobs {",
+        "  open(n: Int): { work: () => Int fails Stop, close: () => void }",
+        "}",
+        "export const unbounded = (xs: Int[]): Int[] fails Stop uses Jobs.open =>",
+        '  traverse(xs, (n) => withResource(() => Jobs.open(n), (job) => job.work(), (job) => job.close()), { concurrency: "unbounded" })',
+        "export const all = (): Int[] =>",
+        '  traverse([defer(() => 1), defer(() => 2)], (job) => run(job), { concurrency: "unbounded" })',
+        "type Int = int",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Deferred, Effect, Exit, Fiber, Layer } from "effect";
+import { Jobs, Stop, all, unbounded } from "./main.ts";
+
+type Gate = Deferred.Deferred<void>;
+let gates: Gate[] = [];
+let ready: Gate[] = [];
+let policy: "success" | "failure" | "interrupt" = "success";
+let active = 0;
+let maximum = 0;
+const started: number[] = [];
+const released: number[] = [];
+const Live = Layer.succeed(Jobs)({
+  open: (n) => Effect.sync(() => {
+    started.push(n);
+    active++;
+    maximum = Math.max(maximum, active);
+    return {
+      work: () => Deferred.succeed(ready[n - 1]!, undefined).pipe(
+        Effect.andThen(Deferred.await(gates[n - 1]!)),
+        Effect.andThen(policy === "failure" && n === 2
+          ? Effect.fail(new Stop({}))
+          : Effect.succeed(n * 2)),
+      ),
+      close: () => Effect.sync(() => { released.push(n); active--; }),
+    };
+  }),
+});
+
+const makeGates = () => Effect.forEach([1, 2, 3], () => Deferred.make<void>());
+const reset = async (next: typeof policy) => {
+  policy = next;
+  started.length = 0;
+  released.length = 0;
+  maximum = 0;
+  gates = await Effect.runPromise(makeGates());
+  ready = await Effect.runPromise(makeGates());
+};
+const start = () => Effect.gen(function* () {
+  const fiber = yield* Effect.forkChild(unbounded([1, 2, 3]).pipe(Effect.provide(Live)));
+  for (const gate of ready) yield* Deferred.await(gate);
+  return fiber;
+});
+
+await reset("success");
+const ordered = await Effect.runPromise(Effect.gen(function* () {
+  const fiber = yield* start();
+  yield* Deferred.succeed(gates[2]!, undefined);
+  yield* Deferred.succeed(gates[0]!, undefined);
+  yield* Deferred.succeed(gates[1]!, undefined);
+  return yield* Fiber.join(fiber);
+}));
+const success = { ordered, maximum, active, started: [...started] };
+
+await reset("failure");
+const failed = await Effect.runPromise(Effect.gen(function* () {
+  const fiber = yield* start();
+  yield* Deferred.succeed(gates[1]!, undefined);
+  return yield* Fiber.await(fiber);
+}));
+const failure = { failed: Exit.isFailure(failed), started: [...started], released: [...released].sort(), active };
+
+await reset("interrupt");
+await Effect.runPromise(Effect.gen(function* () {
+  const fiber = yield* start();
+  yield* Fiber.interrupt(fiber);
+}));
+const interruption = { started: [...started], released: [...released].sort(), active };
+const empty = await Effect.runPromise(unbounded([]).pipe(Effect.provide(Live)));
+const allResults = await Effect.runPromise(all());
+console.log(JSON.stringify({ success, failure, interruption, empty, allResults }));
+`,
+    );
+    assertEquals(result, {
+      success: {
+        ordered: [2, 4, 6],
+        maximum: 3,
+        active: 0,
+        started: [1, 2, 3],
+      },
+      failure: {
+        failed: true,
+        started: [1, 2, 3],
+        released: [1, 2, 3],
+        active: 0,
+      },
+      interruption: {
+        started: [1, 2, 3],
+        released: [1, 2, 3],
+        active: 0,
+      },
+      empty: [],
+      allResults: [1, 2],
+    });
+  });
+});
+
 Deno.test("source-authored streams pull incrementally through an effectful sink", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

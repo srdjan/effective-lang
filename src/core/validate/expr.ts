@@ -1052,14 +1052,14 @@ export class BodyValidator {
         const value = field?.value;
         if (
           field?.name !== "concurrency" || value?.kind !== "literal" ||
-          typeof value.value !== "number" ||
-          !Number.isSafeInteger(value.value) ||
-          value.value <= 0
+          !(value.value === "unbounded" ||
+            (typeof value.value === "number" &&
+              Number.isSafeInteger(value.value) && value.value > 0))
         ) {
           this.add(
             AREA.control,
             `${path}.arguments[2]`,
-            "traverse needs a positive safe integer concurrency literal",
+            "traverse needs a positive safe integer or unbounded concurrency literal",
             options?.span ?? e.span,
           );
         }
