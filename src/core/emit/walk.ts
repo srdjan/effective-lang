@@ -49,6 +49,8 @@ export function childrenOf(expr: Expr): Expr[] {
       return [expr.stream, expr.count];
     case "take-while-stream":
       return [expr.stream, expr.predicate];
+    case "take-until-stream":
+      return [expr.stream, expr.predicate];
     case "partition-all":
       return [expr.jobs];
     case "validate-all":

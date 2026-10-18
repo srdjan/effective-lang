@@ -653,6 +653,13 @@ class BodyLowerer {
           predicate: arg(1),
           ...annotation,
         };
+      case "take-until-stream":
+        return {
+          kind: "take-until-stream",
+          stream: arg(0),
+          predicate: arg(1),
+          ...annotation,
+        };
       case "partition-all":
         return {
           kind: "partition-all",

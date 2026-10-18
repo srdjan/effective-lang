@@ -868,6 +868,13 @@ export class ExprEmitter {
           callArguments([kid(e.stream), this.callback(e.predicate, kid)]),
         ]);
       }
+      case "take-until-stream": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.takeUntil`,
+          callArguments([kid(e.stream), this.callback(e.predicate, kid)]),
+        ]);
+      }
       case "sink-for-each": {
         const sink = this.scope.effect("Sink");
         return emitted([

@@ -1298,6 +1298,89 @@ console.log(JSON.stringify({ before, empty, prefix, failure: { tag: failure._tag
   });
 });
 
+Deno.test("takeUntilStream includes the matching element and closes upstream work", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "export error Stop = {}",
+        "export service Source { next(n: Int): Option<[Int, Int]> fails Stop }",
+        "export service Output { accept(value: Int): void }",
+        "const source = unfold(0, (n) => Source.next(n))",
+        "const sink = sinkForEach((value: Int) => Output.accept(value))",
+        "export const main = (limit: Int): void fails Stop uses Source.next | Output.accept =>",
+        "  runStream(takeUntilStream(source, (n) => n === limit), sink)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer, Option } from "effect";
+import { Output, Source, Stop, main } from "./main.ts";
+
+const calls: number[] = [];
+const released: number[] = [];
+const values: number[] = [];
+let failAtFour = false;
+const SourceLive = Layer.succeed(Source)({
+  next: (n) => Effect.acquireUseRelease(
+    Effect.sync(() => { calls.push(n); return n; }),
+    () => n === 4 && failAtFour ? Effect.fail(new Stop({})) :
+      n === 5 ? Effect.succeed(Option.none()) : Effect.succeed(Option.some([n, n + 1] as const)),
+    () => Effect.sync(() => { released.push(n); }),
+  ),
+});
+const OutputLive = Layer.succeed(Output)({
+  accept: (value) => Effect.sync(() => { values.push(value); }),
+});
+const Live = Layer.mergeAll(SourceLive, OutputLive);
+const run = async (limit: number) => {
+  calls.length = 0;
+  released.length = 0;
+  values.length = 0;
+  await Effect.runPromise(main(limit).pipe(Effect.provide(Live)));
+  return { calls: [...calls], released: [...released], values: [...values] };
+};
+const before = { calls: [...calls], released: [...released], values: [...values] };
+const first = await run(0);
+const prefix = await run(3);
+const noMatch = await run(-1);
+calls.length = 0;
+released.length = 0;
+values.length = 0;
+failAtFour = true;
+const failure = await Effect.runPromise(Effect.flip(main(5).pipe(Effect.provide(Live))));
+console.log(JSON.stringify({ before, first, prefix, noMatch, failure: { tag: failure._tag, calls, released, values } }));
+`,
+    );
+    assertEquals(result, {
+      before: { calls: [], released: [], values: [] },
+      first: { calls: [0], released: [0], values: [0] },
+      prefix: {
+        calls: [0, 1, 2, 3],
+        released: [0, 1, 2, 3],
+        values: [0, 1, 2, 3],
+      },
+      noMatch: {
+        calls: [0, 1, 2, 3, 4, 5],
+        released: [0, 1, 2, 3, 4, 5],
+        values: [0, 1, 2, 3, 4],
+      },
+      failure: {
+        tag: "main#Stop",
+        calls: [0, 1, 2, 3, 4],
+        released: [0, 1, 2, 3, 4],
+        values: [0, 1, 2, 3],
+      },
+    });
+  });
+});
+
 Deno.test("a source race interrupts its losing fiber and waits for cleanup", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

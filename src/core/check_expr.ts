@@ -876,6 +876,8 @@ export class BodyChecker {
         return this.takeStreamCall(node, args);
       case "takeWhileStream":
         return this.takeWhileStreamCall(node, args);
+      case "takeUntilStream":
+        return this.takeUntilStreamCall(node, args);
       case "sinkForEach":
         return this.sinkForEachCall(node, args);
       case "runStream":
@@ -2148,6 +2150,44 @@ export class BodyChecker {
       predicate.result,
       this.table.boolean,
       "the takeWhileStream predicate",
+    );
+    return this.finish(node, stream.type, combine([stream, predicate.info]));
+  }
+
+  private takeUntilStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "take-until-stream" });
+    if (!this.arity(node, "takeUntilStream", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.noPipeline("takeUntilStream", args);
+    this.inlineStreamCallback("takeUntilStream", args[1]);
+    const stream = this.argInfo(args[0]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`takeUntilStream` needs a Stream value",
+        args[0].node,
+      );
+    }
+    const element = source.kind === "stream"
+      ? source.element
+      : this.table.error;
+    const predicate = this.callback(
+      "takeUntilStream",
+      args[1],
+      [element],
+      this.table.boolean,
+    );
+    this.fits(
+      args[1].node,
+      predicate.result,
+      this.table.boolean,
+      "the takeUntilStream predicate",
     );
     return this.finish(node, stream.type, combine([stream, predicate.info]));
   }

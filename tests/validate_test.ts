@@ -542,6 +542,39 @@ const prefix: Stream<Int, Stop, Source.next> = takeWhileStream(source, (n) => n 
   assert(codesOf(wrongChannel, lowered.sources).includes("validation/002"));
 });
 
+Deno.test("takeUntilStream validates predicate and deferred channels", () => {
+  const lowered = lowerText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const prefix: Stream<Int, Stop, Source.next> = takeUntilStream(source, (n) => n === 3)
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+
+  const wrongPredicate = copy(lowered.ir);
+  const predicate = wrongPredicate.declarations.find((d) =>
+    d.name === "prefix"
+  );
+  assert(
+    predicate?.kind === "constant" &&
+      predicate.value.kind === "take-until-stream",
+  );
+  setAt(predicate, "value.predicate.type.result", {
+    kind: "primitive",
+    name: "int",
+  });
+  assert(codesOf(wrongPredicate, lowered.sources).includes("validation/002"));
+
+  const wrongChannel = copy(lowered.ir);
+  const prefix = wrongChannel.declarations.find((d) => d.name === "prefix");
+  assert(
+    prefix?.kind === "constant" && prefix.value.kind === "take-until-stream",
+  );
+  setAt(prefix, "value.type.effects.failures", []);
+  assert(codesOf(wrongChannel, lowered.sources).includes("validation/002"));
+});
+
 Deno.test("stream validation recomputes deferred and active channels", () => {
   const lowered = lowerText(`
 error Stop = {}
