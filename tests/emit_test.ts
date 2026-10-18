@@ -385,6 +385,17 @@ const switched = switchMapStreams(outer, (n) => unfold(n, (m) => Source.next(m))
   assertStringIncludes(output, "Stream.switchMap(");
 });
 
+Deno.test("catchStream emits Stream.catch", () => {
+  const output = oneModule(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const recovered = catchStream(source, (_) => unfold(1, (n) => Source.next(n)))
+`);
+  assertStringIncludes(output, "Stream.catch(");
+});
+
 Deno.test("concurrent stream mapping emits pinned concurrency options", () => {
   const output = oneModule(`
 type Int = int

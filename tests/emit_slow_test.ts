@@ -865,6 +865,73 @@ console.log(JSON.stringify({ before, success, failure }));
   });
 });
 
+Deno.test("catchStream retains earlier values and switches on typed failure", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "export error Stop = { code: Int }",
+        "export error RecoveryStop = {}",
+        "export service Source { next(n: Int): Option<[Int, Int]> fails Stop }",
+        "export service Recovery { next(n: Int): Option<[Int, Int]> fails RecoveryStop }",
+        "const source = unfold(0, (n) => Source.next(n))",
+        "const recovered = catchStream(source, (err) => unfold(err.code, (n) => Recovery.next(n)))",
+        "export const main = (): Int[] fails RecoveryStop uses Source.next | Recovery.next => collectStream(recovered)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer, Option } from "effect";
+import { Source, Recovery, Stop, RecoveryStop, main } from "./main.ts";
+
+let failRecovery = false;
+const sourceCalls: number[] = [];
+const recoveryCalls: number[] = [];
+const finalized: number[] = [];
+const SourceLive = Layer.succeed(Source)({
+  next: (n) => Effect.sync(() => { sourceCalls.push(n); }).pipe(
+    Effect.flatMap(() => n < 2
+      ? Effect.succeed(Option.some([n + 1, n + 1] as const))
+      : Effect.fail(new Stop({ code: 9 }))),
+    Effect.ensuring(Effect.sync(() => { finalized.push(n); })),
+  ),
+});
+const RecoveryLive = Layer.succeed(Recovery)({
+  next: (n) => Effect.sync(() => { recoveryCalls.push(n); }).pipe(
+    Effect.flatMap(() => failRecovery
+      ? Effect.fail(new RecoveryStop({}))
+      : n === 9
+      ? Effect.succeed(Option.some([90, 10] as const))
+      : Effect.succeed(Option.none())),
+  ),
+});
+const pending = main().pipe(Effect.provide(Layer.merge(SourceLive, RecoveryLive)));
+const before = { sourceCalls: [...sourceCalls], recoveryCalls: [...recoveryCalls] };
+const first = await Effect.runPromise(pending);
+const second = await Effect.runPromise(pending);
+failRecovery = true;
+const error = await Effect.runPromise(Effect.flip(pending));
+console.log(JSON.stringify({ before, first, second, tag: error._tag, sourceCalls, recoveryCalls, finalized }));
+`,
+    );
+    assertEquals(result, {
+      before: { sourceCalls: [], recoveryCalls: [] },
+      first: [1, 2, 90],
+      second: [1, 2, 90],
+      tag: "main#RecoveryStop",
+      sourceCalls: [0, 1, 2, 0, 1, 2, 0, 1, 2],
+      recoveryCalls: [9, 10, 9, 10, 9],
+      finalized: [0, 1, 2, 0, 1, 2, 0, 1, 2],
+    });
+  });
+});
+
 Deno.test("concurrent stream mapping bounds work and closes failed siblings", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

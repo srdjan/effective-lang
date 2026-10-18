@@ -914,6 +914,13 @@ export class ExprEmitter {
           callArguments([kid(e.stream), this.callback(e.transform, kid)]),
         ]);
       }
+      case "catch-stream": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.catch`,
+          callArguments([kid(e.stream), this.callback(e.recover, kid)]),
+        ]);
+      }
       case "take-stream": {
         const stream = this.scope.effect("Stream");
         return emitted([

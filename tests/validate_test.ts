@@ -1042,6 +1042,40 @@ const switched = switchMapStreams(outer, (n) => unfold(n, (m) => Inner.next(m)))
   );
 });
 
+Deno.test("catchStream validates removed source failures and recovery channels", () => {
+  const lowered = lowerText(`
+type Int = int
+error Stop = {}
+error RecoveryStop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+service Recovery { next(n: Int): Option<[Int, Int]> fails RecoveryStop }
+const source = unfold(0, (n) => Source.next(n))
+const recovered = catchStream(source, (_) => unfold(9, (n) => Recovery.next(n)))
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const wrongFailures = copy(lowered.ir);
+  const recovered = wrongFailures.declarations.find((d) =>
+    d.name === "recovered"
+  );
+  assert(
+    recovered?.kind === "constant" && recovered.value.kind === "catch-stream",
+  );
+  setAt(recovered, "value.type.effects.failures", ["error:Stop"]);
+  assert(codesOf(wrongFailures, lowered.sources).includes("validation/002"));
+  const wrongRequirements = copy(lowered.ir);
+  const requirement = wrongRequirements.declarations.find((d) =>
+    d.name === "recovered"
+  );
+  assert(
+    requirement?.kind === "constant" &&
+      requirement.value.kind === "catch-stream",
+  );
+  setAt(requirement, "value.type.effects.requirements", []);
+  assert(
+    codesOf(wrongRequirements, lowered.sources).includes("validation/002"),
+  );
+});
+
 Deno.test("effectful stream predicates validate combined deferred channels", () => {
   for (
     const [operation, kind] of [

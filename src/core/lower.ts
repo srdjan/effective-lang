@@ -695,6 +695,13 @@ class BodyLowerer {
           transform: arg(1),
           ...annotation,
         };
+      case "catch-stream":
+        return {
+          kind: "catch-stream",
+          stream: arg(0),
+          recover: arg(1),
+          ...annotation,
+        };
       case "take-stream":
         return {
           kind: "take-stream",

@@ -491,6 +491,8 @@ export class BodyValidator {
         return this.flatMapStreams(e, path);
       case "switch-map-streams":
         return this.switchMapStreams(e, path);
+      case "catch-stream":
+        return this.catchStream(e, path);
       case "take-stream":
         return this.takeStream(e, path);
       case "drop-stream":
@@ -2225,6 +2227,8 @@ export class BodyValidator {
           case "flat-map-streams":
           case "switch-map-streams":
             return [e.stream, e.transform];
+          case "catch-stream":
+            return [e.stream, e.recover];
           case "scan-stream":
           case "map-accum-stream":
           case "fold-stream":
@@ -3087,6 +3091,63 @@ export class BodyValidator {
       },
       match: "exact",
       active: combine([stream, transform]),
+    };
+  }
+
+  private catchStream(
+    e: Extract<Expr, { kind: "catch-stream" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const recover = this.check(e.recover, `${path}.recover`);
+    const source = unfold(this.env, stream.type);
+    const fn = asFunction(this.env, recover.type);
+    if (e.recover.kind !== "closure") {
+      this.add(
+        AREA.control,
+        `${path}.recover`,
+        "catchStream requires an inline closure",
+        e.recover.span,
+      );
+    }
+    const replacement = fn === undefined
+      ? undefined
+      : unfold(this.env, fn.result);
+    const errors = source.kind === "stream"
+      ? unionOf(
+        this.env,
+        source.effects.failures.map((id) => ({ kind: "named", id })),
+      )
+      : NEVER;
+    if (
+      source.kind !== "stream" || fn === undefined ||
+      fn.parameters.length !== 1 ||
+      !fits(this.env, errors, fn.parameters[0]) ||
+      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
+      fn.effects.requirements.length > 0 || replacement?.kind !== "stream"
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "catchStream needs a Stream and a pure error callback returning a Stream",
+        e.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: {
+        kind: "stream",
+        element: unionOf(this.env, [source.element, replacement.element]),
+        effects: {
+          failures: replacement.effects.failures,
+          requirements: sortedUnique([
+            ...source.effects.requirements,
+            ...replacement.effects.requirements,
+          ]),
+        },
+      },
+      match: "exact",
+      active: combine([stream, recover]),
     };
   }
 

@@ -1078,6 +1078,34 @@ const use = (): Int => switchMapStreams()
   assertEquals(codes(shadow), [], messages(shadow).join("\n"));
 });
 
+Deno.test("catchStream replaces typed source failures with recovery channels", () => {
+  const valid = checkText(`
+type Int = int
+error Stop = { code: Int }
+error RecoveryStop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+service Recovery { next(n: Int): Option<[Int, Int]> fails RecoveryStop }
+const source = unfold(0, (n) => Source.next(n))
+const recovered = catchStream(source, (err) => unfold(err.code, (n) => Recovery.next(n)))
+const main = (): Int[] fails RecoveryStop uses Source.next | Recovery.next => collectStream(recovered)
+`);
+  assertEquals(codes(valid), [], messages(valid).join("\n"));
+  const bad = checkText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const recovered = catchStream(source, (err) => err)
+`);
+  assert(codes(bad).includes("type-mismatch/010"));
+  const shadow = checkText(`
+type Int = int
+const catchStream = (): Int => 3
+const use = (): Int => catchStream()
+`);
+  assertEquals(codes(shadow), [], messages(shadow).join("\n"));
+});
+
 Deno.test("stream mapping accepts literal concurrency and rejects invalid bounds", () => {
   const valid = checkText(`
 type Int = int

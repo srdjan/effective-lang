@@ -42,6 +42,8 @@ Collection literals use brackets: `[1, 2]` infers an array, while an expected tu
 
 `switchMapStreams(source, callback)` takes an inline pure callback that returns an inner Stream for each source element. A new source element interrupts the previous inner stream and starts the latest one. Values already emitted remain; source and inner failures and requirements stay deferred until consumption.
 
+`catchStream(source, recover)` takes an inline pure callback from a typed source error to a replacement Stream. Earlier source values remain, the source typed failures are handled, and the replacement's failures and requirements stay deferred. Defects and interruption pass through.
+
 `takeStream(stream, count)` keeps up to the first `count` elements. A pure `Int` count may be dynamic; zero or a negative count yields an empty stream without pulling the source. The stream's deferred failures and requirements remain in its type.
 
 `takeWhileStream(stream, predicate)` keeps the longest prefix accepted by an inline pure boolean predicate. It consumes but omits the first rejected element, stops further pulls, and preserves the stream's deferred channels. Upstream work is closed when the prefix ends.

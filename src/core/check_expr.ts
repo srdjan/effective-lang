@@ -892,6 +892,8 @@ export class BodyChecker {
         return this.flatMapStreamsCall(node, args);
       case "switchMapStreams":
         return this.switchMapStreamsCall(node, args);
+      case "catchStream":
+        return this.catchStreamCall(node, args);
       case "takeStream":
         return this.takeStreamCall(node, args);
       case "dropStream":
@@ -2646,6 +2648,52 @@ export class BodyChecker {
       ],
     );
     return this.finish(node, type, combine([stream, transform.info]));
+  }
+
+  private catchStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    if (!this.arity(node, "catchStream", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.fact(node, { kind: "catch-stream" });
+    this.noPipeline("catchStream", args);
+    this.inlineStreamCallback("catchStream", args[1]);
+    const stream = this.argInfo(args[0]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`catchStream` needs a Stream value",
+        args[0].node,
+      );
+    }
+    const errors = source.kind === "stream"
+      ? this.table.union(source.failures.map((id) => this.table.named(id)))
+      : this.table.error;
+    const recover = this.callback("catchStream", args[1], [errors], undefined);
+    const replacement = this.table.node(this.table.unfold(recover.result));
+    if (replacement.kind !== "stream" && !this.isError(recover.result)) {
+      this.report(
+        "type-mismatch/010",
+        "`catchStream` callback must return a Stream value",
+        args[1].node,
+      );
+    }
+    const type = this.table.stream(
+      this.table.union([
+        source.kind === "stream" ? source.element : this.table.error,
+        replacement.kind === "stream" ? replacement.element : this.table.error,
+      ]),
+      replacement.kind === "stream" ? replacement.failures : [],
+      [
+        ...(source.kind === "stream" ? source.requirements : []),
+        ...(replacement.kind === "stream" ? replacement.requirements : []),
+      ],
+    );
+    return this.finish(node, type, combine([stream, recover.info]));
   }
 
   private takeStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {

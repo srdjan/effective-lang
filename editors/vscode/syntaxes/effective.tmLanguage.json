@@ -83,7 +83,7 @@
       "patterns": [
         {
           "name": "support.function.builtin.effective",
-          "match": "\\b(?:map|filter|fold|traverse|all|partitionAll|validateAll|allResults|retry|retrySchedule|codec|decode|encode|withFiber|joinFiber|interruptFiber|forkScoped|scoped|provide|defer|run|withResource|unfold|mapEffect|mapStream|scanStream|mapAccumStream|foldStream|foldEffectStream|collectStream|headStream|lastStream|drainStream|flatMapStreams|switchMapStreams|filterStream|filterEffectStream|takeWhileEffectStream|takeUntilEffectStream|dropWhileEffectStream|takeStream|dropStream|dropWhileStream|takeWhileStream|takeUntilStream|sinkForEach|runStream|bufferStream|mergeStreams|zipStreams|concatStreams|race|makeRef|getRef|setRef|updateRef|layer|mergeLayers|fail|unbrand)\\b"
+          "match": "\\b(?:map|filter|fold|traverse|all|partitionAll|validateAll|allResults|retry|retrySchedule|codec|decode|encode|withFiber|joinFiber|interruptFiber|forkScoped|scoped|provide|defer|run|withResource|unfold|mapEffect|mapStream|scanStream|mapAccumStream|foldStream|foldEffectStream|collectStream|headStream|lastStream|drainStream|flatMapStreams|switchMapStreams|catchStream|filterStream|filterEffectStream|takeWhileEffectStream|takeUntilEffectStream|dropWhileEffectStream|takeStream|dropStream|dropWhileStream|takeWhileStream|takeUntilStream|sinkForEach|runStream|bufferStream|mergeStreams|zipStreams|concatStreams|race|makeRef|getRef|setRef|updateRef|layer|mergeLayers|fail|unbrand)\\b"
         },
         {
           "name": "support.constant.builtin.effective",
