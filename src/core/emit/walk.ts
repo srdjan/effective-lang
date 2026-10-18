@@ -53,6 +53,7 @@ export function childrenOf(expr: Expr): Expr[] {
       return [expr.stream, expr.seed, expr.update];
     case "collect-stream":
     case "head-stream":
+    case "last-stream":
       return [expr.stream];
     case "take-stream":
       return [expr.stream, expr.count];
