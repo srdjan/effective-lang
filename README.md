@@ -50,6 +50,8 @@ Collection literals use brackets: `[1, 2]` infers an array, while an expected tu
 
 `dropWhileStream(stream, predicate)` discards the initial elements accepted by an inline pure boolean predicate. It emits the first rejected element and every later element without testing the predicate again. Deferred failures and requirements remain in its type.
 
+`filterStream(stream, predicate)` tests every element with an inline pure boolean predicate and emits the accepted elements in source order. Rejected elements are still pulled, so upstream failures propagate. The stream keeps its deferred failure and service channels.
+
 Core 1 also includes `Ref<A>` state, `race` of Effect values, supervised `withFiber` with direct `joinFiber` and `interruptFiber`, pure `Codec<Decoded,Encoded>` transformations, `RetrySchedule<E>` policies, and source-defined `Layer<Services,E,R>` values. The [gap audit](docs/effect-4-gap-audit.md) records the remaining boundary: general Effect and stream operators and ecosystem packages still require host adapters.
 
 Part A4 lowers a checked module to typed IR and serializes it. It adds a synchronous SHA-256 for builtin identities.

@@ -875,6 +875,13 @@ export class ExprEmitter {
           callArguments([kid(e.stream), this.callback(e.predicate, kid)]),
         ]);
       }
+      case "filter-stream": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.filter`,
+          callArguments([kid(e.stream), this.callback(e.predicate, kid)]),
+        ]);
+      }
       case "take-while-stream": {
         const stream = this.scope.effect("Stream");
         return emitted([

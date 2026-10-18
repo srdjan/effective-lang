@@ -660,6 +660,13 @@ class BodyLowerer {
           predicate: arg(1),
           ...annotation,
         };
+      case "filter-stream":
+        return {
+          kind: "filter-stream",
+          stream: arg(0),
+          predicate: arg(1),
+          ...annotation,
+        };
       case "take-while-stream":
         return {
           kind: "take-while-stream",

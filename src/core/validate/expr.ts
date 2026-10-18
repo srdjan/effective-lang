@@ -477,6 +477,8 @@ export class BodyValidator {
         return this.dropStream(e, path);
       case "drop-while-stream":
         return this.dropWhileStream(e, path);
+      case "filter-stream":
+        return this.filterStream(e, path);
       case "take-while-stream":
         return this.takeWhileStream(e, path);
       case "take-until-stream":
@@ -2202,6 +2204,8 @@ export class BodyValidator {
             return [e.stream, e.count];
           case "drop-while-stream":
             return [e.stream, e.predicate];
+          case "filter-stream":
+            return [e.stream, e.predicate];
           case "take-while-stream":
             return [e.stream, e.predicate];
           case "take-until-stream":
@@ -2685,6 +2689,45 @@ export class BodyValidator {
         AREA.types,
         path,
         "dropWhileStream needs a Stream and a pure boolean predicate",
+        e.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: source,
+      match: "exact",
+      active: combine([stream, predicate]),
+    };
+  }
+
+  private filterStream(
+    e: Extract<Expr, { kind: "filter-stream" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const predicate = this.check(e.predicate, `${path}.predicate`);
+    const source = unfold(this.env, stream.type);
+    const fn = asFunction(this.env, predicate.type);
+    if (e.predicate.kind !== "closure") {
+      this.add(
+        AREA.control,
+        `${path}.predicate`,
+        "filterStream requires an inline closure",
+        e.predicate.span,
+      );
+    }
+    if (
+      source.kind !== "stream" || fn === undefined ||
+      fn.parameters.length !== 1 ||
+      !fits(this.env, source.element, fn.parameters[0]) ||
+      !fits(this.env, fn.result, BOOLEAN) ||
+      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
+      fn.effects.requirements.length > 0
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "filterStream needs a Stream and a pure boolean predicate",
         e.span,
       );
       return this.poison();

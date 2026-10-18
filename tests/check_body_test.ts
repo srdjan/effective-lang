@@ -495,6 +495,45 @@ const use = (): Int => takeUntilStream()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("filterStream preserves deferred channels and requires a pure boolean predicate", () => {
+  const valid = checkText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const prefix: Stream<Int, Stop, Source.next> = filterStream(source, (n) => n < 3)
+`);
+  assertEquals(codes(valid), [], messages(valid).join("\n"));
+
+  const wrongResult = checkText(`
+type Int = int
+const bad = filterStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => n + 1)
+`);
+  assert(codes(wrongResult).includes("type-mismatch/003"));
+
+  const effectful = checkText(`
+type Int = int
+service Probe { accept(n: Int): boolean }
+const bad = filterStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => Probe.accept(n))
+`);
+  assert(codes(effectful).includes("execution-mode/001"));
+
+  const wrongSource = checkText(`
+type Int = int
+const bad = filterStream(3, (n) => n < 3)
+`);
+  assert(codes(wrongSource).includes("type-mismatch/010"));
+});
+
+Deno.test("a source binding named filterStream shadows the prelude operation", () => {
+  const project = checkText(`
+type Int = int
+const filterStream = (): Int => 3
+const use = (): Int => filterStream()
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
 Deno.test("zipStreams pairs different element types and unions deferred channels", () => {
   const project = checkText(`
 error Stop = {}
