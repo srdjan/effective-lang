@@ -40,6 +40,8 @@ Collection literals use brackets: `[1, 2]` infers an array, while an expected tu
 
 `flatMapStreams(source, callback)` takes an inline pure callback that returns a Stream for each source element. It exhausts each inner stream in source order and combines the outer and inner deferred channels. Failure stops later inner streams, and interruption releases the active inner stream.
 
+`takeStream(stream, count)` keeps up to the first `count` elements. A pure `Int` count may be dynamic; zero or a negative count yields an empty stream without pulling the source. The stream's deferred failures and requirements remain in its type.
+
 Core 1 also includes `Ref<A>` state, `race` of Effect values, supervised `withFiber` with direct `joinFiber` and `interruptFiber`, pure `Codec<Decoded,Encoded>` transformations, `RetrySchedule<E>` policies, and source-defined `Layer<Services,E,R>` values. The [gap audit](docs/effect-4-gap-audit.md) records the remaining boundary: general Effect and stream operators and ecosystem packages still require host adapters.
 
 Part A4 lowers a checked module to typed IR and serializes it. It adds a synchronous SHA-256 for builtin identities.

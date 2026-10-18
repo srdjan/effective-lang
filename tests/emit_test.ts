@@ -146,6 +146,17 @@ type Int = int
   assertStringIncludes(output, "Stream.run(mapped, sink)");
 });
 
+Deno.test("takeStream emits Stream.take with a dynamic count", () => {
+  const output = oneModule(`
+type Int = int
+service Source { next(state: Int): Option<[Int, Int]> }
+const source = unfold(0, (state) => Source.next(state))
+export const limit = (count: Int): Stream<Int, never, Source.next> =>
+  takeStream(source, count)
+`);
+  assertStringIncludes(output, "Stream.take(source, count)");
+});
+
 Deno.test("buffered merged streams emit bounded suspending buffers", () => {
   const output = oneModule(`
 service Source { next(state: Int): Option<[Int, Int]> }

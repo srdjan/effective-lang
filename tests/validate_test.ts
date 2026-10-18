@@ -473,6 +473,42 @@ const result = (): Outcome[] uses Jobs.run => allResults(jobs, { concurrency: 2 
   assert(codesOf(invalidResult, lowered.sources).includes("validation/002"));
 });
 
+Deno.test("takeStream validates the count and deferred channels", () => {
+  const lowered = lowerText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const limited = (count: Int): Stream<Int, Stop, Source.next> => takeStream(source, count)
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+
+  const invalidCount = copy(lowered.ir);
+  const countFunction = invalidCount.declarations.find((d) =>
+    d.name === "limited"
+  );
+  assert(
+    countFunction?.kind === "function" &&
+      countFunction.body.kind === "take-stream",
+  );
+  setAt(countFunction, "body.count.type", {
+    kind: "primitive",
+    name: "string",
+  });
+  assert(codesOf(invalidCount, lowered.sources).includes("validation/002"));
+
+  const invalidChannel = copy(lowered.ir);
+  const channelFunction = invalidChannel.declarations.find((d) =>
+    d.name === "limited"
+  );
+  assert(
+    channelFunction?.kind === "function" &&
+      channelFunction.body.kind === "take-stream",
+  );
+  setAt(channelFunction, "body.type.effects.failures", []);
+  assert(codesOf(invalidChannel, lowered.sources).includes("validation/002"));
+});
+
 Deno.test("stream validation recomputes deferred and active channels", () => {
   const lowered = lowerText(`
 error Stop = {}

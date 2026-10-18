@@ -639,6 +639,13 @@ class BodyLowerer {
           transform: arg(1),
           ...annotation,
         };
+      case "take-stream":
+        return {
+          kind: "take-stream",
+          stream: arg(0),
+          count: arg(1),
+          ...annotation,
+        };
       case "partition-all":
         return {
           kind: "partition-all",

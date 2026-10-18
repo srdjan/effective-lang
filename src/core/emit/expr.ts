@@ -854,6 +854,13 @@ export class ExprEmitter {
           callArguments([kid(e.stream), this.callback(e.transform, kid)]),
         ]);
       }
+      case "take-stream": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.take`,
+          callArguments([kid(e.stream), kid(e.count)]),
+        ]);
+      }
       case "sink-for-each": {
         const sink = this.scope.effect("Sink");
         return emitted([

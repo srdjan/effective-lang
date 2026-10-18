@@ -308,6 +308,41 @@ const use = (): Int => allResults()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("takeStream keeps deferred channels and accepts a pure Int count", () => {
+  const project = checkText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const limited = (count: Int): Stream<Int, Stop, Source.next> => takeStream(source, count)
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+
+  const wrongCount = checkText(`
+type Int = int
+type Text = string
+const bad = (): Stream<Int> => takeStream(unfold(0, (n): Option<[Int, Int]> => None), "two")
+`);
+  assert(codes(wrongCount).includes("type-mismatch/003"));
+
+  const effectfulCount = checkText(`
+type Int = int
+service Count { next(): Int }
+const bad = (): Stream<Int> uses Count.next =>
+  takeStream(unfold(0, (n): Option<[Int, Int]> => None), Count.next())
+`);
+  assert(codes(effectfulCount).includes("execution-mode/001"));
+});
+
+Deno.test("a source binding named takeStream shadows the prelude operation", () => {
+  const project = checkText(`
+type Int = int
+const takeStream = (): Int => 3
+const use = (): Int => takeStream()
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
 Deno.test("zipStreams pairs different element types and unions deferred channels", () => {
   const project = checkText(`
 error Stop = {}

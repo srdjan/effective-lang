@@ -471,6 +471,8 @@ export class BodyValidator {
         return this.mapEffect(e, path);
       case "flat-map-streams":
         return this.flatMapStreams(e, path);
+      case "take-stream":
+        return this.takeStream(e, path);
       case "sink-for-each":
         return this.sinkForEach(e, path);
       case "run-stream":
@@ -2186,6 +2188,8 @@ export class BodyValidator {
           case "map-effect":
           case "flat-map-streams":
             return [e.stream, e.transform];
+          case "take-stream":
+            return [e.stream, e.count];
           case "sink-for-each":
             return [e.consume];
           case "run-stream":
@@ -2566,6 +2570,40 @@ export class BodyValidator {
       },
       match: "exact",
       active: combine([stream, transform]),
+    };
+  }
+
+  private takeStream(
+    e: Extract<Expr, { kind: "take-stream" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const count = this.check(e.count, `${path}.count`);
+    const source = unfold(this.env, stream.type);
+    if (source.kind !== "stream" || !fits(this.env, count.type, INT)) {
+      this.add(
+        AREA.types,
+        path,
+        "takeStream needs a Stream value and an Int count",
+        e.span,
+      );
+      return this.poison();
+    }
+    if (
+      count.execution !== "pure" || count.failures.length > 0 ||
+      count.requirements.length > 0
+    ) {
+      this.add(
+        AREA.execution,
+        `${path}.count`,
+        "takeStream count must be pure",
+        e.count.span,
+      );
+    }
+    return {
+      type: source,
+      match: "exact",
+      active: combine([stream, count]),
     };
   }
 
