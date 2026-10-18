@@ -707,6 +707,108 @@ console.log(JSON.stringify({ before, produced, first: output.filter((n) => n < 1
     });
   });
 });
+Deno.test("zipped streams defer production and stop at the shorter input", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "type Text = string",
+        "export service Left { next(n: Int): Option<[Int, Int]> }",
+        "export service Right { next(n: Int): Option<[Text, Int]> }",
+        "export service Output { accept(pair: [Int, Text]): void }",
+        "const left = unfold(0, (n) => Left.next(n))",
+        "const right = unfold(0, (n) => Right.next(n))",
+        "const pairs = zipStreams(left, right)",
+        "const sink = sinkForEach((pair: [Int, Text]) => Output.accept(pair))",
+        "export const main = (): void uses Left.next | Right.next | Output.accept => runStream(pairs, sink)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer, Option } from "effect";
+import { Left, Right, Output, main } from "./main.ts";
+let produced = 0;
+const output: Array<readonly [number, string]> = [];
+const LeftLive = Layer.succeed(Left)({
+  next: (n) => Effect.sync(() => {
+    if (n === 2) return Option.none();
+    produced++;
+    return Option.some([n, n + 1] as const);
+  }),
+});
+const RightLive = Layer.succeed(Right)({
+  next: (n) => Effect.sync(() => {
+    if (n === 4) return Option.none();
+    produced++;
+    return Option.some([String(n), n + 1] as const);
+  }),
+});
+const OutputLive = Layer.succeed(Output)({
+  accept: (pair) => Effect.sync(() => { output.push(pair); }),
+});
+const before = produced;
+await Effect.runPromise(main().pipe(Effect.provide(Layer.mergeAll(LeftLive, RightLive, OutputLive))));
+console.log(JSON.stringify({ before, output }));
+`,
+    );
+    assertEquals(result, { before: 0, output: [[0, "0"], [1, "1"]] });
+  });
+});
+Deno.test("zipped stream failure interrupts its waiting peer", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "export error Stop = {}",
+        "export service Left { next(n: Int): Option<[Int, Int]> fails Stop }",
+        "export service Right { next(n: Int): Option<[Int, Int]> }",
+        "export service Output { accept(pair: [Int, Int]): void }",
+        "const pairs = zipStreams(unfold(0, (n) => Left.next(n)), unfold(0, (n) => Right.next(n)))",
+        "const sink = sinkForEach((pair: [Int, Int]) => Output.accept(pair))",
+        "export const main = (): void fails Stop uses Left.next | Right.next | Output.accept => runStream(pairs, sink)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Deferred, Effect, Layer, Option } from "effect";
+import { Left, Right, Output, Stop, main } from "./main.ts";
+const ready = Deferred.makeUnsafe<void>();
+let started = 0;
+let released = 0;
+const LeftLive = Layer.succeed(Left)({
+  next: (n) => n === 0
+    ? Effect.succeed(Option.some([0, 1] as const))
+    : Deferred.await(ready).pipe(Effect.andThen(Effect.fail(new Stop({})))),
+});
+const RightLive = Layer.succeed(Right)({
+  next: (n) => n === 0
+    ? Effect.succeed(Option.some([0, 1] as const))
+    : Effect.sync(() => { started++; }).pipe(
+      Effect.andThen(Deferred.succeed(ready, undefined)),
+      Effect.andThen(Effect.never),
+      Effect.onInterrupt(() => Effect.sync(() => { released++; })),
+    ),
+});
+const OutputLive = Layer.succeed(Output)({ accept: () => Effect.void });
+const error = await Effect.runPromise(Effect.flip(main().pipe(Effect.provide(Layer.mergeAll(LeftLive, RightLive, OutputLive)))));
+console.log(JSON.stringify({ tag: error._tag, started, released }));
+`,
+    );
+    assertEquals(result, { tag: "main#Stop", started: 1, released: 1 });
+  });
+});
 Deno.test("a source race interrupts its losing fiber and waits for cleanup", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

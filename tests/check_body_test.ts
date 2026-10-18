@@ -191,6 +191,34 @@ const array = (): Int[] => all([defer(() => 1), defer(() => 2)])
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("zipStreams pairs different element types and unions deferred channels", () => {
+  const project = checkText(`
+error Stop = {}
+service Left { next(n: Int): Option<[Int, Int]> fails Stop }
+service Right { next(n: Int): Option<[Text, Int]> }
+type Int = int
+type Text = string
+const left = unfold(0, (n) => Left.next(n))
+const right = unfold(0, (n) => Right.next(n))
+const zipped: Stream<[Int, Text], Stop, Left.next | Right.next> = zipStreams(left, right)
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+  const invalid = checkText(`
+type Int = int
+const bad = zipStreams(unfold(0, (n): Option<[Int, Int]> => None), 1)
+`);
+  assert(codes(invalid).includes("type-mismatch/010"));
+});
+
+Deno.test("a source binding named zipStreams shadows the prelude operation", () => {
+  const project = checkText(`
+type Int = int
+const zipStreams = (): Int => 3
+const use = (): Int => zipStreams()
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
 Deno.test("all rejects non-Effect entries and invalid concurrency", () => {
   for (
     const expression of [

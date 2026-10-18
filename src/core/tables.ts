@@ -125,6 +125,7 @@ export type NodeFact =
   | { readonly kind: "run-stream" }
   | { readonly kind: "buffer-stream"; readonly capacity: number | undefined }
   | { readonly kind: "merge-streams" }
+  | { readonly kind: "zip-streams" }
   | { readonly kind: "race" }
   | { readonly kind: "make-ref" | "get-ref" | "set-ref" | "update-ref" }
   | { readonly kind: "layer"; readonly service: ServiceId | undefined }

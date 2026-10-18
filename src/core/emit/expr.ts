@@ -871,6 +871,13 @@ export class ExprEmitter {
           callArguments([kid(e.left), kid(e.right)]),
         ]);
       }
+      case "zip-streams": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.zip`,
+          callArguments([kid(e.left), kid(e.right)]),
+        ]);
+      }
       case "layer":
         return this.sourceLayer(e);
       case "merge-layers": {

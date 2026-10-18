@@ -659,6 +659,13 @@ class BodyLowerer {
           right: arg(1),
           ...annotation,
         };
+      case "zip-streams":
+        return {
+          kind: "zip-streams",
+          left: arg(0),
+          right: arg(1),
+          ...annotation,
+        };
       case "race":
         return { kind: "race", left: arg(0), right: arg(1), ...annotation };
       case "make-ref":

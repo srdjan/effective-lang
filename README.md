@@ -28,6 +28,8 @@ Collection literals use brackets: `[1, 2]` infers an array, while an expected tu
 
 `Stream<A, E, R>` and `Sink<I, O, E, R>` hold deferred producer and consumer channels. `unfold(seed, callback)` creates a pull stream, `mapEffect(stream, callback)` transforms it, `sinkForEach(callback)` consumes values, and `runStream(stream, sink)` executes the pipeline. `bufferStream(stream, { capacity: N })` adds suspending backpressure, and `mergeStreams(left, right)` combines producers. Construction defers production until consumption.
 
+`zipStreams(left, right)` pairs two streams in source order, allows different element types, and ends with the shorter input. It combines their deferred failure and service channels. A source binding named `zipStreams` shadows the prelude operation.
+
 Core 1 also includes `Ref<A>` state, `race` of Effect values, supervised `withFiber` with direct `joinFiber` and `interruptFiber`, pure `Codec<Decoded,Encoded>` transformations, `RetrySchedule<E>` policies, and source-defined `Layer<Services,E,R>` values. The [gap audit](docs/effect-4-gap-audit.md) records the remaining boundary: general Effect and stream operators and ecosystem packages still require host adapters.
 
 Part A4 lowers a checked module to typed IR and serializes it. It adds a synchronous SHA-256 for builtin identities.

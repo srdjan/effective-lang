@@ -51,6 +51,7 @@ export function childrenOf(expr: Expr): Expr[] {
     case "buffer-stream":
       return [expr.stream];
     case "merge-streams":
+    case "zip-streams":
       return [expr.left, expr.right];
     case "race":
       return [expr.left, expr.right];

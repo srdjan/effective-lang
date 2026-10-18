@@ -151,6 +151,25 @@ type Int = int
   assert(codesOf(wrong, lowered.sources).includes("validation/006"));
 });
 
+Deno.test("stream zipping validates paired elements and deferred channels", () => {
+  const lowered = lowerText(`
+error Stop = {}
+service Left { next(n: Int): Option<[Int, Int]> fails Stop }
+service Right { next(n: Int): Option<[Text, Int]> }
+const left = unfold(0, (n) => Left.next(n))
+const right = unfold(0, (n) => Right.next(n))
+const zipped = zipStreams(left, right)
+type Int = int
+type Text = string
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const wrong = copy(lowered.ir);
+  const zipped = wrong.declarations.find((d) => d.name === "zipped");
+  assert(zipped?.kind === "constant" && zipped.value.kind === "zip-streams");
+  setAt(zipped, "value.type.effects.failures", []);
+  assert(codesOf(wrong, lowered.sources).includes("validation/002"));
+});
+
 Deno.test("race validates its result and deferred effect channels", () => {
   const lowered = lowerText(`
 error Stop = {}

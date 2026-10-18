@@ -58,6 +58,7 @@ export type PreludeName =
   | "runStream"
   | "bufferStream"
   | "mergeStreams"
+  | "zipStreams"
   | "race"
   | "makeRef"
   | "getRef"
@@ -96,6 +97,7 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "runStream",
   "bufferStream",
   "mergeStreams",
+  "zipStreams",
   "race",
   "makeRef",
   "getRef",
@@ -365,11 +367,11 @@ class Resolver {
     binding: Binding,
     nameNode: NodeId,
   ): void {
-    // Existing programs use `run` and `all` as value names. Bindings shadow
+    // Existing programs may use these names as values. Bindings shadow
     // these prelude operations; lookupValue already checks bindings first.
     if (
       (PRELUDE_NAMES.has(name) && name !== "run" && name !== "all" &&
-        name !== "scoped" && name !== "forkScoped") ||
+        name !== "scoped" && name !== "forkScoped" && name !== "zipStreams") ||
       BUILTIN_TYPE_NAMES.has(name)
     ) {
       this.report(
@@ -517,7 +519,7 @@ class Resolver {
     const span = this.span(nameNode);
     if (
       PRELUDE_NAMES.has(name) && name !== "run" && name !== "all" &&
-      name !== "scoped" && name !== "forkScoped"
+      name !== "scoped" && name !== "forkScoped" && name !== "zipStreams"
     ) {
       this.report(
         "declaration/002",
