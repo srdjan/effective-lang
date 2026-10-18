@@ -76,6 +76,19 @@ export const record = (): { number: Int, text: Text } =>
   assertStringIncludes(output, "concurrency: 2");
 });
 
+Deno.test("partitionAll emits Effect.partition with a concurrency bound", () => {
+  const output = oneModule(`
+error Stop = { n: Int }
+service Jobs { run(n: Int): Int fails Stop }
+type Int = int
+export const main = (): [Int[], Stop[]] uses Jobs.run =>
+  partitionAll([defer(() => Jobs.run(0)), defer(() => Jobs.run(1))], { concurrency: 2 })
+`);
+  assertStringIncludes(output, "Effect.partition(");
+  assertStringIncludes(output, "(job) => job");
+  assertStringIncludes(output, "concurrency: 2");
+});
+
 Deno.test("scoped fiber emission provides a local scope", () => {
   const output = oneModule(`
 type Int = int

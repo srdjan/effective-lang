@@ -45,6 +45,8 @@ export function childrenOf(expr: Expr): Expr[] {
     case "map-effect":
     case "flat-map-streams":
       return [expr.stream, expr.transform];
+    case "partition-all":
+      return [expr.jobs];
     case "sink-for-each":
       return [expr.consume];
     case "run-stream":

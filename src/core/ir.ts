@@ -132,6 +132,7 @@ export type Expr =
   | Node<{ kind: "unfold"; seed: Expr; next: Expr }>
   | Node<{ kind: "map-effect"; stream: Expr; transform: Expr }>
   | Node<{ kind: "flat-map-streams"; stream: Expr; transform: Expr }>
+  | Node<{ kind: "partition-all"; jobs: Expr; concurrency: number | "unbounded" | undefined }>
   | Node<{ kind: "sink-for-each"; consume: Expr }>
   | Node<{ kind: "run-stream"; stream: Expr; sink: Expr }>
   | Node<{ kind: "buffer-stream"; stream: Expr; capacity: number }>

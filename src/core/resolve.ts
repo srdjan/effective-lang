@@ -82,6 +82,7 @@ export type PreludeName =
   | "filter"
   | "fold"
   | "all"
+  | "partitionAll"
   | "traverse";
 
 export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
@@ -123,6 +124,7 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "filter",
   "fold",
   "all",
+  "partitionAll",
   "traverse",
 ]);
 
@@ -375,6 +377,7 @@ class Resolver {
     // these prelude operations; lookupValue already checks bindings first.
     if (
       (PRELUDE_NAMES.has(name) && name !== "run" && name !== "all" &&
+        name !== "partitionAll" &&
         name !== "scoped" && name !== "forkScoped" && name !== "zipStreams" &&
         name !== "concatStreams" && name !== "flatMapStreams") ||
       BUILTIN_TYPE_NAMES.has(name)
@@ -524,6 +527,7 @@ class Resolver {
     const span = this.span(nameNode);
     if (
       PRELUDE_NAMES.has(name) && name !== "run" && name !== "all" &&
+      name !== "partitionAll" &&
       name !== "scoped" && name !== "forkScoped" && name !== "zipStreams" &&
       name !== "concatStreams" && name !== "flatMapStreams"
     ) {

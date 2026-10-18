@@ -191,6 +191,36 @@ const array = (): Int[] => all([defer(() => 1), defer(() => 2)])
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("partitionAll collects nominal failures as data", () => {
+  const project = checkText(`
+error Stop = { n: Int }
+service Jobs { run(n: Int): Int fails Stop }
+type Int = int
+const jobs: Effect<Int, Stop, Jobs.run>[] = [defer(() => Jobs.run(0)), defer(() => Jobs.run(1))]
+const result = (): [Int[], Stop[]] uses Jobs.run => partitionAll(jobs, { concurrency: 2 })
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+  const invalid = checkText(`
+type Int = int
+const bad = (): [Int[], never[]] => partitionAll([1, 2])
+`);
+  assert(codes(invalid).includes("type-mismatch/010"));
+  const bound = checkText(`
+type Int = int
+const bad = (): [Int[], never[]] => partitionAll([defer(() => 1)], { concurrency: 0 })
+`);
+  assert(codes(bound).includes("type-mismatch/010"));
+});
+
+Deno.test("a source binding named partitionAll shadows the prelude operation", () => {
+  const project = checkText(`
+type Int = int
+const partitionAll = (): Int => 3
+const use = (): Int => partitionAll()
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
 Deno.test("zipStreams pairs different element types and unions deferred channels", () => {
   const project = checkText(`
 error Stop = {}

@@ -362,6 +362,42 @@ const collect = (): [Int, Text] => all(jobs, { concurrency: "unbounded" })
   assert(codesOf(wrongResult, lowered.sources).includes("validation/002"));
 });
 
+Deno.test("partitionAll validates its result and concurrency", () => {
+  const lowered = lowerText(`
+type Int = int
+error Stop = { n: Int }
+service Jobs { run(n: Int): Int fails Stop }
+const jobs: Effect<Int, Stop, Jobs.run>[] = [defer(() => Jobs.run(0)), defer(() => Jobs.run(1))]
+const result = (): [Int[], Stop[]] uses Jobs.run => partitionAll(jobs, { concurrency: 2 })
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+
+  const invalidBound = copy(lowered.ir);
+  const boundFunction = invalidBound.declarations.find((d) =>
+    d.name === "result"
+  );
+  assert(
+    boundFunction?.kind === "function" &&
+      boundFunction.body.kind === "partition-all",
+  );
+  setAt(boundFunction, "body.concurrency", 0);
+  assert(codesOf(invalidBound, lowered.sources).includes("validation/006"));
+
+  const invalidResult = copy(lowered.ir);
+  const resultFunction = invalidResult.declarations.find((d) =>
+    d.name === "result"
+  );
+  assert(
+    resultFunction?.kind === "function" &&
+      resultFunction.body.kind === "partition-all",
+  );
+  setAt(resultFunction, "body.type.elements[1].element", {
+    kind: "primitive",
+    name: "never",
+  });
+  assert(codesOf(invalidResult, lowered.sources).includes("validation/002"));
+});
+
 Deno.test("stream validation recomputes deferred and active channels", () => {
   const lowered = lowerText(`
 error Stop = {}

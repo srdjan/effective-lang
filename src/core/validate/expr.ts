@@ -452,6 +452,8 @@ export class BodyValidator {
         return this.defer(e, path);
       case "run":
         return this.run(e, path);
+      case "partition-all":
+        return this.partitionAll(e, path);
       case "scoped":
         return this.scoped(e, path);
       case "fork-scoped":
@@ -1796,6 +1798,56 @@ export class BodyValidator {
     };
   }
 
+  private partitionAll(
+    e: Extract<Expr, { kind: "partition-all" }>,
+    path: string,
+  ): Comp {
+    const jobs = this.check(e.jobs, `${path}.jobs`);
+    const array = unfold(this.env, jobs.type);
+    const job = array.kind === "array"
+      ? unfold(this.env, array.element)
+      : undefined;
+    if (job?.kind !== "effect") {
+      this.add(
+        AREA.types,
+        path,
+        "partitionAll needs an array of Effect values",
+        e.span,
+      );
+      return this.poison();
+    }
+    if (
+      e.concurrency !== undefined && e.concurrency !== "unbounded" &&
+      !(Number.isSafeInteger(e.concurrency) && e.concurrency > 0)
+    ) {
+      this.add(
+        AREA.control,
+        `${path}.concurrency`,
+        "partitionAll concurrency must be a positive safe integer or unbounded",
+        e.span,
+      );
+    }
+    const errors = unionOf(
+      this.env,
+      job.effects.failures.map((id) => ({ kind: "named", id })),
+    );
+    return {
+      type: {
+        kind: "tuple",
+        elements: [
+          { kind: "array", element: job.result },
+          { kind: "array", element: errors },
+        ],
+      },
+      match: "exact",
+      active: combine([jobs, {
+        failures: [],
+        requirements: job.effects.requirements,
+        execution: "effect",
+      }]),
+    };
+  }
+
   private scoped(e: Extract<Expr, { kind: "scoped" }>, path: string): Comp {
     const value = this.check(e.value, `${path}.value`);
     const effect = unfold(this.env, value.type);
@@ -1948,6 +2000,8 @@ export class BodyValidator {
           case "run":
           case "scoped":
             return [e.value];
+          case "partition-all":
+            return [e.jobs];
           case "closure":
             return [e.body];
           case "call":

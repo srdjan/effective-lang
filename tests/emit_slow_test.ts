@@ -598,6 +598,56 @@ console.log(JSON.stringify({ tupleResult, recordResult, failure, interruption })
   });
 });
 
+Deno.test("partitionAll collects successes and failures within a concurrency bound", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "export error Stop = { n: Int }",
+        "export service Jobs { run(n: Int): Int fails Stop }",
+        "export const main = (): [Int[], Stop[]] uses Jobs.run =>",
+        "  partitionAll([defer(() => Jobs.run(0)), defer(() => Jobs.run(1)), defer(() => Jobs.run(2)), defer(() => Jobs.run(3))], { concurrency: 2 })",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer } from "effect";
+import { Jobs, Stop, main } from "./main.ts";
+
+let active = 0;
+let maximum = 0;
+const started: number[] = [];
+const Live = Layer.succeed(Jobs)({
+  run: (n) => Effect.sync(() => {
+    started.push(n);
+    active++;
+    maximum = Math.max(maximum, active);
+  }).pipe(
+    Effect.andThen(Effect.sleep("20 millis")),
+    Effect.andThen(n % 2 === 0 ? Effect.succeed(n * 10) : Effect.fail(new Stop({ n }))),
+    Effect.ensuring(Effect.sync(() => { active--; })),
+  ),
+});
+const [successes, failures] = await Effect.runPromise(main().pipe(Effect.provide(Live)));
+console.log(JSON.stringify({ successes, failures: failures.map((error) => error.n), started, maximum, active }));
+`,
+    );
+    assertEquals(result, {
+      successes: [0, 20],
+      failures: [1, 3],
+      started: [0, 1, 2, 3],
+      maximum: 2,
+      active: 0,
+    });
+  });
+});
+
 Deno.test("source-authored streams pull incrementally through an effectful sink", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

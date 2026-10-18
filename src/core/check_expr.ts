@@ -901,6 +901,8 @@ export class BodyChecker {
         return this.someCall(node, args, expected);
       case "all":
         return this.allCall(node, args);
+      case "partitionAll":
+        return this.partitionAllCall(node, args);
       case "map":
       case "filter":
       case "fold":
@@ -2690,7 +2692,7 @@ export class BodyChecker {
 
   private concurrencyBound(
     arg: Arg,
-    operation: "traverse" | "all" = "traverse",
+    operation: "traverse" | "all" | "partitionAll" = "traverse",
   ): number | "unbounded" | undefined {
     const bad = (): undefined => {
       this.report(
@@ -2826,6 +2828,62 @@ export class BodyChecker {
       node,
       result,
       combine([input, ...(option === undefined ? [] : [option]), invocation]),
+    );
+  }
+
+  private partitionAllCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    if (args.length !== 1 && args.length !== 2) {
+      this.report(
+        "type-mismatch/004",
+        "`partitionAll` takes an Effect array and an optional concurrency record",
+        node,
+      );
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.noPipeline("partitionAll", args);
+    const jobs = this.argInfo(args[0]);
+    const option = args[1] === undefined ? undefined : this.argInfo(args[1]);
+    const concurrency = args[1] === undefined
+      ? undefined
+      : this.concurrencyBound(args[1], "partitionAll");
+    this.fact(node, { kind: "partition-all", concurrency });
+    const shape = this.table.node(this.table.unfold(jobs.type));
+    const member = shape.kind === "array"
+      ? this.table.node(this.table.unfold(shape.element))
+      : undefined;
+    if (member?.kind !== "effect") {
+      if (!this.isError(jobs.type)) {
+        this.report(
+          "type-mismatch/010",
+          "`partitionAll` needs an array of Effect values",
+          args[0].node,
+        );
+      }
+      return this.finish(
+        node,
+        this.table.error,
+        combine([jobs, ...(option === undefined ? [] : [option])]),
+      );
+    }
+    const errors = this.table.union(
+      member.failures.map((id) => this.table.named(id)),
+    );
+    const result = this.table.tuple([
+      this.table.array(member.result),
+      this.table.array(errors),
+    ]);
+    return this.finish(
+      node,
+      result,
+      combine([jobs, ...(option === undefined ? [] : [option]), {
+        failures: [],
+        requirements: member.requirements,
+        mode: "effect",
+      }]),
     );
   }
 

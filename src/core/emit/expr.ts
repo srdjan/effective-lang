@@ -1018,6 +1018,7 @@ export class ExprEmitter {
       case "interrupt-fiber":
       case "provide":
       case "run":
+      case "partition-all":
       case "scoped":
       case "fork-scoped":
       case "with-resource":
@@ -1643,6 +1644,7 @@ export class ExprEmitter {
       case "interrupt-fiber":
       case "provide":
       case "run":
+      case "partition-all":
       case "scoped":
       case "fork-scoped":
       case "catch":
@@ -1673,6 +1675,8 @@ export class ExprEmitter {
       case "run":
       case "scoped":
         return [e.value];
+      case "partition-all":
+        return [e.jobs];
       case "fork-scoped":
         return [e.job];
       case "run-stream":
@@ -1843,6 +1847,21 @@ export class ExprEmitter {
         return emitted([`${effect}.fail`, callArguments([children[0]])]);
       case "run":
         return children[0];
+      case "partition-all":
+        return emitted([
+          `${effect}.partition`,
+          callArguments([
+            children[0],
+            emitted("(job) => job"),
+            ...(e.concurrency === undefined
+              ? []
+              : [emitted(`{ concurrency: ${
+                e.concurrency === "unbounded"
+                  ? '"unbounded"'
+                  : e.concurrency
+              } }`)]),
+          ]),
+        ]);
       case "scoped":
         return emitted([`${effect}.scoped`, callArguments([children[0]])]);
       case "fork-scoped":

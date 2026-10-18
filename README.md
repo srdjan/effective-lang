@@ -22,6 +22,8 @@ Collection literals use brackets: `[1, 2]` infers an array, while an expected tu
 
 `all(effects, options?)` runs a tuple, record, or array of stored Effect values and preserves its result shape. It unions their failures and requirements. Its optional literal concurrency record accepts a positive safe integer or `"unbounded"`. Heterogeneous bracket literals need a contextual tuple type, such as a typed binding.
 
+`partitionAll(jobs, options?)` runs a homogeneous array of Effect values and returns `[successes, failures]`, preserving input order within each array. Typed failures become values, so the enclosing contract has no failure channel from these jobs. Service requirements still enter the contract. It accepts the same literal concurrency options as `all`.
+
 `forkScoped(job)` starts an Effect value in the current scope and discards its Fiber handle. The job must have no typed failures. `scoped(job)` provides a local scope and closes it after the job completes; a child started by `forkScoped` can outlive its spawning fiber until that scope closes. A reserved Scope requirement keeps scope-bound jobs from running outside `scoped`.
 
 `withResource(acquire, use, release)` composes a scoped resource through three inline callbacks. Acquisition can return an operation record or an opaque host handle. A record may only receive direct operation calls. An opaque handle may pass directly to a borrow-qualified host method or checked source helper. The checker rejects handle escape and requires a data-only use result. The generated Effect runs release after success, failure, defect, or interruption.
