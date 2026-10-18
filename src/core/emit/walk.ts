@@ -51,6 +51,8 @@ export function childrenOf(expr: Expr): Expr[] {
     case "fold-stream":
     case "fold-effect-stream":
       return [expr.stream, expr.seed, expr.update];
+    case "collect-stream":
+      return [expr.stream];
     case "take-stream":
       return [expr.stream, expr.count];
     case "drop-stream":

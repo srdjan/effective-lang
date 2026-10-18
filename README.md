@@ -62,6 +62,8 @@ Collection literals use brackets: `[1, 2]` infers an array, while an expected tu
 
 `foldEffectStream(stream, seed, update)` also returns one final state, while its inline update callback may fail or use services. Source and callback failures and requirements combine in the active effect contract; a callback failure stops later pulls and closes started upstream work.
 
+`collectStream(stream)` consumes a finite stream into an array in source order. An empty source returns `[]`; source failures and requirements move into the active effect contract. The result is a new array on each execution.
+
 Core 1 also includes `Ref<A>` state, `race` of Effect values, supervised `withFiber` with direct `joinFiber` and `interruptFiber`, pure `Codec<Decoded,Encoded>` transformations, `RetrySchedule<E>` policies, and source-defined `Layer<Services,E,R>` values. The [gap audit](docs/effect-4-gap-audit.md) records the remaining boundary: general Effect and stream operators and ecosystem packages still require host adapters.
 
 Part A4 lowers a checked module to typed IR and serializes it. It adds a synchronous SHA-256 for builtin identities.

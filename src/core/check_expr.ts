@@ -880,6 +880,8 @@ export class BodyChecker {
         return this.foldStreamCall(node, args);
       case "foldEffectStream":
         return this.foldEffectStreamCall(node, args);
+      case "collectStream":
+        return this.collectStreamCall(node, args);
       case "flatMapStreams":
         return this.flatMapStreamsCall(node, args);
       case "takeStream":
@@ -2330,6 +2332,43 @@ export class BodyChecker {
           ...(source.kind === "stream" ? source.requirements : []),
           ...(fn?.requirements ?? []),
         ],
+        mode: "effect",
+      }]),
+    );
+  }
+
+  private collectStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "collect-stream" });
+    if (!this.arity(node, "collectStream", 1, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine([...args.map((arg) => this.argInfo(arg)), EFFECT_ONLY]),
+      );
+    }
+    this.noPipeline("collectStream", args);
+    const stream = this.argInfo(args[0]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream") {
+      if (!this.isError(stream.type)) {
+        this.report(
+          "type-mismatch/010",
+          "`collectStream` needs a Stream value",
+          args[0].node,
+        );
+      }
+      return this.finish(
+        node,
+        this.table.error,
+        combine([stream, EFFECT_ONLY]),
+      );
+    }
+    return this.finish(
+      node,
+      this.table.array(source.element),
+      combine([stream, {
+        failures: source.failures,
+        requirements: source.requirements,
         mode: "effect",
       }]),
     );

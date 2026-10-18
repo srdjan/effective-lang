@@ -136,6 +136,7 @@ export type Expr =
   | Node<{ kind: "map-accum-stream"; stream: Expr; seed: Expr; update: Expr }>
   | Node<{ kind: "fold-stream"; stream: Expr; seed: Expr; update: Expr }>
   | Node<{ kind: "fold-effect-stream"; stream: Expr; seed: Expr; update: Expr }>
+  | Node<{ kind: "collect-stream"; stream: Expr }>
   | Node<{ kind: "flat-map-streams"; stream: Expr; transform: Expr }>
   | Node<{ kind: "take-stream"; stream: Expr; count: Expr }>
   | Node<{ kind: "drop-stream"; stream: Expr; count: Expr }>

@@ -793,6 +793,47 @@ const use = (): Int => foldEffectStream()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("collectStream returns an array with active source channels", () => {
+  const valid = checkText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const main = (): Int[] fails Stop uses Source.next => collectStream(source)
+`);
+  assertEquals(codes(valid), [], messages(valid).join("\n"));
+  const main = valid.table.node(fn(valid, "m", "main").type);
+  assert(main.kind === "function");
+  assertEquals(main.execution, "effect");
+  assertEquals(shortIds(main.failures), ["Stop"]);
+  assertEquals(shortIds(main.requirements), ["Source.next"]);
+
+  const missingChannels = checkText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const main = (): Int[] => collectStream(source)
+`);
+  assert(codes(missingChannels).includes("failure-contract/001"));
+  assert(codes(missingChannels).includes("requirement-contract/001"));
+
+  const wrongSource = checkText(`
+type Int = int
+const main = (): Int[] => collectStream(3)
+`);
+  assert(codes(wrongSource).includes("type-mismatch/010"));
+});
+
+Deno.test("a source binding named collectStream shadows the prelude operation", () => {
+  const project = checkText(`
+type Int = int
+const collectStream = (): Int => 3
+const use = (): Int => collectStream()
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
 Deno.test("zipStreams pairs different element types and unions deferred channels", () => {
   const project = checkText(`
 error Stop = {}
