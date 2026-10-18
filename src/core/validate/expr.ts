@@ -2525,6 +2525,17 @@ export class BodyValidator {
     e: Extract<Expr, { kind: "map-effect" }>,
     path: string,
   ): Comp {
+    if (
+      e.concurrency !== undefined && e.concurrency !== "unbounded" &&
+      !(Number.isSafeInteger(e.concurrency) && e.concurrency > 0)
+    ) {
+      this.add(
+        AREA.control,
+        `${path}.concurrency`,
+        "mapEffect concurrency must be a positive safe integer or unbounded",
+        e.span,
+      );
+    }
     const stream = this.check(e.stream, `${path}.stream`);
     const transform = this.check(e.transform, `${path}.transform`);
     const source = unfold(this.env, stream.type);
@@ -2956,6 +2967,17 @@ export class BodyValidator {
     e: Extract<Expr, { kind: "flat-map-streams" }>,
     path: string,
   ): Comp {
+    if (
+      e.concurrency !== undefined && e.concurrency !== "unbounded" &&
+      !(Number.isSafeInteger(e.concurrency) && e.concurrency > 0)
+    ) {
+      this.add(
+        AREA.control,
+        `${path}.concurrency`,
+        "flatMapStreams concurrency must be a positive safe integer or unbounded",
+        e.span,
+      );
+    }
     const stream = this.check(e.stream, `${path}.stream`);
     const transform = this.check(e.transform, `${path}.transform`);
     const source = unfold(this.env, stream.type);

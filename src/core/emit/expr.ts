@@ -844,7 +844,17 @@ export class ExprEmitter {
         const stream = this.scope.effect("Stream");
         return emitted([
           `${stream}.mapEffect`,
-          callArguments([kid(e.stream), this.effectCallback(e.transform)]),
+          callArguments([
+            kid(e.stream),
+            this.effectCallback(e.transform),
+            ...(e.concurrency === undefined
+              ? []
+              : [emitted(`{ concurrency: ${
+                e.concurrency === "unbounded"
+                  ? '"unbounded"'
+                  : e.concurrency
+              } }`)]),
+          ]),
         ]);
       }
       case "map-stream": {
@@ -884,7 +894,17 @@ export class ExprEmitter {
         const stream = this.scope.effect("Stream");
         return emitted([
           `${stream}.flatMap`,
-          callArguments([kid(e.stream), this.callback(e.transform, kid)]),
+          callArguments([
+            kid(e.stream),
+            this.callback(e.transform, kid),
+            ...(e.concurrency === undefined
+              ? []
+              : [emitted(`{ concurrency: ${
+                e.concurrency === "unbounded"
+                  ? '"unbounded"'
+                  : e.concurrency
+              } }`)]),
+          ]),
         ]);
       }
       case "take-stream": {

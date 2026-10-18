@@ -630,6 +630,7 @@ class BodyLowerer {
           kind: "map-effect",
           stream: arg(0),
           transform: arg(1),
+          concurrency: fact.concurrency,
           ...annotation,
         };
       case "map-stream":
@@ -684,6 +685,7 @@ class BodyLowerer {
           kind: "flat-map-streams",
           stream: arg(0),
           transform: arg(1),
+          concurrency: fact.concurrency,
           ...annotation,
         };
       case "take-stream":

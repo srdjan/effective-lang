@@ -990,6 +990,24 @@ const main = (): void fails Stop uses Source.next => drainStream(source)
   assert(codesOf(wrongRequirement, lowered.sources).includes("validation/003"));
 });
 
+Deno.test("concurrent stream mapping validates literal bounds", () => {
+  const lowered = lowerText(`
+type Int = int
+service Source { next(n: Int): Option<[Int, Int]> }
+const source = unfold(0, (n) => Source.next(n))
+const mapped = mapEffect(source, (n) => n, { concurrency: 2 })
+const nested = flatMapStreams(source, (n) => unfold(n, (m) => Source.next(m)), { concurrency: "unbounded" })
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  for (const [name, invalid] of [["mapped", 0], ["nested", -1]] as const) {
+    const changed = copy(lowered.ir);
+    const declaration = changed.declarations.find((d) => d.name === name);
+    assert(declaration?.kind === "constant");
+    setAt(declaration, "value.concurrency", invalid);
+    assert(codesOf(changed, lowered.sources).includes("validation/006"));
+  }
+});
+
 Deno.test("stream validation recomputes deferred and active channels", () => {
   const lowered = lowerText(`
 error Stop = {}

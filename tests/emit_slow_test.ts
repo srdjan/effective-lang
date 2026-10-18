@@ -781,6 +781,122 @@ console.log(JSON.stringify({ pair, named, items, started }));
   });
 });
 
+Deno.test("concurrent stream mapping bounds work and closes failed siblings", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "export error Stop = {}",
+        "export service Source { next(n: Int): Option<[Int, Int]> }",
+        "export service Worker { work(n: Int): Int fails Stop }",
+        "export service Inner { next(n: Int): Option<[Int, Int]> fails Stop }",
+        "const source = unfold(0, (n) => Source.next(n))",
+        "const mapped = mapEffect(source, (n) => Worker.work(n), { concurrency: 2 })",
+        "const nested = flatMapStreams(source, (n) => unfold(n, (m) => Inner.next(m)), { concurrency: 2 })",
+        "export const mapMain = (): Int[] fails Stop uses Source.next | Worker.work => collectStream(mapped)",
+        "export const flatMain = (): Int[] fails Stop uses Source.next | Inner.next => collectStream(nested)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer, Option } from "effect";
+import { Source, Worker, Inner, Stop, mapMain, flatMain } from "./main.ts";
+
+const calls: number[] = [];
+let active = 0;
+let maximum = 0;
+let fail = false;
+const started: number[] = [];
+const released: number[] = [];
+const SourceLive = Layer.succeed(Source)({
+  next: (n) => Effect.sync(() => {
+    calls.push(n);
+    return n >= 3 ? Option.none() : Option.some([n + 1, n + 1] as const);
+  }),
+});
+const perform = (n: number) => Effect.acquireUseRelease(
+  Effect.sync(() => {
+    active++;
+    maximum = Math.max(maximum, active);
+    started.push(n);
+  }),
+  () => Effect.sleep(n === 1 ? "40 millis" : "10 millis").pipe(
+    Effect.flatMap(() => fail && n === 2 ? Effect.fail(new Stop({})) : Effect.succeed(n)),
+  ),
+  () => Effect.sync(() => { active--; released.push(n); }),
+);
+const WorkerLive = Layer.succeed(Worker)({
+  work: (n) => perform(n).pipe(Effect.map((value) => value * 10)),
+});
+const InnerLive = Layer.succeed(Inner)({
+  next: (n) => n > 3 ? Effect.succeed(Option.none()) :
+    perform(n).pipe(Effect.map((value) => Option.some([value, value + 10] as const))),
+});
+const Live = Layer.mergeAll(SourceLive, WorkerLive, InnerLive);
+const reset = () => {
+  calls.length = 0;
+  started.length = 0;
+  released.length = 0;
+  active = 0;
+  maximum = 0;
+};
+const pendingMap = mapMain().pipe(Effect.provide(Live));
+const before = { calls: [...calls], started: [...started] };
+const mapped = await Effect.runPromise(pendingMap);
+const mapSuccess = { mapped, maximum, active, started: [...started], released: [...released].sort() };
+reset();
+fail = true;
+const mapFailure = await Effect.runPromise(Effect.flip(pendingMap));
+const mapFailed = { tag: mapFailure._tag, active, started: [...started], released: [...released].sort() };
+reset();
+fail = false;
+const flat = await Effect.runPromise(flatMain().pipe(Effect.provide(Live)));
+const flatSuccess = { values: [...flat].sort(), maximum, active, started: [...started], released: [...released].sort() };
+reset();
+fail = true;
+const flatFailure = await Effect.runPromise(Effect.flip(flatMain().pipe(Effect.provide(Live))));
+const flatFailed = { tag: flatFailure._tag, active, started: [...started], released: [...released].sort() };
+console.log(JSON.stringify({ before, mapSuccess, mapFailed, flatSuccess, flatFailed }));
+`,
+    );
+    assertEquals(result, {
+      before: { calls: [], started: [] },
+      mapSuccess: {
+        mapped: [10, 20, 30],
+        maximum: 2,
+        active: 0,
+        started: [1, 2, 3],
+        released: [1, 2, 3],
+      },
+      mapFailed: {
+        tag: "main#Stop",
+        active: 0,
+        started: [1, 2],
+        released: [1, 2],
+      },
+      flatSuccess: {
+        values: [1, 2, 3],
+        maximum: 2,
+        active: 0,
+        started: [1, 2, 3],
+        released: [1, 2, 3],
+      },
+      flatFailed: {
+        tag: "main#Stop",
+        active: 0,
+        started: [1, 2],
+        released: [1, 2],
+      },
+    });
+  });
+});
+
 Deno.test("source-authored streams pull incrementally through an effectful sink", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

@@ -1051,6 +1051,38 @@ const use = (): Int => flatMapStreams()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("stream mapping accepts literal concurrency and rejects invalid bounds", () => {
+  const valid = checkText(`
+type Int = int
+service Source { next(n: Int): Option<[Int, Int]> }
+service Worker { work(n: Int): Int }
+const source = unfold(0, (n) => Source.next(n))
+const mapped = mapEffect(source, (n) => Worker.work(n), { concurrency: 2 })
+const nested = flatMapStreams(source, (n) => unfold(n, (m) => Source.next(m)), { concurrency: "unbounded" })
+const main = (): Int[] uses Source.next | Worker.work => collectStream(mapped)
+`);
+  assertEquals(codes(valid), [], messages(valid).join("\n"));
+  for (
+    const expression of [
+      "mapEffect(source, (n) => n, { concurrency: 0 })",
+      'mapEffect(source, (n) => n, { concurrency: "infinite" })',
+      "flatMapStreams(source, (n) => unfold(n, (m) => Source.next(m)), { concurrency: 1.5 })",
+      "flatMapStreams(source, (n) => unfold(n, (m) => Source.next(m)), { capacity: 2 })",
+    ]
+  ) {
+    const invalid = checkText(`
+type Int = int
+service Source { next(n: Int): Option<[Int, Int]> }
+const source = unfold(0, (n) => Source.next(n))
+const bad = ${expression}
+`);
+    assert(
+      codes(invalid).includes("type-mismatch/010"),
+      messages(invalid).join("\n"),
+    );
+  }
+});
+
 Deno.test("all rejects non-Effect entries and invalid concurrency", () => {
   for (
     const expression of [

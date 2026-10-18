@@ -130,7 +130,7 @@ export type Expr =
   | Node<{ kind: "fork-scoped"; job: Expr }>
   | Node<{ kind: "with-resource"; acquire: Expr; use: Expr; release: Expr; useBinding: LocalId; releaseBinding: LocalId }>
   | Node<{ kind: "unfold"; seed: Expr; next: Expr }>
-  | Node<{ kind: "map-effect"; stream: Expr; transform: Expr }>
+  | Node<{ kind: "map-effect"; stream: Expr; transform: Expr; concurrency: number | "unbounded" | undefined }>
   | Node<{ kind: "map-stream"; stream: Expr; transform: Expr }>
   | Node<{ kind: "scan-stream"; stream: Expr; seed: Expr; update: Expr }>
   | Node<{ kind: "map-accum-stream"; stream: Expr; seed: Expr; update: Expr }>
@@ -140,7 +140,7 @@ export type Expr =
   | Node<{ kind: "head-stream"; stream: Expr }>
   | Node<{ kind: "last-stream"; stream: Expr }>
   | Node<{ kind: "drain-stream"; stream: Expr }>
-  | Node<{ kind: "flat-map-streams"; stream: Expr; transform: Expr }>
+  | Node<{ kind: "flat-map-streams"; stream: Expr; transform: Expr; concurrency: number | "unbounded" | undefined }>
   | Node<{ kind: "take-stream"; stream: Expr; count: Expr }>
   | Node<{ kind: "drop-stream"; stream: Expr; count: Expr }>
   | Node<{ kind: "drop-while-stream"; stream: Expr; predicate: Expr }>

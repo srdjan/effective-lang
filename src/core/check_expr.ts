@@ -2011,14 +2011,22 @@ export class BodyChecker {
   }
 
   private mapEffectCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "map-effect" });
-    if (!this.arity(node, "mapEffect", 2, args)) {
+    if (args.length !== 2 && args.length !== 3) {
+      this.report(
+        "type-mismatch/004",
+        "`mapEffect` takes a Stream, a callback, and an optional concurrency record",
+        node,
+      );
       return this.finish(
         node,
         this.table.error,
         combine(args.map((a) => this.argInfo(a))),
       );
     }
+    const concurrency = args[2] === undefined
+      ? undefined
+      : this.concurrencyBound(args[2], "mapEffect");
+    this.fact(node, { kind: "map-effect", concurrency });
     this.noPipeline("mapEffect", args);
     this.inlineStreamCallback("mapEffect", args[1]);
     const stream = this.argInfo(args[0]);
@@ -2052,7 +2060,15 @@ export class BodyChecker {
         ...(fn?.requirements ?? []),
       ],
     );
-    return this.finish(node, type, combine([stream, transform.info]));
+    return this.finish(
+      node,
+      type,
+      combine([
+        stream,
+        transform.info,
+        ...(args[2] === undefined ? [] : [this.argInfo(args[2])]),
+      ]),
+    );
   }
 
   private mapStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
@@ -2489,14 +2505,22 @@ export class BodyChecker {
   }
 
   private flatMapStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "flat-map-streams" });
-    if (!this.arity(node, "flatMapStreams", 2, args)) {
+    if (args.length !== 2 && args.length !== 3) {
+      this.report(
+        "type-mismatch/004",
+        "`flatMapStreams` takes a Stream, a callback, and an optional concurrency record",
+        node,
+      );
       return this.finish(
         node,
         this.table.error,
         combine(args.map((arg) => this.argInfo(arg))),
       );
     }
+    const concurrency = args[2] === undefined
+      ? undefined
+      : this.concurrencyBound(args[2], "flatMapStreams");
+    this.fact(node, { kind: "flat-map-streams", concurrency });
     this.noPipeline("flatMapStreams", args);
     this.inlineStreamCallback("flatMapStreams", args[1]);
     const stream = this.argInfo(args[0]);
@@ -2536,7 +2560,15 @@ export class BodyChecker {
         ...(inner.kind === "stream" ? inner.requirements : []),
       ],
     );
-    return this.finish(node, type, combine([stream, transform.info]));
+    return this.finish(
+      node,
+      type,
+      combine([
+        stream,
+        transform.info,
+        ...(args[2] === undefined ? [] : [this.argInfo(args[2])]),
+      ]),
+    );
   }
 
   private takeStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
@@ -3384,7 +3416,9 @@ export class BodyChecker {
       | "all"
       | "partitionAll"
       | "validateAll"
-      | "allResults" = "traverse",
+      | "allResults"
+      | "mapEffect"
+      | "flatMapStreams" = "traverse",
   ): number | "unbounded" | undefined {
     const bad = (): undefined => {
       this.report(

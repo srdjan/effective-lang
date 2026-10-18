@@ -120,7 +120,10 @@ export type NodeFact =
   | { readonly kind: "scoped" | "fork-scoped" }
   | { readonly kind: "with-resource" }
   | { readonly kind: "unfold" }
-  | { readonly kind: "map-effect" }
+  | {
+    readonly kind: "map-effect";
+    readonly concurrency: number | "unbounded" | undefined;
+  }
   | { readonly kind: "map-stream" }
   | { readonly kind: "scan-stream" }
   | { readonly kind: "map-accum-stream" }
@@ -130,7 +133,10 @@ export type NodeFact =
   | { readonly kind: "head-stream" }
   | { readonly kind: "last-stream" }
   | { readonly kind: "drain-stream" }
-  | { readonly kind: "flat-map-streams" }
+  | {
+    readonly kind: "flat-map-streams";
+    readonly concurrency: number | "unbounded" | undefined;
+  }
   | { readonly kind: "take-stream" }
   | { readonly kind: "drop-stream" }
   | { readonly kind: "drop-while-stream" }

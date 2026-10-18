@@ -375,6 +375,21 @@ type Int = int
   assertStringIncludes(output, "Stream.unfold(");
 });
 
+Deno.test("concurrent stream mapping emits pinned concurrency options", () => {
+  const output = oneModule(`
+type Int = int
+service Source { next(n: Int): Option<[Int, Int]> }
+service Worker { work(n: Int): Int }
+const source = unfold(0, (n) => Source.next(n))
+const mapped = mapEffect(source, (n) => Worker.work(n), { concurrency: 2 })
+const nested = flatMapStreams(source, (n) => unfold(n, (m) => Source.next(m)), { concurrency: "unbounded" })
+`);
+  assertStringIncludes(output, "Stream.mapEffect(");
+  assertStringIncludes(output, "{ concurrency: 2 }");
+  assertStringIncludes(output, "Stream.flatMap(");
+  assertStringIncludes(output, '{ concurrency: "unbounded" }');
+});
+
 Deno.test("a source race emits Effect.race and executes only when run", () => {
   const output = oneModule(`
 type Int = int

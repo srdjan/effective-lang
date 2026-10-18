@@ -32,13 +32,13 @@ Collection literals use brackets: `[1, 2]` infers an array, while an expected tu
 
 `withResource(acquire, use, release)` composes a scoped resource through three inline callbacks. Acquisition can return an operation record or an opaque host handle. A record may only receive direct operation calls. An opaque handle may pass directly to a borrow-qualified host method or checked source helper. The checker rejects handle escape and requires a data-only use result. The generated Effect runs release after success, failure, defect, or interruption.
 
-`Stream<A, E, R>` and `Sink<I, O, E, R>` hold deferred producer and consumer channels. `unfold(seed, callback)` creates a pull stream, `mapEffect(stream, callback)` transforms it, `sinkForEach(callback)` consumes values, and `runStream(stream, sink)` executes the pipeline. `bufferStream(stream, { capacity: N })` adds suspending backpressure, and `mergeStreams(left, right)` combines producers. Construction defers production until consumption.
+`Stream<A, E, R>` and `Sink<I, O, E, R>` hold deferred producer and consumer channels. `unfold(seed, callback)` creates a pull stream, `mapEffect(stream, callback, options?)` transforms it, `sinkForEach(callback)` consumes values, and `runStream(stream, sink)` executes the pipeline. The optional `{ concurrency: N }` or `{ concurrency: "unbounded" }` runs mapping callbacks concurrently while preserving output order. `bufferStream(stream, { capacity: N })` adds suspending backpressure, and `mergeStreams(left, right)` combines producers. Construction defers production until consumption.
 
 `zipStreams(left, right)` pairs two streams in source order, allows different element types, and ends with the shorter input. It combines their deferred failure and service channels. A source binding named `zipStreams` shadows the prelude operation.
 
 `concatStreams(left, right)` emits the entire left stream before starting the right. It allows different element types by returning their union, combines deferred channels, and skips the right stream if the left fails.
 
-`flatMapStreams(source, callback)` takes an inline pure callback that returns a Stream for each source element. It exhausts each inner stream in source order and combines the outer and inner deferred channels. Failure stops later inner streams, and interruption releases the active inner stream.
+`flatMapStreams(source, callback, options?)` takes an inline pure callback that returns a Stream for each source element. Without options it exhausts each inner stream in source order. The optional `{ concurrency: N }` or `{ concurrency: "unbounded" }` runs inner streams together and merges their outputs as they arrive. It combines the outer and inner deferred channels; failure and interruption close active inner streams.
 
 `takeStream(stream, count)` keeps up to the first `count` elements. A pure `Int` count may be dynamic; zero or a negative count yields an empty stream without pulling the source. The stream's deferred failures and requirements remain in its type.
 
