@@ -876,6 +876,8 @@ export class BodyChecker {
         return this.scanStreamCall(node, args);
       case "mapAccumStream":
         return this.mapAccumStreamCall(node, args);
+      case "foldStream":
+        return this.foldStreamCall(node, args);
       case "flatMapStreams":
         return this.flatMapStreamsCall(node, args);
       case "takeStream":
@@ -2207,6 +2209,63 @@ export class BodyChecker {
       source.kind === "stream" ? source.requirements : [],
     );
     return this.finish(node, type, combine([stream, seed, update.info]));
+  }
+
+  private foldStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "fold-stream" });
+    if (!this.arity(node, "foldStream", 3, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine([...args.map((arg) => this.argInfo(arg)), EFFECT_ONLY]),
+      );
+    }
+    this.noPipeline("foldStream", args);
+    this.inlineStreamCallback("foldStream", args[2]);
+    const stream = this.argInfo(args[0]);
+    const seed = this.argInfo(args[1]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`foldStream` needs a Stream value",
+        args[0].node,
+      );
+    }
+    if (
+      seed.mode !== "pure" || seed.failures.length > 0 ||
+      seed.requirements.length > 0
+    ) {
+      this.report(
+        "execution-mode/001",
+        "`foldStream` seed must be pure",
+        args[1].node,
+      );
+    }
+    const element = source.kind === "stream"
+      ? source.element
+      : this.table.error;
+    const update = this.callback(
+      "foldStream",
+      args[2],
+      [seed.type, element],
+      seed.type,
+    );
+    this.fits(
+      args[2].node,
+      update.result,
+      seed.type,
+      "the foldStream update result",
+    );
+    return this.finish(
+      node,
+      seed.type,
+      combine([stream, seed, update.info, {
+        failures: source.kind === "stream" ? source.failures : [],
+        requirements: source.kind === "stream" ? source.requirements : [],
+        mode: "effect",
+      }]),
+    );
   }
 
   private flatMapStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {

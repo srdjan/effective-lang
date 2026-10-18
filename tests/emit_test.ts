@@ -257,6 +257,19 @@ export const result: Stream<Bool, never, Source.next> =
   assertStringIncludes(output, "total + n");
 });
 
+Deno.test("foldStream emits Stream.runFold with a lazy seed", () => {
+  const output = oneModule(`
+type Int = int
+service Source { next(state: Int): Option<[Int, Int]> }
+const source = unfold(0, (state) => Source.next(state))
+export const main = (seed: Int): Int uses Source.next =>
+  foldStream(source, seed, (total, n) => total + n)
+`);
+  assertStringIncludes(output, "Stream.runFold(");
+  assertStringIncludes(output, "() => seed");
+  assertStringIncludes(output, "total + n");
+});
+
 Deno.test("buffered merged streams emit bounded suspending buffers", () => {
   const output = oneModule(`
 service Source { next(state: Int): Option<[Int, Int]> }

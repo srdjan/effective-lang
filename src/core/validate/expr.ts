@@ -475,6 +475,8 @@ export class BodyValidator {
         return this.scanStream(e, path);
       case "map-accum-stream":
         return this.mapAccumStream(e, path);
+      case "fold-stream":
+        return this.foldStream(e, path);
       case "flat-map-streams":
         return this.flatMapStreams(e, path);
       case "take-stream":
@@ -2207,6 +2209,7 @@ export class BodyValidator {
             return [e.stream, e.transform];
           case "scan-stream":
           case "map-accum-stream":
+          case "fold-stream":
             return [e.stream, e.seed, e.update];
           case "take-stream":
             return [e.stream, e.count];
@@ -2710,6 +2713,62 @@ export class BodyValidator {
       },
       match: "exact",
       active: combine([stream, seed, update]),
+    };
+  }
+
+  private foldStream(
+    e: Extract<Expr, { kind: "fold-stream" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const seed = this.check(e.seed, `${path}.seed`);
+    const update = this.check(e.update, `${path}.update`);
+    const source = unfold(this.env, stream.type);
+    const fn = asFunction(this.env, update.type);
+    if (e.update.kind !== "closure") {
+      this.add(
+        AREA.control,
+        `${path}.update`,
+        "foldStream requires an inline closure",
+        e.update.span,
+      );
+    }
+    if (
+      source.kind !== "stream" || fn === undefined ||
+      fn.parameters.length !== 2 ||
+      !fits(this.env, seed.type, fn.parameters[0]) ||
+      !fits(this.env, source.element, fn.parameters[1]) ||
+      !fits(this.env, fn.result, seed.type) ||
+      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
+      fn.effects.requirements.length > 0
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "foldStream needs a Stream and a pure state update callback",
+        e.span,
+      );
+      return this.poison();
+    }
+    if (
+      seed.execution !== "pure" || seed.failures.length > 0 ||
+      seed.requirements.length > 0
+    ) {
+      this.add(
+        AREA.execution,
+        `${path}.seed`,
+        "foldStream seed must be pure",
+        e.seed.span,
+      );
+    }
+    return {
+      type: seed.type,
+      match: "exact",
+      active: combine([stream, seed, update, {
+        failures: source.effects.failures,
+        requirements: source.effects.requirements,
+        execution: "effect",
+      }]),
     };
   }
 

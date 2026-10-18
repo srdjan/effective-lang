@@ -681,6 +681,67 @@ const use = (): Int => mapAccumStream()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("foldStream returns a final state with active source channels", () => {
+  const valid = checkText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const main = (seed: Int): Int fails Stop uses Source.next =>
+  foldStream(source, seed, (total, n) => total + n)
+`);
+  assertEquals(codes(valid), [], messages(valid).join("\n"));
+  const main = valid.table.node(fn(valid, "m", "main").type);
+  assert(main.kind === "function");
+  assertEquals(main.execution, "effect");
+  assertEquals(shortIds(main.failures), ["Stop"]);
+  assertEquals(shortIds(main.requirements), ["Source.next"]);
+
+  const missingChannels = checkText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const main = (): Int => foldStream(source, 0, (total, n) => total + n)
+`);
+  assert(codes(missingChannels).includes("failure-contract/001"));
+  assert(codes(missingChannels).includes("requirement-contract/001"));
+
+  const wrongResult = checkText(`
+type Int = int
+const source = unfold(0, (n): Option<[Int, Int]> => None)
+const main = (): Int => foldStream(source, 0, (total, n) => total < n)
+`);
+  assert(codes(wrongResult).includes("type-mismatch/003"));
+
+  const effectfulUpdate = checkText(`
+type Int = int
+service Probe { next(n: Int): Int }
+const source = unfold(0, (n): Option<[Int, Int]> => None)
+const main = (): Int uses Probe.next =>
+  foldStream(source, 0, (total, n) => Probe.next(total + n))
+`);
+  assert(codes(effectfulUpdate).includes("execution-mode/001"));
+
+  const effectfulSeed = checkText(`
+type Int = int
+service Seed { next(): Int }
+const source = unfold(0, (n): Option<[Int, Int]> => None)
+const main = (): Int uses Seed.next =>
+  foldStream(source, Seed.next(), (total, n) => total + n)
+`);
+  assert(codes(effectfulSeed).includes("execution-mode/001"));
+});
+
+Deno.test("a source binding named foldStream shadows the prelude operation", () => {
+  const project = checkText(`
+type Int = int
+const foldStream = (): Int => 3
+const use = (): Int => foldStream()
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
 Deno.test("zipStreams pairs different element types and unions deferred channels", () => {
   const project = checkText(`
 error Stop = {}

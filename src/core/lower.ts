@@ -655,6 +655,14 @@ class BodyLowerer {
           update: arg(2),
           ...annotation,
         };
+      case "fold-stream":
+        return {
+          kind: "fold-stream",
+          stream: arg(0),
+          seed: arg(1),
+          update: arg(2),
+          ...annotation,
+        };
       case "flat-map-streams":
         return {
           kind: "flat-map-streams",

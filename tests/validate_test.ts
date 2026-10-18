@@ -774,6 +774,39 @@ const mapped: Stream<Bool, Stop, Source.next> =
   assert(codesOf(wrongUpdate, lowered.sources).includes("validation/002"));
 });
 
+Deno.test("foldStream validates its final state and active channels", () => {
+  const lowered = lowerText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const main = (): Int fails Stop uses Source.next =>
+  foldStream(source, 0, (total, n) => total + n)
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+
+  const wrongResult = copy(lowered.ir);
+  const main = wrongResult.declarations.find((d) => d.name === "main");
+  assert(main?.kind === "function" && main.body.kind === "fold-stream");
+  setAt(main, "body.type", { kind: "primitive", name: "boolean" });
+  assert(codesOf(wrongResult, lowered.sources).includes("validation/002"));
+
+  const wrongChannel = copy(lowered.ir);
+  const channel = wrongChannel.declarations.find((d) => d.name === "main");
+  assert(channel?.kind === "function" && channel.body.kind === "fold-stream");
+  setAt(channel, "body.effects.failures", []);
+  assert(codesOf(wrongChannel, lowered.sources).includes("validation/003"));
+
+  const wrongUpdate = copy(lowered.ir);
+  const update = wrongUpdate.declarations.find((d) => d.name === "main");
+  assert(update?.kind === "function" && update.body.kind === "fold-stream");
+  setAt(update, "body.update.type.result", {
+    kind: "primitive",
+    name: "boolean",
+  });
+  assert(codesOf(wrongUpdate, lowered.sources).includes("validation/002"));
+});
+
 Deno.test("stream validation recomputes deferred and active channels", () => {
   const lowered = lowerText(`
 error Stop = {}

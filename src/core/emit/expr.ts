@@ -1100,6 +1100,7 @@ export class ExprEmitter {
       case "fork-scoped":
       case "with-resource":
       case "run-stream":
+      case "fold-stream":
       case "make-ref":
       case "get-ref":
       case "set-ref":
@@ -1729,6 +1730,7 @@ export class ExprEmitter {
       case "catch":
       case "with-resource":
       case "run-stream":
+      case "fold-stream":
       case "make-ref":
       case "get-ref":
       case "set-ref":
@@ -1764,6 +1766,8 @@ export class ExprEmitter {
         return [e.job];
       case "run-stream":
         return [e.stream, e.sink];
+      case "fold-stream":
+        return [e.stream, e.seed, e.update];
       case "make-ref":
         return [e.value];
       case "get-ref":
@@ -1999,6 +2003,19 @@ export class ExprEmitter {
         return emitted([
           `${stream}.run`,
           callArguments([children[0], children[1]]),
+        ]);
+      }
+      case "fold-stream": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.runFold`,
+          callArguments([
+            children[0],
+            emitted(this.arrow("()", children[1]), PREC.conditional, {
+              huggable: true,
+            }),
+            children[2],
+          ]),
         ]);
       }
       case "make-ref":
