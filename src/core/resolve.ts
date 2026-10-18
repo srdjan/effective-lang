@@ -83,6 +83,7 @@ export type PreludeName =
   | "fold"
   | "all"
   | "partitionAll"
+  | "validateAll"
   | "traverse";
 
 export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
@@ -125,6 +126,7 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "fold",
   "all",
   "partitionAll",
+  "validateAll",
   "traverse",
 ]);
 
@@ -378,6 +380,7 @@ class Resolver {
     if (
       (PRELUDE_NAMES.has(name) && name !== "run" && name !== "all" &&
         name !== "partitionAll" &&
+        name !== "validateAll" &&
         name !== "scoped" && name !== "forkScoped" && name !== "zipStreams" &&
         name !== "concatStreams" && name !== "flatMapStreams") ||
       BUILTIN_TYPE_NAMES.has(name)
@@ -528,6 +531,7 @@ class Resolver {
     if (
       PRELUDE_NAMES.has(name) && name !== "run" && name !== "all" &&
       name !== "partitionAll" &&
+      name !== "validateAll" &&
       name !== "scoped" && name !== "forkScoped" && name !== "zipStreams" &&
       name !== "concatStreams" && name !== "flatMapStreams"
     ) {

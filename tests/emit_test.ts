@@ -89,6 +89,20 @@ export const main = (): [Int[], Stop[]] uses Jobs.run =>
   assertStringIncludes(output, "concurrency: 2");
 });
 
+Deno.test("validateAll emits Effect.validate and maps errors", () => {
+  const output = oneModule(`
+error Stop = { n: Int }
+error Problems = { errors: Stop[] }
+service Jobs { run(n: Int): Int fails Stop }
+type Int = int
+export const main = (): Int[] fails Problems uses Jobs.run =>
+  validateAll([defer(() => Jobs.run(0)), defer(() => Jobs.run(1))], (errors) => Problems({ errors }), { concurrency: 2 })
+`);
+  assertStringIncludes(output, "Effect.validate(");
+  assertStringIncludes(output, "Effect.mapError(");
+  assertStringIncludes(output, "concurrency: 2");
+});
+
 Deno.test("scoped fiber emission provides a local scope", () => {
   const output = oneModule(`
 type Int = int

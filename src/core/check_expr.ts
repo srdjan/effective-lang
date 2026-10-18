@@ -903,6 +903,8 @@ export class BodyChecker {
         return this.allCall(node, args);
       case "partitionAll":
         return this.partitionAllCall(node, args);
+      case "validateAll":
+        return this.validateAllCall(node, args);
       case "map":
       case "filter":
       case "fold":
@@ -2692,7 +2694,7 @@ export class BodyChecker {
 
   private concurrencyBound(
     arg: Arg,
-    operation: "traverse" | "all" | "partitionAll" = "traverse",
+    operation: "traverse" | "all" | "partitionAll" | "validateAll" = "traverse",
   ): number | "unbounded" | undefined {
     const bad = (): undefined => {
       this.report(
@@ -2882,6 +2884,72 @@ export class BodyChecker {
       combine([jobs, ...(option === undefined ? [] : [option]), {
         failures: [],
         requirements: member.requirements,
+        mode: "effect",
+      }]),
+    );
+  }
+
+  private validateAllCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    if (args.length !== 2 && args.length !== 3) {
+      this.report(
+        "type-mismatch/004",
+        "`validateAll` takes an Effect array, an error wrapper, and an optional concurrency record",
+        node,
+      );
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.noPipeline("validateAll", args);
+    const jobs = this.argInfo(args[0]);
+    const shape = this.table.node(this.table.unfold(jobs.type));
+    const member = shape.kind === "array"
+      ? this.table.node(this.table.unfold(shape.element))
+      : undefined;
+    if (member?.kind !== "effect" && !this.isError(jobs.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`validateAll` needs an array of Effect values",
+        args[0].node,
+      );
+    }
+    const errors = member?.kind === "effect"
+      ? this.table.union(member.failures.map((id) => this.table.named(id)))
+      : this.table.error;
+    const wrapped = this.callback(
+      "validateAll",
+      args[1],
+      [this.table.array(errors)],
+      undefined,
+    );
+    const wrapper = this.table.node(this.table.unfold(wrapped.result));
+    if (wrapper.kind !== "named" || !wrapper.id.startsWith("error:")) {
+      if (!this.isError(wrapped.result)) {
+        this.report(
+          "type-mismatch/010",
+          "`validateAll` error wrapper must return a nominal error",
+          args[1].node,
+        );
+      }
+    }
+    const option = args[2] === undefined ? undefined : this.argInfo(args[2]);
+    const concurrency = args[2] === undefined
+      ? undefined
+      : this.concurrencyBound(args[2], "validateAll");
+    this.fact(node, { kind: "validate-all", concurrency });
+    return this.finish(
+      node,
+      member?.kind === "effect"
+        ? this.table.array(member.result)
+        : this.table.error,
+      combine([jobs, wrapped.info, ...(option === undefined ? [] : [option]), {
+        failures: wrapper.kind === "named" &&
+            wrapper.id.startsWith("error:")
+          ? [wrapper.id as ErrorId]
+          : [],
+        requirements: member?.kind === "effect" ? member.requirements : [],
         mode: "effect",
       }]),
     );

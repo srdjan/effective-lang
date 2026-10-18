@@ -126,6 +126,10 @@ export type NodeFact =
     readonly kind: "partition-all";
     readonly concurrency: number | "unbounded" | undefined;
   }
+  | {
+    readonly kind: "validate-all";
+    readonly concurrency: number | "unbounded" | undefined;
+  }
   | { readonly kind: "sink-for-each" }
   | { readonly kind: "run-stream" }
   | { readonly kind: "buffer-stream"; readonly capacity: number | undefined }

@@ -648,6 +648,73 @@ console.log(JSON.stringify({ successes, failures: failures.map((error) => error.
   });
 });
 
+Deno.test("validateAll accumulates nominal failures and keeps successful results", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "export error Stop = { n: Int }",
+        "export error Problems = { errors: Stop[] }",
+        "export service Jobs { run(n: Int): Int fails Stop }",
+        "export const main = (): Int[] fails Problems uses Jobs.run =>",
+        "  validateAll([defer(() => Jobs.run(0)), defer(() => Jobs.run(1)), defer(() => Jobs.run(2)), defer(() => Jobs.run(3))], (errors) => Problems({ errors }), { concurrency: 2 })",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer } from "effect";
+import { Jobs, Stop, main } from "./main.ts";
+
+let mode: "success" | "failure" = "success";
+let active = 0;
+let maximum = 0;
+const started: number[] = [];
+const Live = Layer.succeed(Jobs)({
+  run: (n) => Effect.sync(() => {
+    started.push(n);
+    active++;
+    maximum = Math.max(maximum, active);
+  }).pipe(
+    Effect.andThen(Effect.sleep(n === 1 ? "40 millis" : "2 millis")),
+    Effect.andThen(mode === "failure" && n % 2 === 1
+      ? Effect.fail(new Stop({ n }))
+      : Effect.succeed(n * 10)),
+    Effect.ensuring(Effect.sync(() => { active--; })),
+  ),
+});
+const successes = await Effect.runPromise(main().pipe(Effect.provide(Live)));
+const success = { successes, started: [...started], maximum, active };
+mode = "failure";
+started.length = 0;
+maximum = 0;
+const error = await Effect.runPromise(Effect.flip(main().pipe(Effect.provide(Live))));
+const failure = { errors: error.errors.map((item) => item.n), started, maximum, active };
+console.log(JSON.stringify({ success, failure }));
+`,
+    );
+    assertEquals(result, {
+      success: {
+        successes: [0, 10, 20, 30],
+        started: [0, 1, 2, 3],
+        maximum: 2,
+        active: 0,
+      },
+      failure: {
+        errors: [1, 3],
+        started: [0, 1, 2, 3],
+        maximum: 2,
+        active: 0,
+      },
+    });
+  });
+});
+
 Deno.test("source-authored streams pull incrementally through an effectful sink", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

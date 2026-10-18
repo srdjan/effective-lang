@@ -398,6 +398,44 @@ const result = (): [Int[], Stop[]] uses Jobs.run => partitionAll(jobs, { concurr
   assert(codesOf(invalidResult, lowered.sources).includes("validation/002"));
 });
 
+Deno.test("validateAll validates its nominal wrapper and concurrency", () => {
+  const lowered = lowerText(`
+type Int = int
+error Stop = { n: Int }
+error Problems = { errors: Stop[] }
+service Jobs { run(n: Int): Int fails Stop }
+const jobs: Effect<Int, Stop, Jobs.run>[] = [defer(() => Jobs.run(0)), defer(() => Jobs.run(1))]
+const result = (): Int[] fails Problems uses Jobs.run =>
+  validateAll(jobs, (errors) => Problems({ errors }), { concurrency: 2 })
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+
+  const invalidBound = copy(lowered.ir);
+  const boundFunction = invalidBound.declarations.find((d) =>
+    d.name === "result"
+  );
+  assert(
+    boundFunction?.kind === "function" &&
+      boundFunction.body.kind === "validate-all",
+  );
+  setAt(boundFunction, "body.concurrency", 0);
+  assert(codesOf(invalidBound, lowered.sources).includes("validation/006"));
+
+  const invalidWrapper = copy(lowered.ir);
+  const wrapperFunction = invalidWrapper.declarations.find((d) =>
+    d.name === "result"
+  );
+  assert(
+    wrapperFunction?.kind === "function" &&
+      wrapperFunction.body.kind === "validate-all",
+  );
+  setAt(wrapperFunction, "body.onErrors.type.result", {
+    kind: "primitive",
+    name: "int",
+  });
+  assert(codesOf(invalidWrapper, lowered.sources).includes("validation/002"));
+});
+
 Deno.test("stream validation recomputes deferred and active channels", () => {
   const lowered = lowerText(`
 error Stop = {}

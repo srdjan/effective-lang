@@ -454,6 +454,8 @@ export class BodyValidator {
         return this.run(e, path);
       case "partition-all":
         return this.partitionAll(e, path);
+      case "validate-all":
+        return this.validateAll(e, path);
       case "scoped":
         return this.scoped(e, path);
       case "fork-scoped":
@@ -1848,6 +1850,68 @@ export class BodyValidator {
     };
   }
 
+  private validateAll(
+    e: Extract<Expr, { kind: "validate-all" }>,
+    path: string,
+  ): Comp {
+    const jobs = this.check(e.jobs, `${path}.jobs`);
+    const onErrors = this.check(e.onErrors, `${path}.onErrors`);
+    const array = unfold(this.env, jobs.type);
+    const job = array.kind === "array"
+      ? unfold(this.env, array.element)
+      : undefined;
+    const wrapper = asFunction(this.env, onErrors.type);
+    const errors = job?.kind === "effect"
+      ? unionOf(
+        this.env,
+        job.effects.failures.map((id) => ({ kind: "named", id })),
+      )
+      : undefined;
+    const failure = wrapper === undefined
+      ? undefined
+      : unfold(this.env, wrapper.result);
+    if (
+      job?.kind !== "effect" || wrapper === undefined ||
+      errors === undefined || wrapper.parameters.length !== 1 ||
+      !fits(
+        this.env,
+        { kind: "array", element: errors },
+        wrapper.parameters[0],
+      ) ||
+      wrapper.execution !== "pure" || wrapper.effects.failures.length > 0 ||
+      wrapper.effects.requirements.length > 0 || failure?.kind !== "named" ||
+      !this.env.errors.has(failure.id)
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "validateAll needs Effect jobs and a pure error-array wrapper returning a nominal error",
+        e.span,
+      );
+      return this.poison();
+    }
+    if (
+      e.concurrency !== undefined && e.concurrency !== "unbounded" &&
+      !(Number.isSafeInteger(e.concurrency) && e.concurrency > 0)
+    ) {
+      this.add(
+        AREA.control,
+        `${path}.concurrency`,
+        "validateAll concurrency must be a positive safe integer or unbounded",
+        e.span,
+      );
+    }
+    return {
+      type: { kind: "array", element: job.result },
+      match: "exact",
+      active: combine([jobs, onErrors, {
+        failures: [failure.id as ErrorId],
+        requirements: job.effects.requirements,
+        execution: "effect",
+      }]),
+    };
+  }
+
   private scoped(e: Extract<Expr, { kind: "scoped" }>, path: string): Comp {
     const value = this.check(e.value, `${path}.value`);
     const effect = unfold(this.env, value.type);
@@ -2002,6 +2066,8 @@ export class BodyValidator {
             return [e.value];
           case "partition-all":
             return [e.jobs];
+          case "validate-all":
+            return [e.jobs, e.onErrors];
           case "closure":
             return [e.body];
           case "call":

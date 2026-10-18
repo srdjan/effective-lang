@@ -221,6 +221,53 @@ const use = (): Int => partitionAll()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("validateAll wraps accumulated failures in a nominal error", () => {
+  const project = checkText(`
+type Int = int
+error Stop = { n: Int }
+error Problems = { errors: Stop[] }
+service Jobs { run(n: Int): Int fails Stop }
+const jobs: Effect<Int, Stop, Jobs.run>[] = [defer(() => Jobs.run(0)), defer(() => Jobs.run(1))]
+const result = (): Int[] fails Problems uses Jobs.run =>
+  validateAll(jobs, (errors) => Problems({ errors }), { concurrency: 2 })
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+
+  const wrongResult = checkText(`
+type Int = int
+error Stop = {}
+const result = (): Int[] => validateAll([defer(() => fail(Stop()))], (errors) => 1)
+`);
+  assert(codes(wrongResult).includes("type-mismatch/010"));
+
+  const invalidBound = checkText(`
+type Int = int
+error Stop = {}
+error Problems = { errors: Stop[] }
+const result = (): Int[] fails Problems =>
+  validateAll([defer(() => fail(Stop()))], (errors) => Problems({ errors }), { concurrency: 0 })
+`);
+  assert(codes(invalidBound).includes("type-mismatch/010"));
+  const effectfulWrapper = checkText(`
+type Int = int
+error Stop = {}
+error Problems = { errors: Stop[] }
+service Wrap { make(errors: Stop[]): Problems }
+const result = (): Int[] fails Problems uses Wrap.make =>
+  validateAll([defer(() => fail(Stop()))], (errors) => Wrap.make(errors))
+`);
+  assert(codes(effectfulWrapper).includes("execution-mode/001"));
+});
+
+Deno.test("a source binding named validateAll shadows the prelude operation", () => {
+  const project = checkText(`
+type Int = int
+const validateAll = (): Int => 3
+const use = (): Int => validateAll()
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
 Deno.test("zipStreams pairs different element types and unions deferred channels", () => {
   const project = checkText(`
 error Stop = {}

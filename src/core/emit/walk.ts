@@ -47,6 +47,8 @@ export function childrenOf(expr: Expr): Expr[] {
       return [expr.stream, expr.transform];
     case "partition-all":
       return [expr.jobs];
+    case "validate-all":
+      return [expr.jobs, expr.onErrors];
     case "sink-for-each":
       return [expr.consume];
     case "run-stream":
