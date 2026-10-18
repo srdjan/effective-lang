@@ -1105,6 +1105,7 @@ export class ExprEmitter {
       case "collect-stream":
       case "head-stream":
       case "last-stream":
+      case "drain-stream":
       case "make-ref":
       case "get-ref":
       case "set-ref":
@@ -1739,6 +1740,7 @@ export class ExprEmitter {
       case "collect-stream":
       case "head-stream":
       case "last-stream":
+      case "drain-stream":
       case "make-ref":
       case "get-ref":
       case "set-ref":
@@ -1781,6 +1783,7 @@ export class ExprEmitter {
       case "collect-stream":
       case "head-stream":
       case "last-stream":
+      case "drain-stream":
         return [e.stream];
       case "make-ref":
         return [e.value];
@@ -2063,6 +2066,13 @@ export class ExprEmitter {
         const stream = this.scope.effect("Stream");
         return emitted([
           `${stream}.runLast`,
+          callArguments([children[0]]),
+        ]);
+      }
+      case "drain-stream": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.runDrain`,
           callArguments([children[0]]),
         ]);
       }

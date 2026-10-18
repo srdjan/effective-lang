@@ -68,6 +68,8 @@ Collection literals use brackets: `[1, 2]` infers an array, while an expected tu
 
 `lastStream(stream)` consumes a stream to completion and returns its final element as `Option<A>`. An empty source returns `None`; a source failure propagates without returning a partial result. Source failures and requirements become active.
 
+`drainStream(stream)` runs a stream to completion and discards its values, returning `void`. It still executes source effects, propagates failures, and closes started upstream work. Source failures and requirements become active.
+
 Core 1 also includes `Ref<A>` state, `race` of Effect values, supervised `withFiber` with direct `joinFiber` and `interruptFiber`, pure `Codec<Decoded,Encoded>` transformations, `RetrySchedule<E>` policies, and source-defined `Layer<Services,E,R>` values. The [gap audit](docs/effect-4-gap-audit.md) records the remaining boundary: general Effect and stream operators and ecosystem packages still require host adapters.
 
 Part A4 lowers a checked module to typed IR and serializes it. It adds a synchronous SHA-256 for builtin identities.

@@ -129,6 +129,7 @@ export type NodeFact =
   | { readonly kind: "collect-stream" }
   | { readonly kind: "head-stream" }
   | { readonly kind: "last-stream" }
+  | { readonly kind: "drain-stream" }
   | { readonly kind: "flat-map-streams" }
   | { readonly kind: "take-stream" }
   | { readonly kind: "drop-stream" }

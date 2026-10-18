@@ -485,6 +485,8 @@ export class BodyValidator {
         return this.headStream(e, path);
       case "last-stream":
         return this.lastStream(e, path);
+      case "drain-stream":
+        return this.drainStream(e, path);
       case "flat-map-streams":
         return this.flatMapStreams(e, path);
       case "take-stream":
@@ -2223,6 +2225,7 @@ export class BodyValidator {
           case "collect-stream":
           case "head-stream":
           case "last-stream":
+          case "drain-stream":
             return [e.stream];
           case "take-stream":
             return [e.stream, e.count];
@@ -2914,6 +2917,32 @@ export class BodyValidator {
     }
     return {
       type: { kind: "option", element: source.element },
+      match: "exact",
+      active: combine([stream, {
+        failures: source.effects.failures,
+        requirements: source.effects.requirements,
+        execution: "effect",
+      }]),
+    };
+  }
+
+  private drainStream(
+    e: Extract<Expr, { kind: "drain-stream" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const source = unfold(this.env, stream.type);
+    if (source.kind !== "stream") {
+      this.add(
+        AREA.types,
+        path,
+        "drainStream needs a Stream value",
+        e.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: UNIT,
       match: "exact",
       active: combine([stream, {
         failures: source.effects.failures,

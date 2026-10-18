@@ -886,6 +886,8 @@ export class BodyChecker {
         return this.headStreamCall(node, args);
       case "lastStream":
         return this.lastStreamCall(node, args);
+      case "drainStream":
+        return this.drainStreamCall(node, args);
       case "flatMapStreams":
         return this.flatMapStreamsCall(node, args);
       case "takeStream":
@@ -2442,6 +2444,42 @@ export class BodyChecker {
     return this.finish(
       node,
       this.table.option(source.element),
+      combine([stream, {
+        failures: source.failures,
+        requirements: source.requirements,
+        mode: "effect",
+      }]),
+    );
+  }
+  private drainStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "drain-stream" });
+    if (!this.arity(node, "drainStream", 1, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine([...args.map((arg) => this.argInfo(arg)), EFFECT_ONLY]),
+      );
+    }
+    this.noPipeline("drainStream", args);
+    const stream = this.argInfo(args[0]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream") {
+      if (!this.isError(stream.type)) {
+        this.report(
+          "type-mismatch/010",
+          "`drainStream` needs a Stream value",
+          args[0].node,
+        );
+      }
+      return this.finish(
+        node,
+        this.table.error,
+        combine([stream, EFFECT_ONLY]),
+      );
+    }
+    return this.finish(
+      node,
+      this.table.unit,
       combine([stream, {
         failures: source.failures,
         requirements: source.requirements,

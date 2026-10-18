@@ -954,6 +954,42 @@ const main = (): Option<Int> fails Stop uses Source.next => lastStream(source)
   assert(codesOf(wrongRequirement, lowered.sources).includes("validation/003"));
 });
 
+Deno.test("drainStream validates its void result and active channels", () => {
+  const lowered = lowerText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const main = (): void fails Stop uses Source.next => drainStream(source)
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+
+  const wrongElement = copy(lowered.ir);
+  const main = wrongElement.declarations.find((d) => d.name === "main");
+  assert(main?.kind === "function" && main.body.kind === "drain-stream");
+  setAt(main, "body.type", { kind: "primitive", name: "boolean" });
+  assert(codesOf(wrongElement, lowered.sources).includes("validation/002"));
+
+  const wrongChannel = copy(lowered.ir);
+  const channel = wrongChannel.declarations.find((d) => d.name === "main");
+  assert(
+    channel?.kind === "function" && channel.body.kind === "drain-stream",
+  );
+  setAt(channel, "body.effects.failures", []);
+  assert(codesOf(wrongChannel, lowered.sources).includes("validation/003"));
+
+  const wrongRequirement = copy(lowered.ir);
+  const requirement = wrongRequirement.declarations.find((d) =>
+    d.name === "main"
+  );
+  assert(
+    requirement?.kind === "function" &&
+      requirement.body.kind === "drain-stream",
+  );
+  setAt(requirement, "body.effects.requirements", []);
+  assert(codesOf(wrongRequirement, lowered.sources).includes("validation/003"));
+});
+
 Deno.test("stream validation recomputes deferred and active channels", () => {
   const lowered = lowerText(`
 error Stop = {}

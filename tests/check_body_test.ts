@@ -916,6 +916,47 @@ const use = (): Int => lastStream()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("drainStream returns void with active source channels", () => {
+  const valid = checkText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const main = (): void fails Stop uses Source.next => drainStream(source)
+`);
+  assertEquals(codes(valid), [], messages(valid).join("\n"));
+  const main = valid.table.node(fn(valid, "m", "main").type);
+  assert(main.kind === "function");
+  assertEquals(main.execution, "effect");
+  assertEquals(shortIds(main.failures), ["Stop"]);
+  assertEquals(shortIds(main.requirements), ["Source.next"]);
+
+  const missingChannels = checkText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const main = (): void => drainStream(source)
+`);
+  assert(codes(missingChannels).includes("failure-contract/001"));
+  assert(codes(missingChannels).includes("requirement-contract/001"));
+
+  const wrongSource = checkText(`
+type Int = int
+const main = (): void => drainStream(3)
+`);
+  assert(codes(wrongSource).includes("type-mismatch/010"));
+});
+
+Deno.test("a source binding named drainStream shadows the prelude operation", () => {
+  const project = checkText(`
+type Int = int
+const drainStream = (): Int => 3
+const use = (): Int => drainStream()
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
 Deno.test("zipStreams pairs different element types and unions deferred channels", () => {
   const project = checkText(`
 error Stop = {}

@@ -54,6 +54,7 @@ export function childrenOf(expr: Expr): Expr[] {
     case "collect-stream":
     case "head-stream":
     case "last-stream":
+    case "drain-stream":
       return [expr.stream];
     case "take-stream":
       return [expr.stream, expr.count];
