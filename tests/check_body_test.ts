@@ -742,6 +742,57 @@ const use = (): Int => foldStream()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("foldEffectStream combines source and update channels", () => {
+  const valid = checkText(`
+type Int = int
+error SourceStop = {}
+error UpdateStop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails SourceStop }
+service Accum { add(total: Int, n: Int): Int fails UpdateStop }
+const source = unfold(0, (n) => Source.next(n))
+const main = (seed: Int): Int fails SourceStop | UpdateStop uses Source.next | Accum.add =>
+  foldEffectStream(source, seed, (total, n) => Accum.add(total, n))
+`);
+  assertEquals(codes(valid), [], messages(valid).join("\n"));
+  const main = valid.table.node(fn(valid, "m", "main").type);
+  assert(main.kind === "function");
+  assertEquals(main.execution, "effect");
+  assertEquals(shortIds(main.failures), ["SourceStop", "UpdateStop"]);
+  assertEquals(shortIds(main.requirements), ["Accum.add", "Source.next"]);
+
+  const pureUpdate = checkText(`
+type Int = int
+const source = unfold(0, (n): Option<[Int, Int]> => None)
+const main = (): Int => foldEffectStream(source, 0, (total, n) => total + n)
+`);
+  assertEquals(codes(pureUpdate), [], messages(pureUpdate).join("\n"));
+
+  const effectfulSeed = checkText(`
+type Int = int
+service Seed { next(): Int }
+const source = unfold(0, (n): Option<[Int, Int]> => None)
+const main = (): Int uses Seed.next =>
+  foldEffectStream(source, Seed.next(), (total, n) => total + n)
+`);
+  assert(codes(effectfulSeed).includes("execution-mode/001"));
+
+  const wrongResult = checkText(`
+type Int = int
+const source = unfold(0, (n): Option<[Int, Int]> => None)
+const main = (): Int => foldEffectStream(source, 0, (total, n) => total < n)
+`);
+  assert(codes(wrongResult).includes("type-mismatch/003"));
+});
+
+Deno.test("a source binding named foldEffectStream shadows the prelude operation", () => {
+  const project = checkText(`
+type Int = int
+const foldEffectStream = (): Int => 3
+const use = (): Int => foldEffectStream()
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
 Deno.test("zipStreams pairs different element types and unions deferred channels", () => {
   const project = checkText(`
 error Stop = {}

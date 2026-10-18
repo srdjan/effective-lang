@@ -1101,6 +1101,7 @@ export class ExprEmitter {
       case "with-resource":
       case "run-stream":
       case "fold-stream":
+      case "fold-effect-stream":
       case "make-ref":
       case "get-ref":
       case "set-ref":
@@ -1731,6 +1732,7 @@ export class ExprEmitter {
       case "with-resource":
       case "run-stream":
       case "fold-stream":
+      case "fold-effect-stream":
       case "make-ref":
       case "get-ref":
       case "set-ref":
@@ -1768,6 +1770,8 @@ export class ExprEmitter {
         return [e.stream, e.sink];
       case "fold-stream":
         return [e.stream, e.seed, e.update];
+      case "fold-effect-stream":
+        return [e.stream, e.seed];
       case "make-ref":
         return [e.value];
       case "get-ref":
@@ -2015,6 +2019,19 @@ export class ExprEmitter {
               huggable: true,
             }),
             children[2],
+          ]),
+        ]);
+      }
+      case "fold-effect-stream": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.runFoldEffect`,
+          callArguments([
+            children[0],
+            emitted(this.arrow("()", children[1]), PREC.conditional, {
+              huggable: true,
+            }),
+            this.effectCallback(e.update),
           ]),
         ]);
       }

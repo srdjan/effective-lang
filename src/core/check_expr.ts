@@ -878,6 +878,8 @@ export class BodyChecker {
         return this.mapAccumStreamCall(node, args);
       case "foldStream":
         return this.foldStreamCall(node, args);
+      case "foldEffectStream":
+        return this.foldEffectStreamCall(node, args);
       case "flatMapStreams":
         return this.flatMapStreamsCall(node, args);
       case "takeStream":
@@ -2263,6 +2265,71 @@ export class BodyChecker {
       combine([stream, seed, update.info, {
         failures: source.kind === "stream" ? source.failures : [],
         requirements: source.kind === "stream" ? source.requirements : [],
+        mode: "effect",
+      }]),
+    );
+  }
+
+  private foldEffectStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "fold-effect-stream" });
+    if (!this.arity(node, "foldEffectStream", 3, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine([...args.map((arg) => this.argInfo(arg)), EFFECT_ONLY]),
+      );
+    }
+    this.noPipeline("foldEffectStream", args);
+    this.inlineStreamCallback("foldEffectStream", args[2]);
+    const stream = this.argInfo(args[0]);
+    const seed = this.argInfo(args[1]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`foldEffectStream` needs a Stream value",
+        args[0].node,
+      );
+    }
+    if (
+      seed.mode !== "pure" || seed.failures.length > 0 ||
+      seed.requirements.length > 0
+    ) {
+      this.report(
+        "execution-mode/001",
+        "`foldEffectStream` seed must be pure",
+        args[1].node,
+      );
+    }
+    const element = source.kind === "stream"
+      ? source.element
+      : this.table.error;
+    const update = this.callback(
+      "foldEffectStream",
+      args[2],
+      [seed.type, element],
+      seed.type,
+      true,
+    );
+    this.fits(
+      args[2].node,
+      update.result,
+      seed.type,
+      "the foldEffectStream update result",
+    );
+    const fn = this.functionOf(update.info.type);
+    return this.finish(
+      node,
+      seed.type,
+      combine([stream, seed, update.info, {
+        failures: [
+          ...(source.kind === "stream" ? source.failures : []),
+          ...(fn?.failures ?? []),
+        ],
+        requirements: [
+          ...(source.kind === "stream" ? source.requirements : []),
+          ...(fn?.requirements ?? []),
+        ],
         mode: "effect",
       }]),
     );

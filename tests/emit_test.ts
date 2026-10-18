@@ -270,6 +270,20 @@ export const main = (seed: Int): Int uses Source.next =>
   assertStringIncludes(output, "total + n");
 });
 
+Deno.test("foldEffectStream emits an Effect-valued Stream.runFoldEffect callback", () => {
+  const output = oneModule(`
+type Int = int
+service Source { next(state: Int): Option<[Int, Int]> }
+service Accum { add(total: Int, n: Int): Int }
+const source = unfold(0, (state) => Source.next(state))
+export const main = (seed: Int): Int uses Source.next | Accum.add =>
+  foldEffectStream(source, seed, (total, n) => Accum.add(total, n))
+`);
+  assertStringIncludes(output, "Stream.runFoldEffect(");
+  assertStringIncludes(output, "() => seed");
+  assertStringIncludes(output, "Accum.use(");
+});
+
 Deno.test("buffered merged streams emit bounded suspending buffers", () => {
   const output = oneModule(`
 service Source { next(state: Int): Option<[Int, Int]> }

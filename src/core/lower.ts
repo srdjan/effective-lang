@@ -663,6 +663,14 @@ class BodyLowerer {
           update: arg(2),
           ...annotation,
         };
+      case "fold-effect-stream":
+        return {
+          kind: "fold-effect-stream",
+          stream: arg(0),
+          seed: arg(1),
+          update: arg(2),
+          ...annotation,
+        };
       case "flat-map-streams":
         return {
           kind: "flat-map-streams",

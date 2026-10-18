@@ -807,6 +807,45 @@ const main = (): Int fails Stop uses Source.next =>
   assert(codesOf(wrongUpdate, lowered.sources).includes("validation/002"));
 });
 
+Deno.test("foldEffectStream validates combined active channels", () => {
+  const lowered = lowerText(`
+type Int = int
+error SourceStop = {}
+error UpdateStop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails SourceStop }
+service Accum { add(total: Int, n: Int): Int fails UpdateStop }
+const source = unfold(0, (n) => Source.next(n))
+const main = (): Int fails SourceStop | UpdateStop uses Source.next | Accum.add =>
+  foldEffectStream(source, 0, (total, n) => Accum.add(total, n))
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+
+  const wrongResult = copy(lowered.ir);
+  const main = wrongResult.declarations.find((d) => d.name === "main");
+  assert(main?.kind === "function" && main.body.kind === "fold-effect-stream");
+  setAt(main, "body.type", { kind: "primitive", name: "boolean" });
+  assert(codesOf(wrongResult, lowered.sources).includes("validation/002"));
+
+  const wrongFailure = copy(lowered.ir);
+  const failure = wrongFailure.declarations.find((d) => d.name === "main");
+  assert(
+    failure?.kind === "function" && failure.body.kind === "fold-effect-stream",
+  );
+  setAt(failure, "body.effects.failures", []);
+  assert(codesOf(wrongFailure, lowered.sources).includes("validation/003"));
+
+  const wrongRequirement = copy(lowered.ir);
+  const requirement = wrongRequirement.declarations.find((d) =>
+    d.name === "main"
+  );
+  assert(
+    requirement?.kind === "function" &&
+      requirement.body.kind === "fold-effect-stream",
+  );
+  setAt(requirement, "body.effects.requirements", []);
+  assert(codesOf(wrongRequirement, lowered.sources).includes("validation/003"));
+});
+
 Deno.test("stream validation recomputes deferred and active channels", () => {
   const lowered = lowerText(`
 error Stop = {}

@@ -2012,6 +2012,132 @@ console.log(JSON.stringify({ before, first, second, emptyResult, failure: { tag:
   });
 });
 
+Deno.test("foldEffectStream runs updates sequentially and stops on failure", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "export error SourceStop = {}",
+        "export error UpdateStop = {}",
+        "export service Source { next(n: Int): Option<[Int, Int]> fails SourceStop }",
+        "export service Accum { add(total: Int, n: Int): Int fails UpdateStop }",
+        "const source = unfold(0, (n) => Source.next(n))",
+        "export const main = (seed: Int): Int fails SourceStop | UpdateStop uses Source.next | Accum.add =>",
+        "  foldEffectStream(source, seed, (total, n) => Accum.add(total, n))",
+        "export const pureMain = (seed: Int): Int fails SourceStop uses Source.next =>",
+        "  foldEffectStream(source, seed, (total, n) => total + n)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer, Option } from "effect";
+import { Accum, Source, SourceStop, UpdateStop, main, pureMain } from "./main.ts";
+
+const calls: number[] = [];
+const released: number[] = [];
+const updates: Array<[number, number]> = [];
+let empty = false;
+let failSource = false;
+let failUpdate = false;
+const SourceLive = Layer.succeed(Source)({
+  next: (n) => Effect.acquireUseRelease(
+    Effect.sync(() => { calls.push(n); return n; }),
+    () => n === 2 && failSource ? Effect.fail(new SourceStop({})) :
+      empty || n === 3 ? Effect.succeed(Option.none()) :
+      Effect.succeed(Option.some([n + 1, n + 1] as const)),
+    () => Effect.sync(() => { released.push(n); }),
+  ),
+});
+const AccumLive = Layer.succeed(Accum)({
+  add: (total, n) => Effect.sync(() => {
+    updates.push([total, n]);
+    return total + n;
+  }).pipe(Effect.flatMap((next) => failUpdate && n === 2 ?
+    Effect.fail(new UpdateStop({})) : Effect.succeed(next))),
+});
+const Live = Layer.mergeAll(SourceLive, AccumLive);
+const snapshot = () => ({
+  calls: [...calls], released: [...released], updates: [...updates],
+});
+const reset = () => {
+  calls.length = 0;
+  released.length = 0;
+  updates.length = 0;
+};
+const pending = main(10).pipe(Effect.provide(Live));
+const before = snapshot();
+const firstValue = await Effect.runPromise(pending);
+const first = { value: firstValue, ...snapshot() };
+reset();
+const secondValue = await Effect.runPromise(pending);
+const second = { value: secondValue, ...snapshot() };
+reset();
+const pureValue = await Effect.runPromise(pureMain(10).pipe(Effect.provide(SourceLive)));
+const pure = { value: pureValue, ...snapshot() };
+reset();
+empty = true;
+const emptyValue = await Effect.runPromise(main(7).pipe(Effect.provide(Live)));
+const emptyResult = { value: emptyValue, ...snapshot() };
+reset();
+empty = false;
+failSource = true;
+const sourceFailure = await Effect.runPromise(Effect.flip(main(0).pipe(Effect.provide(Live))));
+const sourceResult = { tag: sourceFailure._tag, ...snapshot() };
+reset();
+failSource = false;
+failUpdate = true;
+const updateFailure = await Effect.runPromise(Effect.flip(main(0).pipe(Effect.provide(Live))));
+console.log(JSON.stringify({ before, first, second, pure, emptyResult, sourceResult, updateResult: { tag: updateFailure._tag, ...snapshot() } }));
+`,
+    );
+    assertEquals(result, {
+      before: { calls: [], released: [], updates: [] },
+      first: {
+        value: 16,
+        calls: [0, 1, 2, 3],
+        released: [0, 1, 2, 3],
+        updates: [[10, 1], [11, 2], [13, 3]],
+      },
+      second: {
+        value: 16,
+        calls: [0, 1, 2, 3],
+        released: [0, 1, 2, 3],
+        updates: [[10, 1], [11, 2], [13, 3]],
+      },
+      pure: {
+        value: 16,
+        calls: [0, 1, 2, 3],
+        released: [0, 1, 2, 3],
+        updates: [],
+      },
+      emptyResult: {
+        value: 7,
+        calls: [0],
+        released: [0],
+        updates: [],
+      },
+      sourceResult: {
+        tag: "main#SourceStop",
+        calls: [0, 1, 2],
+        released: [0, 1, 2],
+        updates: [[0, 1], [1, 2]],
+      },
+      updateResult: {
+        tag: "main#UpdateStop",
+        calls: [0, 1],
+        released: [0, 1],
+        updates: [[0, 1], [1, 2]],
+      },
+    });
+  });
+});
+
 Deno.test("a source race interrupts its losing fiber and waits for cleanup", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

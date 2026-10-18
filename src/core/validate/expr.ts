@@ -477,6 +477,8 @@ export class BodyValidator {
         return this.mapAccumStream(e, path);
       case "fold-stream":
         return this.foldStream(e, path);
+      case "fold-effect-stream":
+        return this.foldEffectStream(e, path);
       case "flat-map-streams":
         return this.flatMapStreams(e, path);
       case "take-stream":
@@ -2210,6 +2212,7 @@ export class BodyValidator {
           case "scan-stream":
           case "map-accum-stream":
           case "fold-stream":
+          case "fold-effect-stream":
             return [e.stream, e.seed, e.update];
           case "take-stream":
             return [e.stream, e.count];
@@ -2767,6 +2770,66 @@ export class BodyValidator {
       active: combine([stream, seed, update, {
         failures: source.effects.failures,
         requirements: source.effects.requirements,
+        execution: "effect",
+      }]),
+    };
+  }
+
+  private foldEffectStream(
+    e: Extract<Expr, { kind: "fold-effect-stream" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const seed = this.check(e.seed, `${path}.seed`);
+    const update = this.check(e.update, `${path}.update`);
+    const source = unfold(this.env, stream.type);
+    const fn = asFunction(this.env, update.type);
+    if (e.update.kind !== "closure") {
+      this.add(
+        AREA.control,
+        `${path}.update`,
+        "foldEffectStream requires an inline closure",
+        e.update.span,
+      );
+    }
+    if (
+      source.kind !== "stream" || fn === undefined ||
+      fn.parameters.length !== 2 ||
+      !fits(this.env, seed.type, fn.parameters[0]) ||
+      !fits(this.env, source.element, fn.parameters[1]) ||
+      !fits(this.env, fn.result, seed.type)
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "foldEffectStream needs a Stream and a compatible state update callback",
+        e.span,
+      );
+      return this.poison();
+    }
+    if (
+      seed.execution !== "pure" || seed.failures.length > 0 ||
+      seed.requirements.length > 0
+    ) {
+      this.add(
+        AREA.execution,
+        `${path}.seed`,
+        "foldEffectStream seed must be pure",
+        e.seed.span,
+      );
+    }
+    return {
+      type: seed.type,
+      match: "exact",
+      active: combine([stream, seed, update, {
+        failures: sortedUnique([
+          ...source.effects.failures,
+          ...fn.effects.failures,
+        ]),
+        requirements: sortedUnique([
+          ...source.effects.requirements,
+          ...fn.effects.requirements,
+        ]),
         execution: "effect",
       }]),
     };
