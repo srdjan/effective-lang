@@ -247,6 +247,44 @@ const use = (): Int => concatStreams()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("flatMapStreams combines outer and inner deferred channels", () => {
+  const project = checkText(`
+error OuterStop = {}
+error InnerStop = {}
+service Outer { next(n: Int): Option<[Int, Int]> fails OuterStop }
+service Inner { next(n: Int): Option<[Text, Int]> fails InnerStop }
+type Int = int
+type Text = string
+const outer = unfold(0, (n) => Outer.next(n))
+const nested: Stream<Text, OuterStop | InnerStop, Outer.next | Inner.next> =
+  flatMapStreams(outer, (n) => unfold(n, (m) => Inner.next(m)))
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+  const invalid = checkText(`
+type Int = int
+service Outer { next(n: Int): Option<[Int, Int]> }
+const outer = unfold(0, (n) => Outer.next(n))
+const bad = flatMapStreams(outer, (n) => n + 1)
+`);
+  assert(codes(invalid).includes("type-mismatch/010"));
+  const effectful = checkText(`
+type Int = int
+service Outer { next(n: Int): Option<[Int, Int]> }
+const outer = unfold(0, (n) => Outer.next(n))
+const bad = flatMapStreams(outer, (n) => { Outer.next(n); unfold(n, (m) => Outer.next(m)) })
+`);
+  assert(codes(effectful).includes("execution-mode/001"));
+});
+
+Deno.test("a source binding named flatMapStreams shadows the prelude operation", () => {
+  const project = checkText(`
+type Int = int
+const flatMapStreams = (): Int => 3
+const use = (): Int => flatMapStreams()
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
 Deno.test("all rejects non-Effect entries and invalid concurrency", () => {
   for (
     const expression of [

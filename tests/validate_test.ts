@@ -191,6 +191,26 @@ type Text = string
   assert(codesOf(wrong, lowered.sources).includes("validation/002"));
 });
 
+Deno.test("stream flat mapping validates inner deferred channels", () => {
+  const lowered = lowerText(`
+error Stop = {}
+service Outer { next(n: Int): Option<[Int, Int]> }
+service Inner { next(n: Int): Option<[Text, Int]> fails Stop }
+const outer = unfold(0, (n) => Outer.next(n))
+const nested = flatMapStreams(outer, (n) => unfold(n, (m) => Inner.next(m)))
+type Int = int
+type Text = string
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const wrong = copy(lowered.ir);
+  const nested = wrong.declarations.find((d) => d.name === "nested");
+  assert(
+    nested?.kind === "constant" && nested.value.kind === "flat-map-streams",
+  );
+  setAt(nested, "value.type.effects.failures", []);
+  assert(codesOf(wrong, lowered.sources).includes("validation/002"));
+});
+
 Deno.test("race validates its result and deferred effect channels", () => {
   const lowered = lowerText(`
 error Stop = {}

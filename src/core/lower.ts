@@ -632,6 +632,13 @@ class BodyLowerer {
           transform: arg(1),
           ...annotation,
         };
+      case "flat-map-streams":
+        return {
+          kind: "flat-map-streams",
+          stream: arg(0),
+          transform: arg(1),
+          ...annotation,
+        };
       case "sink-for-each":
         return { kind: "sink-for-each", consume: arg(0), ...annotation };
       case "run-stream":

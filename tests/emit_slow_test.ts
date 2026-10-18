@@ -884,6 +884,94 @@ console.log(JSON.stringify({ before, success, failure: { tag: error._tag, emitte
     });
   });
 });
+Deno.test("flat mapped streams exhaust each inner stream and stop after inner failure", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "type Text = string",
+        "type State = { outer: Int, offset: Int }",
+        "export error Stop = {}",
+        "export service Outer { next(n: Int): Option<[Int, Int]> }",
+        "export service Inner { next(state: State): Option<[Text, State]> fails Stop }",
+        "export service Output { accept(value: Text): void }",
+        "const outer = unfold(0, (n) => Outer.next(n))",
+        "const nested = flatMapStreams(outer, (value) => unfold({ outer: value, offset: 0 }, (state) => Inner.next(state)))",
+        "const sink = sinkForEach((value: Text) => Output.accept(value))",
+        "export const main = (): void fails Stop uses Outer.next | Inner.next | Output.accept => runStream(nested, sink)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Deferred, Effect, Fiber, Layer, Option } from "effect";
+import { Inner, Outer, Output, Stop, main } from "./main.ts";
+const output: string[] = [];
+let outerCalls = 0;
+let firstFinished = false;
+const OuterLive = Layer.succeed(Outer)({
+  next: (n) => Effect.sync(() => {
+    if (n === 1 && !firstFinished) throw new Error("outer advanced before first inner ended");
+    outerCalls++;
+    return n === 2 ? Option.none() : Option.some([n + 1, n + 1] as const);
+  }),
+});
+const InnerSuccess = Layer.succeed(Inner)({
+  next: (state) => Effect.sync(() => {
+    if (state.offset === 2) {
+      if (state.outer === 1) firstFinished = true;
+      return Option.none();
+    }
+    return Option.some([state.outer + "." + state.offset, { ...state, offset: state.offset + 1 }] as const);
+  }),
+});
+const OutputLive = Layer.succeed(Output)({ accept: (value) => Effect.sync(() => { output.push(value); }) });
+const before = { output: [...output], outerCalls };
+await Effect.runPromise(main().pipe(Effect.provide(Layer.mergeAll(OuterLive, InnerSuccess, OutputLive))));
+const success = { output: [...output], outerCalls };
+output.length = 0;
+outerCalls = 0;
+firstFinished = false;
+const InnerFailure = Layer.succeed(Inner)({
+  next: (state) => state.outer === 1 && state.offset === 1
+    ? Effect.fail(new Stop({}))
+    : Effect.succeed(Option.some([state.outer + "." + state.offset, { ...state, offset: state.offset + 1 }] as const)),
+});
+const error = await Effect.runPromise(Effect.flip(main().pipe(Effect.provide(Layer.mergeAll(OuterLive, InnerFailure, OutputLive)))));
+const failure = { tag: error._tag, output: [...output], outerCalls };
+output.length = 0;
+outerCalls = 0;
+const ready = Deferred.makeUnsafe<void>();
+let released = 0;
+const InnerBlocked = Layer.succeed(Inner)({
+  next: (state) => state.offset === 0
+    ? Effect.succeed(Option.some([state.outer + ".0", { ...state, offset: 1 }] as const))
+    : Deferred.succeed(ready, undefined).pipe(
+      Effect.andThen(Effect.never),
+      Effect.onInterrupt(() => Effect.sync(() => { released++; })),
+    ),
+});
+await Effect.runPromise(Effect.gen(function* () {
+  const fiber = yield* Effect.forkChild(main().pipe(Effect.provide(Layer.mergeAll(OuterLive, InnerBlocked, OutputLive))));
+  yield* Deferred.await(ready);
+  yield* Fiber.interrupt(fiber);
+}));
+console.log(JSON.stringify({ before, success, failure, interrupted: { output, outerCalls, released } }));
+`,
+    );
+    assertEquals(result, {
+      before: { output: [], outerCalls: 0 },
+      success: { output: ["1.0", "1.1", "2.0", "2.1"], outerCalls: 3 },
+      failure: { tag: "main#Stop", output: ["1.0"], outerCalls: 1 },
+      interrupted: { output: ["1.0"], outerCalls: 1, released: 1 },
+    });
+  });
+});
 Deno.test("a source race interrupts its losing fiber and waits for cleanup", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

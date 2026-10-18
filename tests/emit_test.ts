@@ -145,6 +145,17 @@ type Int = int
   assertStringIncludes(output, "Stream.concat(");
 });
 
+Deno.test("flat mapped streams emit a pure Stream.flatMap callback", () => {
+  const output = oneModule(`
+service Source { next(state: Int): Option<[Int, Int]> }
+const outer = unfold(0, (state) => Source.next(state))
+const nested = flatMapStreams(outer, (value) => unfold(value, (state) => Source.next(state)))
+type Int = int
+`);
+  assertStringIncludes(output, "Stream.flatMap(");
+  assertStringIncludes(output, "Stream.unfold(");
+});
+
 Deno.test("a source race emits Effect.race and executes only when run", () => {
   const output = oneModule(`
 type Int = int
