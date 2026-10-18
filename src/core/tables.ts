@@ -137,6 +137,7 @@ export type NodeFact =
     readonly kind: "flat-map-streams";
     readonly concurrency: number | "unbounded" | undefined;
   }
+  | { readonly kind: "switch-map-streams" }
   | { readonly kind: "take-stream" }
   | { readonly kind: "drop-stream" }
   | { readonly kind: "drop-while-stream" }

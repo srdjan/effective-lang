@@ -40,6 +40,8 @@ Collection literals use brackets: `[1, 2]` infers an array, while an expected tu
 
 `flatMapStreams(source, callback, options?)` takes an inline pure callback that returns a Stream for each source element. Without options it exhausts each inner stream in source order. The optional `{ concurrency: N }` or `{ concurrency: "unbounded" }` runs inner streams together and merges their outputs as they arrive. It combines the outer and inner deferred channels; failure and interruption close active inner streams.
 
+`switchMapStreams(source, callback)` takes an inline pure callback that returns an inner Stream for each source element. A new source element interrupts the previous inner stream and starts the latest one. Values already emitted remain; source and inner failures and requirements stay deferred until consumption.
+
 `takeStream(stream, count)` keeps up to the first `count` elements. A pure `Int` count may be dynamic; zero or a negative count yields an empty stream without pulling the source. The stream's deferred failures and requirements remain in its type.
 
 `takeWhileStream(stream, predicate)` keeps the longest prefix accepted by an inline pure boolean predicate. It consumes but omits the first rejected element, stops further pulls, and preserves the stream's deferred channels. Upstream work is closed when the prefix ends.

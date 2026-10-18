@@ -141,6 +141,7 @@ export type Expr =
   | Node<{ kind: "last-stream"; stream: Expr }>
   | Node<{ kind: "drain-stream"; stream: Expr }>
   | Node<{ kind: "flat-map-streams"; stream: Expr; transform: Expr; concurrency: number | "unbounded" | undefined }>
+  | Node<{ kind: "switch-map-streams"; stream: Expr; transform: Expr }>
   | Node<{ kind: "take-stream"; stream: Expr; count: Expr }>
   | Node<{ kind: "drop-stream"; stream: Expr; count: Expr }>
   | Node<{ kind: "drop-while-stream"; stream: Expr; predicate: Expr }>

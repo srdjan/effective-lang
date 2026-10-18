@@ -907,6 +907,13 @@ export class ExprEmitter {
           ]),
         ]);
       }
+      case "switch-map-streams": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.switchMap`,
+          callArguments([kid(e.stream), this.callback(e.transform, kid)]),
+        ]);
+      }
       case "take-stream": {
         const stream = this.scope.effect("Stream");
         return emitted([

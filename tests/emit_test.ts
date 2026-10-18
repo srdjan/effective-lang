@@ -375,6 +375,16 @@ type Int = int
   assertStringIncludes(output, "Stream.unfold(");
 });
 
+Deno.test("switchMapStreams emits Stream.switchMap", () => {
+  const output = oneModule(`
+type Int = int
+service Source { next(n: Int): Option<[Int, Int]> }
+const outer = unfold(0, (n) => Source.next(n))
+const switched = switchMapStreams(outer, (n) => unfold(n, (m) => Source.next(m)))
+`);
+  assertStringIncludes(output, "Stream.switchMap(");
+});
+
 Deno.test("concurrent stream mapping emits pinned concurrency options", () => {
   const output = oneModule(`
 type Int = int

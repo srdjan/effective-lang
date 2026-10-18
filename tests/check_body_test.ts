@@ -1051,6 +1051,33 @@ const use = (): Int => flatMapStreams()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("switchMapStreams combines outer and inner deferred channels", () => {
+  const valid = checkText(`
+type Int = int
+error OuterStop = {}
+error InnerStop = {}
+service Outer { next(n: Int): Option<[Int, Int]> fails OuterStop }
+service Inner { next(n: Int): Option<[Int, Int]> fails InnerStop }
+const outer = unfold(0, (n) => Outer.next(n))
+const switched = switchMapStreams(outer, (n) => unfold(n, (m) => Inner.next(m)))
+const main = (): Int[] fails OuterStop | InnerStop uses Outer.next | Inner.next => collectStream(switched)
+`);
+  assertEquals(codes(valid), [], messages(valid).join("\n"));
+  const bad = checkText(`
+type Int = int
+service Outer { next(n: Int): Option<[Int, Int]> }
+const outer = unfold(0, (n) => Outer.next(n))
+const switched = switchMapStreams(outer, (n) => n)
+`);
+  assert(codes(bad).includes("type-mismatch/010"));
+  const shadow = checkText(`
+type Int = int
+const switchMapStreams = (): Int => 3
+const use = (): Int => switchMapStreams()
+`);
+  assertEquals(codes(shadow), [], messages(shadow).join("\n"));
+});
+
 Deno.test("stream mapping accepts literal concurrency and rejects invalid bounds", () => {
   const valid = checkText(`
 type Int = int

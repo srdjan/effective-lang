@@ -890,6 +890,8 @@ export class BodyChecker {
         return this.drainStreamCall(node, args);
       case "flatMapStreams":
         return this.flatMapStreamsCall(node, args);
+      case "switchMapStreams":
+        return this.switchMapStreamsCall(node, args);
       case "takeStream":
         return this.takeStreamCall(node, args);
       case "dropStream":
@@ -2593,6 +2595,57 @@ export class BodyChecker {
         ...(args[2] === undefined ? [] : [this.argInfo(args[2])]),
       ]),
     );
+  }
+
+  private switchMapStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    if (!this.arity(node, "switchMapStreams", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.fact(node, { kind: "switch-map-streams" });
+    this.noPipeline("switchMapStreams", args);
+    this.inlineStreamCallback("switchMapStreams", args[1]);
+    const stream = this.argInfo(args[0]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`switchMapStreams` needs a Stream value",
+        args[0].node,
+      );
+    }
+    const element = source.kind === "stream"
+      ? source.element
+      : this.table.error;
+    const transform = this.callback(
+      "switchMapStreams",
+      args[1],
+      [element],
+      undefined,
+    );
+    const inner = this.table.node(this.table.unfold(transform.result));
+    if (inner.kind !== "stream" && !this.isError(transform.result)) {
+      this.report(
+        "type-mismatch/010",
+        "`switchMapStreams` callback must return a Stream value",
+        args[1].node,
+      );
+    }
+    const type = this.table.stream(
+      inner.kind === "stream" ? inner.element : this.table.error,
+      [
+        ...(source.kind === "stream" ? source.failures : []),
+        ...(inner.kind === "stream" ? inner.failures : []),
+      ],
+      [
+        ...(source.kind === "stream" ? source.requirements : []),
+        ...(inner.kind === "stream" ? inner.requirements : []),
+      ],
+    );
+    return this.finish(node, type, combine([stream, transform.info]));
   }
 
   private takeStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {

@@ -70,6 +70,7 @@ export type PreludeName =
   | "zipStreams"
   | "concatStreams"
   | "flatMapStreams"
+  | "switchMapStreams"
   | "takeStream"
   | "dropStream"
   | "dropWhileStream"
@@ -133,6 +134,7 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "zipStreams",
   "concatStreams",
   "flatMapStreams",
+  "switchMapStreams",
   "takeStream",
   "dropStream",
   "dropWhileStream",
@@ -424,6 +426,7 @@ class Resolver {
         name !== "allResults" &&
         name !== "scoped" && name !== "forkScoped" && name !== "zipStreams" &&
         name !== "concatStreams" && name !== "flatMapStreams" &&
+        name !== "switchMapStreams" &&
         name !== "takeStream" && name !== "dropStream" &&
         name !== "dropWhileStream" && name !== "filterStream" &&
         name !== "filterEffectStream" &&
@@ -589,6 +592,7 @@ class Resolver {
       name !== "allResults" &&
       name !== "scoped" && name !== "forkScoped" && name !== "zipStreams" &&
       name !== "concatStreams" && name !== "flatMapStreams" &&
+      name !== "switchMapStreams" &&
       name !== "takeStream" && name !== "dropStream" &&
       name !== "dropWhileStream" && name !== "filterStream" &&
       name !== "filterEffectStream" &&

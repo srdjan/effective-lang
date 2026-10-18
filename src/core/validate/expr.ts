@@ -489,6 +489,8 @@ export class BodyValidator {
         return this.drainStream(e, path);
       case "flat-map-streams":
         return this.flatMapStreams(e, path);
+      case "switch-map-streams":
+        return this.switchMapStreams(e, path);
       case "take-stream":
         return this.takeStream(e, path);
       case "drop-stream":
@@ -2221,6 +2223,7 @@ export class BodyValidator {
           case "map-effect":
           case "map-stream":
           case "flat-map-streams":
+          case "switch-map-streams":
             return [e.stream, e.transform];
           case "scan-stream":
           case "map-accum-stream":
@@ -3011,6 +3014,58 @@ export class BodyValidator {
         AREA.types,
         path,
         "flatMapStreams needs a Stream and a pure callback returning a Stream",
+        e.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: {
+        kind: "stream",
+        element: inner.element,
+        effects: {
+          failures: sortedUnique([
+            ...source.effects.failures,
+            ...inner.effects.failures,
+          ]),
+          requirements: sortedUnique([
+            ...source.effects.requirements,
+            ...inner.effects.requirements,
+          ]),
+        },
+      },
+      match: "exact",
+      active: combine([stream, transform]),
+    };
+  }
+
+  private switchMapStreams(
+    e: Extract<Expr, { kind: "switch-map-streams" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const transform = this.check(e.transform, `${path}.transform`);
+    const source = unfold(this.env, stream.type);
+    const fn = asFunction(this.env, transform.type);
+    if (e.transform.kind !== "closure") {
+      this.add(
+        AREA.control,
+        `${path}.transform`,
+        "switchMapStreams requires an inline closure",
+        e.transform.span,
+      );
+    }
+    const inner = fn === undefined ? undefined : unfold(this.env, fn.result);
+    if (
+      source.kind !== "stream" || fn === undefined ||
+      fn.parameters.length !== 1 ||
+      !fits(this.env, source.element, fn.parameters[0]) ||
+      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
+      fn.effects.requirements.length > 0 || inner?.kind !== "stream"
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "switchMapStreams needs a Stream and a pure callback returning a Stream",
         e.span,
       );
       return this.poison();

@@ -781,6 +781,90 @@ console.log(JSON.stringify({ pair, named, items, started }));
   });
 });
 
+Deno.test("switchMapStreams interrupts superseded inners and waits for cleanup", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "export error Stop = {}",
+        "export service Outer { next(n: Int): Option<[Int, Int]> fails Stop }",
+        "export service Inner { next(n: Int): Option<[Int, Int]> }",
+        "const outer = unfold(0, (n) => Outer.next(n))",
+        "const switched = switchMapStreams(outer, (n) => unfold(n, (m) => Inner.next(m)))",
+        "export const main = (): Int[] fails Stop uses Outer.next | Inner.next => collectStream(switched)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Deferred, Effect, Layer, Option } from "effect";
+import { Outer, Inner, Stop, main } from "./main.ts";
+
+let ready = [Deferred.makeUnsafe<void>(), Deferred.makeUnsafe<void>()];
+let failOuter = false;
+const outerCalls: number[] = [];
+const started: number[] = [];
+const released: number[] = [];
+const OuterLive = Layer.succeed(Outer)({
+  next: (n) => Effect.sync(() => { outerCalls.push(n); }).pipe(
+    Effect.flatMap(() => n === 0
+      ? Effect.succeed(Option.some([1, 1] as const))
+      : n === 1
+      ? Deferred.await(ready[0]!).pipe(Effect.as(Option.some([2, 2] as const)))
+      : n === 2
+      ? Deferred.await(ready[1]!).pipe(Effect.flatMap(() => failOuter
+        ? Effect.fail(new Stop({}))
+        : Effect.succeed(Option.some([3, 3] as const))))
+      : Effect.succeed(Option.none())),
+  ),
+});
+const InnerLive = Layer.succeed(Inner)({
+  next: (n) => n > 3 ? Effect.succeed(Option.none()) :
+    n === 3 ? Effect.sync(() => { started.push(n); return Option.some([n, n + 100] as const); }) :
+    Effect.sync(() => { started.push(n); }).pipe(
+      Effect.andThen(Deferred.succeed(ready[n - 1]!, undefined)),
+      Effect.andThen(Effect.never),
+      Effect.onInterrupt(() => Effect.sync(() => { released.push(n); })),
+    ),
+});
+const Live = Layer.merge(OuterLive, InnerLive);
+const pending = main().pipe(Effect.provide(Live));
+const before = { outerCalls: [...outerCalls], started: [...started] };
+const values = await Effect.runPromise(pending);
+const success = { values, outerCalls: [...outerCalls], started: [...started], released: [...released] };
+ready = [Deferred.makeUnsafe<void>(), Deferred.makeUnsafe<void>()];
+outerCalls.length = 0;
+started.length = 0;
+released.length = 0;
+failOuter = true;
+const error = await Effect.runPromise(Effect.flip(pending));
+const failure = { tag: error._tag, outerCalls: [...outerCalls], started: [...started], released: [...released] };
+console.log(JSON.stringify({ before, success, failure }));
+`,
+    );
+    assertEquals(result, {
+      before: { outerCalls: [], started: [] },
+      success: {
+        values: [3],
+        outerCalls: [0, 1, 2, 3],
+        started: [1, 2, 3],
+        released: [1, 2],
+      },
+      failure: {
+        tag: "main#Stop",
+        outerCalls: [0, 1, 2],
+        started: [1, 2],
+        released: [1, 2],
+      },
+    });
+  });
+});
+
 Deno.test("concurrent stream mapping bounds work and closes failed siblings", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

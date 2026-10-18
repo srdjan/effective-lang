@@ -1008,6 +1008,40 @@ const nested = flatMapStreams(source, (n) => unfold(n, (m) => Source.next(m)), {
   }
 });
 
+Deno.test("switchMapStreams validates inner deferred channels", () => {
+  const lowered = lowerText(`
+type Int = int
+error Stop = {}
+service Outer { next(n: Int): Option<[Int, Int]> }
+service Inner { next(n: Int): Option<[Int, Int]> fails Stop }
+const outer = unfold(0, (n) => Outer.next(n))
+const switched = switchMapStreams(outer, (n) => unfold(n, (m) => Inner.next(m)))
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const wrongFailures = copy(lowered.ir);
+  const switched = wrongFailures.declarations.find((d) =>
+    d.name === "switched"
+  );
+  assert(
+    switched?.kind === "constant" &&
+      switched.value.kind === "switch-map-streams",
+  );
+  setAt(switched, "value.type.effects.failures", []);
+  assert(codesOf(wrongFailures, lowered.sources).includes("validation/002"));
+  const wrongRequirements = copy(lowered.ir);
+  const requirement = wrongRequirements.declarations.find((d) =>
+    d.name === "switched"
+  );
+  assert(
+    requirement?.kind === "constant" &&
+      requirement.value.kind === "switch-map-streams",
+  );
+  setAt(requirement, "value.type.effects.requirements", []);
+  assert(
+    codesOf(wrongRequirements, lowered.sources).includes("validation/002"),
+  );
+});
+
 Deno.test("effectful stream predicates validate combined deferred channels", () => {
   for (
     const [operation, kind] of [

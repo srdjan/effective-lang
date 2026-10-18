@@ -688,6 +688,13 @@ class BodyLowerer {
           concurrency: fact.concurrency,
           ...annotation,
         };
+      case "switch-map-streams":
+        return {
+          kind: "switch-map-streams",
+          stream: arg(0),
+          transform: arg(1),
+          ...annotation,
+        };
       case "take-stream":
         return {
           kind: "take-stream",
