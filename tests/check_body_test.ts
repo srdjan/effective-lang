@@ -627,6 +627,60 @@ const use = (): Int => scanStream()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("mapAccumStream threads state and infers emitted values", () => {
+  const valid = checkText(`
+type Int = int
+type Bool = boolean
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const mapped: Stream<Bool, Stop, Source.next> =
+  mapAccumStream(source, 0, (total, n): [Int, Bool[]] =>
+    [total + n, if (n < 2) { [] } else { [total < n, n < 4] }])
+`);
+  assertEquals(codes(valid), [], messages(valid).join("\n"));
+
+  const noResultType = checkText(`
+type Int = int
+const source = unfold(0, (n): Option<[Int, Int]> => None)
+const bad = mapAccumStream(source, 0, (total, n) => [total + n, [n]])
+`);
+  assert(codes(noResultType).includes("type-mismatch/011"));
+
+  const wrongState = checkText(`
+type Int = int
+type Bool = boolean
+const source = unfold(0, (n): Option<[Int, Int]> => None)
+const bad = mapAccumStream(source, 0, (total, n): [Bool, Int[]] => [true, [n]])
+`);
+  assert(codes(wrongState).includes("type-mismatch/003"));
+
+  const effectfulUpdate = checkText(`
+type Int = int
+service Probe { next(n: Int): Int }
+const source = unfold(0, (n): Option<[Int, Int]> => None)
+const bad = mapAccumStream(source, 0, (total, n): [Int, Int[]] => [Probe.next(total), [n]])
+`);
+  assert(codes(effectfulUpdate).includes("execution-mode/001"));
+
+  const effectfulSeed = checkText(`
+type Int = int
+service Seed { next(): Int }
+const source = unfold(0, (n): Option<[Int, Int]> => None)
+const bad = mapAccumStream(source, Seed.next(), (total, n): [Int, Int[]] => [total + n, [n]])
+`);
+  assert(codes(effectfulSeed).includes("execution-mode/001"));
+});
+
+Deno.test("a source binding named mapAccumStream shadows the prelude operation", () => {
+  const project = checkText(`
+type Int = int
+const mapAccumStream = (): Int => 3
+const use = (): Int => mapAccumStream()
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
 Deno.test("zipStreams pairs different element types and unions deferred channels", () => {
   const project = checkText(`
 error Stop = {}

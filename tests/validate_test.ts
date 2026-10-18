@@ -734,6 +734,46 @@ const scanned: Stream<Int, Stop, Source.next> =
   assert(codesOf(wrongUpdate, lowered.sources).includes("validation/002"));
 });
 
+Deno.test("mapAccumStream validates state, outputs, and deferred channels", () => {
+  const lowered = lowerText(`
+type Int = int
+type Bool = boolean
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const mapped: Stream<Bool, Stop, Source.next> =
+  mapAccumStream(source, 0, (total, n): [Int, Bool[]] => [total + n, [n < 3]])
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+
+  const wrongElement = copy(lowered.ir);
+  const mapped = wrongElement.declarations.find((d) => d.name === "mapped");
+  assert(
+    mapped?.kind === "constant" && mapped.value.kind === "map-accum-stream",
+  );
+  setAt(mapped, "value.type.element", { kind: "primitive", name: "int" });
+  assert(codesOf(wrongElement, lowered.sources).includes("validation/002"));
+
+  const wrongChannel = copy(lowered.ir);
+  const channel = wrongChannel.declarations.find((d) => d.name === "mapped");
+  assert(
+    channel?.kind === "constant" && channel.value.kind === "map-accum-stream",
+  );
+  setAt(channel, "value.type.effects.failures", []);
+  assert(codesOf(wrongChannel, lowered.sources).includes("validation/002"));
+
+  const wrongUpdate = copy(lowered.ir);
+  const update = wrongUpdate.declarations.find((d) => d.name === "mapped");
+  assert(
+    update?.kind === "constant" && update.value.kind === "map-accum-stream",
+  );
+  setAt(update, "value.update.type.result", {
+    kind: "primitive",
+    name: "boolean",
+  });
+  assert(codesOf(wrongUpdate, lowered.sources).includes("validation/002"));
+});
+
 Deno.test("stream validation recomputes deferred and active channels", () => {
   const lowered = lowerText(`
 error Stop = {}

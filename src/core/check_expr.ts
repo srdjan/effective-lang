@@ -874,6 +874,8 @@ export class BodyChecker {
         return this.mapStreamCall(node, args);
       case "scanStream":
         return this.scanStreamCall(node, args);
+      case "mapAccumStream":
+        return this.mapAccumStreamCall(node, args);
       case "flatMapStreams":
         return this.flatMapStreamsCall(node, args);
       case "takeStream":
@@ -2126,6 +2128,81 @@ export class BodyChecker {
     );
     const type = this.table.stream(
       seed.type,
+      source.kind === "stream" ? source.failures : [],
+      source.kind === "stream" ? source.requirements : [],
+    );
+    return this.finish(node, type, combine([stream, seed, update.info]));
+  }
+
+  private mapAccumStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "map-accum-stream" });
+    if (!this.arity(node, "mapAccumStream", 3, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.noPipeline("mapAccumStream", args);
+    this.inlineStreamCallback("mapAccumStream", args[2]);
+    if (
+      kindOf(this.tree, args[2].node) === SyntaxKind.ArrowExpr &&
+      !this.kids(args[2].node).some((kid) => isTypeKind(kindOf(this.tree, kid)))
+    ) {
+      this.report(
+        "type-mismatch/011",
+        "`mapAccumStream` callback needs an explicit [State, Output[]] result type",
+        args[2].node,
+      );
+    }
+    const stream = this.argInfo(args[0]);
+    const seed = this.argInfo(args[1]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`mapAccumStream` needs a Stream value",
+        args[0].node,
+      );
+    }
+    if (
+      seed.mode !== "pure" || seed.failures.length > 0 ||
+      seed.requirements.length > 0
+    ) {
+      this.report(
+        "execution-mode/001",
+        "`mapAccumStream` seed must be pure",
+        args[1].node,
+      );
+    }
+    const element = source.kind === "stream"
+      ? source.element
+      : this.table.error;
+    const update = this.callback(
+      "mapAccumStream",
+      args[2],
+      [seed.type, element],
+      undefined,
+    );
+    const result = this.table.node(this.table.unfold(update.result));
+    const state = result.kind === "tuple" && result.elements.length === 2
+      ? result.elements[0]
+      : this.table.error;
+    const outputs = result.kind === "tuple" && result.elements.length === 2
+      ? this.table.node(this.table.unfold(result.elements[1]))
+      : undefined;
+    if (
+      result.kind !== "tuple" || result.elements.length !== 2 ||
+      !this.table.isAssignable(state, seed.type) || outputs?.kind !== "array"
+    ) {
+      this.report(
+        "type-mismatch/003",
+        "`mapAccumStream` callback must return [State, Output[]]",
+        args[2].node,
+      );
+    }
+    const type = this.table.stream(
+      outputs?.kind === "array" ? outputs.element : this.table.error,
       source.kind === "stream" ? source.failures : [],
       source.kind === "stream" ? source.requirements : [],
     );

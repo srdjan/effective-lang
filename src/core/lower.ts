@@ -647,6 +647,14 @@ class BodyLowerer {
           update: arg(2),
           ...annotation,
         };
+      case "map-accum-stream":
+        return {
+          kind: "map-accum-stream",
+          stream: arg(0),
+          seed: arg(1),
+          update: arg(2),
+          ...annotation,
+        };
       case "flat-map-streams":
         return {
           kind: "flat-map-streams",

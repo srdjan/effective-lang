@@ -867,6 +867,19 @@ export class ExprEmitter {
           ]),
         ]);
       }
+      case "map-accum-stream": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.mapAccum`,
+          callArguments([
+            kid(e.stream),
+            emitted(this.arrow("()", kid(e.seed)), PREC.conditional, {
+              huggable: true,
+            }),
+            this.callback(e.update, kid),
+          ]),
+        ]);
+      }
       case "flat-map-streams": {
         const stream = this.scope.effect("Stream");
         return emitted([

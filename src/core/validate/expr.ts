@@ -473,6 +473,8 @@ export class BodyValidator {
         return this.mapStream(e, path);
       case "scan-stream":
         return this.scanStream(e, path);
+      case "map-accum-stream":
+        return this.mapAccumStream(e, path);
       case "flat-map-streams":
         return this.flatMapStreams(e, path);
       case "take-stream":
@@ -2204,6 +2206,7 @@ export class BodyValidator {
           case "flat-map-streams":
             return [e.stream, e.transform];
           case "scan-stream":
+          case "map-accum-stream":
             return [e.stream, e.seed, e.update];
           case "take-stream":
             return [e.stream, e.count];
@@ -2639,6 +2642,70 @@ export class BodyValidator {
       type: {
         kind: "stream",
         element: seed.type,
+        effects: source.effects,
+      },
+      match: "exact",
+      active: combine([stream, seed, update]),
+    };
+  }
+
+  private mapAccumStream(
+    e: Extract<Expr, { kind: "map-accum-stream" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const seed = this.check(e.seed, `${path}.seed`);
+    const update = this.check(e.update, `${path}.update`);
+    const source = unfold(this.env, stream.type);
+    const fn = asFunction(this.env, update.type);
+    if (e.update.kind !== "closure") {
+      this.add(
+        AREA.control,
+        `${path}.update`,
+        "mapAccumStream requires an inline closure",
+        e.update.span,
+      );
+    }
+    const result = fn === undefined ? undefined : unfold(this.env, fn.result);
+    const state = result?.kind === "tuple" && result.elements.length === 2
+      ? result.elements[0]
+      : undefined;
+    const output = result?.kind === "tuple" && result.elements.length === 2
+      ? unfold(this.env, result.elements[1])
+      : undefined;
+    if (
+      source.kind !== "stream" || fn === undefined ||
+      fn.parameters.length !== 2 ||
+      !fits(this.env, seed.type, fn.parameters[0]) ||
+      !fits(this.env, source.element, fn.parameters[1]) ||
+      state === undefined || !fits(this.env, state, seed.type) ||
+      output?.kind !== "array" ||
+      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
+      fn.effects.requirements.length > 0
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "mapAccumStream needs a Stream and a pure callback returning [State, Output[]]",
+        e.span,
+      );
+      return this.poison();
+    }
+    if (
+      seed.execution !== "pure" || seed.failures.length > 0 ||
+      seed.requirements.length > 0
+    ) {
+      this.add(
+        AREA.execution,
+        `${path}.seed`,
+        "mapAccumStream seed must be pure",
+        e.seed.span,
+      );
+    }
+    return {
+      type: {
+        kind: "stream",
+        element: output.element,
         effects: source.effects,
       },
       match: "exact",

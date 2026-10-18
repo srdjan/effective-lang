@@ -243,6 +243,20 @@ export const result: Stream<Int, never, Source.next> =
   assertStringIncludes(scanned, "total + n");
 });
 
+Deno.test("mapAccumStream emits Stream.mapAccum with a lazy seed", () => {
+  const output = oneModule(`
+type Int = int
+type Bool = boolean
+service Source { next(state: Int): Option<[Int, Int]> }
+const source = unfold(0, (state) => Source.next(state))
+export const result: Stream<Bool, never, Source.next> =
+  mapAccumStream(source, 0, (total, n): [Int, Bool[]] => [total + n, [n < 3]])
+`);
+  assertStringIncludes(output, "Stream.mapAccum(");
+  assertStringIncludes(output, "() => 0");
+  assertStringIncludes(output, "total + n");
+});
+
 Deno.test("buffered merged streams emit bounded suspending buffers", () => {
   const output = oneModule(`
 service Source { next(state: Int): Option<[Int, Int]> }

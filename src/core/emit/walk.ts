@@ -47,6 +47,7 @@ export function childrenOf(expr: Expr): Expr[] {
     case "flat-map-streams":
       return [expr.stream, expr.transform];
     case "scan-stream":
+    case "map-accum-stream":
       return [expr.stream, expr.seed, expr.update];
     case "take-stream":
       return [expr.stream, expr.count];

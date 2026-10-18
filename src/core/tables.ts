@@ -123,6 +123,7 @@ export type NodeFact =
   | { readonly kind: "map-effect" }
   | { readonly kind: "map-stream" }
   | { readonly kind: "scan-stream" }
+  | { readonly kind: "map-accum-stream" }
   | { readonly kind: "flat-map-streams" }
   | { readonly kind: "take-stream" }
   | { readonly kind: "drop-stream" }
