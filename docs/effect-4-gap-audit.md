@@ -368,10 +368,61 @@ part of broader Effect API parity. They need additional source rules or a
 separate expressiveness witness. This follow-up does not claim every Effect
 Stream export.
 
+## General concurrency and scope disposition
+
+The [explicit Scope investigation](plans/2026-10-18-explicit-scope-design.md)
+now has a pinned Effect 4.0.5 witness and compiler probes. A lexical create/close
+lifetime is expressible with `scoped` and `forkScoped`: the emitted source
+records startup, body, completed release, then continuation after close.
+`withResource` similarly handles a lexical acquisition/use/release bracket.
+
+The stronger witness returns a live raw scope from one root execution and
+closes it in a later root execution, waiting for the child's finalizer.
+Current source cannot return equivalent scope or borrowed Fiber authority;
+unscoped `forkScoped` is rejected for its reserved requirement. Raw Scope
+composition therefore remains a native gap. The investigation records the
+diagnostics, equivalent-program boundary, and proposed operational rule for
+scope identity, transfer, explicit close Exit, finalizer completion, and
+abandonment before implementation. It also verifies that providing a scope
+alone does not interrupt ordinary work when that scope closes.
+
+Seven target tests and two compiler/runtime probe tests pass. This is a
+disposition of the raw Scope witness, not a claim of general concurrency parity.
+
+## General Stream and Schedule disposition
+
+The [general Stream/Schedule investigation](plans/2026-10-18-general-stream-schedule-design.md)
+adds six target tests and two compiler/runtime probes. A tagged end-marker
+composition with existing stream forms matches the selected external-stop
+cases, including interruption of a pending pull and cleanup of the signal on
+source completion. A fixed combined retry-delay policy also fits the current
+pure `RetrySchedule` callback. These witnesses do not select new builtins.
+
+Keyed live substreams, arbitrary Sink leftovers, and general Schedule values
+remain uncovered native contracts. The investigation records target behavior,
+source diagnostics, equivalent-program limits, and the lifetime/type rules
+needed before implementation. In particular, current source Sink types fix
+the target leftover channel to `never`, rejecting a target `Sink.take(2)`.
+
+The investigation also found an existing compiler defect:
+[inline `Some([record, state])`](plans/stream-schedule-probes/inline-marker.eff)
+passes source checking and IR validation but widens to an array in emitted
+TypeScript, failing strict target checking with `TS2375`. An explicitly typed
+tuple binding allows the working composition. The probe retains both cases;
+repairing the inline case needs no new source rule.
+
 ## Remaining investigation queue
 
-1. **General concurrency and scope.** Compare raw `Scope` composition with the scoped fiber source forms. `Effect.all` discard mode can be expressed by calling `all` and ignoring its result in a block. Keep cancellation and finalizer behavior explicit.
-2. **General stream and Schedule APIs.** Investigate additional operators beyond the completed native stream follow-up, especially keyed grouping, aggregation, custom interruption, and general Schedule composition. Require an expressiveness witness and a source rule before adding each form.
-3. **Schema and ecosystem APIs.** Test effectful transformations, recursive schemas, and representative HTTP, SQL, RPC, AI, and observability objects through typed adapters. Preserve failures, requirements, and scoped lifetimes.
+1. **Schema and ecosystem APIs.** Test effectful transformations, recursive schemas, and representative HTTP, SQL, RPC, AI, and observability objects through typed adapters. Preserve failures, requirements, and scoped lifetimes.
+
+The raw Scope investigation above is complete; implementation remains gated on
+a source ownership/transfer decision. Other general concurrency APIs need their
+own witnesses before any parity claim. `Effect.all` discard mode remains
+expressible by calling `all` and ignoring its result in a block.
+
+The representative general Stream/Schedule investigation is complete. New
+grouping, aggregation, or Schedule forms still require the source decisions
+recorded above; this is not full API parity. The contextual tuple emission
+defect is a separate compiler repair follow-up.
 
 For each item, record a minimal `.eff` or TypeScript witness, the observed compiler phase and diagnostic (or emitted output), an equivalent-program argument, and a disposition. This audit did not execute external HTTP, SQL, RPC, AI, or telemetry services.

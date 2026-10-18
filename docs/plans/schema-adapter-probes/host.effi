@@ -1,0 +1,10 @@
+import { Operations, Policy, Int, Text, AdapterError } from "./contracts.eff"
+export provider AdapterLive provides Operations fails AdapterError uses Policy.allow
+
+export opaque type Session
+export service Cursor {
+  open(): Session
+  push(borrow session: Session, chunk: Text): Int fails AdapterError
+  close(borrow session: Session): void
+}
+export provider CursorLive provides Cursor

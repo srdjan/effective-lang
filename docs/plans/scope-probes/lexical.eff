@@ -1,0 +1,12 @@
+export service Child { run(): void; wait(): void }
+export service Trace { record(value: Text): void }
+type Text = string
+
+export const main = (): void uses Child.run | Child.wait | Trace.record => {
+  scoped(defer(() => {
+    forkScoped(defer(() => Child.run()))
+    Child.wait()
+    Trace.record("body")
+  }))
+  Trace.record("closed")
+}

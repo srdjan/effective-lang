@@ -1,0 +1,31 @@
+import { Operations, Policy, Int, Text, AdapterError } from "./contracts.eff"
+import { AdapterLive, CursorLive, Cursor, Session } from "host:adapter"
+
+const checkedInt: Codec<Int, Int> = codec((value: Int): Int => value, (value: Int): Int => value)
+const resolve = (input: unknown): Int fails AdapterError uses Operations.lookup =>
+  match decode(checkedInt, input) {
+    Some(value) => Operations.lookup(value),
+    None => fail(AdapterError({ operation: "decode" }))
+  }
+
+export const decodeLookup = (input: unknown): Int fails AdapterError uses Policy.allow =>
+  provide(AdapterLive, () => resolve(input))
+export const http = (body: Text): Int fails AdapterError uses Policy.allow =>
+  provide(AdapterLive, () => Operations.http(body))
+export const sql = (mode: Text): Int fails AdapterError uses Policy.allow =>
+  provide(AdapterLive, () => Operations.sql(mode))
+export const rpc = (body: Text): Int fails AdapterError uses Policy.allow =>
+  provide(AdapterLive, () => Operations.rpc(body))
+export const ai = (prompt: Text): Text fails AdapterError uses Policy.allow =>
+  provide(AdapterLive, () => Operations.ai(prompt))
+export const metric = (): Int fails AdapterError uses Policy.allow =>
+  provide(AdapterLive, () => Operations.metric())
+
+const push = (borrow session: Session, chunk: Text): Int fails AdapterError uses Cursor.push =>
+  Cursor.push(session, chunk)
+export const cursor = (chunk: Text): Int fails AdapterError =>
+  provide(CursorLive, () => withResource(
+    () => Cursor.open(),
+    (session) => push(session, chunk),
+    (session) => Cursor.close(session),
+  ))
