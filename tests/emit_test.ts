@@ -216,6 +216,20 @@ export const prefix: Stream<Int, never, Source.next> =
   assertStringIncludes(output, ") => n < 3");
 });
 
+Deno.test("mapStream emits pure Stream.map with a changed element type", () => {
+  const output = oneModule(`
+type Int = int
+type Bool = boolean
+service Source { next(state: Int): Option<[Int, Int]> }
+const source = unfold(0, (state) => Source.next(state))
+export const mapped: Stream<Bool, never, Source.next> =
+  mapStream(source, (n) => n < 3)
+`);
+  assertStringIncludes(output, "Stream.map(");
+  assertStringIncludes(output, ") => n < 3");
+  assertStringIncludes(output, "Stream.Stream<Bool, never, Source>");
+});
+
 Deno.test("buffered merged streams emit bounded suspending buffers", () => {
   const output = oneModule(`
 service Source { next(state: Int): Option<[Int, Int]> }

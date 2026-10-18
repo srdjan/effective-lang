@@ -43,6 +43,7 @@ export function childrenOf(expr: Expr): Expr[] {
     case "unfold":
       return [expr.seed, expr.next];
     case "map-effect":
+    case "map-stream":
     case "flat-map-streams":
       return [expr.stream, expr.transform];
     case "take-stream":

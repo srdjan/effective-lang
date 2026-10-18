@@ -870,6 +870,8 @@ export class BodyChecker {
         return this.unfoldCall(node, args);
       case "mapEffect":
         return this.mapEffectCall(node, args);
+      case "mapStream":
+        return this.mapStreamCall(node, args);
       case "flatMapStreams":
         return this.flatMapStreamsCall(node, args);
       case "takeStream":
@@ -2033,6 +2035,43 @@ export class BodyChecker {
         ...(source.kind === "stream" ? source.requirements : []),
         ...(fn?.requirements ?? []),
       ],
+    );
+    return this.finish(node, type, combine([stream, transform.info]));
+  }
+
+  private mapStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "map-stream" });
+    if (!this.arity(node, "mapStream", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.noPipeline("mapStream", args);
+    this.inlineStreamCallback("mapStream", args[1]);
+    const stream = this.argInfo(args[0]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`mapStream` needs a Stream value",
+        args[0].node,
+      );
+    }
+    const element = source.kind === "stream"
+      ? source.element
+      : this.table.error;
+    const transform = this.callback(
+      "mapStream",
+      args[1],
+      [element],
+      undefined,
+    );
+    const type = this.table.stream(
+      transform.result,
+      source.kind === "stream" ? source.failures : [],
+      source.kind === "stream" ? source.requirements : [],
     );
     return this.finish(node, type, combine([stream, transform.info]));
   }

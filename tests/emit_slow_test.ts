@@ -1650,6 +1650,95 @@ console.log(JSON.stringify({ before, all, selected, none, failure: { tag: failur
   });
 });
 
+Deno.test("mapStream changes element type and propagates source failures", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "type Bool = boolean",
+        "export error Stop = {}",
+        "export service Source { next(n: Int): Option<[Int, Int]> fails Stop }",
+        "export service Output { accept(value: Bool): void }",
+        "const source = unfold(0, (n) => Source.next(n))",
+        "const sink = sinkForEach((value: Bool) => Output.accept(value))",
+        "export const main = (limit: Int): void fails Stop uses Source.next | Output.accept =>",
+        "  runStream(mapStream(source, (n) => n >= limit), sink)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer, Option } from "effect";
+import { Output, Source, Stop, main } from "./main.ts";
+
+const calls: number[] = [];
+const released: number[] = [];
+const values: boolean[] = [];
+const sourceValues = [0, 1, 3, 0, 4];
+let failAtOne = false;
+const SourceLive = Layer.succeed(Source)({
+  next: (n) => Effect.acquireUseRelease(
+    Effect.sync(() => { calls.push(n); return n; }),
+    () => n === 1 && failAtOne ? Effect.fail(new Stop({})) :
+      n === 5 ? Effect.succeed(Option.none()) : Effect.succeed(Option.some([sourceValues[n]!, n + 1] as const)),
+    () => Effect.sync(() => { released.push(n); }),
+  ),
+});
+const OutputLive = Layer.succeed(Output)({
+  accept: (value) => Effect.sync(() => { values.push(value); }),
+});
+const Live = Layer.mergeAll(SourceLive, OutputLive);
+const run = async (limit: number) => {
+  calls.length = 0;
+  released.length = 0;
+  values.length = 0;
+  await Effect.runPromise(main(limit).pipe(Effect.provide(Live)));
+  return { calls: [...calls], released: [...released], values: [...values] };
+};
+const before = { calls: [...calls], released: [...released], values: [...values] };
+const all = await run(0);
+const selected = await run(3);
+const none = await run(6);
+calls.length = 0;
+released.length = 0;
+values.length = 0;
+failAtOne = true;
+const failure = await Effect.runPromise(Effect.flip(main(3).pipe(Effect.provide(Live))));
+console.log(JSON.stringify({ before, all, selected, none, failure: { tag: failure._tag, calls, released, values } }));
+`,
+    );
+    assertEquals(result, {
+      before: { calls: [], released: [], values: [] },
+      all: {
+        calls: [0, 1, 2, 3, 4, 5],
+        released: [0, 1, 2, 3, 4, 5],
+        values: [true, true, true, true, true],
+      },
+      selected: {
+        calls: [0, 1, 2, 3, 4, 5],
+        released: [0, 1, 2, 3, 4, 5],
+        values: [false, false, true, false, true],
+      },
+      none: {
+        calls: [0, 1, 2, 3, 4, 5],
+        released: [0, 1, 2, 3, 4, 5],
+        values: [false, false, false, false, false],
+      },
+      failure: {
+        tag: "main#Stop",
+        calls: [0, 1],
+        released: [0, 1],
+        values: [false],
+      },
+    });
+  });
+});
+
 Deno.test("a source race interrupts its losing fiber and waits for cleanup", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

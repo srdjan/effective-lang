@@ -121,6 +121,7 @@ export type NodeFact =
   | { readonly kind: "with-resource" }
   | { readonly kind: "unfold" }
   | { readonly kind: "map-effect" }
+  | { readonly kind: "map-stream" }
   | { readonly kind: "flat-map-streams" }
   | { readonly kind: "take-stream" }
   | { readonly kind: "drop-stream" }

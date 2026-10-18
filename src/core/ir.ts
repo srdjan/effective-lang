@@ -131,6 +131,7 @@ export type Expr =
   | Node<{ kind: "with-resource"; acquire: Expr; use: Expr; release: Expr; useBinding: LocalId; releaseBinding: LocalId }>
   | Node<{ kind: "unfold"; seed: Expr; next: Expr }>
   | Node<{ kind: "map-effect"; stream: Expr; transform: Expr }>
+  | Node<{ kind: "map-stream"; stream: Expr; transform: Expr }>
   | Node<{ kind: "flat-map-streams"; stream: Expr; transform: Expr }>
   | Node<{ kind: "take-stream"; stream: Expr; count: Expr }>
   | Node<{ kind: "drop-stream"; stream: Expr; count: Expr }>

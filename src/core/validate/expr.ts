@@ -469,6 +469,8 @@ export class BodyValidator {
         return this.unfoldStream(e, path);
       case "map-effect":
         return this.mapEffect(e, path);
+      case "map-stream":
+        return this.mapStream(e, path);
       case "flat-map-streams":
         return this.flatMapStreams(e, path);
       case "take-stream":
@@ -2196,6 +2198,7 @@ export class BodyValidator {
           case "unfold":
             return [e.seed, e.next];
           case "map-effect":
+          case "map-stream":
           case "flat-map-streams":
             return [e.stream, e.transform];
           case "take-stream":
@@ -2535,6 +2538,48 @@ export class BodyValidator {
             ...fn.effects.requirements,
           ]),
         },
+      },
+      match: "exact",
+      active: combine([stream, transform]),
+    };
+  }
+
+  private mapStream(
+    e: Extract<Expr, { kind: "map-stream" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const transform = this.check(e.transform, `${path}.transform`);
+    const source = unfold(this.env, stream.type);
+    const fn = asFunction(this.env, transform.type);
+    if (e.transform.kind !== "closure") {
+      this.add(
+        AREA.control,
+        `${path}.transform`,
+        "mapStream requires an inline closure",
+        e.transform.span,
+      );
+    }
+    if (
+      source.kind !== "stream" || fn === undefined ||
+      fn.parameters.length !== 1 ||
+      !fits(this.env, source.element, fn.parameters[0]) ||
+      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
+      fn.effects.requirements.length > 0
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "mapStream needs a Stream and a pure element callback",
+        e.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: {
+        kind: "stream",
+        element: fn.result,
+        effects: source.effects,
       },
       match: "exact",
       active: combine([stream, transform]),

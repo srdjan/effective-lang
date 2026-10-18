@@ -534,6 +534,49 @@ const use = (): Int => filterStream()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("mapStream changes the element type and preserves deferred channels", () => {
+  const valid = checkText(`
+type Int = int
+type Bool = boolean
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const mapped: Stream<Bool, Stop, Source.next> = mapStream(source, (n) => n < 3)
+`);
+  assertEquals(codes(valid), [], messages(valid).join("\n"));
+
+  const effectful = checkText(`
+type Int = int
+service Probe { next(n: Int): Int }
+const source = unfold(0, (n): Option<[Int, Int]> => None)
+const bad = mapStream(source, (n) => Probe.next(n))
+`);
+  assert(codes(effectful).includes("execution-mode/001"));
+
+  const wrongSource = checkText(`
+type Int = int
+const bad = mapStream(3, (n) => n + 1)
+`);
+  assert(codes(wrongSource).includes("type-mismatch/010"));
+
+  const nonInline = checkText(`
+type Int = int
+const convert = (n: Int): Int => n + 1
+const source = unfold(0, (n): Option<[Int, Int]> => None)
+const bad = mapStream(source, convert)
+`);
+  assert(codes(nonInline).includes("type-mismatch/010"));
+});
+
+Deno.test("a source binding named mapStream shadows the prelude operation", () => {
+  const project = checkText(`
+type Int = int
+const mapStream = (): Int => 3
+const use = (): Int => mapStream()
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
 Deno.test("zipStreams pairs different element types and unions deferred channels", () => {
   const project = checkText(`
 error Stop = {}

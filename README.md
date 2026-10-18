@@ -52,6 +52,8 @@ Collection literals use brackets: `[1, 2]` infers an array, while an expected tu
 
 `filterStream(stream, predicate)` tests every element with an inline pure boolean predicate and emits the accepted elements in source order. Rejected elements are still pulled, so upstream failures propagate. The stream keeps its deferred failure and service channels.
 
+`mapStream(stream, transform)` applies an inline pure callback to each pulled element and emits the transformed values in source order. The result element type may differ from the source; deferred failures and requirements stay in the stream type.
+
 Core 1 also includes `Ref<A>` state, `race` of Effect values, supervised `withFiber` with direct `joinFiber` and `interruptFiber`, pure `Codec<Decoded,Encoded>` transformations, `RetrySchedule<E>` policies, and source-defined `Layer<Services,E,R>` values. The [gap audit](docs/effect-4-gap-audit.md) records the remaining boundary: general Effect and stream operators and ecosystem packages still require host adapters.
 
 Part A4 lowers a checked module to typed IR and serializes it. It adds a synchronous SHA-256 for builtin identities.
