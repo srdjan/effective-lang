@@ -872,6 +872,8 @@ export class BodyChecker {
         return this.mapEffectCall(node, args);
       case "mapStream":
         return this.mapStreamCall(node, args);
+      case "scanStream":
+        return this.scanStreamCall(node, args);
       case "flatMapStreams":
         return this.flatMapStreamsCall(node, args);
       case "takeStream":
@@ -2074,6 +2076,60 @@ export class BodyChecker {
       source.kind === "stream" ? source.requirements : [],
     );
     return this.finish(node, type, combine([stream, transform.info]));
+  }
+
+  private scanStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "scan-stream" });
+    if (!this.arity(node, "scanStream", 3, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.noPipeline("scanStream", args);
+    this.inlineStreamCallback("scanStream", args[2]);
+    const stream = this.argInfo(args[0]);
+    const seed = this.argInfo(args[1]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`scanStream` needs a Stream value",
+        args[0].node,
+      );
+    }
+    if (
+      seed.mode !== "pure" || seed.failures.length > 0 ||
+      seed.requirements.length > 0
+    ) {
+      this.report(
+        "execution-mode/001",
+        "`scanStream` seed must be pure",
+        args[1].node,
+      );
+    }
+    const element = source.kind === "stream"
+      ? source.element
+      : this.table.error;
+    const update = this.callback(
+      "scanStream",
+      args[2],
+      [seed.type, element],
+      seed.type,
+    );
+    this.fits(
+      args[2].node,
+      update.result,
+      seed.type,
+      "the scanStream update result",
+    );
+    const type = this.table.stream(
+      seed.type,
+      source.kind === "stream" ? source.failures : [],
+      source.kind === "stream" ? source.requirements : [],
+    );
+    return this.finish(node, type, combine([stream, seed, update.info]));
   }
 
   private flatMapStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {

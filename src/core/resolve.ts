@@ -55,6 +55,7 @@ export type PreludeName =
   | "unfold"
   | "mapEffect"
   | "mapStream"
+  | "scanStream"
   | "sinkForEach"
   | "runStream"
   | "bufferStream"
@@ -106,6 +107,7 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "unfold",
   "mapEffect",
   "mapStream",
+  "scanStream",
   "sinkForEach",
   "runStream",
   "bufferStream",
@@ -402,7 +404,7 @@ class Resolver {
         name !== "concatStreams" && name !== "flatMapStreams" &&
         name !== "takeStream" && name !== "dropStream" &&
         name !== "dropWhileStream" && name !== "filterStream" &&
-        name !== "mapStream" &&
+        name !== "mapStream" && name !== "scanStream" &&
         name !== "takeWhileStream" &&
         name !== "takeUntilStream") ||
       BUILTIN_TYPE_NAMES.has(name)
@@ -559,7 +561,7 @@ class Resolver {
       name !== "concatStreams" && name !== "flatMapStreams" &&
       name !== "takeStream" && name !== "dropStream" &&
       name !== "dropWhileStream" && name !== "filterStream" &&
-      name !== "mapStream" &&
+      name !== "mapStream" && name !== "scanStream" &&
       name !== "takeWhileStream" &&
       name !== "takeUntilStream"
     ) {

@@ -701,6 +701,39 @@ const mapped: Stream<Bool, Stop, Source.next> = mapStream(source, (n) => n < 3)
   assert(codesOf(wrongChannel, lowered.sources).includes("validation/002"));
 });
 
+Deno.test("scanStream validates the state and deferred channels", () => {
+  const lowered = lowerText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const scanned: Stream<Int, Stop, Source.next> =
+  scanStream(source, 0, (total, n) => total + n)
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+
+  const wrongElement = copy(lowered.ir);
+  const scanned = wrongElement.declarations.find((d) => d.name === "scanned");
+  assert(scanned?.kind === "constant" && scanned.value.kind === "scan-stream");
+  setAt(scanned, "value.type.element", { kind: "primitive", name: "boolean" });
+  assert(codesOf(wrongElement, lowered.sources).includes("validation/002"));
+
+  const wrongChannel = copy(lowered.ir);
+  const channel = wrongChannel.declarations.find((d) => d.name === "scanned");
+  assert(channel?.kind === "constant" && channel.value.kind === "scan-stream");
+  setAt(channel, "value.type.effects.failures", []);
+  assert(codesOf(wrongChannel, lowered.sources).includes("validation/002"));
+
+  const wrongUpdate = copy(lowered.ir);
+  const update = wrongUpdate.declarations.find((d) => d.name === "scanned");
+  assert(update?.kind === "constant" && update.value.kind === "scan-stream");
+  setAt(update, "value.update.type.result", {
+    kind: "primitive",
+    name: "boolean",
+  });
+  assert(codesOf(wrongUpdate, lowered.sources).includes("validation/002"));
+});
+
 Deno.test("stream validation recomputes deferred and active channels", () => {
   const lowered = lowerText(`
 error Stop = {}

@@ -471,6 +471,8 @@ export class BodyValidator {
         return this.mapEffect(e, path);
       case "map-stream":
         return this.mapStream(e, path);
+      case "scan-stream":
+        return this.scanStream(e, path);
       case "flat-map-streams":
         return this.flatMapStreams(e, path);
       case "take-stream":
@@ -2201,6 +2203,8 @@ export class BodyValidator {
           case "map-stream":
           case "flat-map-streams":
             return [e.stream, e.transform];
+          case "scan-stream":
+            return [e.stream, e.seed, e.update];
           case "take-stream":
             return [e.stream, e.count];
           case "drop-stream":
@@ -2583,6 +2587,62 @@ export class BodyValidator {
       },
       match: "exact",
       active: combine([stream, transform]),
+    };
+  }
+
+  private scanStream(
+    e: Extract<Expr, { kind: "scan-stream" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const seed = this.check(e.seed, `${path}.seed`);
+    const update = this.check(e.update, `${path}.update`);
+    const source = unfold(this.env, stream.type);
+    const fn = asFunction(this.env, update.type);
+    if (e.update.kind !== "closure") {
+      this.add(
+        AREA.control,
+        `${path}.update`,
+        "scanStream requires an inline closure",
+        e.update.span,
+      );
+    }
+    if (
+      source.kind !== "stream" || fn === undefined ||
+      fn.parameters.length !== 2 ||
+      !fits(this.env, seed.type, fn.parameters[0]) ||
+      !fits(this.env, source.element, fn.parameters[1]) ||
+      !fits(this.env, fn.result, seed.type) ||
+      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
+      fn.effects.requirements.length > 0
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "scanStream needs a Stream and a pure state update callback",
+        e.span,
+      );
+      return this.poison();
+    }
+    if (
+      seed.execution !== "pure" || seed.failures.length > 0 ||
+      seed.requirements.length > 0
+    ) {
+      this.add(
+        AREA.execution,
+        `${path}.seed`,
+        "scanStream seed must be pure",
+        e.seed.span,
+      );
+    }
+    return {
+      type: {
+        kind: "stream",
+        element: seed.type,
+        effects: source.effects,
+      },
+      match: "exact",
+      active: combine([stream, seed, update]),
     };
   }
 

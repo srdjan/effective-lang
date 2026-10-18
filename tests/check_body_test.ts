@@ -577,6 +577,56 @@ const use = (): Int => mapStream()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("scanStream emits seed states and preserves deferred channels", () => {
+  const valid = checkText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const scanned: Stream<Int, Stop, Source.next> =
+  scanStream(source, 0, (total, n) => total + n)
+`);
+  assertEquals(codes(valid), [], messages(valid).join("\n"));
+
+  const wrongResult = checkText(`
+type Int = int
+const source = unfold(0, (n): Option<[Int, Int]> => None)
+const bad = scanStream(source, 0, (total, n) => total < n)
+`);
+  assert(codes(wrongResult).includes("type-mismatch/003"));
+
+  const effectfulSeed = checkText(`
+type Int = int
+service Seed { next(): Int }
+const source = unfold(0, (n): Option<[Int, Int]> => None)
+const bad = scanStream(source, Seed.next(), (total, n) => total + n)
+`);
+  assert(codes(effectfulSeed).includes("execution-mode/001"));
+
+  const effectfulUpdate = checkText(`
+type Int = int
+service Probe { next(n: Int): Int }
+const source = unfold(0, (n): Option<[Int, Int]> => None)
+const bad = scanStream(source, 0, (total, n) => Probe.next(total + n))
+`);
+  assert(codes(effectfulUpdate).includes("execution-mode/001"));
+
+  const wrongSource = checkText(`
+type Int = int
+const bad = scanStream(3, 0, (total, n) => total + n)
+`);
+  assert(codes(wrongSource).includes("type-mismatch/010"));
+});
+
+Deno.test("a source binding named scanStream shadows the prelude operation", () => {
+  const project = checkText(`
+type Int = int
+const scanStream = (): Int => 3
+const use = (): Int => scanStream()
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
 Deno.test("zipStreams pairs different element types and unions deferred channels", () => {
   const project = checkText(`
 error Stop = {}

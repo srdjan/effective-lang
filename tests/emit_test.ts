@@ -230,6 +230,19 @@ export const mapped: Stream<Bool, never, Source.next> =
   assertStringIncludes(output, "Stream.Stream<Bool, never, Source>");
 });
 
+Deno.test("scanStream emits Stream.scan with a lazy seed", () => {
+  const scanned = oneModule(`
+type Int = int
+service Source { next(state: Int): Option<[Int, Int]> }
+const source = unfold(0, (state) => Source.next(state))
+export const result: Stream<Int, never, Source.next> =
+  scanStream(source, 0, (total, n) => total + n)
+`);
+  assertStringIncludes(scanned, "Stream.scan(");
+  assertStringIncludes(scanned, "() => 0");
+  assertStringIncludes(scanned, "total + n");
+});
+
 Deno.test("buffered merged streams emit bounded suspending buffers", () => {
   const output = oneModule(`
 service Source { next(state: Int): Option<[Int, Int]> }

@@ -639,6 +639,14 @@ class BodyLowerer {
           transform: arg(1),
           ...annotation,
         };
+      case "scan-stream":
+        return {
+          kind: "scan-stream",
+          stream: arg(0),
+          seed: arg(1),
+          update: arg(2),
+          ...annotation,
+        };
       case "flat-map-streams":
         return {
           kind: "flat-map-streams",

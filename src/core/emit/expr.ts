@@ -854,6 +854,19 @@ export class ExprEmitter {
           callArguments([kid(e.stream), this.callback(e.transform, kid)]),
         ]);
       }
+      case "scan-stream": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.scan`,
+          callArguments([
+            kid(e.stream),
+            emitted(this.arrow("()", kid(e.seed)), PREC.conditional, {
+              huggable: true,
+            }),
+            this.callback(e.update, kid),
+          ]),
+        ]);
+      }
       case "flat-map-streams": {
         const stream = this.scope.effect("Stream");
         return emitted([
