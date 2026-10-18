@@ -882,6 +882,8 @@ export class BodyChecker {
         return this.foldEffectStreamCall(node, args);
       case "collectStream":
         return this.collectStreamCall(node, args);
+      case "headStream":
+        return this.headStreamCall(node, args);
       case "flatMapStreams":
         return this.flatMapStreamsCall(node, args);
       case "takeStream":
@@ -2366,6 +2368,42 @@ export class BodyChecker {
     return this.finish(
       node,
       this.table.array(source.element),
+      combine([stream, {
+        failures: source.failures,
+        requirements: source.requirements,
+        mode: "effect",
+      }]),
+    );
+  }
+  private headStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "head-stream" });
+    if (!this.arity(node, "headStream", 1, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine([...args.map((arg) => this.argInfo(arg)), EFFECT_ONLY]),
+      );
+    }
+    this.noPipeline("headStream", args);
+    const stream = this.argInfo(args[0]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream") {
+      if (!this.isError(stream.type)) {
+        this.report(
+          "type-mismatch/010",
+          "`headStream` needs a Stream value",
+          args[0].node,
+        );
+      }
+      return this.finish(
+        node,
+        this.table.error,
+        combine([stream, EFFECT_ONLY]),
+      );
+    }
+    return this.finish(
+      node,
+      this.table.option(source.element),
       combine([stream, {
         failures: source.failures,
         requirements: source.requirements,

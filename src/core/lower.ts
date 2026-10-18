@@ -673,6 +673,8 @@ class BodyLowerer {
         };
       case "collect-stream":
         return { kind: "collect-stream", stream: arg(0), ...annotation };
+      case "head-stream":
+        return { kind: "head-stream", stream: arg(0), ...annotation };
       case "flat-map-streams":
         return {
           kind: "flat-map-streams",

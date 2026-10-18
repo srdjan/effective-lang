@@ -1103,6 +1103,7 @@ export class ExprEmitter {
       case "fold-stream":
       case "fold-effect-stream":
       case "collect-stream":
+      case "head-stream":
       case "make-ref":
       case "get-ref":
       case "set-ref":
@@ -1735,6 +1736,7 @@ export class ExprEmitter {
       case "fold-stream":
       case "fold-effect-stream":
       case "collect-stream":
+      case "head-stream":
       case "make-ref":
       case "get-ref":
       case "set-ref":
@@ -1775,6 +1777,7 @@ export class ExprEmitter {
       case "fold-effect-stream":
         return [e.stream, e.seed];
       case "collect-stream":
+      case "head-stream":
         return [e.stream];
       case "make-ref":
         return [e.value];
@@ -2043,6 +2046,13 @@ export class ExprEmitter {
         const stream = this.scope.effect("Stream");
         return emitted([
           `${stream}.runCollect`,
+          callArguments([children[0]]),
+        ]);
+      }
+      case "head-stream": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.runHead`,
           callArguments([children[0]]),
         ]);
       }

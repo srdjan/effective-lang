@@ -294,6 +294,16 @@ export const main = (): Int[] uses Source.next => collectStream(source)
   assertStringIncludes(output, "Stream.runCollect(source)");
 });
 
+Deno.test("headStream emits Stream.runHead", () => {
+  const output = oneModule(`
+type Int = int
+service Source { next(state: Int): Option<[Int, Int]> }
+const source = unfold(0, (state) => Source.next(state))
+export const main = (): Option<Int> uses Source.next => headStream(source)
+`);
+  assertStringIncludes(output, "Stream.runHead(source)");
+});
+
 Deno.test("buffered merged streams emit bounded suspending buffers", () => {
   const output = oneModule(`
 service Source { next(state: Int): Option<[Int, Int]> }

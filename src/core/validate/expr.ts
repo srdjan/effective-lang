@@ -481,6 +481,8 @@ export class BodyValidator {
         return this.foldEffectStream(e, path);
       case "collect-stream":
         return this.collectStream(e, path);
+      case "head-stream":
+        return this.headStream(e, path);
       case "flat-map-streams":
         return this.flatMapStreams(e, path);
       case "take-stream":
@@ -2217,6 +2219,7 @@ export class BodyValidator {
           case "fold-effect-stream":
             return [e.stream, e.seed, e.update];
           case "collect-stream":
+          case "head-stream":
             return [e.stream];
           case "take-stream":
             return [e.stream, e.count];
@@ -2856,6 +2859,32 @@ export class BodyValidator {
     }
     return {
       type: { kind: "array", element: source.element },
+      match: "exact",
+      active: combine([stream, {
+        failures: source.effects.failures,
+        requirements: source.effects.requirements,
+        execution: "effect",
+      }]),
+    };
+  }
+
+  private headStream(
+    e: Extract<Expr, { kind: "head-stream" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const source = unfold(this.env, stream.type);
+    if (source.kind !== "stream") {
+      this.add(
+        AREA.types,
+        path,
+        "headStream needs a Stream value",
+        e.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: { kind: "option", element: source.element },
       match: "exact",
       active: combine([stream, {
         failures: source.effects.failures,

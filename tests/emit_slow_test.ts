@@ -2212,6 +2212,81 @@ console.log(JSON.stringify({ before, first, second, emptyResult, failure: { tag:
   });
 });
 
+Deno.test("headStream stops after the first element and closes upstream work", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "export error Stop = {}",
+        "export service Source { next(n: Int): Option<[Int, Int]> fails Stop }",
+        "const source = unfold(0, (n) => Source.next(n))",
+        "export const main = (): Option<Int> fails Stop uses Source.next => headStream(source)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer, Option } from "effect";
+import { Source, Stop, main } from "./main.ts";
+
+const calls: number[] = [];
+const released: number[] = [];
+let empty = false;
+let fail = false;
+const SourceLive = Layer.succeed(Source)({
+  next: (n) => Effect.acquireUseRelease(
+    Effect.sync(() => { calls.push(n); return n; }),
+    () => fail ? Effect.fail(new Stop({})) :
+      empty ? Effect.succeed(Option.none()) :
+      Effect.succeed(Option.some([n + 1, n + 1] as const)),
+    () => Effect.sync(() => { released.push(n); }),
+  ),
+});
+const snapshot = () => ({ calls: [...calls], released: [...released] });
+const reset = () => { calls.length = 0; released.length = 0; };
+const describe = (value: Option.Option<number>) => Option.isSome(value) ? { tag: "Some", value: value.value } : { tag: "None" };
+const pending = main().pipe(Effect.provide(SourceLive));
+const before = snapshot();
+const first = { result: describe(await Effect.runPromise(pending)), ...snapshot() };
+reset();
+const second = { result: describe(await Effect.runPromise(pending)), ...snapshot() };
+reset();
+empty = true;
+const emptyResult = { result: describe(await Effect.runPromise(pending)), ...snapshot() };
+reset();
+empty = false;
+fail = true;
+const failure = await Effect.runPromise(Effect.flip(pending));
+console.log(JSON.stringify({ before, first, second, emptyResult, failure: { tag: failure._tag, ...snapshot() } }));
+`,
+    );
+    assertEquals(result, {
+      before: { calls: [], released: [] },
+      first: {
+        result: { tag: "Some", value: 1 },
+        calls: [0],
+        released: [0],
+      },
+      second: {
+        result: { tag: "Some", value: 1 },
+        calls: [0],
+        released: [0],
+      },
+      emptyResult: {
+        result: { tag: "None" },
+        calls: [0],
+        released: [0],
+      },
+      failure: { tag: "main#Stop", calls: [0], released: [0] },
+    });
+  });
+});
+
 Deno.test("a source race interrupts its losing fiber and waits for cleanup", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
