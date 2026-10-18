@@ -932,6 +932,75 @@ console.log(JSON.stringify({ before, first, second, tag: error._tag, sourceCalls
   });
 });
 
+Deno.test("retryStream replays values and resets its schedule after output", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "export error Stop = {}",
+        "export service Source { next(n: Int): Option<[Int, Int]> fails Stop }",
+        "const policy: RetrySchedule<Stop> = retrySchedule((_: Stop, attempt: Int): Option<Int> => if (attempt < 2) { Some(0) } else { None })",
+        "const source = unfold(0, (n) => Source.next(n))",
+        "const retried = retryStream(source, policy)",
+        "export const main = (): Int[] fails Stop uses Source.next => collectStream(retried)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer, Option } from "effect";
+import { Source, Stop, main } from "./main.ts";
+
+let attempt = 0;
+const calls: number[] = [];
+const finalized: number[] = [];
+const Live = Layer.succeed(Source)({
+  next: (n) => Effect.sync(() => {
+    calls.push(n);
+    if (n === 0) attempt++;
+  }).pipe(
+    Effect.flatMap(() => n === 0
+      ? Effect.succeed(Option.some([1, 1] as readonly [number, number]))
+      : n === 1 && attempt < 3
+      ? Effect.fail(new Stop({}))
+      : n === 1
+      ? Effect.succeed(Option.some([2, 2] as readonly [number, number]))
+      : Effect.succeed(Option.none())),
+    Effect.ensuring(Effect.sync(() => { finalized.push(n); })),
+  ),
+});
+const pending = main().pipe(Effect.provide(Live));
+const before = { calls: [...calls], attempt };
+const first = await Effect.runPromise(pending);
+const firstRun = { attempt, calls: [...calls], finalized: [...finalized] };
+attempt = 0;
+calls.length = 0;
+finalized.length = 0;
+const second = await Effect.runPromise(pending);
+console.log(JSON.stringify({ before, first, firstRun, second, attempt, calls, finalized }));
+`,
+    );
+    assertEquals(result, {
+      before: { calls: [], attempt: 0 },
+      first: [1, 1, 1, 2],
+      firstRun: {
+        attempt: 3,
+        calls: [0, 1, 0, 1, 0, 1, 2],
+        finalized: [0, 1, 0, 1, 0, 1, 2],
+      },
+      second: [1, 1, 1, 2],
+      attempt: 3,
+      calls: [0, 1, 0, 1, 0, 1, 2],
+      finalized: [0, 1, 0, 1, 0, 1, 2],
+    });
+  });
+});
+
 Deno.test("concurrent stream mapping bounds work and closes failed siblings", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

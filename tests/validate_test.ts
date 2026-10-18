@@ -1076,6 +1076,28 @@ const recovered = catchStream(source, (_) => unfold(9, (n) => Recovery.next(n)))
   );
 });
 
+Deno.test("retryStream validates deferred channels and policy type", () => {
+  const lowered = lowerText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const policy: RetrySchedule<Stop> = retrySchedule((_: Stop, attempt: Int): Option<Int> => None)
+const source = unfold(0, (n) => Source.next(n))
+const retried = retryStream(source, policy)
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const wrongFailures = copy(lowered.ir);
+  const retried = wrongFailures.declarations.find((d) => d.name === "retried");
+  assert(retried?.kind === "constant" && retried.value.kind === "retry-stream");
+  setAt(retried, "value.type.effects.failures", []);
+  assert(codesOf(wrongFailures, lowered.sources).includes("validation/002"));
+  const wrongPolicy = copy(lowered.ir);
+  const bad = wrongPolicy.declarations.find((d) => d.name === "retried");
+  assert(bad?.kind === "constant" && bad.value.kind === "retry-stream");
+  setAt(bad, "value.policy.type.error", { kind: "primitive", name: "string" });
+  assert(codesOf(wrongPolicy, lowered.sources).includes("validation/002"));
+});
+
 Deno.test("effectful stream predicates validate combined deferred channels", () => {
   for (
     const [operation, kind] of [

@@ -702,6 +702,13 @@ class BodyLowerer {
           recover: arg(1),
           ...annotation,
         };
+      case "retry-stream":
+        return {
+          kind: "retry-stream",
+          stream: arg(0),
+          policy: arg(1),
+          ...annotation,
+        };
       case "take-stream":
         return {
           kind: "take-stream",

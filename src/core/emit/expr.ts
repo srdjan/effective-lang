@@ -921,6 +921,13 @@ export class ExprEmitter {
           callArguments([kid(e.stream), this.callback(e.recover, kid)]),
         ]);
       }
+      case "retry-stream": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.retry`,
+          callArguments([kid(e.stream), kid(e.policy)]),
+        ]);
+      }
       case "take-stream": {
         const stream = this.scope.effect("Stream");
         return emitted([

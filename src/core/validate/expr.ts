@@ -493,6 +493,8 @@ export class BodyValidator {
         return this.switchMapStreams(e, path);
       case "catch-stream":
         return this.catchStream(e, path);
+      case "retry-stream":
+        return this.retryStream(e, path);
       case "take-stream":
         return this.takeStream(e, path);
       case "drop-stream":
@@ -2229,6 +2231,8 @@ export class BodyValidator {
             return [e.stream, e.transform];
           case "catch-stream":
             return [e.stream, e.recover];
+          case "retry-stream":
+            return [e.stream, e.policy];
           case "scan-stream":
           case "map-accum-stream":
           case "fold-stream":
@@ -3148,6 +3152,51 @@ export class BodyValidator {
       },
       match: "exact",
       active: combine([stream, recover]),
+    };
+  }
+
+  private retryStream(
+    e: Extract<Expr, { kind: "retry-stream" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const policy = this.check(e.policy, `${path}.policy`);
+    const source = unfold(this.env, stream.type);
+    const schedule = unfold(this.env, policy.type);
+    if (source.kind !== "stream" || schedule.kind !== "retry-schedule") {
+      this.add(
+        AREA.types,
+        path,
+        "retryStream needs a Stream and a RetrySchedule",
+        e.span,
+      );
+      return this.poison();
+    }
+    for (const failure of source.effects.failures) {
+      if (!fits(this.env, { kind: "named", id: failure }, schedule.error)) {
+        this.add(
+          AREA.types,
+          `${path}.policy`,
+          `retry schedule does not accept ${failure}`,
+          e.policy.span,
+        );
+      }
+    }
+    if (
+      policy.execution !== "pure" || policy.failures.length > 0 ||
+      policy.requirements.length > 0
+    ) {
+      this.add(
+        AREA.execution,
+        `${path}.policy`,
+        "retryStream policy must be pure",
+        e.policy.span,
+      );
+    }
+    return {
+      type: source,
+      match: "exact",
+      active: combine([stream, policy]),
     };
   }
 

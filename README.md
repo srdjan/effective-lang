@@ -44,6 +44,8 @@ Collection literals use brackets: `[1, 2]` infers an array, while an expected tu
 
 `catchStream(source, recover)` takes an inline pure callback from a typed source error to a replacement Stream. Earlier source values remain, the source typed failures are handled, and the replacement's failures and requirements stay deferred. Defects and interruption pass through.
 
+`retryStream(source, policy)` retries a Stream under a compatible `RetrySchedule<E>`. It restarts the entire source after a typed failure, so values emitted before that failure may appear again. Its failure and service channels remain deferred, and the schedule resets after the first element of a new attempt.
+
 `takeStream(stream, count)` keeps up to the first `count` elements. A pure `Int` count may be dynamic; zero or a negative count yields an empty stream without pulling the source. The stream's deferred failures and requirements remain in its type.
 
 `takeWhileStream(stream, predicate)` keeps the longest prefix accepted by an inline pure boolean predicate. It consumes but omits the first rejected element, stops further pulls, and preserves the stream's deferred channels. Upstream work is closed when the prefix ends.

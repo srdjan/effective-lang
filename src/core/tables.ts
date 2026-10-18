@@ -139,6 +139,7 @@ export type NodeFact =
   }
   | { readonly kind: "switch-map-streams" }
   | { readonly kind: "catch-stream" }
+  | { readonly kind: "retry-stream" }
   | { readonly kind: "take-stream" }
   | { readonly kind: "drop-stream" }
   | { readonly kind: "drop-while-stream" }

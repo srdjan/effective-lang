@@ -396,6 +396,18 @@ const recovered = catchStream(source, (_) => unfold(1, (n) => Source.next(n)))
   assertStringIncludes(output, "Stream.catch(");
 });
 
+Deno.test("retryStream emits Stream.retry with a source policy", () => {
+  const output = oneModule(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const policy: RetrySchedule<Stop> = retrySchedule((_: Stop, attempt: Int): Option<Int> => None)
+const source = unfold(0, (n) => Source.next(n))
+const retried = retryStream(source, policy)
+`);
+  assertStringIncludes(output, "Stream.retry(");
+});
+
 Deno.test("concurrent stream mapping emits pinned concurrency options", () => {
   const output = oneModule(`
 type Int = int

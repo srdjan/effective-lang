@@ -1106,6 +1106,34 @@ const use = (): Int => catchStream()
   assertEquals(codes(shadow), [], messages(shadow).join("\n"));
 });
 
+Deno.test("retryStream accepts compatible schedules and keeps source channels", () => {
+  const valid = checkText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const policy: RetrySchedule<Stop> = retrySchedule((_: Stop, attempt: Int): Option<Int> => if (attempt < 2) { Some(0) } else { None })
+const source = unfold(0, (n) => Source.next(n))
+const retried = retryStream(source, policy)
+const main = (): Int[] fails Stop uses Source.next => collectStream(retried)
+`);
+  assertEquals(codes(valid), [], messages(valid).join("\n"));
+  const bad = checkText(`
+type Int = int
+error Stop = {}
+error Other = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const policy: RetrySchedule<Other> = retrySchedule((_: Other, attempt: Int): Option<Int> => None)
+const retried = retryStream(unfold(0, (n) => Source.next(n)), policy)
+`);
+  assert(codes(bad).includes("type-mismatch/003"));
+  const shadow = checkText(`
+type Int = int
+const retryStream = (): Int => 3
+const use = (): Int => retryStream()
+`);
+  assertEquals(codes(shadow), [], messages(shadow).join("\n"));
+});
+
 Deno.test("stream mapping accepts literal concurrency and rejects invalid bounds", () => {
   const valid = checkText(`
 type Int = int

@@ -894,6 +894,8 @@ export class BodyChecker {
         return this.switchMapStreamsCall(node, args);
       case "catchStream":
         return this.catchStreamCall(node, args);
+      case "retryStream":
+        return this.retryStreamCall(node, args);
       case "takeStream":
         return this.takeStreamCall(node, args);
       case "dropStream":
@@ -2694,6 +2696,67 @@ export class BodyChecker {
       ],
     );
     return this.finish(node, type, combine([stream, recover.info]));
+  }
+
+  private retryStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    if (!this.arity(node, "retryStream", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.fact(node, { kind: "retry-stream" });
+    this.noPipeline("retryStream", args);
+    const stream = this.argInfo(args[0]);
+    const policy = this.argInfo(args[1]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    const schedule = this.table.node(this.table.unfold(policy.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`retryStream` needs a Stream value",
+        args[0].node,
+      );
+    }
+    if (schedule.kind !== "retry-schedule" && !this.isError(policy.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`retryStream` needs a RetrySchedule value",
+        args[1].node,
+      );
+    }
+    if (source.kind === "stream" && schedule.kind === "retry-schedule") {
+      for (const failure of source.failures) {
+        if (
+          !this.table.isAssignable(this.table.named(failure), schedule.error)
+        ) {
+          this.report(
+            "type-mismatch/003",
+            `the retry schedule does not accept ${failure}`,
+            args[1].node,
+          );
+        }
+      }
+    }
+    if (
+      policy.mode !== "pure" || policy.failures.length > 0 ||
+      policy.requirements.length > 0
+    ) {
+      this.report(
+        "execution-mode/001",
+        "`retryStream` policy must be pure",
+        args[1].node,
+      );
+    }
+    const type = source.kind === "stream"
+      ? this.table.stream(
+        source.element,
+        source.failures,
+        source.requirements,
+      )
+      : this.table.error;
+    return this.finish(node, type, combine([stream, policy]));
   }
 
   private takeStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
