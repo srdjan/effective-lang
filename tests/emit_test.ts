@@ -76,6 +76,18 @@ export const record = (): { number: Int, text: Text } =>
   assertStringIncludes(output, "concurrency: 2");
 });
 
+Deno.test("scoped fiber emission provides a local scope", () => {
+  const output = oneModule(`
+type Int = int
+export const main = (): Int => scoped(defer(() => {
+  forkScoped(defer(() => 1))
+  2
+}))
+`);
+  assertStringIncludes(output, "Effect.scoped(");
+  assertStringIncludes(output, "Effect.forkScoped(");
+});
+
 Deno.test("stream operations emit the Effect 4 Stream and Sink APIs", () => {
   const output = oneModule(`
 service Source { next(state: Int): Option<[Int, Int]> }

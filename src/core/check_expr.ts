@@ -18,6 +18,7 @@ import {
   makeDiagnostic,
 } from "./diagnostics.ts";
 import { isTypeKind, nameTextOf } from "./index.ts";
+import { SCOPE_CAPABILITY } from "./ir.ts";
 import type {
   CapabilityId,
   ErrorId,
@@ -859,6 +860,10 @@ export class BodyChecker {
         return this.deferCall(node, args);
       case "run":
         return this.runCall(node, args);
+      case "scoped":
+        return this.scopedCall(node, args);
+      case "forkScoped":
+        return this.forkScopedCall(node, args);
       case "withResource":
         return this.withResourceCall(node, args, expected);
       case "unfold":
@@ -1553,6 +1558,73 @@ export class BodyChecker {
           mode: "effect",
         },
       ]),
+    );
+  }
+
+  private scopedCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "scoped" });
+    if (!this.arity(node, "scoped", 1, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine([...args.map((arg) => this.argInfo(arg)), EFFECT_ONLY]),
+      );
+    }
+    const value = this.argInfo(args[0]);
+    const effect = this.table.node(this.table.unfold(value.type));
+    if (effect.kind !== "effect") {
+      this.report(
+        "type-mismatch/010",
+        "`scoped` needs an Effect value",
+        args[0].node,
+      );
+      return this.finish(node, this.table.error, combine([value, EFFECT_ONLY]));
+    }
+    return this.finish(
+      node,
+      effect.result,
+      combine([value, {
+        failures: effect.failures,
+        requirements: without(effect.requirements, [SCOPE_CAPABILITY]),
+        mode: "effect",
+      }]),
+    );
+  }
+
+  private forkScopedCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "fork-scoped" });
+    if (!this.arity(node, "forkScoped", 1, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine([...args.map((arg) => this.argInfo(arg)), EFFECT_ONLY]),
+      );
+    }
+    const job = this.argInfo(args[0]);
+    const effect = this.table.node(this.table.unfold(job.type));
+    if (effect.kind !== "effect") {
+      this.report(
+        "type-mismatch/010",
+        "`forkScoped` needs an Effect value",
+        args[0].node,
+      );
+      return this.finish(node, this.table.error, combine([job, EFFECT_ONLY]));
+    }
+    if (effect.failures.length > 0) {
+      this.report(
+        "type-mismatch/010",
+        "`forkScoped` needs an Effect value without typed failures",
+        args[0].node,
+      );
+    }
+    return this.finish(
+      node,
+      this.table.unit,
+      combine([job, {
+        failures: [],
+        requirements: [...effect.requirements, SCOPE_CAPABILITY],
+        mode: "effect",
+      }]),
     );
   }
 

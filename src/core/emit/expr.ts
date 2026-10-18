@@ -997,6 +997,8 @@ export class ExprEmitter {
       case "interrupt-fiber":
       case "provide":
       case "run":
+      case "scoped":
+      case "fork-scoped":
       case "with-resource":
       case "run-stream":
       case "make-ref":
@@ -1620,6 +1622,8 @@ export class ExprEmitter {
       case "interrupt-fiber":
       case "provide":
       case "run":
+      case "scoped":
+      case "fork-scoped":
       case "catch":
       case "with-resource":
       case "run-stream":
@@ -1646,7 +1650,10 @@ export class ExprEmitter {
       case "fail":
         return [e.error];
       case "run":
+      case "scoped":
         return [e.value];
+      case "fork-scoped":
+        return [e.job];
       case "run-stream":
         return [e.stream, e.sink];
       case "make-ref":
@@ -1815,6 +1822,16 @@ export class ExprEmitter {
         return emitted([`${effect}.fail`, callArguments([children[0]])]);
       case "run":
         return children[0];
+      case "scoped":
+        return emitted([`${effect}.scoped`, callArguments([children[0]])]);
+      case "fork-scoped":
+        return emitted([
+          `${effect}.as`,
+          callArguments([
+            emitted([`${effect}.forkScoped`, callArguments([children[0]])]),
+            emitted("undefined"),
+          ]),
+        ]);
       case "run-stream": {
         const stream = this.scope.effect("Stream");
         return emitted([

@@ -599,6 +599,10 @@ class BodyLowerer {
         return { kind: "defer", job: arg(0), ...annotation };
       case "run":
         return { kind: "run", value: arg(0), ...annotation };
+      case "scoped":
+        return { kind: "scoped", value: arg(0), ...annotation };
+      case "fork-scoped":
+        return { kind: "fork-scoped", job: arg(0), ...annotation };
       case "with-resource": {
         const acquire = arg(0);
         const use = arg(1);

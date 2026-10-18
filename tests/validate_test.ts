@@ -687,6 +687,28 @@ type Int = int
   assert(codesOf(wrong, sources).includes("validation/006"));
 });
 
+Deno.test("scoped fiber validation checks the reserved scope requirement", () => {
+  const { ir, sources } = lowerText(`
+const job = defer(() => forkScoped(defer(() => 1)))
+export const main = (): void => scoped(job)
+`);
+  assertEquals(validateModule(ir, sources), []);
+  const missing = copy(ir);
+  const job = missing.declarations[decl(missing, "job")];
+  assert(
+    job.kind === "constant" && job.value.kind === "defer" &&
+      job.value.job.kind === "closure" &&
+      job.value.job.body.kind === "fork-scoped",
+  );
+  setAt(job, "value.job.body.effects.requirements", []);
+  assert(codesOf(missing, sources).includes("validation/003"));
+  const leaked = copy(ir);
+  const main = leaked.declarations[decl(leaked, "main")];
+  assert(main.kind === "function" && main.body.kind === "scoped");
+  setAt(main, "body.effects.requirements", ["cap:effect/Scope"]);
+  assert(codesOf(leaked, sources).includes("validation/003"));
+});
+
 Deno.test("borrowed host handle validation rejects a lost qualifier", () => {
   const files = {
     "effective.json": JSON.stringify({

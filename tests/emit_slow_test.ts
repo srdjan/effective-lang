@@ -746,6 +746,50 @@ console.log(JSON.stringify({ value, started, released }));
     assertEquals(result, { value: 7, started: 1, released: 1 });
   });
 });
+Deno.test("forkScoped outlives its spawning fiber and closes with its scope", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "type Bool = boolean",
+        "export service Child { run(): void; wait(): void; alive(): Bool }",
+        "const job = defer(() => {",
+        "    withFiber(defer(() => { forkScoped(defer(() => Child.run())); 1 }), (fiber) => joinFiber(fiber))",
+        "    Child.wait()",
+        "    Child.alive()",
+        "})",
+        "export const main = (): Bool uses Child.run | Child.wait | Child.alive => scoped(job)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Deferred, Effect, Layer } from "effect";
+import { Child, main } from "./main.ts";
+const ready = Deferred.makeUnsafe<void>();
+let active = false;
+let released = 0;
+const Live = Layer.succeed(Child)({
+  run: () => Effect.sync(() => { active = true; }).pipe(
+    Effect.andThen(Deferred.succeed(ready, undefined)),
+    Effect.andThen(Effect.never),
+    Effect.onInterrupt(() => Effect.sync(() => { active = false; released++; })),
+  ),
+  wait: () => Deferred.await(ready),
+  alive: () => Effect.sync(() => active),
+});
+const observed = await Effect.runPromise(main().pipe(Effect.provide(Live)));
+console.log(JSON.stringify({ observed, active, released }));
+`,
+    );
+    assertEquals(result, { observed: true, active: false, released: 1 });
+  });
+});
 Deno.test("reference updates are atomic under bounded traversal", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

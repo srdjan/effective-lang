@@ -20,6 +20,7 @@ import type {
   Span,
   Type,
 } from "../ir.ts";
+import { SCOPE_CAPABILITY } from "../ir.ts";
 import { AREA } from "./report.ts";
 import {
   type Active,
@@ -451,6 +452,10 @@ export class BodyValidator {
         return this.defer(e, path);
       case "run":
         return this.run(e, path);
+      case "scoped":
+        return this.scoped(e, path);
+      case "fork-scoped":
+        return this.forkScoped(e, path);
       case "with-resource":
         return this.withResource(e, path);
       case "unfold":
@@ -1785,6 +1790,53 @@ export class BodyValidator {
     };
   }
 
+  private scoped(e: Extract<Expr, { kind: "scoped" }>, path: string): Comp {
+    const value = this.check(e.value, `${path}.value`);
+    const effect = unfold(this.env, value.type);
+    if (effect.kind !== "effect") {
+      this.add(AREA.control, path, "scoped needs an Effect value", e.span);
+      return this.poison();
+    }
+    return {
+      type: effect.result,
+      match: "exact",
+      active: combine([value, {
+        failures: effect.effects.failures,
+        requirements: minus(effect.effects.requirements, [SCOPE_CAPABILITY]),
+        execution: "effect",
+      }]),
+    };
+  }
+
+  private forkScoped(
+    e: Extract<Expr, { kind: "fork-scoped" }>,
+    path: string,
+  ): Comp {
+    const job = this.check(e.job, `${path}.job`);
+    const effect = unfold(this.env, job.type);
+    if (effect.kind !== "effect") {
+      this.add(AREA.control, path, "forkScoped needs an Effect value", e.span);
+      return this.poison();
+    }
+    if (effect.effects.failures.length > 0) {
+      this.add(
+        AREA.control,
+        path,
+        "forkScoped needs an Effect value without typed failures",
+        e.span,
+      );
+    }
+    return {
+      type: UNIT,
+      match: "exact",
+      active: combine([job, {
+        failures: [],
+        requirements: [...effect.effects.requirements, SCOPE_CAPABILITY],
+        execution: "effect",
+      }]),
+    };
+  }
+
   private dataOnly(type: Type, seen = new Set<Type>()): boolean {
     const value = unfold(this.env, type);
     if (seen.has(value)) return true;
@@ -1888,6 +1940,7 @@ export class BodyValidator {
           case "unbrand":
           case "some":
           case "run":
+          case "scoped":
             return [e.value];
           case "closure":
             return [e.body];
@@ -1937,6 +1990,7 @@ export class BodyValidator {
             return [e.fiber];
           case "defer":
           case "retry":
+          case "fork-scoped":
             return [e.job];
           case "perform":
             return [...e.arguments];

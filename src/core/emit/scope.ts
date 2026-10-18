@@ -15,6 +15,7 @@ import type {
   Type,
   TypeDecl,
 } from "../ir.ts";
+import { SCOPE_CAPABILITY } from "../ir.ts";
 import {
   methodOfCapability as coreMethodOfCapability,
   moduleOfId as coreModuleOfId,
@@ -36,7 +37,8 @@ export type EffectModule =
   | "Schedule"
   | "Duration"
   | "Cause"
-  | "Fiber";
+  | "Fiber"
+  | "Scope";
 
 export type EmitFailureData =
   | {
@@ -116,7 +118,13 @@ export function compareImportNames(a: string, b: string): number {
 export function servicesOf(
   capabilities: readonly CapabilityId[],
 ): ServiceId[] {
-  return [...new Set(capabilities.map(serviceOfCapability))].sort(compareText);
+  return [
+    ...new Set(
+      capabilities.filter((id) => id !== SCOPE_CAPABILITY).map(
+        serviceOfCapability,
+      ),
+    ),
+  ].sort(compareText);
 }
 
 // ------------------------------------------------------------------ paths

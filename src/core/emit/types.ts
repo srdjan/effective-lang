@@ -10,6 +10,7 @@ import type {
   FunctionType,
   Type,
 } from "../ir.ts";
+import { SCOPE_CAPABILITY } from "../ir.ts";
 import {
   bracketed,
   callWith,
@@ -59,8 +60,11 @@ function requirementUnion(
   capabilities: readonly CapabilityId[],
 ): Doc | undefined {
   const services = servicesOf(capabilities);
-  if (services.length === 0) return undefined;
-  return unionDoc(services.map((id) => scope.nameOf(id)));
+  const names: Doc[] = services.map((id) => scope.nameOf(id));
+  if (capabilities.includes(SCOPE_CAPABILITY)) {
+    names.push(`${scope.effect("Scope")}.Scope`);
+  }
+  return names.length === 0 ? undefined : unionDoc(names);
 }
 
 /**

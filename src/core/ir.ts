@@ -4,6 +4,8 @@ export type TypeId = `type:${string}`;
 export type ErrorId = `error:${string}`;
 export type ServiceId = `service:${string}`;
 export type CapabilityId = `cap:${string}`;
+/** A reserved Effect runtime requirement, discharged by `scoped`. */
+export const SCOPE_CAPABILITY: CapabilityId = "cap:effect/Scope";
 export type ValueId = `value:${string}`;
 export type LocalId = `local:${string}`;
 export type Execution = "pure" | "effect";
@@ -124,6 +126,8 @@ export type Expr =
   | Node<{ kind: "call"; callee: Expr; arguments: readonly Expr[] }>
   | Node<{ kind: "defer"; job: Expr }>
   | Node<{ kind: "run"; value: Expr }>
+  | Node<{ kind: "scoped"; value: Expr }>
+  | Node<{ kind: "fork-scoped"; job: Expr }>
   | Node<{ kind: "with-resource"; acquire: Expr; use: Expr; release: Expr; useBinding: LocalId; releaseBinding: LocalId }>
   | Node<{ kind: "unfold"; seed: Expr; next: Expr }>
   | Node<{ kind: "map-effect"; stream: Expr; transform: Expr }>

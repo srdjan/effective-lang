@@ -13,6 +13,7 @@ import type {
   Type,
   TypeDecl,
 } from "../ir.ts";
+import { SCOPE_CAPABILITY } from "../ir.ts";
 import { AREA, type Report } from "./report.ts";
 import { isNever, same, type TypeEnv, unfold } from "./typing.ts";
 import { sameSet } from "./sets.ts";
@@ -134,7 +135,7 @@ export function checkTypeIds(
       }
     });
     e.requirements.forEach((id, i) => {
-      if (!world.methods.has(id)) {
+      if (!world.methods.has(id) && id !== SCOPE_CAPABILITY) {
         fail(
           `${at}.requirements[${i}]`,
           `the requirement ${id} is not a declared service method`,

@@ -13,6 +13,7 @@ import type {
   TypeDecl,
   ValueId,
 } from "../ir.ts";
+import { SCOPE_CAPABILITY } from "../ir.ts";
 import {
   braces,
   bracketed,
@@ -97,7 +98,9 @@ function effectsIn(
   out: Set<DeclarationId>,
 ): void {
   for (const f of failures) out.add(f);
-  for (const r of requirements) out.add(serviceOfCapability(r));
+  for (const r of requirements) {
+    if (r !== SCOPE_CAPABILITY) out.add(serviceOfCapability(r));
+  }
 }
 
 /** The declarations that the interface of `declaration` mentions. */

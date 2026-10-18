@@ -218,6 +218,40 @@ const use = (): Int => all()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("scoped discharges a scope-bound fork after its parent finishes", () => {
+  const project = checkText(`
+service Child { run(): void; wait(): void; alive(): Bool }
+type Int = int
+type Bool = boolean
+const parent = (): Int uses Child.run | Child.wait | Child.alive =>
+  scoped(defer(() => {
+    withFiber(defer(() => { forkScoped(defer(() => Child.run())); 1 }), (fiber) => joinFiber(fiber))
+    Child.wait()
+    if (Child.alive()) { 1 } else { 0 }
+  }))
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
+Deno.test("forkScoped needs a scope and a job without typed failures", () => {
+  const outside = checkText(
+    `const outside = (): void => forkScoped(defer(() => 1))`,
+  );
+  assert(
+    codes(outside).includes("requirement-contract/001"),
+    messages(outside).join("\n"),
+  );
+  const failed = checkText(`
+error Stop = {}
+const bad = (): void fails Stop =>
+  scoped(defer(() => forkScoped(defer(() => fail(Stop())))))
+`);
+  assert(
+    codes(failed).includes("type-mismatch/010"),
+    messages(failed).join("\n"),
+  );
+});
+
 Deno.test("withResource rejects escaped operation records and fields", () => {
   const prefix =
     `service Files { open(): { read: () => Text, close: () => void } }\n`;

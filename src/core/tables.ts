@@ -117,6 +117,7 @@ export type NodeFact =
   | { readonly kind: "provide"; readonly provider: ValueId | undefined }
   | { readonly kind: "defer" }
   | { readonly kind: "run" }
+  | { readonly kind: "scoped" | "fork-scoped" }
   | { readonly kind: "with-resource" }
   | { readonly kind: "unfold" }
   | { readonly kind: "map-effect" }

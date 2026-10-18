@@ -31,10 +31,12 @@ export function childrenOf(expr: Expr): Expr[] {
     case "unbrand":
     case "some":
     case "run":
+    case "scoped":
       return [expr.value];
     case "closure":
       return [expr.body];
     case "defer":
+    case "fork-scoped":
       return [expr.job];
     case "with-resource":
       return [expr.acquire, expr.use, expr.release];
