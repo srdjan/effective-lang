@@ -133,6 +133,7 @@ export type Expr =
   | Node<{ kind: "map-effect"; stream: Expr; transform: Expr }>
   | Node<{ kind: "flat-map-streams"; stream: Expr; transform: Expr }>
   | Node<{ kind: "take-stream"; stream: Expr; count: Expr }>
+  | Node<{ kind: "take-while-stream"; stream: Expr; predicate: Expr }>
   | Node<{ kind: "partition-all"; jobs: Expr; concurrency: number | "unbounded" | undefined }>
   | Node<{ kind: "validate-all"; jobs: Expr; onErrors: Expr; concurrency: number | "unbounded" | undefined }>
   | Node<{ kind: "all-results"; jobs: Expr; concurrency: number | "unbounded" | undefined }>

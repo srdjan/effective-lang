@@ -874,6 +874,8 @@ export class BodyChecker {
         return this.flatMapStreamsCall(node, args);
       case "takeStream":
         return this.takeStreamCall(node, args);
+      case "takeWhileStream":
+        return this.takeWhileStreamCall(node, args);
       case "sinkForEach":
         return this.sinkForEachCall(node, args);
       case "runStream":
@@ -2110,6 +2112,44 @@ export class BodyChecker {
       );
     }
     return this.finish(node, stream.type, combine([stream, count]));
+  }
+
+  private takeWhileStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "take-while-stream" });
+    if (!this.arity(node, "takeWhileStream", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.noPipeline("takeWhileStream", args);
+    this.inlineStreamCallback("takeWhileStream", args[1]);
+    const stream = this.argInfo(args[0]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`takeWhileStream` needs a Stream value",
+        args[0].node,
+      );
+    }
+    const element = source.kind === "stream"
+      ? source.element
+      : this.table.error;
+    const predicate = this.callback(
+      "takeWhileStream",
+      args[1],
+      [element],
+      this.table.boolean,
+    );
+    this.fits(
+      args[1].node,
+      predicate.result,
+      this.table.boolean,
+      "the takeWhileStream predicate",
+    );
+    return this.finish(node, stream.type, combine([stream, predicate.info]));
   }
 
   private sinkForEachCall(node: NodeId, args: readonly Arg[]): NodeInfo {

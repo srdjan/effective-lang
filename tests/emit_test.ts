@@ -157,6 +157,18 @@ export const limit = (count: Int): Stream<Int, never, Source.next> =>
   assertStringIncludes(output, "Stream.take(source, count)");
 });
 
+Deno.test("takeWhileStream emits Stream.takeWhile", () => {
+  const output = oneModule(`
+type Int = int
+service Source { next(state: Int): Option<[Int, Int]> }
+const source = unfold(0, (state) => Source.next(state))
+export const prefix: Stream<Int, never, Source.next> =
+  takeWhileStream(source, (n) => n < 3)
+`);
+  assertStringIncludes(output, "Stream.takeWhile(");
+  assertStringIncludes(output, "(n) => n < 3");
+});
+
 Deno.test("buffered merged streams emit bounded suspending buffers", () => {
   const output = oneModule(`
 service Source { next(state: Int): Option<[Int, Int]> }

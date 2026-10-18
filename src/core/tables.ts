@@ -123,6 +123,7 @@ export type NodeFact =
   | { readonly kind: "map-effect" }
   | { readonly kind: "flat-map-streams" }
   | { readonly kind: "take-stream" }
+  | { readonly kind: "take-while-stream" }
   | {
     readonly kind: "partition-all";
     readonly concurrency: number | "unbounded" | undefined;

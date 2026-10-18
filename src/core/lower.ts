@@ -646,6 +646,13 @@ class BodyLowerer {
           count: arg(1),
           ...annotation,
         };
+      case "take-while-stream":
+        return {
+          kind: "take-while-stream",
+          stream: arg(0),
+          predicate: arg(1),
+          ...annotation,
+        };
       case "partition-all":
         return {
           kind: "partition-all",
