@@ -124,6 +124,7 @@ export type NodeFact =
   | { readonly kind: "flat-map-streams" }
   | { readonly kind: "take-stream" }
   | { readonly kind: "drop-stream" }
+  | { readonly kind: "drop-while-stream" }
   | { readonly kind: "take-while-stream" }
   | { readonly kind: "take-until-stream" }
   | {

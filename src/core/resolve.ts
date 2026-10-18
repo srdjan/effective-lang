@@ -63,6 +63,7 @@ export type PreludeName =
   | "flatMapStreams"
   | "takeStream"
   | "dropStream"
+  | "dropWhileStream"
   | "takeWhileStream"
   | "takeUntilStream"
   | "race"
@@ -111,6 +112,7 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "flatMapStreams",
   "takeStream",
   "dropStream",
+  "dropWhileStream",
   "takeWhileStream",
   "takeUntilStream",
   "race",
@@ -395,6 +397,7 @@ class Resolver {
         name !== "scoped" && name !== "forkScoped" && name !== "zipStreams" &&
         name !== "concatStreams" && name !== "flatMapStreams" &&
         name !== "takeStream" && name !== "dropStream" &&
+        name !== "dropWhileStream" &&
         name !== "takeWhileStream" &&
         name !== "takeUntilStream") ||
       BUILTIN_TYPE_NAMES.has(name)
@@ -550,6 +553,7 @@ class Resolver {
       name !== "scoped" && name !== "forkScoped" && name !== "zipStreams" &&
       name !== "concatStreams" && name !== "flatMapStreams" &&
       name !== "takeStream" && name !== "dropStream" &&
+      name !== "dropWhileStream" &&
       name !== "takeWhileStream" &&
       name !== "takeUntilStream"
     ) {

@@ -49,6 +49,8 @@ export function childrenOf(expr: Expr): Expr[] {
       return [expr.stream, expr.count];
     case "drop-stream":
       return [expr.stream, expr.count];
+    case "drop-while-stream":
+      return [expr.stream, expr.predicate];
     case "take-while-stream":
       return [expr.stream, expr.predicate];
     case "take-until-stream":

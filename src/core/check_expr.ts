@@ -876,6 +876,8 @@ export class BodyChecker {
         return this.takeStreamCall(node, args);
       case "dropStream":
         return this.dropStreamCall(node, args);
+      case "dropWhileStream":
+        return this.dropWhileStreamCall(node, args);
       case "takeWhileStream":
         return this.takeWhileStreamCall(node, args);
       case "takeUntilStream":
@@ -2150,6 +2152,44 @@ export class BodyChecker {
       );
     }
     return this.finish(node, stream.type, combine([stream, count]));
+  }
+
+  private dropWhileStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "drop-while-stream" });
+    if (!this.arity(node, "dropWhileStream", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.noPipeline("dropWhileStream", args);
+    this.inlineStreamCallback("dropWhileStream", args[1]);
+    const stream = this.argInfo(args[0]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`dropWhileStream` needs a Stream value",
+        args[0].node,
+      );
+    }
+    const element = source.kind === "stream"
+      ? source.element
+      : this.table.error;
+    const predicate = this.callback(
+      "dropWhileStream",
+      args[1],
+      [element],
+      this.table.boolean,
+    );
+    this.fits(
+      args[1].node,
+      predicate.result,
+      this.table.boolean,
+      "the dropWhileStream predicate",
+    );
+    return this.finish(node, stream.type, combine([stream, predicate.info]));
   }
 
   private takeWhileStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {

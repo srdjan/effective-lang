@@ -180,6 +180,18 @@ export const prefix: Stream<Int, never, Source.next> =
   assertStringIncludes(output, "(n) => n < 3");
 });
 
+Deno.test("dropWhileStream emits Stream.dropWhile", () => {
+  const output = oneModule(`
+type Int = int
+service Source { next(state: Int): Option<[Int, Int]> }
+const source = unfold(0, (state) => Source.next(state))
+export const prefix: Stream<Int, never, Source.next> =
+  dropWhileStream(source, (n) => n < 3)
+`);
+  assertStringIncludes(output, "Stream.dropWhile(");
+  assertStringIncludes(output, "(n) => n < 3");
+});
+
 Deno.test("takeUntilStream emits Stream.takeUntil", () => {
   const output = oneModule(`
 type Int = int
