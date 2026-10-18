@@ -935,6 +935,23 @@ export class ExprEmitter {
           callArguments([kid(e.stream), this.callback(e.predicate, kid)]),
         ]);
       }
+      case "filter-effect-stream":
+      case "take-while-effect-stream":
+      case "take-until-effect-stream":
+      case "drop-while-effect-stream": {
+        const stream = this.scope.effect("Stream");
+        const method = e.kind === "filter-effect-stream"
+          ? "filterEffect"
+          : e.kind === "take-while-effect-stream"
+          ? "takeWhileEffect"
+          : e.kind === "take-until-effect-stream"
+          ? "takeUntilEffect"
+          : "dropWhileEffect";
+        return emitted([
+          `${stream}.${method}`,
+          callArguments([kid(e.stream), this.effectCallback(e.predicate)]),
+        ]);
+      }
       case "take-while-stream": {
         const stream = this.scope.effect("Stream");
         return emitted([

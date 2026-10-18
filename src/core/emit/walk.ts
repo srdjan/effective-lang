@@ -63,6 +63,10 @@ export function childrenOf(expr: Expr): Expr[] {
     case "drop-while-stream":
       return [expr.stream, expr.predicate];
     case "filter-stream":
+    case "filter-effect-stream":
+    case "take-while-effect-stream":
+    case "take-until-effect-stream":
+    case "drop-while-effect-stream":
       return [expr.stream, expr.predicate];
     case "take-while-stream":
       return [expr.stream, expr.predicate];

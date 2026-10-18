@@ -898,6 +898,30 @@ export class BodyChecker {
         return this.dropWhileStreamCall(node, args);
       case "filterStream":
         return this.filterStreamCall(node, args);
+      case "filterEffectStream":
+        this.fact(node, { kind: "filter-effect-stream" });
+        return this.effectStreamPredicateCall(node, args, "filterEffectStream");
+      case "takeWhileEffectStream":
+        this.fact(node, { kind: "take-while-effect-stream" });
+        return this.effectStreamPredicateCall(
+          node,
+          args,
+          "takeWhileEffectStream",
+        );
+      case "takeUntilEffectStream":
+        this.fact(node, { kind: "take-until-effect-stream" });
+        return this.effectStreamPredicateCall(
+          node,
+          args,
+          "takeUntilEffectStream",
+        );
+      case "dropWhileEffectStream":
+        this.fact(node, { kind: "drop-while-effect-stream" });
+        return this.effectStreamPredicateCall(
+          node,
+          args,
+          "dropWhileEffectStream",
+        );
       case "takeWhileStream":
         return this.takeWhileStreamCall(node, args);
       case "takeUntilStream":
@@ -2713,6 +2737,64 @@ export class BodyChecker {
       "the filterStream predicate",
     );
     return this.finish(node, stream.type, combine([stream, predicate.info]));
+  }
+
+  private effectStreamPredicateCall(
+    node: NodeId,
+    args: readonly Arg[],
+    name:
+      | "filterEffectStream"
+      | "takeWhileEffectStream"
+      | "takeUntilEffectStream"
+      | "dropWhileEffectStream",
+  ): NodeInfo {
+    if (!this.arity(node, name, 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.noPipeline(name, args);
+    this.inlineStreamCallback(name, args[1]);
+    const stream = this.argInfo(args[0]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        `${name} needs a Stream value`,
+        args[0].node,
+      );
+    }
+    const element = source.kind === "stream"
+      ? source.element
+      : this.table.error;
+    const predicate = this.callback(
+      name,
+      args[1],
+      [element],
+      this.table.boolean,
+      true,
+    );
+    this.fits(
+      args[1].node,
+      predicate.result,
+      this.table.boolean,
+      `the ${name} predicate`,
+    );
+    const fn = this.functionOf(predicate.info.type);
+    const type = this.table.stream(
+      element,
+      [
+        ...(source.kind === "stream" ? source.failures : []),
+        ...(fn?.failures ?? []),
+      ],
+      [
+        ...(source.kind === "stream" ? source.requirements : []),
+        ...(fn?.requirements ?? []),
+      ],
+    );
+    return this.finish(node, type, combine([stream, predicate.info]));
   }
 
   private takeWhileStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {

@@ -52,6 +52,8 @@ Collection literals use brackets: `[1, 2]` infers an array, while an expected tu
 
 `filterStream(stream, predicate)` tests every element with an inline pure boolean predicate and emits the accepted elements in source order. Rejected elements are still pulled, so upstream failures propagate. The stream keeps its deferred failure and service channels.
 
+`filterEffectStream`, `takeWhileEffectStream`, `takeUntilEffectStream`, and `dropWhileEffectStream` use inline boolean predicates that may fail or call services. Their stream types combine source and predicate channels. They test sequentially when consumed; the prefix forms stop or retain elements according to their pure counterparts.
+
 `mapStream(stream, transform)` applies an inline pure callback to each pulled element and emits the transformed values in source order. The result element type may differ from the source; deferred failures and requirements stay in the stream type.
 
 `scanStream(stream, seed, update)` emits the pure seed before pulling, then emits each state computed by an inline pure `(state, element)` callback. Each consumption starts with a fresh state; source failures and requirements remain deferred in the stream type.

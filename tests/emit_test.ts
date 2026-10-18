@@ -390,6 +390,30 @@ const nested = flatMapStreams(source, (n) => unfold(n, (m) => Source.next(m)), {
   assertStringIncludes(output, '{ concurrency: "unbounded" }');
 });
 
+Deno.test("effectful stream predicates emit the corresponding Effect operators", () => {
+  const output = oneModule(`
+type Int = int
+type Bool = boolean
+service Source { next(n: Int): Option<[Int, Int]> }
+service Gate { check(n: Int): Bool }
+const source = unfold(0, (n) => Source.next(n))
+const filtered = filterEffectStream(source, (n) => Gate.check(n))
+const taken = takeWhileEffectStream(source, (n) => Gate.check(n))
+const until = takeUntilEffectStream(source, (n) => Gate.check(n))
+const dropped = dropWhileEffectStream(source, (n) => Gate.check(n))
+`);
+  for (
+    const method of [
+      "filterEffect",
+      "takeWhileEffect",
+      "takeUntilEffect",
+      "dropWhileEffect",
+    ]
+  ) {
+    assertStringIncludes(output, `Stream.${method}(`);
+  }
+});
+
 Deno.test("a source race emits Effect.race and executes only when run", () => {
   const output = oneModule(`
 type Int = int

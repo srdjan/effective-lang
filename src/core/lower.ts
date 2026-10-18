@@ -716,6 +716,34 @@ class BodyLowerer {
           predicate: arg(1),
           ...annotation,
         };
+      case "filter-effect-stream":
+        return {
+          kind: "filter-effect-stream",
+          stream: arg(0),
+          predicate: arg(1),
+          ...annotation,
+        };
+      case "take-while-effect-stream":
+        return {
+          kind: "take-while-effect-stream",
+          stream: arg(0),
+          predicate: arg(1),
+          ...annotation,
+        };
+      case "take-until-effect-stream":
+        return {
+          kind: "take-until-effect-stream",
+          stream: arg(0),
+          predicate: arg(1),
+          ...annotation,
+        };
+      case "drop-while-effect-stream":
+        return {
+          kind: "drop-while-effect-stream",
+          stream: arg(0),
+          predicate: arg(1),
+          ...annotation,
+        };
       case "take-while-stream":
         return {
           kind: "take-while-stream",

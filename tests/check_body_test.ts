@@ -1083,6 +1083,47 @@ const bad = ${expression}
   }
 });
 
+Deno.test("effectful stream predicates defer source and callback channels", () => {
+  for (
+    const operation of [
+      "filterEffectStream",
+      "takeWhileEffectStream",
+      "takeUntilEffectStream",
+      "dropWhileEffectStream",
+    ]
+  ) {
+    const valid = checkText(`
+type Int = int
+type Bool = boolean
+error SourceStop = {}
+error PredicateStop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails SourceStop }
+service Gate { check(n: Int): Bool fails PredicateStop }
+const source = unfold(0, (n) => Source.next(n))
+const selected = ${operation}(source, (n) => Gate.check(n))
+const main = (): Int[] fails SourceStop | PredicateStop uses Source.next | Gate.check => collectStream(selected)
+`);
+    assertEquals(codes(valid), [], messages(valid).join("\n"));
+
+    const wrongResult = checkText(`
+type Int = int
+service Source { next(n: Int): Option<[Int, Int]> }
+const source = unfold(0, (n) => Source.next(n))
+const bad = ${operation}(source, (n) => n + 1)
+`);
+    assert(
+      codes(wrongResult).includes("type-mismatch/003"),
+      messages(wrongResult).join("\n"),
+    );
+    const shadow = checkText(`
+type Int = int
+const ${operation} = (): Int => 3
+const use = (): Int => ${operation}()
+`);
+    assertEquals(codes(shadow), [], messages(shadow).join("\n"));
+  }
+});
+
 Deno.test("all rejects non-Effect entries and invalid concurrency", () => {
   for (
     const expression of [

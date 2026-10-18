@@ -1008,6 +1008,46 @@ const nested = flatMapStreams(source, (n) => unfold(n, (m) => Source.next(m)), {
   }
 });
 
+Deno.test("effectful stream predicates validate combined deferred channels", () => {
+  for (
+    const [operation, kind] of [
+      ["filterEffectStream", "filter-effect-stream"],
+      ["takeWhileEffectStream", "take-while-effect-stream"],
+      ["takeUntilEffectStream", "take-until-effect-stream"],
+      ["dropWhileEffectStream", "drop-while-effect-stream"],
+    ] as const
+  ) {
+    const lowered = lowerText(`
+type Int = int
+type Bool = boolean
+error SourceStop = {}
+error PredicateStop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails SourceStop }
+service Gate { check(n: Int): Bool fails PredicateStop }
+const source = unfold(0, (n) => Source.next(n))
+const selected = ${operation}(source, (n) => Gate.check(n))
+`);
+    assertEquals(codesOf(lowered.ir, lowered.sources), []);
+    const wrongFailures = copy(lowered.ir);
+    const selected = wrongFailures.declarations.find((d) =>
+      d.name === "selected"
+    );
+    assert(selected?.kind === "constant" && selected.value.kind === kind);
+    setAt(selected, "value.type.effects.failures", []);
+    assert(codesOf(wrongFailures, lowered.sources).includes("validation/002"));
+
+    const wrongRequirements = copy(lowered.ir);
+    const requirement = wrongRequirements.declarations.find((d) =>
+      d.name === "selected"
+    );
+    assert(requirement?.kind === "constant" && requirement.value.kind === kind);
+    setAt(requirement, "value.type.effects.requirements", []);
+    assert(
+      codesOf(wrongRequirements, lowered.sources).includes("validation/002"),
+    );
+  }
+});
+
 Deno.test("stream validation recomputes deferred and active channels", () => {
   const lowered = lowerText(`
 error Stop = {}

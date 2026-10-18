@@ -74,6 +74,10 @@ export type PreludeName =
   | "dropStream"
   | "dropWhileStream"
   | "filterStream"
+  | "filterEffectStream"
+  | "takeWhileEffectStream"
+  | "takeUntilEffectStream"
+  | "dropWhileEffectStream"
   | "takeWhileStream"
   | "takeUntilStream"
   | "race"
@@ -133,6 +137,10 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "dropStream",
   "dropWhileStream",
   "filterStream",
+  "filterEffectStream",
+  "takeWhileEffectStream",
+  "takeUntilEffectStream",
+  "dropWhileEffectStream",
   "takeWhileStream",
   "takeUntilStream",
   "race",
@@ -418,6 +426,10 @@ class Resolver {
         name !== "concatStreams" && name !== "flatMapStreams" &&
         name !== "takeStream" && name !== "dropStream" &&
         name !== "dropWhileStream" && name !== "filterStream" &&
+        name !== "filterEffectStream" &&
+        name !== "takeWhileEffectStream" &&
+        name !== "takeUntilEffectStream" &&
+        name !== "dropWhileEffectStream" &&
         name !== "mapStream" && name !== "scanStream" &&
         name !== "mapAccumStream" && name !== "foldStream" &&
         name !== "foldEffectStream" && name !== "collectStream" &&
@@ -579,6 +591,10 @@ class Resolver {
       name !== "concatStreams" && name !== "flatMapStreams" &&
       name !== "takeStream" && name !== "dropStream" &&
       name !== "dropWhileStream" && name !== "filterStream" &&
+      name !== "filterEffectStream" &&
+      name !== "takeWhileEffectStream" &&
+      name !== "takeUntilEffectStream" &&
+      name !== "dropWhileEffectStream" &&
       name !== "mapStream" && name !== "scanStream" &&
       name !== "mapAccumStream" && name !== "foldStream" &&
       name !== "foldEffectStream" && name !== "collectStream" &&

@@ -1678,6 +1678,143 @@ console.log(JSON.stringify({ before, immediate, suffix, allDropped, failure: { t
   });
 });
 
+Deno.test("effectful stream predicates stop, fail, and close pulls", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "type Bool = boolean",
+        "export error Stop = {}",
+        "export service Source { next(n: Int): Option<[Int, Int]> }",
+        "export service Gate { check(n: Int): Bool fails Stop }",
+        "const source = unfold(0, (n) => Source.next(n))",
+        "export const filtered = (): Int[] fails Stop uses Source.next | Gate.check => collectStream(filterEffectStream(source, (n) => Gate.check(n)))",
+        "export const taken = (): Int[] fails Stop uses Source.next | Gate.check => collectStream(takeWhileEffectStream(source, (n) => Gate.check(n)))",
+        "export const until = (): Int[] fails Stop uses Source.next | Gate.check => collectStream(takeUntilEffectStream(source, (n) => Gate.check(n)))",
+        "export const dropped = (): Int[] fails Stop uses Source.next | Gate.check => collectStream(dropWhileEffectStream(source, (n) => Gate.check(n)))",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer, Option } from "effect";
+import { Source, Gate, Stop, filtered, taken, until, dropped } from "./main.ts";
+
+const pulled: number[] = [];
+const released: number[] = [];
+const tested: number[] = [];
+let mode = "filter";
+let fail = false;
+let empty = false;
+const SourceLive = Layer.succeed(Source)({
+  next: (n) => Effect.acquireUseRelease(
+    Effect.sync(() => { pulled.push(n); }),
+    () => Effect.succeed(empty || n === 4
+      ? Option.none()
+      : Option.some([n + 1, n + 1] as const)),
+    () => Effect.sync(() => { released.push(n); }),
+  ),
+});
+const GateLive = Layer.succeed(Gate)({
+  check: (n) => Effect.sync(() => { tested.push(n); }).pipe(
+    Effect.flatMap(() => fail && n === 2
+      ? Effect.fail(new Stop({}))
+      : Effect.succeed(mode === "filter" ? n % 2 === 0
+        : mode === "until" ? n === 3 : n < 3)),
+  ),
+});
+const Live = Layer.merge(SourceLive, GateLive);
+const reset = (nextMode: string) => {
+  mode = nextMode;
+  pulled.length = 0;
+  released.length = 0;
+  tested.length = 0;
+  fail = false;
+  empty = false;
+};
+const snapshot = (values: readonly number[]) => ({
+  values, pulled: [...pulled], released: [...released], tested: [...tested],
+});
+const pending = filtered().pipe(Effect.provide(Live));
+const before = snapshot([]);
+const filterResult = snapshot(await Effect.runPromise(pending));
+reset("while");
+const whileResult = snapshot(await Effect.runPromise(taken().pipe(Effect.provide(Live))));
+reset("until");
+const untilResult = snapshot(await Effect.runPromise(until().pipe(Effect.provide(Live))));
+reset("drop");
+const dropResult = snapshot(await Effect.runPromise(dropped().pipe(Effect.provide(Live))));
+reset("filter");
+empty = true;
+const emptyResult = snapshot(await Effect.runPromise(pending));
+reset("filter");
+const repeated = snapshot(await Effect.runPromise(pending));
+const failures = [];
+for (const [nextMode, program] of [
+  ["filter", filtered], ["while", taken], ["until", until], ["drop", dropped],
+] as const) {
+  reset(nextMode);
+  fail = true;
+  const error = await Effect.runPromise(Effect.flip(program().pipe(Effect.provide(Live))));
+  failures.push({ mode: nextMode, tag: error._tag, pulled: [...pulled], released: [...released], tested: [...tested] });
+}
+console.log(JSON.stringify({ before, filterResult, whileResult, untilResult, dropResult, emptyResult, repeated, failures }));
+`,
+    );
+    assertEquals(result, {
+      before: { values: [], pulled: [], released: [], tested: [] },
+      filterResult: {
+        values: [2, 4],
+        pulled: [0, 1, 2, 3, 4],
+        released: [0, 1, 2, 3, 4],
+        tested: [1, 2, 3, 4],
+      },
+      whileResult: {
+        values: [1, 2],
+        pulled: [0, 1, 2],
+        released: [0, 1, 2],
+        tested: [1, 2, 3],
+      },
+      untilResult: {
+        values: [1, 2, 3],
+        pulled: [0, 1, 2],
+        released: [0, 1, 2],
+        tested: [1, 2, 3],
+      },
+      dropResult: {
+        values: [3, 4],
+        pulled: [0, 1, 2, 3, 4],
+        released: [0, 1, 2, 3, 4],
+        tested: [1, 2, 3],
+      },
+      emptyResult: {
+        values: [],
+        pulled: [0],
+        released: [0],
+        tested: [],
+      },
+      repeated: {
+        values: [2, 4],
+        pulled: [0, 1, 2, 3, 4],
+        released: [0, 1, 2, 3, 4],
+        tested: [1, 2, 3, 4],
+      },
+      failures: ["filter", "while", "until", "drop"].map((mode) => ({
+        mode,
+        tag: "main#Stop",
+        pulled: [0, 1],
+        released: [0, 1],
+        tested: [1, 2],
+      })),
+    });
+  });
+});
+
 Deno.test("filterStream evaluates every element and propagates source failures", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

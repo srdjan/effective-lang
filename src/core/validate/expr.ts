@@ -497,6 +497,11 @@ export class BodyValidator {
         return this.dropWhileStream(e, path);
       case "filter-stream":
         return this.filterStream(e, path);
+      case "filter-effect-stream":
+      case "take-while-effect-stream":
+      case "take-until-effect-stream":
+      case "drop-while-effect-stream":
+        return this.effectStreamPredicate(e, path);
       case "take-while-stream":
         return this.takeWhileStream(e, path);
       case "take-until-stream":
@@ -2234,6 +2239,10 @@ export class BodyValidator {
           case "drop-while-stream":
             return [e.stream, e.predicate];
           case "filter-stream":
+          case "filter-effect-stream":
+          case "take-while-effect-stream":
+          case "take-until-effect-stream":
+          case "drop-while-effect-stream":
             return [e.stream, e.predicate];
           case "take-while-stream":
             return [e.stream, e.predicate];
@@ -3167,6 +3176,65 @@ export class BodyValidator {
     }
     return {
       type: source,
+      match: "exact",
+      active: combine([stream, predicate]),
+    };
+  }
+
+  private effectStreamPredicate(
+    e: Extract<
+      Expr,
+      {
+        kind:
+          | "filter-effect-stream"
+          | "take-while-effect-stream"
+          | "take-until-effect-stream"
+          | "drop-while-effect-stream";
+      }
+    >,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const predicate = this.check(e.predicate, `${path}.predicate`);
+    const source = unfold(this.env, stream.type);
+    const fn = asFunction(this.env, predicate.type);
+    if (e.predicate.kind !== "closure") {
+      this.add(
+        AREA.control,
+        `${path}.predicate`,
+        "effectful stream predicate requires an inline closure",
+        e.predicate.span,
+      );
+    }
+    if (
+      source.kind !== "stream" || fn === undefined ||
+      fn.parameters.length !== 1 ||
+      !fits(this.env, source.element, fn.parameters[0]) ||
+      !fits(this.env, fn.result, BOOLEAN)
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "effectful stream predicate needs a Stream and a boolean callback",
+        e.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: {
+        kind: "stream",
+        element: source.element,
+        effects: {
+          failures: sortedUnique([
+            ...source.effects.failures,
+            ...fn.effects.failures,
+          ]),
+          requirements: sortedUnique([
+            ...source.effects.requirements,
+            ...fn.effects.requirements,
+          ]),
+        },
+      },
       match: "exact",
       active: combine([stream, predicate]),
     };

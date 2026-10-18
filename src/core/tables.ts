@@ -141,6 +141,10 @@ export type NodeFact =
   | { readonly kind: "drop-stream" }
   | { readonly kind: "drop-while-stream" }
   | { readonly kind: "filter-stream" }
+  | { readonly kind: "filter-effect-stream" }
+  | { readonly kind: "take-while-effect-stream" }
+  | { readonly kind: "take-until-effect-stream" }
+  | { readonly kind: "drop-while-effect-stream" }
   | { readonly kind: "take-while-stream" }
   | { readonly kind: "take-until-stream" }
   | {
