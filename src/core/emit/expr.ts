@@ -928,6 +928,33 @@ export class ExprEmitter {
           callArguments([kid(e.stream), kid(e.policy)]),
         ]);
       }
+      case "debounce-stream": {
+        const stream = this.scope.effect("Stream");
+        const duration = this.scope.effect("Duration");
+        return emitted([
+          `${stream}.debounce`,
+          callArguments([
+            kid(e.stream),
+            emitted(`${duration}.millis(${e.delayMs})`),
+          ]),
+        ]);
+      }
+      case "throttle-stream": {
+        const stream = this.scope.effect("Stream");
+        const duration = this.scope.effect("Duration");
+        return emitted([
+          `${stream}.throttle`,
+          callArguments([
+            emitted([
+              `${stream}.rechunk`,
+              callArguments([kid(e.stream), emitted("1")]),
+            ]),
+            emitted(
+              `{ cost: (arr) => arr.length, units: ${e.units}, duration: ${duration}.millis(${e.durationMs}), strategy: "${e.strategy}" }`,
+            ),
+          ]),
+        ]);
+      }
       case "take-stream": {
         const stream = this.scope.effect("Stream");
         return emitted([

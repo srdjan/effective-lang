@@ -144,6 +144,8 @@ export type Expr =
   | Node<{ kind: "switch-map-streams"; stream: Expr; transform: Expr }>
   | Node<{ kind: "catch-stream"; stream: Expr; recover: Expr }>
   | Node<{ kind: "retry-stream"; stream: Expr; policy: Expr }>
+  | Node<{ kind: "debounce-stream"; stream: Expr; delayMs: number }>
+  | Node<{ kind: "throttle-stream"; stream: Expr; units: number; durationMs: number; strategy: "shape" | "enforce" }>
   | Node<{ kind: "take-stream"; stream: Expr; count: Expr }>
   | Node<{ kind: "drop-stream"; stream: Expr; count: Expr }>
   | Node<{ kind: "drop-while-stream"; stream: Expr; predicate: Expr }>

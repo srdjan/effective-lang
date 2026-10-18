@@ -1134,6 +1134,70 @@ const use = (): Int => retryStream()
   assertEquals(codes(shadow), [], messages(shadow).join("\n"));
 });
 
+Deno.test("temporal stream controls validate literal settings and deferred channels", () => {
+  const valid = checkText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const debounced = debounceStream(source, 0)
+const shaped = throttleStream(debounced, { units: 2, durationMs: 100, strategy: "shape" })
+const enforced = throttleStream(source, { strategy: "enforce", durationMs: 100, units: 1 })
+const main = (): Int[] fails Stop uses Source.next => collectStream(shaped)
+`);
+  assertEquals(codes(valid), [], messages(valid).join("\n"));
+  for (
+    const [expression, expected] of [
+      ["debounceStream(source, -1)", "syntax/010"],
+      [
+        'throttleStream(source, { units: 0, durationMs: 100, strategy: "shape" })',
+        "type-mismatch/010",
+      ],
+      [
+        'throttleStream(source, { units: 1, durationMs: 0, strategy: "shape" })',
+        "type-mismatch/010",
+      ],
+      [
+        'throttleStream(source, { units: 1, durationMs: 100, strategy: "drop" })',
+        "type-mismatch/010",
+      ],
+    ] as const
+  ) {
+    const bad = checkText(`
+type Int = int
+service Source { next(n: Int): Option<[Int, Int]> }
+const source = unfold(0, (n) => Source.next(n))
+const bad = ${expression}
+`);
+    assert(codes(bad).includes(expected), expression);
+  }
+  const shadow = checkText(`
+type Int = int
+const debounceStream = (): Int => 1
+const throttleStream = (): Int => 2
+const use = (): Int => debounceStream() + throttleStream()
+`);
+  assertEquals(codes(shadow), [], messages(shadow).join("\n"));
+});
+
+Deno.test("common stream terminals and observation compose from core forms", () => {
+  const project = checkText(`
+type Int = int
+type Count = number
+type Bool = boolean
+service Source { next(n: Int): Option<[Int, Int]> }
+service Worker { inspect(n: Int): void; keep(n: Int): Bool }
+const source = unfold(0, (n) => Source.next(n))
+const tapped = mapEffect(source, (n) => { Worker.inspect(n); n })
+const seed: Count = 0
+const counted = (): Count uses Source.next => foldStream(source, seed, (count, _) => count + 1)
+const each = (): void uses Source.next | Worker.inspect => runStream(source, sinkForEach((n: Int) => Worker.inspect(n)))
+const eachWhile = (): void uses Source.next | Worker.keep => drainStream(takeUntilEffectStream(source, (n) => Worker.keep(n) === false))
+const observed = (): Int[] uses Source.next | Worker.inspect => collectStream(tapped)
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
 Deno.test("stream mapping accepts literal concurrency and rejects invalid bounds", () => {
   const valid = checkText(`
 type Int = int

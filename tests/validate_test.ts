@@ -1098,6 +1098,39 @@ const retried = retryStream(source, policy)
   assert(codesOf(wrongPolicy, lowered.sources).includes("validation/002"));
 });
 
+Deno.test("temporal stream controls validate bounds and preserved channels", () => {
+  const lowered = lowerText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const debounced = debounceStream(source, 0)
+const throttled = throttleStream(source, { units: 1, durationMs: 100, strategy: "enforce" })
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  for (
+    const [name, path, value] of [
+      ["debounced", "value.delayMs", -1],
+      ["throttled", "value.units", 0],
+      ["throttled", "value.durationMs", 0],
+      ["throttled", "value.strategy", "drop"],
+    ] as const
+  ) {
+    const changed = copy(lowered.ir);
+    const declaration = changed.declarations.find((d) => d.name === name);
+    assert(declaration?.kind === "constant");
+    setAt(declaration, path, value);
+    assert(codesOf(changed, lowered.sources).includes("validation/006"));
+  }
+  const wrongFailures = copy(lowered.ir);
+  const debounced = wrongFailures.declarations.find((d) =>
+    d.name === "debounced"
+  );
+  assert(debounced?.kind === "constant");
+  setAt(debounced, "value.type.effects.failures", []);
+  assert(codesOf(wrongFailures, lowered.sources).includes("validation/002"));
+});
+
 Deno.test("effectful stream predicates validate combined deferred channels", () => {
   for (
     const [operation, kind] of [

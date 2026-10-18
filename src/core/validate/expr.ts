@@ -495,6 +495,10 @@ export class BodyValidator {
         return this.catchStream(e, path);
       case "retry-stream":
         return this.retryStream(e, path);
+      case "debounce-stream":
+        return this.debounceStream(e, path);
+      case "throttle-stream":
+        return this.throttleStream(e, path);
       case "take-stream":
         return this.takeStream(e, path);
       case "drop-stream":
@@ -2233,6 +2237,9 @@ export class BodyValidator {
             return [e.stream, e.recover];
           case "retry-stream":
             return [e.stream, e.policy];
+          case "debounce-stream":
+          case "throttle-stream":
+            return [e.stream];
           case "scan-stream":
           case "map-accum-stream":
           case "fold-stream":
@@ -3198,6 +3205,52 @@ export class BodyValidator {
       match: "exact",
       active: combine([stream, policy]),
     };
+  }
+
+  private debounceStream(
+    e: Extract<Expr, { kind: "debounce-stream" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const source = unfold(this.env, stream.type);
+    if (source.kind !== "stream") {
+      this.add(AREA.types, path, "debounceStream needs a Stream", e.span);
+      return this.poison();
+    }
+    if (!Number.isSafeInteger(e.delayMs) || e.delayMs < 0) {
+      this.add(
+        AREA.control,
+        `${path}.delayMs`,
+        "debounceStream delay must be a nonnegative safe integer",
+        e.span,
+      );
+    }
+    return { type: source, match: "exact", active: combine([stream]) };
+  }
+
+  private throttleStream(
+    e: Extract<Expr, { kind: "throttle-stream" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const source = unfold(this.env, stream.type);
+    if (source.kind !== "stream") {
+      this.add(AREA.types, path, "throttleStream needs a Stream", e.span);
+      return this.poison();
+    }
+    if (
+      !Number.isSafeInteger(e.units) || e.units <= 0 ||
+      !Number.isSafeInteger(e.durationMs) || e.durationMs <= 0 ||
+      (e.strategy !== "shape" && e.strategy !== "enforce")
+    ) {
+      this.add(
+        AREA.control,
+        path,
+        "throttleStream needs positive units and duration and a known strategy",
+        e.span,
+      );
+    }
+    return { type: source, match: "exact", active: combine([stream]) };
   }
 
   private takeStream(

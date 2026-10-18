@@ -408,6 +408,21 @@ const retried = retryStream(source, policy)
   assertStringIncludes(output, "Stream.retry(");
 });
 
+Deno.test("temporal stream controls emit duration and per-element throttle", () => {
+  const output = oneModule(`
+type Int = int
+service Source { next(n: Int): Option<[Int, Int]> }
+const source = unfold(0, (n) => Source.next(n))
+const debounced = debounceStream(source, 0)
+const throttled = throttleStream(source, { units: 2, durationMs: 100, strategy: "enforce" })
+`);
+  assertStringIncludes(output, "Stream.debounce(");
+  assertStringIncludes(output, "Duration.millis(0)");
+  assertStringIncludes(output, "Stream.throttle(");
+  assertStringIncludes(output, "Stream.rechunk(");
+  assertStringIncludes(output, 'strategy: "enforce"');
+});
+
 Deno.test("concurrent stream mapping emits pinned concurrency options", () => {
   const output = oneModule(`
 type Int = int

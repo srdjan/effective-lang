@@ -896,6 +896,10 @@ export class BodyChecker {
         return this.catchStreamCall(node, args);
       case "retryStream":
         return this.retryStreamCall(node, args);
+      case "debounceStream":
+        return this.debounceStreamCall(node, args);
+      case "throttleStream":
+        return this.throttleStreamCall(node, args);
       case "takeStream":
         return this.takeStreamCall(node, args);
       case "dropStream":
@@ -2757,6 +2761,157 @@ export class BodyChecker {
       )
       : this.table.error;
     return this.finish(node, type, combine([stream, policy]));
+  }
+
+  private debounceStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    if (!this.arity(node, "debounceStream", 2, args)) {
+      this.fact(node, { kind: "debounce-stream", delayMs: undefined });
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.noPipeline("debounceStream", args);
+    const stream = this.argInfo(args[0]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`debounceStream` needs a Stream value",
+        args[0].node,
+      );
+    }
+    const delayNode = args[1].node;
+    const delay = args[1].pre === undefined &&
+        kindOf(this.tree, delayNode) === SyntaxKind.LiteralExpr
+      ? literalOf(this.tree, delayNode)
+      : undefined;
+    const delayMs = typeof delay === "number" &&
+        Number.isSafeInteger(delay) && delay >= 0
+      ? delay
+      : undefined;
+    if (delayMs === undefined) {
+      this.report(
+        "type-mismatch/010",
+        "`debounceStream` needs a nonnegative safe integer millisecond literal",
+        delayNode,
+      );
+    } else {
+      this.finish(delayNode, this.table.int, PURE_EFFECTS);
+    }
+    this.fact(node, { kind: "debounce-stream", delayMs });
+    return this.finish(node, stream.type, stream);
+  }
+
+  private throttleStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    if (!this.arity(node, "throttleStream", 2, args)) {
+      this.fact(node, {
+        kind: "throttle-stream",
+        units: undefined,
+        durationMs: undefined,
+        strategy: undefined,
+      });
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.noPipeline("throttleStream", args);
+    const stream = this.argInfo(args[0]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`throttleStream` needs a Stream value",
+        args[0].node,
+      );
+    }
+    const options = this.streamThrottleOptions(args[1]);
+    this.fact(node, {
+      kind: "throttle-stream",
+      units: options?.units,
+      durationMs: options?.durationMs,
+      strategy: options?.strategy,
+    });
+    return this.finish(node, stream.type, stream);
+  }
+
+  private streamThrottleOptions(
+    arg: Arg,
+  ):
+    | { units: number; durationMs: number; strategy: "shape" | "enforce" }
+    | undefined {
+    const bad = (): undefined => {
+      this.report(
+        "type-mismatch/010",
+        '`throttleStream` needs { units: U, durationMs: M, strategy: "shape" | "enforce" } with positive safe integer literals',
+        arg.node,
+      );
+      return undefined;
+    };
+    if (
+      arg.pre !== undefined ||
+      kindOf(this.tree, arg.node) !== SyntaxKind.RecordExpr
+    ) return bad();
+    const fields = this.kids(arg.node);
+    if (fields.length !== 3) return bad();
+    const values = new Map<string, { node: NodeId; value: unknown }>();
+    for (const field of fields) {
+      if (kindOf(this.tree, field) !== SyntaxKind.RecordField) return bad();
+      const parts = this.kids(field);
+      const label = parts.find((part) =>
+        kindOf(this.tree, part) === SyntaxKind.Name
+      );
+      const valueNode = parts.find((part) => part !== label);
+      if (
+        label === undefined || valueNode === undefined ||
+        kindOf(this.tree, valueNode) !== SyntaxKind.LiteralExpr
+      ) return bad();
+      const name = nameTextOf(this.tree, label);
+      if (name === undefined || values.has(name)) return bad();
+      values.set(name, {
+        node: valueNode,
+        value: literalOf(this.tree, valueNode),
+      });
+    }
+    const units = values.get("units");
+    const duration = values.get("durationMs");
+    const strategy = values.get("strategy");
+    if (
+      units === undefined || duration === undefined || strategy === undefined ||
+      typeof units.value !== "number" ||
+      !Number.isSafeInteger(units.value) || units.value <= 0 ||
+      typeof duration.value !== "number" ||
+      !Number.isSafeInteger(duration.value) || duration.value <= 0 ||
+      (strategy.value !== "shape" && strategy.value !== "enforce")
+    ) return bad();
+    this.finish(units.node, this.table.int, PURE_EFFECTS);
+    this.finish(duration.node, this.table.int, PURE_EFFECTS);
+    this.finish(
+      strategy.node,
+      this.table.literal(strategy.value),
+      PURE_EFFECTS,
+    );
+    this.finish(
+      arg.node,
+      this.table.record([
+        { name: "units", type: this.table.int, optional: false },
+        { name: "durationMs", type: this.table.int, optional: false },
+        {
+          name: "strategy",
+          type: this.table.literal(strategy.value),
+          optional: false,
+        },
+      ]),
+      PURE_EFFECTS,
+    );
+    return {
+      units: units.value,
+      durationMs: duration.value,
+      strategy: strategy.value,
+    };
   }
 
   private takeStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {

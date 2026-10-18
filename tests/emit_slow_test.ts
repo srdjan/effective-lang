@@ -1001,6 +1001,67 @@ console.log(JSON.stringify({ before, first, firstRun, second, attempt, calls, fi
   });
 });
 
+Deno.test("temporal stream controls coalesce and shape or drop elements", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "export error Stop = {}",
+        "export service Source { next(n: Int): Option<[Int, Int]> fails Stop }",
+        "const source = unfold(0, (n) => Source.next(n))",
+        "const debounced = debounceStream(source, 0)",
+        'const enforced = throttleStream(source, { units: 1, durationMs: 1000, strategy: "enforce" })',
+        'const shaped = throttleStream(source, { units: 1, durationMs: 1, strategy: "shape" })',
+        "export const debounceRun = (): Int[] fails Stop uses Source.next => collectStream(debounced)",
+        "export const enforceRun = (): Int[] fails Stop uses Source.next => collectStream(enforced)",
+        "export const shapeRun = (): Int[] fails Stop uses Source.next => collectStream(shaped)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer, Option } from "effect";
+import { Source, Stop, debounceRun, enforceRun, shapeRun } from "./main.ts";
+
+let calls = 0;
+let failSource = false;
+const finalized: number[] = [];
+const Live = Layer.succeed(Source)({
+  next: (n) => Effect.sync(() => { calls++; }).pipe(
+    Effect.flatMap(() => failSource && n === 2
+      ? Effect.fail(new Stop({}))
+      : Effect.succeed(n < 3
+        ? Option.some([n + 1, n + 1] as readonly [number, number])
+        : Option.none())),
+    Effect.ensuring(Effect.sync(() => { finalized.push(n); })),
+  ),
+});
+const before = calls;
+const debounced = await Effect.runPromise(debounceRun().pipe(Effect.provide(Live)));
+const enforced = await Effect.runPromise(enforceRun().pipe(Effect.provide(Live)));
+const shaped = await Effect.runPromise(shapeRun().pipe(Effect.provide(Live)));
+failSource = true;
+const failure = await Effect.runPromise(Effect.flip(shapeRun().pipe(Effect.provide(Live))));
+console.log(JSON.stringify({ before, debounced, enforced, shaped, calls, tag: failure._tag, finalized }));
+`,
+    );
+    assertEquals(result, {
+      before: 0,
+      debounced: [3],
+      enforced: [1],
+      shaped: [1, 2, 3],
+      calls: 15,
+      tag: "main#Stop",
+      finalized: [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2],
+    });
+  });
+});
+
 Deno.test("concurrent stream mapping bounds work and closes failed siblings", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

@@ -73,6 +73,8 @@ export type PreludeName =
   | "switchMapStreams"
   | "catchStream"
   | "retryStream"
+  | "debounceStream"
+  | "throttleStream"
   | "takeStream"
   | "dropStream"
   | "dropWhileStream"
@@ -139,6 +141,8 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "switchMapStreams",
   "catchStream",
   "retryStream",
+  "debounceStream",
+  "throttleStream",
   "takeStream",
   "dropStream",
   "dropWhileStream",
@@ -433,6 +437,7 @@ class Resolver {
         name !== "switchMapStreams" &&
         name !== "catchStream" &&
         name !== "retryStream" &&
+        name !== "debounceStream" && name !== "throttleStream" &&
         name !== "takeStream" && name !== "dropStream" &&
         name !== "dropWhileStream" && name !== "filterStream" &&
         name !== "filterEffectStream" &&
@@ -601,6 +606,7 @@ class Resolver {
       name !== "switchMapStreams" &&
       name !== "catchStream" &&
       name !== "retryStream" &&
+      name !== "debounceStream" && name !== "throttleStream" &&
       name !== "takeStream" && name !== "dropStream" &&
       name !== "dropWhileStream" && name !== "filterStream" &&
       name !== "filterEffectStream" &&

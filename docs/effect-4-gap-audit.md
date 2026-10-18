@@ -199,6 +199,14 @@ consumption, and completed pull finalizers. The checker and independent IR
 validator enforce nominal error compatibility and preserve deferred source
 channels.
 
+Update, 2026-10-18: design draft 0.33 adds `debounceStream` and
+`throttleStream`. The latter rechunks to one element before applying a token
+bucket so its configured units count elements, not source chunks. Strict
+target and runtime tests cover synchronous burst coalescing, enforced drops,
+shaped delivery, and deferred construction. The checker and independent IR
+validator enforce nonnegative or positive literal millisecond settings and
+preserve source channels.
+
 Update, 2026-10-17: `bufferStream` and `mergeStreams` now compile to Effect 4
 streams. A slow runtime test covers deferred production and per-source order.
 The original probes remain the audit snapshot.
@@ -253,7 +261,7 @@ This is an expressiveness result for the current language and compiler, not a cl
 | First-class Effect values and general combinators | **Partial.** `Effect<A,E,R>`, `defer`, and `run` let source construct, store, pass, return, and execute a typed Effect value. General Effect combinators remain absent. | [IR type model](../src/core/ir.ts#L31), [spec: execution](../../effective/public/effective-spec.html#execution), [Phase 4 runtime test](../tests/emit_slow_test.ts); Effect [the Effect type](https://effect.website/docs/v4/getting-started/the-effect-type). The original probe below predates Phase 4. | Host may expose a specific composed operation as a service method. |
 | Concurrency, racing, fibers, interruption | **Supported core 1 subset.** Bounded and unbounded `traverse`, heterogeneous `all` and `allResults` over Effect tuples and records, `partitionAll` and `validateAll` over homogeneous arrays, `race`, supervised `withFiber`, and scope-bound `forkScoped` are native. Discarding an `all` result is expressible with a block. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime tests](../tests/emit_slow_test.ts); Effect [concurrency](https://effect.website/docs/v4/concurrency/basic-concurrency) and [fibers](https://effect.website/docs/v4/concurrency/fibers). | A service can expose other concurrent policies. |
 | Effectful collection traversal | **Supported sequentially and concurrently.** `traverse` accepts effectful callbacks and preserves their failure and requirement sets. `map`, `filter`, and `fold` still require pure callbacks. | [Spec: collections](../../effective/public/effective-spec.html#pipelines), [prelude names](../src/core/resolve.ts#L53), [Phase 3 runtime test](../tests/emit_slow_test.ts); Effect [`forEach`](https://effect.website/docs/v4/code-style/control-flow). The original `filter` probe still fails. | A host service can expose other traversal policies. |
-| Streams and sinks | **Supported core 1 subset.** `unfold`, `mapEffect`, `mapStream`, `scanStream`, `mapAccumStream`, `foldStream`, `foldEffectStream`, `collectStream`, `headStream`, `lastStream`, `drainStream`, `sinkForEach`, `runStream`, `bufferStream`, `mergeStreams`, `zipStreams`, `concatStreams`, bounded and unbounded `mapEffect` and `flatMapStreams`, `switchMapStreams`, `catchStream`, `retryStream`, `takeStream`, `takeWhileStream`, `takeUntilStream`, `dropStream`, `dropWhileStream`, `filterStream`, `filterEffectStream`, `takeWhileEffectStream`, `takeUntilEffectStream`, and `dropWhileEffectStream` are native. Other stream combinators remain absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime tests](../tests/emit_slow_test.ts); Effect [streams](https://effect.website/docs/v4/stream/introduction) and [sinks](https://effect.website/docs/v4/sink/introduction). | A host adapter can expose other stream policies. |
+| Streams and sinks | **Supported core 1 subset.** `unfold`, `mapEffect`, `mapStream`, `scanStream`, `mapAccumStream`, `foldStream`, `foldEffectStream`, `collectStream`, `headStream`, `lastStream`, `drainStream`, `sinkForEach`, `runStream`, `bufferStream`, `mergeStreams`, `zipStreams`, `concatStreams`, bounded and unbounded `mapEffect` and `flatMapStreams`, `switchMapStreams`, `catchStream`, `retryStream`, `debounceStream`, `throttleStream`, `takeStream`, `takeWhileStream`, `takeUntilStream`, `dropStream`, `dropWhileStream`, `filterStream`, `filterEffectStream`, `takeWhileEffectStream`, `takeUntilEffectStream`, and `dropWhileEffectStream` are native. Other stream combinators remain absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime tests](../tests/emit_slow_test.ts); Effect [streams](https://effect.website/docs/v4/stream/introduction) and [sinks](https://effect.website/docs/v4/sink/introduction). | A host adapter can expose other stream policies. |
 | Resource scopes and finalizers | **Supported core 1 subset.** `withResource` scopes operation records and opaque host handles; borrow-qualified methods and checked source helpers prevent handle escape. `scoped` supplies a local scope for `forkScoped` jobs. Raw `Scope` composition remains absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [borrow runtime test](../tests/cli_slow_test.ts), [scoped fiber runtime test](../tests/emit_slow_test.ts); Effect [scope](https://effect.website/docs/v4/resource-management/scope). | A host adapter owns the handle and its operations. |
 | Schedules and timed repetition | **Supported core 1 subset.** `retrySchedule` authors a conditional millisecond policy for `retry`. General Schedule operators and cron policies remain absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime test](../tests/emit_slow_test.ts); Effect [schedules](https://effect.website/docs/v4/scheduling/using-schedules). | Host can implement other policies. |
 | Mutable concurrent state | **Supported core 1 subset.** `Ref<A>` and make/get/set/update operations are native; update is atomic under bounded traversal. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime test](../tests/emit_slow_test.ts); Effect [`Ref`](https://effect.website/docs/v4/state-management/ref). | Other state primitives can live in services. |
@@ -331,10 +339,39 @@ export const run = (): int uses Jobs.next =>
 
 The fix moved the left expression's active requirements to the block binding and kept the retry stage's local annotation limited to its own work. A named host-provider `provide` pipeline also validates.
 
+## Stream follow-up disposition
+
+The planned native stream follow-up selected behavior that the earlier core
+operators could not express while staying within the existing `Stream` and
+`RetrySchedule` source types. Each selected function now has a spec rule,
+checker and independent IR validation, strict Effect 4.0.5 target checking,
+and a runtime witness:
+
+| Behavior | Source function | Runtime witness |
+| --- | --- | --- |
+| Keep prior output, then replace a failed source | `catchStream` | Earlier values survive; replacement failure propagates. |
+| Restart the whole source after typed failure | `retryStream` | Prior values replay; schedule resets after new output. |
+| Coalesce a burst by elapsed time | `debounceStream` | A synchronous burst emits its last element. |
+| Apply element-rate policy | `throttleStream` | `enforce` drops excess; `shape` delays without dropping. |
+
+Some common Effect Stream names are compositions of forms already present.
+`runForEach` is `runStream` with `sinkForEach`; `runCount` is `foldStream` with
+a `number` state; `tap` is `mapEffect` returning the original element after
+the observation; and `runForEachWhile` is `drainStream` after an effectful
+inclusive stop predicate. A [source checker test](../tests/check_body_test.ts)
+accepts those compositions with their service contracts. They do not need
+separate source names for this follow-up.
+
+General keyed grouping, aggregation with arbitrary Sinks, chunk-cost
+throttling, custom stream interruption, and other specialized policies remain
+part of broader Effect API parity. They need additional source rules or a
+separate expressiveness witness. This follow-up does not claim every Effect
+Stream export.
+
 ## Remaining investigation queue
 
 1. **General concurrency and scope.** Compare raw `Scope` composition with the scoped fiber source forms. `Effect.all` discard mode can be expressed by calling `all` and ignoring its result in a block. Keep cancellation and finalizer behavior explicit.
-2. **General stream and Schedule APIs.** Identify further operators whose behavior cannot be expressed by `unfold`, `mapStream`, `scanStream`, `mapAccumStream`, `foldStream`, `foldEffectStream`, `collectStream`, `headStream`, `lastStream`, `drainStream`, `bufferStream`, `mergeStreams`, `zipStreams`, `concatStreams`, `flatMapStreams`, `switchMapStreams`, `takeStream`, `takeWhileStream`, `takeUntilStream`, `dropStream`, `dropWhileStream`, `filterStream`, `filterEffectStream`, `takeWhileEffectStream`, `takeUntilEffectStream`, `dropWhileEffectStream`, and `retrySchedule`; require target and runtime witnesses.
+2. **General stream and Schedule APIs.** Investigate additional operators beyond the completed native stream follow-up, especially keyed grouping, aggregation, custom interruption, and general Schedule composition. Require an expressiveness witness and a source rule before adding each form.
 3. **Schema and ecosystem APIs.** Test effectful transformations, recursive schemas, and representative HTTP, SQL, RPC, AI, and observability objects through typed adapters. Preserve failures, requirements, and scoped lifetimes.
 
 For each item, record a minimal `.eff` or TypeScript witness, the observed compiler phase and diagnostic (or emitted output), an equivalent-program argument, and a disposition. This audit did not execute external HTTP, SQL, RPC, AI, or telemetry services.

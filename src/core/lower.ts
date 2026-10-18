@@ -709,6 +709,22 @@ class BodyLowerer {
           policy: arg(1),
           ...annotation,
         };
+      case "debounce-stream":
+        return {
+          kind: "debounce-stream",
+          stream: arg(0),
+          delayMs: this.required(fact.delayMs, "debounce delay", node),
+          ...annotation,
+        };
+      case "throttle-stream":
+        return {
+          kind: "throttle-stream",
+          stream: arg(0),
+          units: this.required(fact.units, "throttle units", node),
+          durationMs: this.required(fact.durationMs, "throttle duration", node),
+          strategy: this.required(fact.strategy, "throttle strategy", node),
+          ...annotation,
+        };
       case "take-stream":
         return {
           kind: "take-stream",

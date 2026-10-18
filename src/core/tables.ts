@@ -140,6 +140,13 @@ export type NodeFact =
   | { readonly kind: "switch-map-streams" }
   | { readonly kind: "catch-stream" }
   | { readonly kind: "retry-stream" }
+  | { readonly kind: "debounce-stream"; readonly delayMs: number | undefined }
+  | {
+    readonly kind: "throttle-stream";
+    readonly units: number | undefined;
+    readonly durationMs: number | undefined;
+    readonly strategy: "shape" | "enforce" | undefined;
+  }
   | { readonly kind: "take-stream" }
   | { readonly kind: "drop-stream" }
   | { readonly kind: "drop-while-stream" }
