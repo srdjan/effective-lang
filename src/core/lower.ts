@@ -666,6 +666,13 @@ class BodyLowerer {
           right: arg(1),
           ...annotation,
         };
+      case "concat-streams":
+        return {
+          kind: "concat-streams",
+          left: arg(0),
+          right: arg(1),
+          ...annotation,
+        };
       case "race":
         return { kind: "race", left: arg(0), right: arg(1), ...annotation };
       case "make-ref":

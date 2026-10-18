@@ -219,6 +219,34 @@ const use = (): Int => zipStreams()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("concatStreams unions different element and deferred channel types", () => {
+  const project = checkText(`
+error Stop = {}
+service Left { next(n: Int): Option<[Int, Int]> fails Stop }
+service Right { next(n: Int): Option<[Text, Int]> }
+type Int = int
+type Text = string
+const left = unfold(0, (n) => Left.next(n))
+const right = unfold(0, (n) => Right.next(n))
+const combined: Stream<Int | Text, Stop, Left.next | Right.next> = concatStreams(left, right)
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+  const invalid = checkText(`
+type Int = int
+const bad = concatStreams(unfold(0, (n): Option<[Int, Int]> => None), 1)
+`);
+  assert(codes(invalid).includes("type-mismatch/010"));
+});
+
+Deno.test("a source binding named concatStreams shadows the prelude operation", () => {
+  const project = checkText(`
+type Int = int
+const concatStreams = (): Int => 3
+const use = (): Int => concatStreams()
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
 Deno.test("all rejects non-Effect entries and invalid concurrency", () => {
   for (
     const expression of [

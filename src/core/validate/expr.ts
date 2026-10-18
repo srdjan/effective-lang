@@ -472,6 +472,8 @@ export class BodyValidator {
         return this.mergeStreams(e, path);
       case "zip-streams":
         return this.zipStreams(e, path);
+      case "concat-streams":
+        return this.concatStreams(e, path);
       case "race":
         return this.race(e, path);
       case "make-ref":
@@ -1962,6 +1964,7 @@ export class BodyValidator {
             return [e.stream];
           case "merge-streams":
           case "zip-streams":
+          case "concat-streams":
             return [e.left, e.right];
           case "race":
             return [e.left, e.right];
@@ -2443,6 +2446,43 @@ export class BodyValidator {
       type: {
         kind: "stream",
         element: { kind: "tuple", elements: [a.element, b.element] },
+        effects: {
+          failures: sortedUnique([
+            ...a.effects.failures,
+            ...b.effects.failures,
+          ]),
+          requirements: sortedUnique([
+            ...a.effects.requirements,
+            ...b.effects.requirements,
+          ]),
+        },
+      },
+      match: "exact",
+      active: combine([left, right]),
+    };
+  }
+
+  private concatStreams(
+    e: Extract<Expr, { kind: "concat-streams" }>,
+    path: string,
+  ): Comp {
+    const left = this.check(e.left, `${path}.left`);
+    const right = this.check(e.right, `${path}.right`);
+    const a = unfold(this.env, left.type);
+    const b = unfold(this.env, right.type);
+    if (a.kind !== "stream" || b.kind !== "stream") {
+      this.add(
+        AREA.types,
+        path,
+        "concatStreams needs two Stream values",
+        e.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: {
+        kind: "stream",
+        element: unionOf(this.env, [a.element, b.element]),
         effects: {
           failures: sortedUnique([
             ...a.effects.failures,

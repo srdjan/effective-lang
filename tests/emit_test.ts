@@ -134,6 +134,17 @@ type Int = int
   assertStringIncludes(output, "Stream.zip(");
 });
 
+Deno.test("concatenated streams emit Stream.concat", () => {
+  const output = oneModule(`
+service Source { next(state: Int): Option<[Int, Int]> }
+const first = unfold(0, (state) => Source.next(state))
+const second = unfold(10, (state) => Source.next(state))
+const values = concatStreams(first, second)
+type Int = int
+`);
+  assertStringIncludes(output, "Stream.concat(");
+});
+
 Deno.test("a source race emits Effect.race and executes only when run", () => {
   const output = oneModule(`
 type Int = int

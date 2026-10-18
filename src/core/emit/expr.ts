@@ -878,6 +878,13 @@ export class ExprEmitter {
           callArguments([kid(e.left), kid(e.right)]),
         ]);
       }
+      case "concat-streams": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.concat`,
+          callArguments([kid(e.left), kid(e.right)]),
+        ]);
+      }
       case "layer":
         return this.sourceLayer(e);
       case "merge-layers": {

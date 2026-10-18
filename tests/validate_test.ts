@@ -170,6 +170,27 @@ type Text = string
   assert(codesOf(wrong, lowered.sources).includes("validation/002"));
 });
 
+Deno.test("stream concatenation validates element union and deferred channels", () => {
+  const lowered = lowerText(`
+error Stop = {}
+service Left { next(n: Int): Option<[Int, Int]> fails Stop }
+service Right { next(n: Int): Option<[Text, Int]> }
+const left = unfold(0, (n) => Left.next(n))
+const right = unfold(0, (n) => Right.next(n))
+const combined = concatStreams(left, right)
+type Int = int
+type Text = string
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const wrong = copy(lowered.ir);
+  const combined = wrong.declarations.find((d) => d.name === "combined");
+  assert(
+    combined?.kind === "constant" && combined.value.kind === "concat-streams",
+  );
+  setAt(combined, "value.type.effects.failures", []);
+  assert(codesOf(wrong, lowered.sources).includes("validation/002"));
+});
+
 Deno.test("race validates its result and deferred effect channels", () => {
   const lowered = lowerText(`
 error Stop = {}

@@ -880,6 +880,8 @@ export class BodyChecker {
         return this.mergeStreamsCall(node, args);
       case "zipStreams":
         return this.zipStreamsCall(node, args);
+      case "concatStreams":
+        return this.concatStreamsCall(node, args);
       case "race":
         return this.raceCall(node, args);
       case "makeRef":
@@ -2230,6 +2232,36 @@ export class BodyChecker {
     }
     const type = this.table.stream(
       this.table.tuple([a.element, b.element]),
+      [...a.failures, ...b.failures],
+      [...a.requirements, ...b.requirements],
+    );
+    return this.finish(node, type, combine([left, right]));
+  }
+
+  private concatStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "concat-streams" });
+    if (!this.arity(node, "concatStreams", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.noPipeline("concatStreams", args);
+    const left = this.argInfo(args[0]);
+    const right = this.argInfo(args[1]);
+    const a = this.table.node(this.table.unfold(left.type));
+    const b = this.table.node(this.table.unfold(right.type));
+    if (a.kind !== "stream" || b.kind !== "stream") {
+      this.report(
+        "type-mismatch/010",
+        "`concatStreams` needs two Stream values",
+        node,
+      );
+      return this.finish(node, this.table.error, combine([left, right]));
+    }
+    const type = this.table.stream(
+      this.table.union([a.element, b.element]),
       [...a.failures, ...b.failures],
       [...a.requirements, ...b.requirements],
     );

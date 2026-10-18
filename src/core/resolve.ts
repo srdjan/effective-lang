@@ -59,6 +59,7 @@ export type PreludeName =
   | "bufferStream"
   | "mergeStreams"
   | "zipStreams"
+  | "concatStreams"
   | "race"
   | "makeRef"
   | "getRef"
@@ -98,6 +99,7 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "bufferStream",
   "mergeStreams",
   "zipStreams",
+  "concatStreams",
   "race",
   "makeRef",
   "getRef",
@@ -371,7 +373,8 @@ class Resolver {
     // these prelude operations; lookupValue already checks bindings first.
     if (
       (PRELUDE_NAMES.has(name) && name !== "run" && name !== "all" &&
-        name !== "scoped" && name !== "forkScoped" && name !== "zipStreams") ||
+        name !== "scoped" && name !== "forkScoped" && name !== "zipStreams" &&
+        name !== "concatStreams") ||
       BUILTIN_TYPE_NAMES.has(name)
     ) {
       this.report(
@@ -519,7 +522,8 @@ class Resolver {
     const span = this.span(nameNode);
     if (
       PRELUDE_NAMES.has(name) && name !== "run" && name !== "all" &&
-      name !== "scoped" && name !== "forkScoped" && name !== "zipStreams"
+      name !== "scoped" && name !== "forkScoped" && name !== "zipStreams" &&
+      name !== "concatStreams"
     ) {
       this.report(
         "declaration/002",

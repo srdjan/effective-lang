@@ -809,6 +809,81 @@ console.log(JSON.stringify({ tag: error._tag, started, released }));
     assertEquals(result, { tag: "main#Stop", started: 1, released: 1 });
   });
 });
+Deno.test("concatenated streams run in sequence and skip the right side after failure", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "type Text = string",
+        "export error Stop = {}",
+        "export service Left { next(n: Int): Option<[Int, Int]> fails Stop }",
+        "export service Right { next(n: Int): Option<[Text, Int]> }",
+        "export service Output { accept(value: Int | Text): void }",
+        "const left = unfold(0, (n) => Left.next(n))",
+        "const right = unfold(0, (n) => Right.next(n))",
+        "const values = concatStreams(left, right)",
+        "const sink = sinkForEach((value: Int | Text) => Output.accept(value))",
+        "export const main = (): void fails Stop uses Left.next | Right.next | Output.accept => runStream(values, sink)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer, Option } from "effect";
+import { Left, Right, Output, Stop, main } from "./main.ts";
+const emitted: Array<number | string> = [];
+let leftDone = false;
+let leftStarted = 0;
+let rightStarted = 0;
+const LeftSuccess = Layer.succeed(Left)({
+  next: (n) => Effect.sync(() => {
+    leftStarted++;
+    if (n === 2) { leftDone = true; return Option.none(); }
+    return Option.some([n, n + 1] as const);
+  }),
+});
+const RightLive = Layer.succeed(Right)({
+  next: (n) => Effect.sync(() => {
+    if (!leftDone) throw new Error("right started before left completed");
+    rightStarted++;
+    return n === 2 ? Option.none() : Option.some([String(n), n + 1] as const);
+  }),
+});
+const OutputLive = Layer.succeed(Output)({
+  accept: (value) => Effect.sync(() => { emitted.push(value); }),
+});
+const before = { leftStarted, rightStarted };
+await Effect.runPromise(main().pipe(Effect.provide(Layer.mergeAll(LeftSuccess, RightLive, OutputLive))));
+const success = { emitted: [...emitted], leftDone, leftStarted, rightStarted };
+emitted.length = 0;
+rightStarted = 0;
+leftDone = false;
+const LeftFailure = Layer.succeed(Left)({
+  next: (n) => n === 0
+    ? Effect.succeed(Option.some([0, 1] as const))
+    : Effect.fail(new Stop({})),
+});
+const error = await Effect.runPromise(Effect.flip(main().pipe(Effect.provide(Layer.mergeAll(LeftFailure, RightLive, OutputLive)))));
+console.log(JSON.stringify({ before, success, failure: { tag: error._tag, emitted, rightStarted } }));
+`,
+    );
+    assertEquals(result, {
+      before: { leftStarted: 0, rightStarted: 0 },
+      success: {
+        emitted: [0, 1, "0", "1"],
+        leftDone: true,
+        leftStarted: 3,
+        rightStarted: 3,
+      },
+      failure: { tag: "main#Stop", emitted: [0], rightStarted: 0 },
+    });
+  });
+});
 Deno.test("a source race interrupts its losing fiber and waits for cleanup", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
