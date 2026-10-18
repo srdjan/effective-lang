@@ -157,6 +157,17 @@ export const limit = (count: Int): Stream<Int, never, Source.next> =>
   assertStringIncludes(output, "Stream.take(source, count)");
 });
 
+Deno.test("dropStream emits Stream.drop with a dynamic count", () => {
+  const output = oneModule(`
+type Int = int
+service Source { next(state: Int): Option<[Int, Int]> }
+const source = unfold(0, (state) => Source.next(state))
+export const limit = (count: Int): Stream<Int, never, Source.next> =>
+  dropStream(source, count)
+`);
+  assertStringIncludes(output, "Stream.drop(source, count)");
+});
+
 Deno.test("takeWhileStream emits Stream.takeWhile", () => {
   const output = oneModule(`
 type Int = int

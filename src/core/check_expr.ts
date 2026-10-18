@@ -874,6 +874,8 @@ export class BodyChecker {
         return this.flatMapStreamsCall(node, args);
       case "takeStream":
         return this.takeStreamCall(node, args);
+      case "dropStream":
+        return this.dropStreamCall(node, args);
       case "takeWhileStream":
         return this.takeWhileStreamCall(node, args);
       case "takeUntilStream":
@@ -2110,6 +2112,40 @@ export class BodyChecker {
       this.report(
         "execution-mode/001",
         "`takeStream` count must be pure",
+        args[1].node,
+      );
+    }
+    return this.finish(node, stream.type, combine([stream, count]));
+  }
+
+  private dropStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "drop-stream" });
+    if (!this.arity(node, "dropStream", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.noPipeline("dropStream", args);
+    const stream = this.argInfo(args[0]);
+    const count = this.argInfo(args[1], this.table.int);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`dropStream` needs a Stream value",
+        args[0].node,
+      );
+    }
+    this.fits(args[1].node, count.type, this.table.int, "the drop count");
+    if (
+      count.mode !== "pure" || count.failures.length > 0 ||
+      count.requirements.length > 0
+    ) {
+      this.report(
+        "execution-mode/001",
+        "`dropStream` count must be pure",
         args[1].node,
       );
     }

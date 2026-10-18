@@ -646,6 +646,13 @@ class BodyLowerer {
           count: arg(1),
           ...annotation,
         };
+      case "drop-stream":
+        return {
+          kind: "drop-stream",
+          stream: arg(0),
+          count: arg(1),
+          ...annotation,
+        };
       case "take-while-stream":
         return {
           kind: "take-while-stream",

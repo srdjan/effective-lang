@@ -62,6 +62,7 @@ export type PreludeName =
   | "concatStreams"
   | "flatMapStreams"
   | "takeStream"
+  | "dropStream"
   | "takeWhileStream"
   | "takeUntilStream"
   | "race"
@@ -109,6 +110,7 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "concatStreams",
   "flatMapStreams",
   "takeStream",
+  "dropStream",
   "takeWhileStream",
   "takeUntilStream",
   "race",
@@ -392,7 +394,8 @@ class Resolver {
         name !== "allResults" &&
         name !== "scoped" && name !== "forkScoped" && name !== "zipStreams" &&
         name !== "concatStreams" && name !== "flatMapStreams" &&
-        name !== "takeStream" && name !== "takeWhileStream" &&
+        name !== "takeStream" && name !== "dropStream" &&
+        name !== "takeWhileStream" &&
         name !== "takeUntilStream") ||
       BUILTIN_TYPE_NAMES.has(name)
     ) {
@@ -546,7 +549,8 @@ class Resolver {
       name !== "allResults" &&
       name !== "scoped" && name !== "forkScoped" && name !== "zipStreams" &&
       name !== "concatStreams" && name !== "flatMapStreams" &&
-      name !== "takeStream" && name !== "takeWhileStream" &&
+      name !== "takeStream" && name !== "dropStream" &&
+      name !== "takeWhileStream" &&
       name !== "takeUntilStream"
     ) {
       this.report(

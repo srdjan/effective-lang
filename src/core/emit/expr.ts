@@ -861,6 +861,13 @@ export class ExprEmitter {
           callArguments([kid(e.stream), kid(e.count)]),
         ]);
       }
+      case "drop-stream": {
+        const stream = this.scope.effect("Stream");
+        return emitted([
+          `${stream}.drop`,
+          callArguments([kid(e.stream), kid(e.count)]),
+        ]);
+      }
       case "take-while-stream": {
         const stream = this.scope.effect("Stream");
         return emitted([

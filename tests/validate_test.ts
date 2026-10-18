@@ -509,6 +509,42 @@ const limited = (count: Int): Stream<Int, Stop, Source.next> => takeStream(sourc
   assert(codesOf(invalidChannel, lowered.sources).includes("validation/002"));
 });
 
+Deno.test("dropStream validates the count and deferred channels", () => {
+  const lowered = lowerText(`
+type Int = int
+error Stop = {}
+service Source { next(n: Int): Option<[Int, Int]> fails Stop }
+const source = unfold(0, (n) => Source.next(n))
+const limited = (count: Int): Stream<Int, Stop, Source.next> => dropStream(source, count)
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+
+  const invalidCount = copy(lowered.ir);
+  const countFunction = invalidCount.declarations.find((d) =>
+    d.name === "limited"
+  );
+  assert(
+    countFunction?.kind === "function" &&
+      countFunction.body.kind === "drop-stream",
+  );
+  setAt(countFunction, "body.count.type", {
+    kind: "primitive",
+    name: "string",
+  });
+  assert(codesOf(invalidCount, lowered.sources).includes("validation/002"));
+
+  const invalidChannel = copy(lowered.ir);
+  const channelFunction = invalidChannel.declarations.find((d) =>
+    d.name === "limited"
+  );
+  assert(
+    channelFunction?.kind === "function" &&
+      channelFunction.body.kind === "drop-stream",
+  );
+  setAt(channelFunction, "body.type.effects.failures", []);
+  assert(codesOf(invalidChannel, lowered.sources).includes("validation/002"));
+});
+
 Deno.test("takeWhileStream validates predicate and deferred channels", () => {
   const lowered = lowerText(`
 type Int = int

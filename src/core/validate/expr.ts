@@ -473,6 +473,8 @@ export class BodyValidator {
         return this.flatMapStreams(e, path);
       case "take-stream":
         return this.takeStream(e, path);
+      case "drop-stream":
+        return this.dropStream(e, path);
       case "take-while-stream":
         return this.takeWhileStream(e, path);
       case "take-until-stream":
@@ -2194,6 +2196,8 @@ export class BodyValidator {
             return [e.stream, e.transform];
           case "take-stream":
             return [e.stream, e.count];
+          case "drop-stream":
+            return [e.stream, e.count];
           case "take-while-stream":
             return [e.stream, e.predicate];
           case "take-until-stream":
@@ -2605,6 +2609,40 @@ export class BodyValidator {
         AREA.execution,
         `${path}.count`,
         "takeStream count must be pure",
+        e.count.span,
+      );
+    }
+    return {
+      type: source,
+      match: "exact",
+      active: combine([stream, count]),
+    };
+  }
+
+  private dropStream(
+    e: Extract<Expr, { kind: "drop-stream" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const count = this.check(e.count, `${path}.count`);
+    const source = unfold(this.env, stream.type);
+    if (source.kind !== "stream" || !fits(this.env, count.type, INT)) {
+      this.add(
+        AREA.types,
+        path,
+        "dropStream needs a Stream value and an Int count",
+        e.span,
+      );
+      return this.poison();
+    }
+    if (
+      count.execution !== "pure" || count.failures.length > 0 ||
+      count.requirements.length > 0
+    ) {
+      this.add(
+        AREA.execution,
+        `${path}.count`,
+        "dropStream count must be pure",
         e.count.span,
       );
     }
