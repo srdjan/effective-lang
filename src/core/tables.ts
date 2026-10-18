@@ -136,7 +136,7 @@ export type NodeFact =
   /** A collection builtin with its closed function type. */
   | {
     readonly kind: "builtin";
-    readonly name: "map" | "filter" | "fold" | "traverse";
+    readonly name: "map" | "filter" | "fold" | "all" | "traverse";
     readonly specialized: TypeRef;
     readonly ir: FunctionType;
   }

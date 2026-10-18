@@ -500,6 +500,104 @@ console.log(JSON.stringify({ success, failure, interruption, empty, allResults }
   });
 });
 
+Deno.test("all preserves tuple and record results and cleans up siblings", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "export error Stop = {}",
+        "export service Jobs { number(): Int fails Stop; text(): Text }",
+        "type Int = int",
+        "type Text = string",
+        "type Pair = [Effect<Int, Stop, Jobs.number>, Effect<Text, never, Jobs.text>]",
+        "const pair: Pair = [defer(() => Jobs.number()), defer(() => Jobs.text())]",
+        "export const tuple = (): [Int, Text] fails Stop uses Jobs.number | Jobs.text =>",
+        '  all(pair, { concurrency: "unbounded" })',
+        "export const record = (): { number: Int, text: Text } fails Stop uses Jobs.number | Jobs.text =>",
+        '  all({ number: defer(() => Jobs.number()), text: defer(() => Jobs.text()) }, { concurrency: "unbounded" })',
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Deferred, Effect, Exit, Fiber, Layer } from "effect";
+import { Jobs, Stop, tuple, record } from "./main.ts";
+
+const Stable = Layer.succeed(Jobs)({
+  number: () => Effect.succeed(7),
+  text: () => Effect.succeed("seven"),
+});
+const tupleResult = await Effect.runPromise(tuple().pipe(Effect.provide(Stable)));
+const recordResult = await Effect.runPromise(record().pipe(Effect.provide(Stable)));
+
+let numberReady = Effect.runSync(Deferred.make<void>());
+let textReady = Effect.runSync(Deferred.make<void>());
+let releaseNumber = Effect.runSync(Deferred.make<void>());
+let mode: "failure" | "interrupt" = "failure";
+const started: string[] = [];
+const released: string[] = [];
+const Live = Layer.succeed(Jobs)({
+  number: () => Effect.acquireUseRelease(
+    Effect.sync(() => { started.push("number"); }),
+    () => Deferred.succeed(numberReady, undefined).pipe(
+      Effect.andThen(Deferred.await(releaseNumber)),
+      Effect.andThen(mode === "failure" ? Effect.fail(new Stop({})) : Effect.never),
+    ),
+    () => Effect.sync(() => { released.push("number"); }),
+  ),
+  text: () => Effect.acquireUseRelease(
+    Effect.sync(() => { started.push("text"); }),
+    () => Deferred.succeed(textReady, undefined).pipe(Effect.andThen(Effect.never)),
+    () => Effect.sync(() => { released.push("text"); }),
+  ),
+});
+const start = () => Effect.gen(function* () {
+  const fiber = yield* Effect.forkChild(record().pipe(Effect.provide(Live)));
+  yield* Deferred.await(numberReady);
+  yield* Deferred.await(textReady);
+  return fiber;
+});
+const failed = await Effect.runPromise(Effect.gen(function* () {
+  const fiber = yield* start();
+  yield* Deferred.succeed(releaseNumber, undefined);
+  return yield* Fiber.await(fiber);
+}));
+const failure = { failed: Exit.isFailure(failed), started: [...started], released: [...released].sort() };
+
+mode = "interrupt";
+started.length = 0;
+released.length = 0;
+numberReady = Effect.runSync(Deferred.make<void>());
+textReady = Effect.runSync(Deferred.make<void>());
+releaseNumber = Effect.runSync(Deferred.make<void>());
+await Effect.runPromise(Effect.gen(function* () {
+  const fiber = yield* start();
+  yield* Fiber.interrupt(fiber);
+}));
+const interruption = { started: [...started], released: [...released].sort() };
+console.log(JSON.stringify({ tupleResult, recordResult, failure, interruption }));
+`,
+    );
+    assertEquals(result, {
+      tupleResult: [7, "seven"],
+      recordResult: { number: 7, text: "seven" },
+      failure: {
+        failed: true,
+        started: ["number", "text"],
+        released: ["number", "text"],
+      },
+      interruption: {
+        started: ["number", "text"],
+        released: ["number", "text"],
+      },
+    });
+  });
+});
+
 Deno.test("source-authored streams pull incrementally through an effectful sink", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

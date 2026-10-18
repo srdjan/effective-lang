@@ -1065,6 +1065,26 @@ export class BodyValidator {
         }
       }
     }
+    if (builtin === "all" && outs.length === 2) {
+      const options = e.arguments[1];
+      const field = options?.kind === "record" && options.fields.length === 1
+        ? options.fields[0]
+        : undefined;
+      const value = field?.value;
+      if (
+        field?.name !== "concurrency" || value?.kind !== "literal" ||
+        !(value.value === "unbounded" ||
+          (typeof value.value === "number" &&
+            Number.isSafeInteger(value.value) && value.value > 0))
+      ) {
+        this.add(
+          AREA.control,
+          `${path}.arguments[1]`,
+          "all needs a positive safe integer or unbounded concurrency literal",
+          options?.span ?? e.span,
+        );
+      }
+    }
     return {
       type: fn.result,
       match: "exact",

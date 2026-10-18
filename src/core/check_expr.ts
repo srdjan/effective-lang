@@ -888,6 +888,8 @@ export class BodyChecker {
         return this.unbrandCall(node, args);
       case "Some":
         return this.someCall(node, args, expected);
+      case "all":
+        return this.allCall(node, args);
       case "map":
       case "filter":
       case "fold":
@@ -2497,11 +2499,14 @@ export class BodyChecker {
     });
   }
 
-  private concurrencyBound(arg: Arg): number | "unbounded" | undefined {
+  private concurrencyBound(
+    arg: Arg,
+    operation: "traverse" | "all" = "traverse",
+  ): number | "unbounded" | undefined {
     const bad = (): undefined => {
       this.report(
         "type-mismatch/010",
-        '`traverse` needs `{ concurrency: N }` with a positive safe integer literal, or `{ concurrency: "unbounded" }`',
+        `\`${operation}\` needs \`{ concurrency: N }\` with a positive safe integer literal, or \`{ concurrency: "unbounded" }\``,
         arg.node,
       );
       return undefined;
@@ -2529,6 +2534,110 @@ export class BodyChecker {
         literal > 0
       ? literal
       : bad();
+  }
+
+  private allCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    if (args.length !== 1 && args.length !== 2) {
+      this.report(
+        "type-mismatch/004",
+        "`all` takes an Effect collection and an optional concurrency record",
+        node,
+      );
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    const input = this.argInfo(args[0]);
+    const table = this.table;
+    const shape = table.node(table.unfold(input.type));
+    const effectTypes = shape.kind === "tuple"
+      ? shape.elements
+      : shape.kind === "record"
+      ? shape.fields.map((field) => field.type)
+      : shape.kind === "array"
+      ? [shape.element]
+      : undefined;
+    const option = args[1] === undefined ? undefined : this.argInfo(args[1]);
+    const concurrency = args[1] === undefined
+      ? undefined
+      : this.concurrencyBound(args[1], "all");
+    if (effectTypes === undefined) {
+      this.report(
+        "type-mismatch/010",
+        "`all` needs a tuple, record, or array of Effect values",
+        args[0].node,
+      );
+      return this.finish(
+        node,
+        table.error,
+        combine([input, ...(option === undefined ? [] : [option])]),
+      );
+    }
+    if (
+      shape.kind === "record" && shape.fields.some((field) => field.optional)
+    ) {
+      this.report(
+        "type-mismatch/010",
+        "`all` requires every record field to be present",
+        args[0].node,
+      );
+    }
+    const effects = effectTypes.map((type) => {
+      const member = table.node(table.unfold(type));
+      if (member.kind !== "effect") {
+        this.report(
+          "type-mismatch/010",
+          "`all` requires an Effect value at every position",
+          args[0].node,
+        );
+        return { result: table.error, failures: [], requirements: [] };
+      }
+      return member;
+    });
+    const invocation = combine(effects.map((effect) => ({
+      failures: effect.failures,
+      requirements: effect.requirements,
+      mode: "effect" as const,
+    })));
+    const results = effects.map((effect) => effect.result);
+    const result = shape.kind === "tuple"
+      ? table.tuple(results)
+      : shape.kind === "record"
+      ? table.record(shape.fields.map((field, i) => ({
+        name: field.name,
+        type: results[i],
+        optional: false,
+      })))
+      : table.array(results[0]);
+    const specialized = table.function({
+      execution: "effect",
+      parameters: args.length === 2
+        ? [
+          input.type,
+          table.record([{
+            name: "concurrency",
+            type: concurrency === "unbounded" ? table.string : table.int,
+            optional: false,
+          }]),
+        ]
+        : [input.type],
+      result,
+      failures: invocation.failures,
+      requirements: invocation.requirements,
+    });
+    this.fact(node, {
+      kind: "builtin",
+      name: "all",
+      specialized,
+      ir: table.toIrFunction(specialized),
+    });
+    return this.finish(
+      node,
+      result,
+      combine([input, ...(option === undefined ? [] : [option]), invocation]),
+    );
   }
 
   private collectionCall(

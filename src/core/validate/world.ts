@@ -595,7 +595,7 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
 // ------------------------------------------------------------------ imports
 
 const BUILTIN_ID =
-  /^value:(.+)#\$builtin\/(map|filter|fold|traverse)\/[0-9a-f]+$/;
+  /^value:(.+)#\$builtin\/(map|filter|fold|all|traverse)\/[0-9a-f]+$/;
 
 function checkBuiltinShape(
   ctx: Ctx,
@@ -629,10 +629,76 @@ function checkBuiltinShape(
       );
     }
   };
-  if (name !== "traverse") quiet(type, path);
+  if (name !== "traverse" && name !== "all") quiet(type, path);
   const wrong = (what: string): void =>
     report.add(AREA.types, path, `the builtin ${name} ${what}`, span);
   const count = type.parameters.length;
+  if (name === "all") {
+    if (count !== 1 && count !== 2) {
+      wrong(`has an invalid parameter count ${count}`);
+      return;
+    }
+    if (count === 2) {
+      const options = unfold(env, type.parameters[1]);
+      const field = options.kind === "record" && options.fields.length === 1
+        ? options.fields[0]
+        : undefined;
+      if (
+        field?.name !== "concurrency" || field.optional ||
+        (!same(env, field.type, { kind: "primitive", name: "int" }) &&
+          !same(env, field.type, { kind: "primitive", name: "string" }))
+      ) wrong("requires a concurrency options record");
+    }
+    const input = unfold(env, type.parameters[0]);
+    const entries = input.kind === "tuple"
+      ? input.elements
+      : input.kind === "record"
+      ? input.fields.map((field) => field.type)
+      : input.kind === "array"
+      ? [input.element]
+      : undefined;
+    if (entries === undefined) {
+      wrong("takes a tuple, record, or array of Effects");
+      return;
+    }
+    if (
+      input.kind === "record" && input.fields.some((field) => field.optional)
+    ) {
+      wrong("requires every record field to be present");
+    }
+    const effects = entries.map((entry) => unfold(env, entry));
+    if (effects.some((entry) => entry.kind !== "effect")) {
+      wrong("requires an Effect at every position");
+      return;
+    }
+    const effectEntries = effects.filter((entry) => entry.kind === "effect");
+    const results = effectEntries.map((entry) => entry.result);
+    const result: Type = input.kind === "tuple"
+      ? { kind: "tuple", elements: results }
+      : input.kind === "record"
+      ? {
+        kind: "record",
+        fields: input.fields.map((field, i) => ({
+          name: field.name,
+          type: results[i],
+          optional: false,
+        })),
+      }
+      : { kind: "array", element: results[0] };
+    if (!same(env, type.result, result)) wrong("must preserve input shape");
+    if (
+      type.execution !== "effect" ||
+      !sameSet(
+        type.effects.failures,
+        effectEntries.flatMap((entry) => entry.effects.failures),
+      ) ||
+      !sameSet(
+        type.effects.requirements,
+        effectEntries.flatMap((entry) => entry.effects.requirements),
+      )
+    ) wrong("must carry the failures and requirements of every Effect");
+    return;
+  }
   const validCount = name === "fold"
     ? count === 3
     : name === "traverse"

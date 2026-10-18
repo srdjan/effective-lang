@@ -265,6 +265,43 @@ Deno.test("unbounded traversal validation rejects a different string", () => {
   assert(codesOf(changed, lowered.sources).includes("validation/006"));
 });
 
+Deno.test("all validates heterogeneous shape and literal concurrency", () => {
+  const lowered = lowerText(`
+type Int = int
+type Text = string
+type Jobs = [Effect<Int>, Effect<Text>]
+const jobs: Jobs = [defer(() => 1), defer(() => "ok")]
+const collect = (): [Int, Text] => all(jobs, { concurrency: "unbounded" })
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const changed = copy(lowered.ir);
+  const functionDecl = changed.declarations.find((d) => d.name === "collect");
+  assert(
+    functionDecl?.kind === "function" && functionDecl.body.kind === "call",
+  );
+  const options = functionDecl.body.arguments[1];
+  assert(
+    options?.kind === "record" && options.fields[0]?.value.kind === "literal",
+  );
+  (options.fields[0].value as { value: string }).value = "infinite";
+  assert(codesOf(changed, lowered.sources).includes("validation/006"));
+  const wrongResult = copy(lowered.ir);
+  const wrongFunction = wrongResult.declarations.find((d) =>
+    d.name === "collect"
+  );
+  assert(
+    wrongFunction?.kind === "function" && wrongFunction.body.kind === "call",
+  );
+  (wrongFunction.body as { type: Type }).type = {
+    kind: "tuple",
+    elements: [
+      { kind: "primitive", name: "string" },
+      { kind: "primitive", name: "int" },
+    ],
+  };
+  assert(codesOf(wrongResult, lowered.sources).includes("validation/002"));
+});
+
 Deno.test("stream validation recomputes deferred and active channels", () => {
   const lowered = lowerText(`
 error Stop = {}

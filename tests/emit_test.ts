@@ -57,6 +57,25 @@ Deno.test("unbounded traverse passes its literal to Effect.forEach", () => {
   assertStringIncludes(output, 'concurrency: "unbounded"');
 });
 
+Deno.test("all emits heterogeneous Effect collections", () => {
+  const output = oneModule(`
+type Int = int
+type Text = string
+type Jobs = [Effect<Int>, Effect<Text>]
+const jobs: Jobs = [defer(() => 1), defer(() => "ok")]
+export const tuple = (): [Int, Text] => all(jobs, { concurrency: "unbounded" })
+export const record = (): { number: Int, text: Text } =>
+  all({ number: defer(() => 1), text: defer(() => "ok") }, { concurrency: 2 })
+`);
+  assertStringIncludes(
+    output,
+    'Effect.all(jobs, { concurrency: "unbounded" })',
+  );
+  assertStringIncludes(output, "Effect.all({");
+  assertStringIncludes(output, "number: Effect.suspend(");
+  assertStringIncludes(output, "concurrency: 2");
+});
+
 Deno.test("stream operations emit the Effect 4 Stream and Sink APIs", () => {
   const output = oneModule(`
 service Source { next(state: Int): Option<[Int, Int]> }

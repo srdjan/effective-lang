@@ -511,6 +511,13 @@ function builtinName(target: string): string | undefined {
   return rest.split("/")[1];
 }
 
+function effectCollectionBuiltin(
+  target: string,
+): "all" | "traverse" | undefined {
+  const name = builtinName(target);
+  return name === "all" || name === "traverse" ? name : undefined;
+}
+
 type Mode = "pure" | "gen";
 type Kid = (e: Expr, expected?: Type) => Emitted;
 
@@ -1631,7 +1638,7 @@ export class ExprEmitter {
     switch (e.kind) {
       case "call":
         return e.callee.kind === "reference" &&
-            builtinName(e.callee.target) === "traverse"
+            effectCollectionBuiltin(e.callee.target) !== undefined
           ? [...e.arguments]
           : [e.callee, ...e.arguments];
       case "perform":
@@ -1665,7 +1672,7 @@ export class ExprEmitter {
     switch (e.kind) {
       case "call":
         return e.callee.kind === "reference" &&
-            builtinName(e.callee.target) === "traverse"
+            effectCollectionBuiltin(e.callee.target) !== undefined
           ? [...(this.functionTypeOf(e.callee.type)?.parameters ?? [])]
           : [
             undefined,
@@ -1763,21 +1770,25 @@ export class ExprEmitter {
     const effect = this.scope.effect("Effect");
     switch (e.kind) {
       case "call":
-        if (
-          e.callee.kind === "reference" &&
-          builtinName(e.callee.target) === "traverse"
-        ) {
-          if (children.length !== 2 && children.length !== 3) {
-            throw internal("traverse needs two or three arguments");
+        if (e.callee.kind === "reference") {
+          const builtin = effectCollectionBuiltin(e.callee.target);
+          if (builtin !== undefined) {
+            if (
+              children.length !== (builtin === "all" ? 1 : 2) &&
+              children.length !== (builtin === "all" ? 2 : 3)
+            ) {
+              throw internal(`${builtin} has an invalid argument count`);
+            }
+            return emitted([
+              `${effect}.${builtin === "all" ? "all" : "forEach"}(`,
+              free(children[0]),
+              ...(builtin === "traverse" ? [", ", free(children[1])] : []),
+              ...(children[builtin === "all" ? 1 : 2] === undefined
+                ? []
+                : [", ", free(children[builtin === "all" ? 1 : 2])]),
+              ")",
+            ]);
           }
-          return emitted([
-            `${effect}.forEach(`,
-            free(children[0]),
-            ", ",
-            free(children[1]),
-            ...(children[2] === undefined ? [] : [", ", free(children[2])]),
-            ")",
-          ]);
         }
         return emitted([
           at(children[0], PREC.member),

@@ -174,6 +174,50 @@ Deno.test("traverse requires a positive bound or the unbounded literal", () => {
   }
 });
 
+Deno.test("all preserves heterogeneous result and effect channels", () => {
+  const project = checkText(`
+error Stop = {}
+service Probe { number(): Int fails Stop; text(): Text }
+type Int = int
+type Text = string
+type Jobs = [Effect<Int, Stop, Probe.number>, Effect<Text, never, Probe.text>]
+const jobs: Jobs = [defer(() => Probe.number()), defer(() => Probe.text())]
+const tuple = (): [Int, Text] fails Stop uses Probe.number | Probe.text =>
+  all(jobs, { concurrency: "unbounded" })
+const record = (): { number: Int, text: Text } fails Stop uses Probe.number | Probe.text =>
+  all({ number: defer(() => Probe.number()), text: defer(() => Probe.text()) })
+const array = (): Int[] => all([defer(() => 1), defer(() => 2)])
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
+Deno.test("all rejects non-Effect entries and invalid concurrency", () => {
+  for (
+    const expression of [
+      "all({ count: 1 })",
+      'all({ job: defer(() => 1) }, { concurrency: "infinite" })',
+      "all({ job: defer(() => 1) }, { concurrency: 0 })",
+    ]
+  ) {
+    const project = checkText(
+      `const bad = (): Int => ${expression}\ntype Int = int`,
+    );
+    assert(
+      codes(project).includes("type-mismatch/010"),
+      messages(project).join("\n"),
+    );
+  }
+});
+
+Deno.test("an existing value named all shadows the new prelude builtin", () => {
+  const project = checkText(`
+type Int = int
+const all = (): Int => 3
+const use = (): Int => all()
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
 Deno.test("withResource rejects escaped operation records and fields", () => {
   const prefix =
     `service Files { open(): { read: () => Text, close: () => void } }\n`;

@@ -20,6 +20,8 @@ Collection literals use brackets: `[1, 2]` infers an array, while an expected tu
 
 `Effect<A, E, R>` stores a computation with result type `A`, typed failures `E`, and service method requirements `R`. `defer(() => job())` constructs it without running the job. `run(value)` executes it and adds its failures and requirements to the caller's contract. Empty channels may be omitted or written as `never`. A source binding named `run` shadows the prelude operation.
 
+`all(effects, options?)` runs a tuple, record, or array of stored Effect values and preserves its result shape. It unions their failures and requirements. Its optional literal concurrency record accepts a positive safe integer or `"unbounded"`. Heterogeneous bracket literals need a contextual tuple type, such as a typed binding.
+
 `withResource(acquire, use, release)` composes a scoped resource through three inline callbacks. Acquisition can return an operation record or an opaque host handle. A record may only receive direct operation calls. An opaque handle may pass directly to a borrow-qualified host method or checked source helper. The checker rejects handle escape and requires a data-only use result. The generated Effect runs release after success, failure, defect, or interruption.
 
 `Stream<A, E, R>` and `Sink<I, O, E, R>` hold deferred producer and consumer channels. `unfold(seed, callback)` creates a pull stream, `mapEffect(stream, callback)` transforms it, `sinkForEach(callback)` consumes values, and `runStream(stream, sink)` executes the pipeline. `bufferStream(stream, { capacity: N })` adds suspending backpressure, and `mergeStreams(left, right)` combines producers. Construction defers production until consumption.
@@ -225,7 +227,7 @@ A declaration with a syntax error is checked, but its body diagnostics are not p
 
 `lowerProject(checked)` does this for every `.eff` module. A `.effi` module has no entry, because it emits nothing.
 
-The IR holds the declarations in source order, the sorted export identities, and one `Import` for each import declaration. The `module` of an `Import` is the module name for a relative import. It is the import string, such as `host:providers`, for a host import. A module that uses `map`, `filter`, `fold`, or `traverse` has one more `Import` with the module `effective:prelude`.
+The IR holds the declarations in source order, the sorted export identities, and one `Import` for each import declaration. The `module` of an `Import` is the module name for a relative import. It is the import string, such as `host:providers`, for a host import. A module that uses `map`, `filter`, `fold`, `all`, or `traverse` has one more `Import` with the module `effective:prelude`.
 
 Each distinct closed instance of a builtin gets the identity `value:<module>#$builtin/<name>/<hash>`. The hash is the first 12 hex digits of the SHA-256 of the canonical JSON of the closed function type. A pipeline lowers to a block with the generated bindings `$p1`, `$p2`, and so on. A generated binding and each reference to it carry the span of the left expression. Each call carries the span of its stage.
 

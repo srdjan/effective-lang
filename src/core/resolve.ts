@@ -76,6 +76,7 @@ export type PreludeName =
   | "map"
   | "filter"
   | "fold"
+  | "all"
   | "traverse";
 
 export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
@@ -111,6 +112,7 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "map",
   "filter",
   "fold",
+  "all",
   "traverse",
 ]);
 
@@ -359,10 +361,10 @@ class Resolver {
     binding: Binding,
     nameNode: NodeId,
   ): void {
-    // Existing programs use `run` as a value name. A binding shadows the new
-    // prelude operation; lookupValue already checks bindings first.
+    // Existing programs use `run` and `all` as value names. Bindings shadow
+    // these prelude operations; lookupValue already checks bindings first.
     if (
-      (PRELUDE_NAMES.has(name) && name !== "run") ||
+      (PRELUDE_NAMES.has(name) && name !== "run" && name !== "all") ||
       BUILTIN_TYPE_NAMES.has(name)
     ) {
       this.report(
@@ -508,7 +510,7 @@ class Resolver {
     const name = nameTextOf(this.tree, nameNode);
     if (name === undefined) return undefined;
     const span = this.span(nameNode);
-    if (PRELUDE_NAMES.has(name) && name !== "run") {
+    if (PRELUDE_NAMES.has(name) && name !== "run" && name !== "all") {
       this.report(
         "declaration/002",
         `\`${name}\` is a reserved prelude name and cannot be a binding`,
