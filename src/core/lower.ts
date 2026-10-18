@@ -654,6 +654,13 @@ class BodyLowerer {
           concurrency: fact.concurrency,
           ...annotation,
         };
+      case "all-results":
+        return {
+          kind: "all-results",
+          jobs: arg(0),
+          concurrency: fact.concurrency,
+          ...annotation,
+        };
       case "sink-for-each":
         return { kind: "sink-for-each", consume: arg(0), ...annotation };
       case "run-stream":

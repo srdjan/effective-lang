@@ -715,6 +715,72 @@ console.log(JSON.stringify({ success, failure }));
   });
 });
 
+Deno.test("allResults keeps successes and failures in array, tuple, and record positions", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Int = int",
+        "type Text = string",
+        "export error Stop = { n: Int }",
+        "export service Jobs { number(n: Int): Int fails Stop; text(): Text }",
+        'type NumberResult = { _tag: "Success", success: Int } | { _tag: "Failure", failure: Stop }',
+        'type TextResult = { _tag: "Success", success: Text } | { _tag: "Failure", failure: never }',
+        "type Pair = [Effect<Int, Stop, Jobs.number>, Effect<Text, never, Jobs.text>]",
+        "const pair: Pair = [defer(() => Jobs.number(0)), defer(() => Jobs.text())]",
+        "export const tuple = (): [NumberResult, TextResult] uses Jobs.number | Jobs.text =>",
+        "  allResults(pair, { concurrency: 2 })",
+        "export const record = (): { number: NumberResult, text: TextResult } uses Jobs.number | Jobs.text =>",
+        "  allResults({ number: defer(() => Jobs.number(1)), text: defer(() => Jobs.text()) }, { concurrency: 2 })",
+        "export const array = (): NumberResult[] uses Jobs.number =>",
+        "  allResults([defer(() => Jobs.number(0)), defer(() => Jobs.number(1)), defer(() => Jobs.number(2))], { concurrency: 2 })",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Layer } from "effect";
+import { Jobs, Stop, tuple, record, array } from "./main.ts";
+
+const started: string[] = [];
+const Live = Layer.succeed(Jobs)({
+  number: (n) => Effect.sync(() => { started.push(String(n)); }).pipe(
+    Effect.andThen(n === 1 ? Effect.fail(new Stop({ n })) : Effect.succeed(n * 10)),
+  ),
+  text: () => Effect.sync(() => { started.push("text"); return "ok"; }),
+});
+const inspect = (result: { _tag: "Success"; success: unknown } | { _tag: "Failure"; failure: Stop }) =>
+  result._tag === "Success" ? { tag: "success", value: result.success } : { tag: "failure", n: result.failure.n };
+const pair = (await Effect.runPromise(tuple().pipe(Effect.provide(Live)))).map(inspect);
+const values = await Effect.runPromise(record().pipe(Effect.provide(Live)));
+const named = { number: inspect(values.number), text: inspect(values.text) };
+const items = (await Effect.runPromise(array().pipe(Effect.provide(Live)))).map(inspect);
+console.log(JSON.stringify({ pair, named, items, started }));
+`,
+    );
+    assertEquals(result, {
+      pair: [
+        { tag: "success", value: 0 },
+        { tag: "success", value: "ok" },
+      ],
+      named: {
+        number: { tag: "failure", n: 1 },
+        text: { tag: "success", value: "ok" },
+      },
+      items: [
+        { tag: "success", value: 0 },
+        { tag: "failure", n: 1 },
+        { tag: "success", value: 20 },
+      ],
+      started: ["0", "text", "1", "text", "0", "1", "2"],
+    });
+  });
+});
+
 Deno.test("source-authored streams pull incrementally through an effectful sink", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

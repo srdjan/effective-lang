@@ -436,6 +436,43 @@ const result = (): Int[] fails Problems uses Jobs.run =>
   assert(codesOf(invalidWrapper, lowered.sources).includes("validation/002"));
 });
 
+Deno.test("allResults validates tagged outcomes and literal concurrency", () => {
+  const lowered = lowerText(`
+type Int = int
+error Stop = { n: Int }
+service Jobs { run(n: Int): Int fails Stop }
+type Outcome = { _tag: "Success", success: Int } | { _tag: "Failure", failure: Stop }
+const jobs: Effect<Int, Stop, Jobs.run>[] = [defer(() => Jobs.run(0)), defer(() => Jobs.run(1))]
+const result = (): Outcome[] uses Jobs.run => allResults(jobs, { concurrency: 2 })
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+
+  const invalidBound = copy(lowered.ir);
+  const boundFunction = invalidBound.declarations.find((d) =>
+    d.name === "result"
+  );
+  assert(
+    boundFunction?.kind === "function" &&
+      boundFunction.body.kind === "all-results",
+  );
+  setAt(boundFunction, "body.concurrency", 0);
+  assert(codesOf(invalidBound, lowered.sources).includes("validation/006"));
+
+  const invalidResult = copy(lowered.ir);
+  const resultFunction = invalidResult.declarations.find((d) =>
+    d.name === "result"
+  );
+  assert(
+    resultFunction?.kind === "function" &&
+      resultFunction.body.kind === "all-results",
+  );
+  setAt(resultFunction, "body.type.element", {
+    kind: "primitive",
+    name: "int",
+  });
+  assert(codesOf(invalidResult, lowered.sources).includes("validation/002"));
+});
+
 Deno.test("stream validation recomputes deferred and active channels", () => {
   const lowered = lowerText(`
 error Stop = {}

@@ -19,14 +19,14 @@ array collections of first-class Effect values. The compiler preserves result
 shape and unions failure and requirement channels. Its independent validator
 checks the closed builtin signature and literal concurrency option. A runtime
 test covers tuple and record results and sibling cleanup. `Effect.forkScoped`,
-raw `Scope`, and non-default `Effect.all` error modes remain open.
+raw `Scope`, and non-default `Effect.all` error modes remained open at this step.
 
 Update, 2026-10-18: design draft 0.6 adds `scoped` and `forkScoped`.
 `forkScoped` requires a reserved Scope capability and accepts an Effect value
 without typed failures. `scoped` supplies that capability and closes the local
 scope. A runtime test confirms a child can outlive its spawning fiber and is
 interrupted with finalizer completion when its scope closes. Raw `Scope` values,
-explicit `Scope.close`, and non-default `Effect.all` error modes remain open.
+explicit `Scope.close`, and non-default `Effect.all` error modes remained open at this step.
 
 Update, 2026-10-18: design draft 0.7 adds `zipStreams` for streams with
 different element types. It preserves ordered pairs and unions deferred
@@ -58,6 +58,15 @@ typed failures. A pure source callback wraps the nonempty error array in a
 nominal error so the result fits Effective's failure contracts. The checker,
 independent IR validator, strict target check, and runtime test cover both
 success and accumulated failure with a literal concurrency bound.
+
+Update, 2026-10-18: design draft 0.12 adds `allResults` for Effect tuples,
+records, and homogeneous arrays. It emits `Effect.all` in result mode, retaining
+each success or typed failure at its input position as a tagged record union.
+The checker and independent IR validator preserve shape and combined service
+requirements while removing typed job failures from the active channel. Strict
+target and runtime tests cover all three collection shapes and sibling work
+after a typed failure. `Effect.all` discard mode remains outside the source
+subset.
 
 Update, 2026-10-17: `bufferStream` and `mergeStreams` now compile to Effect 4
 streams. A slow runtime test covers deferred production and per-source order.
@@ -99,7 +108,7 @@ snapshot and should be read with these updates.
 
 ## Answer and boundary
 
-**Yes. There are valid Effect 4 programs whose behavior and typed API cannot currently be authored in Effective source.** Non-default `Effect.all` modes, general stream combinators, raw `Scope` values, effectful Schema transformations, and direct ecosystem package APIs remain examples. Effective now supports the selected core 1 forms in the [language spec](../../effective/public/effective-spec.html#core1) and [typed IR](../src/core/ir.ts). Effect's documentation describes the broader [concurrency](https://effect.website/docs/v4/concurrency/basic-concurrency), [stream](https://effect.website/docs/v4/stream/introduction), and [scope](https://effect.website/docs/v4/resource-management/scope) APIs.
+**Yes. There are valid Effect 4 programs whose behavior and typed API cannot currently be authored in Effective source.** `Effect.all` discard mode, general stream combinators, raw `Scope` values, effectful Schema transformations, and direct ecosystem package APIs remain examples. Effective now supports the selected core 1 forms in the [language spec](../../effective/public/effective-spec.html#core1) and [typed IR](../src/core/ir.ts). Effect's documentation describes the broader [concurrency](https://effect.website/docs/v4/concurrency/basic-concurrency), [stream](https://effect.website/docs/v4/stream/introduction), and [scope](https://effect.website/docs/v4/resource-management/scope) APIs.
 
 Here, **native support** means a program can be written in `.eff`, checked with its intended contract, and emitted to equivalent Effect behavior. A host TypeScript module may implement any of these behaviors behind an Effective service, but that implementation is then authored in TypeScript. This distinction matters for ecosystem coverage. The `host:` boundary accepts declared providers, service tags, and opaque types from a registered interface; it does not import arbitrary package functions or Effect constants. `.effi` still rejects `const`, and imports accept only relative `.eff` files or registered `host:` modules. A service method can return a nested Effect value ([parser](../src/core/parse.ts), [project linker](../src/core/project.ts), [emitter](../src/core/emit/decls.ts)).
 
@@ -111,7 +120,7 @@ This is an expressiveness result for the current language and compiler, not a cl
 | --- | --- | --- | --- |
 | Ordinary typed effects, service calls, tagged failures, recovery, and fixed-count retry | **Supported subset.** Effective emits `Effect`, `Context`, `Layer`, `Option`, and `Schema`; its examples cover these forms. | [Examples](../fixtures/examples/), [emitter import set](../src/core/emit/scope.ts#L26), [source control rules](../../effective/public/effective-spec.html#control). | Host supplies the provider and invokes exported entry functions. |
 | First-class Effect values and general combinators | **Partial.** `Effect<A,E,R>`, `defer`, and `run` let source construct, store, pass, return, and execute a typed Effect value. General Effect combinators remain absent. | [IR type model](../src/core/ir.ts#L31), [spec: execution](../../effective/public/effective-spec.html#execution), [Phase 4 runtime test](../tests/emit_slow_test.ts); Effect [the Effect type](https://effect.website/docs/v4/getting-started/the-effect-type). The original probe below predates Phase 4. | Host may expose a specific composed operation as a service method. |
-| Concurrency, racing, fibers, interruption | **Supported core 1 subset.** Bounded and unbounded `traverse`, heterogeneous `all` over Effect tuples and records, `partitionAll` and `validateAll` over homogeneous arrays, `race`, supervised `withFiber`, and scope-bound `forkScoped` are native. Other `Effect.all` modes remain absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime tests](../tests/emit_slow_test.ts); Effect [concurrency](https://effect.website/docs/v4/concurrency/basic-concurrency) and [fibers](https://effect.website/docs/v4/concurrency/fibers). | A service can expose other concurrent policies. |
+| Concurrency, racing, fibers, interruption | **Supported core 1 subset.** Bounded and unbounded `traverse`, heterogeneous `all` and `allResults` over Effect tuples and records, `partitionAll` and `validateAll` over homogeneous arrays, `race`, supervised `withFiber`, and scope-bound `forkScoped` are native. `Effect.all` discard mode remains absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime tests](../tests/emit_slow_test.ts); Effect [concurrency](https://effect.website/docs/v4/concurrency/basic-concurrency) and [fibers](https://effect.website/docs/v4/concurrency/fibers). | A service can expose other concurrent policies. |
 | Effectful collection traversal | **Supported sequentially and concurrently.** `traverse` accepts effectful callbacks and preserves their failure and requirement sets. `map`, `filter`, and `fold` still require pure callbacks. | [Spec: collections](../../effective/public/effective-spec.html#pipelines), [prelude names](../src/core/resolve.ts#L53), [Phase 3 runtime test](../tests/emit_slow_test.ts); Effect [`forEach`](https://effect.website/docs/v4/code-style/control-flow). The original `filter` probe still fails. | A host service can expose other traversal policies. |
 | Streams and sinks | **Supported core 1 subset.** `unfold`, `mapEffect`, `sinkForEach`, `runStream`, `bufferStream`, `mergeStreams`, `zipStreams`, `concatStreams`, and sequential `flatMapStreams` are native. Other stream combinators remain absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime tests](../tests/emit_slow_test.ts); Effect [streams](https://effect.website/docs/v4/stream/introduction) and [sinks](https://effect.website/docs/v4/sink/introduction). | A host adapter can expose other stream policies. |
 | Resource scopes and finalizers | **Supported core 1 subset.** `withResource` scopes operation records and opaque host handles; borrow-qualified methods and checked source helpers prevent handle escape. `scoped` supplies a local scope for `forkScoped` jobs. Raw `Scope` composition remains absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [borrow runtime test](../tests/cli_slow_test.ts), [scoped fiber runtime test](../tests/emit_slow_test.ts); Effect [scope](https://effect.website/docs/v4/resource-management/scope). | A host adapter owns the handle and its operations. |
@@ -193,7 +202,7 @@ The fix moved the left expression's active requirements to the block binding and
 
 ## Remaining investigation queue
 
-1. **General concurrency and scope.** Compare non-default `Effect.all` modes and raw `Scope` composition with the traversal, collection, and scoped fiber source forms. Keep cancellation and finalizer behavior explicit.
+1. **General concurrency and scope.** Compare `Effect.all` discard mode and raw `Scope` composition with the traversal, collection, and scoped fiber source forms. Keep cancellation and finalizer behavior explicit.
 2. **General stream and Schedule APIs.** Identify further operators whose behavior cannot be expressed by `unfold`, `bufferStream`, `mergeStreams`, `zipStreams`, `concatStreams`, `flatMapStreams`, and `retrySchedule`; require target and runtime witnesses.
 3. **Schema and ecosystem APIs.** Test effectful transformations, recursive schemas, and representative HTTP, SQL, RPC, AI, and observability objects through typed adapters. Preserve failures, requirements, and scoped lifetimes.
 

@@ -11,6 +11,7 @@
 // The equations come from the spec, "Equations and validation".
 
 import type {
+  CapabilityId,
   ConstantDecl,
   ErrorId,
   Expr,
@@ -456,6 +457,8 @@ export class BodyValidator {
         return this.partitionAll(e, path);
       case "validate-all":
         return this.validateAll(e, path);
+      case "all-results":
+        return this.allResults(e, path);
       case "scoped":
         return this.scoped(e, path);
       case "fork-scoped":
@@ -1912,6 +1915,108 @@ export class BodyValidator {
     };
   }
 
+  private allResults(
+    e: Extract<Expr, { kind: "all-results" }>,
+    path: string,
+  ): Comp {
+    const jobs = this.check(e.jobs, `${path}.jobs`);
+    const shape = unfold(this.env, jobs.type);
+    const members = shape.kind === "tuple"
+      ? shape.elements
+      : shape.kind === "record"
+      ? shape.fields.map((field) => field.type)
+      : shape.kind === "array"
+      ? [shape.element]
+      : undefined;
+    if (
+      members === undefined ||
+      (shape.kind === "record" && shape.fields.some((field) => field.optional))
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "allResults needs a tuple, record, or array of Effect values with required fields",
+        e.span,
+      );
+      return this.poison();
+    }
+    const outcomes: Type[] = [];
+    const requirements: CapabilityId[] = [];
+    for (const type of members) {
+      const member = unfold(this.env, type);
+      if (member.kind !== "effect") {
+        this.add(
+          AREA.types,
+          path,
+          "allResults requires an Effect value at every position",
+          e.span,
+        );
+        return this.poison();
+      }
+      const error = unionOf(
+        this.env,
+        member.effects.failures.map((id) => ({ kind: "named", id })),
+      );
+      outcomes.push(unionOf(this.env, [
+        {
+          kind: "record",
+          fields: [
+            {
+              name: "_tag",
+              type: { kind: "literal", value: "Success" },
+              optional: false,
+            },
+            { name: "success", type: member.result, optional: false },
+          ],
+        },
+        {
+          kind: "record",
+          fields: [
+            {
+              name: "_tag",
+              type: { kind: "literal", value: "Failure" },
+              optional: false,
+            },
+            { name: "failure", type: error, optional: false },
+          ],
+        },
+      ]));
+      requirements.push(...member.effects.requirements);
+    }
+    if (
+      e.concurrency !== undefined && e.concurrency !== "unbounded" &&
+      !(Number.isSafeInteger(e.concurrency) && e.concurrency > 0)
+    ) {
+      this.add(
+        AREA.control,
+        `${path}.concurrency`,
+        "allResults concurrency must be a positive safe integer or unbounded",
+        e.span,
+      );
+    }
+    const result: Type = shape.kind === "tuple"
+      ? { kind: "tuple", elements: outcomes }
+      : shape.kind === "record"
+      ? {
+        kind: "record",
+        fields: shape.fields.map((field, i) => ({
+          name: field.name,
+          type: outcomes[i],
+          optional: false,
+        })),
+      }
+      : { kind: "array", element: outcomes[0] };
+    return {
+      type: result,
+      match: "exact",
+      active: combine([jobs, {
+        failures: [],
+        requirements,
+        execution: "effect",
+      }]),
+    };
+  }
+
   private scoped(e: Extract<Expr, { kind: "scoped" }>, path: string): Comp {
     const value = this.check(e.value, `${path}.value`);
     const effect = unfold(this.env, value.type);
@@ -2068,6 +2173,8 @@ export class BodyValidator {
             return [e.jobs];
           case "validate-all":
             return [e.jobs, e.onErrors];
+          case "all-results":
+            return [e.jobs];
           case "closure":
             return [e.body];
           case "call":

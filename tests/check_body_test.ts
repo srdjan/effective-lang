@@ -268,6 +268,46 @@ const use = (): Int => validateAll()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
+Deno.test("allResults preserves collection shape and captures each failure", () => {
+  const project = checkText(`
+type Int = int
+type Text = string
+error Stop = { n: Int }
+service Probe { number(): Int fails Stop; text(): Text }
+type NumberResult = { _tag: "Success", success: Int } | { _tag: "Failure", failure: Stop }
+type TextResult = { _tag: "Success", success: Text } | { _tag: "Failure", failure: never }
+type Jobs = [Effect<Int, Stop, Probe.number>, Effect<Text, never, Probe.text>]
+const jobs: Jobs = [defer(() => Probe.number()), defer(() => Probe.text())]
+const tuple = (): [NumberResult, TextResult] uses Probe.number | Probe.text =>
+  allResults(jobs, { concurrency: 2 })
+const record = (): { number: NumberResult, text: TextResult } uses Probe.number | Probe.text =>
+  allResults({ number: defer(() => Probe.number()), text: defer(() => Probe.text()) })
+const array = (): NumberResult[] uses Probe.number =>
+  allResults([defer(() => Probe.number())])
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+
+  const invalid = checkText(`
+type Int = int
+const bad = (): Int[] => allResults([1, 2])
+`);
+  assert(codes(invalid).includes("type-mismatch/010"));
+  const bound = checkText(`
+type Int = int
+const bad = (): Int[] => allResults([defer(() => 1)], { concurrency: 0 })
+`);
+  assert(codes(bound).includes("type-mismatch/010"));
+});
+
+Deno.test("a source binding named allResults shadows the prelude operation", () => {
+  const project = checkText(`
+type Int = int
+const allResults = (): Int => 3
+const use = (): Int => allResults()
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
 Deno.test("zipStreams pairs different element types and unions deferred channels", () => {
   const project = checkText(`
 error Stop = {}

@@ -49,6 +49,8 @@ export function childrenOf(expr: Expr): Expr[] {
       return [expr.jobs];
     case "validate-all":
       return [expr.jobs, expr.onErrors];
+    case "all-results":
+      return [expr.jobs];
     case "sink-for-each":
       return [expr.consume];
     case "run-stream":

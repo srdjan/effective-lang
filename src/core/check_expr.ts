@@ -905,6 +905,8 @@ export class BodyChecker {
         return this.partitionAllCall(node, args);
       case "validateAll":
         return this.validateAllCall(node, args);
+      case "allResults":
+        return this.allResultsCall(node, args);
       case "map":
       case "filter":
       case "fold":
@@ -2694,7 +2696,12 @@ export class BodyChecker {
 
   private concurrencyBound(
     arg: Arg,
-    operation: "traverse" | "all" | "partitionAll" | "validateAll" = "traverse",
+    operation:
+      | "traverse"
+      | "all"
+      | "partitionAll"
+      | "validateAll"
+      | "allResults" = "traverse",
   ): number | "unbounded" | undefined {
     const bad = (): undefined => {
       this.report(
@@ -2950,6 +2957,103 @@ export class BodyChecker {
           ? [wrapper.id as ErrorId]
           : [],
         requirements: member?.kind === "effect" ? member.requirements : [],
+        mode: "effect",
+      }]),
+    );
+  }
+
+  private allResultsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    if (args.length !== 1 && args.length !== 2) {
+      this.report(
+        "type-mismatch/004",
+        "`allResults` takes an Effect collection and an optional concurrency record",
+        node,
+      );
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.noPipeline("allResults", args);
+    const jobs = this.argInfo(args[0]);
+    const option = args[1] === undefined ? undefined : this.argInfo(args[1]);
+    const concurrency = args[1] === undefined
+      ? undefined
+      : this.concurrencyBound(args[1], "allResults");
+    this.fact(node, { kind: "all-results", concurrency });
+    const table = this.table;
+    const shape = table.node(table.unfold(jobs.type));
+    const members = shape.kind === "tuple"
+      ? shape.elements
+      : shape.kind === "record"
+      ? shape.fields.map((field) => field.type)
+      : shape.kind === "array"
+      ? [shape.element]
+      : undefined;
+    if (members === undefined) {
+      if (!this.isError(jobs.type)) {
+        this.report(
+          "type-mismatch/010",
+          "`allResults` needs a tuple, record, or array of Effect values",
+          args[0].node,
+        );
+      }
+      return this.finish(
+        node,
+        table.error,
+        combine([jobs, ...(option === undefined ? [] : [option])]),
+      );
+    }
+    if (
+      shape.kind === "record" && shape.fields.some((field) => field.optional)
+    ) {
+      this.report(
+        "type-mismatch/010",
+        "`allResults` requires every record field to be present",
+        args[0].node,
+      );
+    }
+    const outcomes = members.map((type) => {
+      const member = table.node(table.unfold(type));
+      if (member.kind !== "effect") {
+        this.report(
+          "type-mismatch/010",
+          "`allResults` requires an Effect value at every position",
+          args[0].node,
+        );
+        return { result: table.error, requirements: [] };
+      }
+      const error = table.union(member.failures.map((id) => table.named(id)));
+      return {
+        result: table.union([
+          table.record([
+            { name: "_tag", type: table.literal("Success"), optional: false },
+            { name: "success", type: member.result, optional: false },
+          ]),
+          table.record([
+            { name: "_tag", type: table.literal("Failure"), optional: false },
+            { name: "failure", type: error, optional: false },
+          ]),
+        ]),
+        requirements: member.requirements,
+      };
+    });
+    const result = shape.kind === "tuple"
+      ? table.tuple(outcomes.map((outcome) => outcome.result))
+      : shape.kind === "record"
+      ? table.record(shape.fields.map((field, i) => ({
+        name: field.name,
+        type: outcomes[i].result,
+        optional: false,
+      })))
+      : table.array(outcomes[0].result);
+    return this.finish(
+      node,
+      result,
+      combine([jobs, ...(option === undefined ? [] : [option]), {
+        failures: [],
+        requirements: outcomes.flatMap((outcome) => outcome.requirements),
         mode: "effect",
       }]),
     );

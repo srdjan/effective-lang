@@ -103,6 +103,20 @@ export const main = (): Int[] fails Problems uses Jobs.run =>
   assertStringIncludes(output, "concurrency: 2");
 });
 
+Deno.test("allResults emits Effect.all in result mode", () => {
+  const output = oneModule(`
+type Int = int
+error Stop = { n: Int }
+service Jobs { run(n: Int): Int fails Stop }
+type Outcome = { _tag: "Success", success: Int } | { _tag: "Failure", failure: Stop }
+export const main = (): Outcome[] uses Jobs.run =>
+  allResults([defer(() => Jobs.run(0)), defer(() => Jobs.run(1))], { concurrency: 2 })
+`);
+  assertStringIncludes(output, "Effect.all(");
+  assertStringIncludes(output, 'mode: "result"');
+  assertStringIncludes(output, "concurrency: 2");
+});
+
 Deno.test("scoped fiber emission provides a local scope", () => {
   const output = oneModule(`
 type Int = int

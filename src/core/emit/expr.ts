@@ -1020,6 +1020,7 @@ export class ExprEmitter {
       case "run":
       case "partition-all":
       case "validate-all":
+      case "all-results":
       case "scoped":
       case "fork-scoped":
       case "with-resource":
@@ -1647,6 +1648,7 @@ export class ExprEmitter {
       case "run":
       case "partition-all":
       case "validate-all":
+      case "all-results":
       case "scoped":
       case "fork-scoped":
       case "catch":
@@ -1681,6 +1683,8 @@ export class ExprEmitter {
         return [e.jobs];
       case "validate-all":
         return [e.jobs, e.onErrors];
+      case "all-results":
+        return [e.jobs];
       case "fork-scoped":
         return [e.job];
       case "run-stream":
@@ -1885,6 +1889,24 @@ export class ExprEmitter {
               ]),
             ]),
             children[1],
+          ]),
+        ]);
+      case "all-results":
+        return emitted([
+          `${effect}.all`,
+          callArguments([
+            children[0],
+            emitted(
+              `{ mode: "result"${
+                e.concurrency === undefined
+                  ? ""
+                  : `, concurrency: ${
+                    e.concurrency === "unbounded"
+                      ? '"unbounded"'
+                      : e.concurrency
+                  }`
+              } }`,
+            ),
           ]),
         ]);
       case "scoped":
