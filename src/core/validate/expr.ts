@@ -1717,6 +1717,13 @@ export class BodyValidator {
               "struct",
               "union",
               "optional-key",
+              "null-to-missing-key",
+              "option-from-optional-key",
+              "default-key",
+              "default-null-key",
+              "default-encoded-key",
+              "optional-transform",
+              "optional-from-required",
               "transform",
               "constructor-default",
               "both",
@@ -1729,9 +1736,7 @@ export class BodyValidator {
       return found.kind === "schema" && found.optionalKey === true &&
           found.encodedOptionalKey !== true &&
           found.decodedOptionalKey !== true &&
-          found.constructorDefault !== true &&
-          (found.makeInput === undefined ||
-            same(this.env, found.makeInput, found.decoded))
+          found.constructorDefault !== true
         ? found
         : undefined;
     };
@@ -1866,6 +1871,7 @@ export class BodyValidator {
         type: {
           ...input,
           decoded: { kind: "option", element: input.decoded },
+          makeInput: { kind: "option", element: input.decoded },
           encodedOptionalKey: true,
         },
         match: "exact",
@@ -2102,6 +2108,9 @@ export class BodyValidator {
             ...encode.effects.requirements,
           ]),
           decodedOptionalKey: true,
+          ...(target.makeInput === undefined
+            ? {}
+            : { makeInput: target.makeInput }),
         },
         match: "exact",
         active: combine(args),
@@ -2173,6 +2182,9 @@ export class BodyValidator {
             ...encode.effects.requirements,
           ]),
           optionalKey: true,
+          ...(target.makeInput === undefined
+            ? {}
+            : { makeInput: target.makeInput }),
         },
         match: "exact",
         active: combine(args),

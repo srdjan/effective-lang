@@ -1,0 +1,78 @@
+export type Int = int
+type Text = string
+type NullableE = E | null
+export type D = { score: Int }
+export type E = { score: Text }
+export type M = { score?: Int }
+type Required = { settings: D }
+type Input = { settings: M }
+type Optional = { settings?: D }
+type OptionalInput = { settings?: M }
+type OptionalWire = { settings?: E }
+type NullableWire = { settings?: E | null }
+type OptionRecord = { settings: Option<D> }
+type Source = { label: Text }
+type SourceInput = { label?: Text }
+
+export service Read { parse(value: Text): Int }
+export service Write { print(value: Int): Text }
+export service Defaults { next(): D; encoded(): E }
+export service Convert {
+  decode(value: Option<Source>): Option<E>
+  encode(value: Option<E>): Option<Source>
+  required(value: Option<E>): Source
+}
+
+const integer: Schema<Int> = schema()
+const text: Schema<Text> = schema()
+const shifted: Schema<Int, Text, Read.parse, Write.print> = schemaTransform(
+  text, integer,
+  (value: Text): Option<Int> uses Read.parse => Some(Read.parse(value)),
+  (value: Int): Option<Text> uses Write.print => Some(Write.print(value))
+)
+export const child: Schema<D, E, Read.parse, Write.print, M> =
+  schemaStruct({ score: schemaConstructorDefault(shifted, (): Int => 4) })
+export const nullField: SchemaOptional<D, NullableE, Read.parse, Write.print, M> =
+  schemaNullToMissingKey(child)
+export const nullMissing: Schema<Optional, NullableWire, Read.parse, Write.print, OptionalInput> =
+  schemaStruct({ settings: nullField })
+export const decodedField: SchemaEncodedOptional<D, E, Read.parse | Defaults.next, Write.print, M> =
+  schemaDefaultKey(child, (): D uses Defaults.next => Defaults.next())
+export const decoded: Schema<Required, OptionalWire, Read.parse | Defaults.next, Write.print, Input> =
+  schemaStruct({ settings: decodedField })
+export const nullDefault: Schema<Required, NullableWire, Read.parse | Defaults.next, Write.print, Input> =
+  schemaStruct({ settings: schemaDefaultNullKey(child,
+    (): D uses Defaults.next => Defaults.next(), { encodingStrategy: "omit" }) })
+export const encodedField: SchemaEncodedOptional<D, E, Read.parse | Defaults.encoded, Write.print, M> =
+  schemaDefaultEncodedKey(child, (): E uses Defaults.encoded => Defaults.encoded(), { encodingStrategy: "omit" })
+export const encoded: Schema<Required, OptionalWire, Read.parse | Defaults.encoded, Write.print, Input> =
+  schemaStruct({ settings: encodedField })
+export const optionField: SchemaEncodedOptional<Option<D>, E, Read.parse, Write.print> =
+  schemaOptionFromOptionalKey(child)
+export const optionRecord: Schema<OptionRecord, OptionalWire, Read.parse, Write.print> =
+  schemaStruct({ settings: optionField })
+
+const source: Schema<Source, Source, never, never, SourceInput> =
+  schemaStruct({ label: schemaConstructorDefault(text, (): Text => "source") })
+export const transformedField: SchemaOptional<D, Source, Read.parse | Convert.decode, Write.print | Convert.encode, M> =
+  schemaOptionalTransform(schemaOptionalKey(source), schemaOptionalKey(child),
+    (value: Option<Source>): Option<E> uses Convert.decode => Convert.decode(value),
+    (value: Option<E>): Option<Source> uses Convert.encode => Convert.encode(value))
+export const transformed: Schema<Optional, { settings?: Source }, Read.parse | Convert.decode, Write.print | Convert.encode, OptionalInput> =
+  schemaStruct({ settings: transformedField })
+export const requiredField: SchemaDecodedOptional<D, Source, Read.parse | Convert.decode, Write.print | Convert.required, M> =
+  schemaOptionalFromRequired(source, schemaOptionalKey(child),
+    (value: Source): Option<E> uses Convert.decode => Convert.decode(Some(value)),
+    (value: Option<E>): Source uses Convert.required => Convert.required(value))
+export const required: Schema<Optional, { settings: Source }, Read.parse | Convert.decode, Write.print | Convert.required, OptionalInput> =
+  schemaStruct({ settings: requiredField })
+
+export const makeDecoded = (input: Input): Required fails SchemaIssue => schemaMake(decoded, input)
+export const makeOptional = (input: OptionalInput): Optional fails SchemaIssue => schemaMake(required, input)
+export const makeOption = (input: OptionRecord): OptionRecord fails SchemaIssue => schemaMake(optionRecord, input)
+export const readDefault = (input: unknown): Required fails SchemaError uses Read.parse | Defaults.next => schemaDecode(decoded, input)
+export const readNull = (input: unknown): Required fails SchemaError uses Read.parse | Defaults.next => schemaDecode(nullDefault, input)
+export const readEncoded = (input: unknown): Required fails SchemaError uses Read.parse | Defaults.encoded => schemaDecode(encoded, input)
+export const readMissing = (input: unknown): Optional fails SchemaError uses Read.parse => schemaDecode(nullMissing, input)
+export const readTransformed = (input: unknown): Optional fails SchemaError uses Read.parse | Convert.decode => schemaDecode(transformed, input)
+export const writeEncoded = (input: Required): OptionalWire fails SchemaError uses Write.print => schemaEncode(encoded, input)

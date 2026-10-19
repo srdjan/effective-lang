@@ -94,12 +94,11 @@ those rules with a new object-identity guarantee.
 
 ## Boundaries and verification
 
-Changed make-input metadata is rejected by schema(), recursive Schema builders,
-and the currently unprobed optional adapters: schemaNullToMissingKey,
-schemaOptionFromOptionalKey, decoded/encoded default-key builders,
-schemaOptionalTransform, and schemaOptionalFromRequired. These operations must
-gain explicit propagation rules before accepting that metadata. Existing forms
-with M=D remain supported. Constructor defaults attached directly to optional
+Changed make-input metadata is rejected by schema() and recursive Schema builders.
+The [optional adapter extension](2026-10-19-schema-constructor-optional-contract.md)
+now specifies propagation through nullable, decoding-default, and optional
+transformation fields. The Option adapter explicitly requires complete Option<D>
+constructor input. Constructor defaults attached directly to optional
 descriptors, recursive make-input propagation, constructor options, and
 arbitrary Schema AST access remain outside this slice.
 
@@ -110,8 +109,8 @@ captured Ref defaults, native replay identity, constructor-only effects, full
 issue paths, and awaited cleanup. Independent mutations reject erased M and
 forged default flags. Source boundaries reject metadata erasure, duplicate
 defaults, invalid callbacks, services, descriptor runners, and unsupported
-adapters.
+metadata derivation.
 
-Constructor metadata through optional adapters is next, followed by recursive
-make-input propagation. Broader package interoperability, item 9, stays deferred
+Constructor metadata through optional adapters is implemented; recursive
+make-input propagation is next. Broader package interoperability, item 9, stays deferred
 by user instruction.

@@ -1526,6 +1526,13 @@ export class BodyChecker {
           "array",
           "union",
           "optional-key",
+          "null-to-missing-key",
+          "option-from-optional-key",
+          "default-key",
+          "default-null-key",
+          "default-encoded-key",
+          "optional-transform",
+          "optional-from-required",
           "transform",
           "constructor-default",
           "make",
@@ -1549,8 +1556,7 @@ export class BodyChecker {
     const asOptional = (info: NodeInfo, at: NodeId) => {
       const type = this.table.node(this.table.unfold(info.type));
       if (
-        type.kind !== "schema" || type.optionalKey !== true ||
-        changedMakeInput(type)
+        type.kind !== "schema" || type.optionalKey !== true
       ) {
         if (!this.isError(info.type)) {
           this.report(
@@ -1868,6 +1874,9 @@ export class BodyChecker {
             ...(encodeFn?.requirements ?? []),
           ],
           true,
+          false,
+          false,
+          target.makeInput ?? target.decoded,
         ),
         combine([sourceInfo, targetInfo, decode.info, encode.info]),
       );
@@ -1959,6 +1968,7 @@ export class BodyChecker {
           false,
           false,
           true,
+          target.makeInput ?? target.decoded,
         ),
         combine([sourceInfo, targetInfo, decode.info, encode.info]),
       );
@@ -2029,6 +2039,9 @@ export class BodyChecker {
           schema.decodeRequirements,
           schema.encodeRequirements,
           true,
+          false,
+          false,
+          schema.makeInput ?? schema.decoded,
         ),
         combine([first]),
       );
@@ -2185,6 +2198,8 @@ export class BodyChecker {
           schema.encodeRequirements,
           false,
           true,
+          false,
+          schema.makeInput ?? schema.decoded,
         ),
         combine([
           first,

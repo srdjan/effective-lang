@@ -1438,7 +1438,7 @@ export class ExprEmitter {
           const option = this.scope.effect("Option");
           const source = this.scope.temp();
           const value = this.scope.temp();
-          return emitted([
+          return withMakeInput(emitted([
             "((",
             source,
             ": ",
@@ -1451,7 +1451,7 @@ export class ExprEmitter {
             " })))(",
             free(kid(args[0])),
             ")",
-          ]);
+          ]));
         }
         if (e.op === "optional-key") {
           return emitted([
@@ -1511,7 +1511,7 @@ export class ExprEmitter {
             const omit = options?.kind === "record" &&
               options.fields[0].value.kind === "literal" &&
               options.fields[0].value.value === "omit";
-            return emitted([
+            return withMakeInput(emitted([
               "((",
               source,
               ": ",
@@ -1528,9 +1528,9 @@ export class ExprEmitter {
               "(",
               free(kid(args[0])),
               ")",
-            ]);
+            ]));
           }
-          return emitted([
+          return withMakeInput(emitted([
             at(kid(args[0]), PREC.member),
             ".pipe(",
             `${schema}.${
@@ -1541,7 +1541,7 @@ export class ExprEmitter {
             defaultValue,
             ...(args[2] === undefined ? [] : [", ", free(kid(args[2]))]),
             "))",
-          ]);
+          ]));
         }
         if (e.op === "optional-transform") {
           const getter = this.scope.effect("SchemaGetter");
@@ -1552,7 +1552,7 @@ export class ExprEmitter {
               args[index].type.execution === "effect"
               ? "transformOptionalEffect"
               : "transformOptional";
-          return emitted([
+          return withMakeInput(emitted([
             at(kid(args[0]), PREC.member),
             ".pipe(",
             `${schema}.decodeTo(`,
@@ -1564,7 +1564,7 @@ export class ExprEmitter {
             `${getter}.${getterName(3)}(`,
             free(encode),
             ") }))",
-          ]);
+          ]));
         }
         if (e.op === "optional-from-required") {
           const getter = this.scope.effect("SchemaGetter");
@@ -1594,7 +1594,7 @@ export class ExprEmitter {
               encodeValue,
               "))",
             ];
-          return emitted([
+          return withMakeInput(emitted([
             at(kid(args[0]), PREC.member),
             ".pipe(",
             `${schema}.decodeTo(`,
@@ -1615,7 +1615,7 @@ export class ExprEmitter {
             }((${encodeValue}) => `,
             encodeResult,
             ") }))",
-          ]);
+          ]));
         }
         if (e.op === "union") {
           return withMakeInput(
