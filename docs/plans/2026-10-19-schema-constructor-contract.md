@@ -108,5 +108,7 @@ The [metadata extension](2026-10-19-schema-constructor-metadata-contract.md)
 now supplies nonrecursive constructor-default fields and propagates M through
 selected composition forms. The optional-adapter and
 [recursive extensions](2026-10-19-schema-constructor-recursive-contract.md) now
-propagate M through those forms. Distinct recursive D/E remains open. Broader package interoperability, item 9, stays deferred
+propagate M through those forms. The
+[wire extension](2026-10-19-schema-recursive-wire-contract.md) also permits distinct
+recursive D/E. Constructor defaults on field descriptors remain open. Broader package interoperability, item 9, stays deferred
 by user instruction.

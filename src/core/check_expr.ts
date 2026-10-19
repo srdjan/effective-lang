@@ -1626,16 +1626,6 @@ export class BodyChecker {
           node,
         );
       }
-      if (
-        op === "recursive" &&
-        !this.table.isAssignable(hint.decoded, hint.encoded)
-      ) {
-        this.report(
-          "type-mismatch/003",
-          "recursive Schema needs the same decoded and encoded type",
-          node,
-        );
-      }
       if (op === "identity") {
         if (
           hint.decoded !== hint.encoded || hint.decodeRequirements.length ||

@@ -96,12 +96,13 @@ those rules with a new object-identity guarantee.
 
 Changed make-input metadata is rejected by schema(). The
 [recursive constructor extension](2026-10-19-schema-constructor-recursive-contract.md)
-now carries a separate M through guarded recursive Schemas with D=E.
+now carries a separate M through guarded recursive Schemas; the
+[wire extension](2026-10-19-schema-recursive-wire-contract.md) also separates D/E.
 The [optional adapter extension](2026-10-19-schema-constructor-optional-contract.md)
 now specifies propagation through nullable, decoding-default, and optional
 transformation fields. The Option adapter explicitly requires complete Option<D>
 constructor input. Constructor defaults attached directly to optional
-descriptors, distinct recursive D/E, constructor options, and
+descriptors, constructor options, and
 arbitrary Schema AST access remain outside this slice.
 
 Four target tests cover nested M, arrays, unions, optional fields,
@@ -114,5 +115,5 @@ defaults, invalid callbacks, services, descriptor runners, and unsupported
 metadata derivation.
 
 Constructor metadata through optional adapters and guarded recursion is implemented.
-Distinct recursive D/E is next. Broader package interoperability, item 9, stays deferred
+Constructor defaults on field descriptors are next. Broader package interoperability, item 9, stays deferred
 by user instruction.

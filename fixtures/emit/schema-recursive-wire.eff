@@ -1,0 +1,52 @@
+export type Int = int
+export type Text = string
+export type Tree = { score: Int, children: Tree[] }
+export type WireTree = { score: Text, children: WireTree[] }
+export type TreeInput = { score?: Int, children?: TreeInput[] }
+export type Node = { score: Int, next?: Node }
+export type WireNode = { score?: Text, next?: WireNode }
+export type Choice = { kind: "end" } | { kind: "more", score: Int, next: Choice }
+export type WireChoice = { kind: "end" } | { kind: "more", score: Text, next: WireChoice }
+export type ChoiceInput = { kind: "end" } | { kind: "more", score?: Int, next?: ChoiceInput }
+type End = "end"
+type More = "more"
+
+export service Read { parse(value: Text): Int fails SchemaIssue }
+export service Write { print(value: Int): Text fails SchemaIssue }
+
+const integer: Schema<Int> = schema()
+const text: Schema<Text> = schema()
+const endTag: Schema<End> = schema()
+const moreTag: Schema<More> = schema()
+const transformed: Schema<Int, Text, Read.parse, Write.print> = schemaTransform(
+  text, integer,
+  (value: Text): Int fails SchemaIssue uses Read.parse => Read.parse(value),
+  (value: Int): Text fails SchemaIssue uses Write.print => Write.print(value)
+)
+export const tree: Schema<Tree, WireTree, Read.parse, Write.print, TreeInput> = schemaRecursive(
+  (self: Schema<Tree, WireTree, Read.parse, Write.print, TreeInput>): Schema<Tree, WireTree, Read.parse, Write.print, TreeInput> =>
+    schemaStruct({
+      score: schemaConstructorDefault(transformed, (): Int => 4),
+      children: schemaConstructorDefault(schemaArray(self), (): TreeInput[] => [])
+    })
+)
+export const node: Schema<Node, WireNode, Read.parse, Write.print> = schemaRecursive(
+  (self: Schema<Node, WireNode, Read.parse, Write.print>): Schema<Node, WireNode, Read.parse, Write.print> =>
+    schemaStruct({ score: schemaDefaultKey(transformed, (): Int => 8), next: schemaOptionalKey(self) })
+)
+export const choice: Schema<Choice, WireChoice, Read.parse, Write.print, ChoiceInput> = schemaRecursive(
+  (self: Schema<Choice, WireChoice, Read.parse, Write.print, ChoiceInput>): Schema<Choice, WireChoice, Read.parse, Write.print, ChoiceInput> => schemaUnion([
+    schemaStruct({ kind: endTag }),
+    schemaStruct({ kind: moreTag, score: schemaConstructorDefault(transformed, (): Int => 4),
+      next: schemaConstructorDefault(self, (): ChoiceInput => ({ kind: "end" })) })
+  ])
+)
+export const makeTree = (input: TreeInput): Tree fails SchemaIssue => schemaMake(tree, input)
+export const makeNode = (input: Node): Node fails SchemaIssue => schemaMake(node, input)
+export const makeChoice = (input: ChoiceInput): Choice fails SchemaIssue => schemaMake(choice, input)
+export const readTree = (input: unknown): Tree fails SchemaError uses Read.parse => schemaDecode(tree, input)
+export const writeTree = (input: Tree): WireTree fails SchemaError uses Write.print => schemaEncode(tree, input)
+export const readNode = (input: unknown): Node fails SchemaError uses Read.parse => schemaDecode(node, input)
+export const writeNode = (input: Node): WireNode fails SchemaError uses Write.print => schemaEncode(node, input)
+export const readChoice = (input: unknown): Choice fails SchemaError uses Read.parse => schemaDecode(choice, input)
+export const writeChoice = (input: Choice): WireChoice fails SchemaError uses Write.print => schemaEncode(choice, input)

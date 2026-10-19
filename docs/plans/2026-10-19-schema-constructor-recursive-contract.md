@@ -77,7 +77,8 @@ nested failures, defects, and awaited cleanup. Boundaries reject M erasure,
 wrong self types, missing metadata, unguarded recursion, invalid nested data,
 and self captured inside a default callback.
 
-Decoded and encoded recursive types must still be the same. Supporting distinct
-recursive D and E is the next investigation. Mutual recursion, direct defaults
+The [recursive wire extension](2026-10-19-schema-recursive-wire-contract.md)
+now allows distinct decoded and encoded recursive aliases while retaining M and
+directional services. Constructor defaults on field descriptors are next. Mutual recursion, direct defaults
 on field descriptors, constructor options, and arbitrary AST access remain
 outside this slice. Broader package interoperability, item 9, stays deferred.

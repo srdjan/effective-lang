@@ -2199,7 +2199,6 @@ export class BodyValidator {
       if (
         args.length !== 1 || hint === undefined || fn === undefined ||
         fn.parameters.length !== 1 ||
-        !same(this.env, hint.decoded, hint.encoded) ||
         !same(this.env, fn.parameters[0], hint) ||
         !fits(this.env, fn.result, hint) || fn.execution !== "pure" ||
         fn.effects.failures.length || fn.effects.requirements.length ||

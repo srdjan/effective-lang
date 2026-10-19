@@ -146,8 +146,9 @@ self reference only when it reaches an array element.
 The [recursive constructor extension](2026-10-19-schema-constructor-recursive-contract.md)
 now retains a separate, guarded make-input M in the self Schema. It adds
 constructor defaults to these recursive bodies without changing their decoded
-or encoded shapes or their directional wire services. Distinct recursive D/E
-remains separate work.
+or encoded shapes or their directional wire services. The
+[recursive wire extension](2026-10-19-schema-recursive-wire-contract.md) now
+permits distinct recursive D/E with the same guarded body rules.
 
 ## Execution and acceptance gate
 
