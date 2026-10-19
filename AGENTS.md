@@ -19,3 +19,7 @@ Tests use `Deno.test` and `@std/assert`. A fast test runs in under one second. A
 ## Commit & Pull Request Guidelines
 
 The history uses one commit for each complete unit of work on local `main`. Use a short, imperative subject that explains the change, and a body that gives the reason. Pull requests should summarize the purpose, list the commands used to verify the change, and link related issues when available. Include screenshots for visible interface changes, and call out any setup or configuration changes reviewers need to reproduce.
+
+## Feature Selection & Completion
+
+Follow the accepted [application acceptance rule](docs/plans/2026-10-19-application-acceptance-rule.md) when selecting gap work. The stopping rule requires three complete applications with precise contracts and passing failure, cancellation, and cleanup checks. Keep application orchestration in `.eff`; typed host adapters may supply drivers and the runtime entry point. Add features only for demonstrated application blockers after checking existing source compositions. Investigate the scheduled worker and general Schedule consumers first. Broader package interoperability, gap item 9, remains deferred by user instruction.

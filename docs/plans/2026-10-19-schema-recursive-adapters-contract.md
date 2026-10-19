@@ -83,5 +83,7 @@ and IR checks reject self capture in default and both directional getter
 callbacks. Existing service, presence, constructor-default and issue rules stay
 in force.
 
-Recursive Option data is next. Broader package interoperability, item 9, stays
-deferred by user instruction.
+The accepted [application acceptance rule](2026-10-19-application-acceptance-rule.md)
+now sets the queue. Recursive Option data remains open without blocking that
+target by default. Broader package interoperability, item 9, stays deferred
+by user instruction.
