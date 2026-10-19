@@ -232,6 +232,9 @@ interface MatchState {
   tagField: string | undefined;
 }
 
+/** A Schema type node. */
+type SchemaNode = Extract<TypeNode, { kind: "schema" }>;
+
 /**
  * True when `failures` is known and holds no failure or exactly one failure
  * from `allowed`. A set with two failures fails the test, even when both are
@@ -1887,10 +1890,13 @@ export class BodyChecker {
         combine([input]),
       );
     }
-    if (op === "optional-transform") {
+    if (op === "optional-transform" || op === "optional-from-required") {
+      const fromRequired = op === "optional-from-required";
       const sourceInfo = this.argInfo(args[0]);
       const targetInfo = this.argInfo(args[1]);
-      const source = asOptional(sourceInfo, args[0].node);
+      const source = fromRequired
+        ? asSchema(sourceInfo, args[0].node)
+        : asOptional(sourceInfo, args[0].node);
       const target = asOptional(targetInfo, args[1].node);
       if (source === undefined || target === undefined) {
         return this.finish(
@@ -1903,169 +1909,12 @@ export class BodyChecker {
           ]),
         );
       }
-      const decode = this.callback(
-        name,
-        args[2],
-        [this.table.option(source.decoded)],
-        this.table.option(target.encoded),
-        true,
-      );
-      const encode = this.callback(
-        name,
-        args[3],
-        [this.table.option(target.encoded)],
-        this.table.option(source.decoded),
-        true,
-      );
-      const decodeFn = this.functionOf(decode.info.type);
-      const encodeFn = this.functionOf(encode.info.type);
-      if (
-        !failsOnlyWith(decodeFn?.failures, [SCHEMA_ISSUE_ID]) ||
-        !failsOnlyWith(encodeFn?.failures, [SCHEMA_ISSUE_ID])
-      ) {
-        this.report(
-          "type-mismatch/010",
-          "schemaOptionalTransform callbacks may fail only with SchemaIssue",
-          node,
-        );
-      }
-      if (
-        kindOf(this.tree, args[2].node) !== SyntaxKind.ArrowExpr ||
-        kindOf(this.tree, args[3].node) !== SyntaxKind.ArrowExpr
-      ) {
-        this.report(
-          "type-mismatch/010",
-          "schemaOptionalTransform needs inline callbacks",
-          node,
-        );
-      }
-      if (
-        !this.table.isAssignable(
-          decode.result,
-          this.table.option(target.encoded),
-        ) ||
-        !this.table.isAssignable(
-          encode.result,
-          this.table.option(source.decoded),
-        )
-      ) {
-        this.report(
-          "type-mismatch/003",
-          "schemaOptionalTransform callbacks must return directional Option values",
-          node,
-        );
-      }
-      return this.finish(
+      return this.optionalBridge(
         node,
-        this.table.schema(
-          target.decoded,
-          source.encoded,
-          [
-            ...source.decodeRequirements,
-            ...target.decodeRequirements,
-            ...(decodeFn?.requirements ?? []),
-          ],
-          [
-            ...source.encodeRequirements,
-            ...target.encodeRequirements,
-            ...(encodeFn?.requirements ?? []),
-          ],
-          true,
-          false,
-          false,
-          target.makeInput ?? target.decoded,
-          target.constructorDefault === true,
-        ),
-        combine([sourceInfo, targetInfo, decode.info, encode.info]),
-      );
-    }
-    if (op === "optional-from-required") {
-      const sourceInfo = this.argInfo(args[0]);
-      const targetInfo = this.argInfo(args[1]);
-      const source = asSchema(sourceInfo, args[0].node);
-      const target = asOptional(targetInfo, args[1].node);
-      if (source === undefined || target === undefined) {
-        return this.finish(
-          node,
-          this.table.error,
-          combine([
-            sourceInfo,
-            targetInfo,
-            ...args.slice(2).map((arg) => this.argInfo(arg)),
-          ]),
-        );
-      }
-      const decode = this.callback(
         name,
-        args[2],
-        [source.decoded],
-        this.table.option(target.encoded),
-        true,
-      );
-      const encode = this.callback(
-        name,
-        args[3],
-        [this.table.option(target.encoded)],
-        source.decoded,
-        true,
-      );
-      const decodeFn = this.functionOf(decode.info.type);
-      const encodeFn = this.functionOf(encode.info.type);
-      if (
-        !failsOnlyWith(decodeFn?.failures, [SCHEMA_ISSUE_ID]) ||
-        !failsOnlyWith(encodeFn?.failures, [SCHEMA_ISSUE_ID])
-      ) {
-        this.report(
-          "type-mismatch/010",
-          "schemaOptionalFromRequired callbacks may fail only with SchemaIssue",
-          node,
-        );
-      }
-      if (
-        kindOf(this.tree, args[2].node) !== SyntaxKind.ArrowExpr ||
-        kindOf(this.tree, args[3].node) !== SyntaxKind.ArrowExpr
-      ) {
-        this.report(
-          "type-mismatch/010",
-          "schemaOptionalFromRequired needs inline callbacks",
-          node,
-        );
-      }
-      if (
-        !this.table.isAssignable(
-          decode.result,
-          this.table.option(target.encoded),
-        ) ||
-        !this.table.isAssignable(encode.result, source.decoded)
-      ) {
-        this.report(
-          "type-mismatch/003",
-          "schemaOptionalFromRequired decode must return optional target-encoded values and encode must return a required source-decoded value",
-          node,
-        );
-      }
-      return this.finish(
-        node,
-        this.table.schema(
-          target.decoded,
-          source.encoded,
-          [
-            ...source.decodeRequirements,
-            ...target.decodeRequirements,
-            ...(decodeFn?.requirements ?? []),
-          ],
-          [
-            ...source.encodeRequirements,
-            ...target.encodeRequirements,
-            ...(encodeFn?.requirements ?? []),
-          ],
-          false,
-          false,
-          true,
-          target.makeInput ?? target.decoded,
-          target.constructorDefault === true,
-        ),
-        combine([sourceInfo, targetInfo, decode.info, encode.info]),
+        args,
+        { sourceInfo, targetInfo, source, target },
+        fromRequired,
       );
     }
     const first = this.argInfo(args[0]);
@@ -2420,6 +2269,104 @@ export class BodyChecker {
         target.makeInput ?? target.decoded,
       ),
       combine([first, targetInfo, decode.info, encode.info]),
+    );
+  }
+
+  /**
+   * The shared tail of schemaOptionalTransform and schemaOptionalFromRequired.
+   * Both bridge a source field to an optional target. A required source passes
+   * its value to the decode callback and reads its value from the encode
+   * callback. An optional source passes and reads an Option.
+   */
+  private optionalBridge(
+    node: NodeId,
+    name: string,
+    args: readonly Arg[],
+    parts: {
+      readonly sourceInfo: NodeInfo;
+      readonly targetInfo: NodeInfo;
+      readonly source: SchemaNode;
+      readonly target: SchemaNode;
+    },
+    fromRequired: boolean,
+  ): NodeInfo {
+    const { sourceInfo, targetInfo, source, target } = parts;
+    const sourceValue = fromRequired
+      ? source.decoded
+      : this.table.option(source.decoded);
+    const decode = this.callback(
+      name,
+      args[2],
+      [sourceValue],
+      this.table.option(target.encoded),
+      true,
+    );
+    const encode = this.callback(
+      name,
+      args[3],
+      [this.table.option(target.encoded)],
+      sourceValue,
+      true,
+    );
+    const decodeFn = this.functionOf(decode.info.type);
+    const encodeFn = this.functionOf(encode.info.type);
+    if (
+      !failsOnlyWith(decodeFn?.failures, [SCHEMA_ISSUE_ID]) ||
+      !failsOnlyWith(encodeFn?.failures, [SCHEMA_ISSUE_ID])
+    ) {
+      this.report(
+        "type-mismatch/010",
+        `${name} callbacks may fail only with SchemaIssue`,
+        node,
+      );
+    }
+    if (
+      kindOf(this.tree, args[2].node) !== SyntaxKind.ArrowExpr ||
+      kindOf(this.tree, args[3].node) !== SyntaxKind.ArrowExpr
+    ) {
+      this.report(
+        "type-mismatch/010",
+        `${name} needs inline callbacks`,
+        node,
+      );
+    }
+    if (
+      !this.table.isAssignable(
+        decode.result,
+        this.table.option(target.encoded),
+      ) ||
+      !this.table.isAssignable(encode.result, sourceValue)
+    ) {
+      this.report(
+        "type-mismatch/003",
+        fromRequired
+          ? `${name} decode must return optional target-encoded values and encode must return a required source-decoded value`
+          : `${name} callbacks must return directional Option values`,
+        node,
+      );
+    }
+    return this.finish(
+      node,
+      this.table.schema(
+        target.decoded,
+        source.encoded,
+        [
+          ...source.decodeRequirements,
+          ...target.decodeRequirements,
+          ...(decodeFn?.requirements ?? []),
+        ],
+        [
+          ...source.encodeRequirements,
+          ...target.encodeRequirements,
+          ...(encodeFn?.requirements ?? []),
+        ],
+        !fromRequired,
+        false,
+        fromRequired,
+        target.makeInput ?? target.decoded,
+        target.constructorDefault === true,
+      ),
+      combine([sourceInfo, targetInfo, decode.info, encode.info]),
     );
   }
 
