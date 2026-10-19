@@ -1429,7 +1429,11 @@ export class ExprEmitter {
           if (type.kind !== "schema") {
             throw internal("schema identity has wrong type");
           }
-          return emitted(schemaDoc(this.scope, type.decoded));
+          return emitted([
+            `${schema}.toType(`,
+            schemaDoc(this.scope, type.decoded),
+            ")",
+          ]);
         }
         if (e.op === "array" || e.op === "struct") {
           return withSchemaView(emitted([

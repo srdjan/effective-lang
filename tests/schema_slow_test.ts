@@ -22,6 +22,65 @@ function checked(source: string) {
   return result.value;
 }
 
+/**
+ * Emits the source, checks the strict target, runs `run.ts` against it, and
+ * returns the JSON that `run.ts` prints. The source must have no diagnostics.
+ */
+async function compileAndRun(source: string, run: string): Promise<unknown> {
+  const project = checked(source);
+  assertEquals(project.diagnostics, []);
+  const lowered = lowerProject(project);
+  for (const result of lowered.values()) {
+    assert(result.ok, JSON.stringify(result));
+  }
+  for (
+    const diagnostics of validateProject(project.analysis.project, lowered)
+      .values()
+  ) assertEquals(diagnostics, []);
+  const dir = Deno.makeTempDirSync({ prefix: "effective-schema-identity-" });
+  try {
+    Deno.writeTextFileSync(
+      `${dir}/deno.json`,
+      JSON.stringify({
+        imports: { effect: "npm:effect@4.0.5" },
+        compilerOptions: {
+          strict: true,
+          exactOptionalPropertyTypes: true,
+          noUncheckedIndexedAccess: true,
+        },
+      }),
+    );
+    for (
+      const result of emitProject(lowered, {
+        config: project.analysis.project.config,
+      }).values()
+    ) {
+      assert(result.ok, JSON.stringify(result));
+      Deno.writeTextFileSync(`${dir}/${result.value.path}`, result.value.text);
+    }
+    Deno.writeTextFileSync(`${dir}/run.ts`, run);
+    const decoder = new TextDecoder();
+    let stdout = "";
+    for (const command of ["check", "run"]) {
+      const result = await new Deno.Command(Deno.execPath(), {
+        args: [command, "--no-lock", "run.ts"],
+        cwd: dir,
+        stdout: "piped",
+        stderr: "piped",
+      }).output();
+      assertEquals(
+        result.code,
+        0,
+        decoder.decode(result.stderr) + decoder.decode(result.stdout),
+      );
+      stdout = decoder.decode(result.stdout);
+    }
+    return JSON.parse(stdout);
+  } finally {
+    Deno.removeSync(dir, { recursive: true });
+  }
+}
+
 Deno.test("schema composition and guarded recursion compile and run with separate services", async () => {
   const project = checked(fixture);
   assertEquals(project.diagnostics, []);
@@ -228,4 +287,110 @@ Deno.test("independent validation rejects forged schema channels and self use", 
       diagnostic.message.includes("schemaRecursive needs")
     ),
   );
+});
+
+const identitySource = `type Int = int
+export type UserId = Brand<string>
+export error Stop = { reason: string }
+export type Wrapper = { stop: Stop, id: UserId }
+export type Tree =
+  { tag: "branch", id: UserId, ids: UserId[], note?: UserId, kids: Tree[] } |
+  { tag: "leaf", id: UserId }
+export type Node = { error: Stop, kids: Node[] }
+
+export const userId: Schema<UserId> = schema()
+export const stop: Schema<Stop> = schema()
+export const wrapper: Schema<Wrapper> = schema()
+export const tree: Schema<Tree> = schema()
+export const node: Schema<Node> = schema()
+export const nodeCodec: Codec<Node, Node> = codec(
+  (value: Node): Node => value,
+  (value: Node): Node => value
+)
+
+export const readUserId = (input: unknown): UserId fails SchemaError => schemaDecode(userId, input)
+export const writeUserId = (value: UserId): UserId fails SchemaError => schemaEncode(userId, value)
+export const readStop = (input: unknown): Stop fails SchemaError => schemaDecode(stop, input)
+export const writeStop = (value: Stop): Stop fails SchemaError => schemaEncode(stop, value)
+export const readWrapper = (input: unknown): Wrapper fails SchemaError => schemaDecode(wrapper, input)
+export const readTree = (input: unknown): Tree fails SchemaError => schemaDecode(tree, input)
+export const writeTree = (value: Tree): Tree fails SchemaError => schemaEncode(tree, value)
+export const readNode = (input: unknown): Node fails SchemaError => schemaDecode(node, input)
+`;
+
+Deno.test("identity Schemas over brands, errors, and recursive aliases pass strict checking and roundtrip", async () => {
+  const output = await compileAndRun(
+    identitySource,
+    `import { Cause, Effect, Exit, Option, Schema } from "effect";
+import {
+  nodeCodec, readNode, readStop, readTree, readUserId, readWrapper, Stop,
+  writeStop, writeTree, writeUserId,
+} from "./main.ts";
+const run = <A>(effect: Effect.Effect<A, Schema.SchemaError>) => Effect.runPromiseExit(effect);
+const failed = (exit: Exit.Exit<unknown, Schema.SchemaError>) =>
+  Exit.isFailure(exit) && Cause.findErrorOption(exit.cause).pipe(Option.exists((e) => e instanceof Schema.SchemaError));
+
+const brand = await run(readUserId("u1"));
+const brandBad = await run(readUserId(1));
+const brandWrite = Exit.isSuccess(brand) ? await Effect.runPromise(writeUserId(brand.value)) : undefined;
+
+const instance = new Stop({ reason: "x" });
+const stopRead = await run(readStop(instance));
+const stopWire = await run(readStop({ _tag: "main#Stop", reason: "x" }));
+const stopWrite = await Effect.runPromise(writeStop(instance));
+const wrapped = await run(readWrapper({ stop: instance, id: "w" }));
+const wrappedWire = await run(readWrapper({ stop: { _tag: "main#Stop", reason: "x" }, id: "w" }));
+
+const sample: unknown = {
+  tag: "branch", id: "a", ids: ["b", "c"], note: "d",
+  kids: [{ tag: "leaf", id: "e" }, { tag: "branch", id: "f", ids: [], kids: [] }],
+};
+const treeRead = await run(readTree(sample));
+const treeBad = await run(readTree({ tag: "leaf", id: 1 }));
+const treeBadElement = await run(readTree({ tag: "branch", id: "a", ids: ["b", 2], kids: [] }));
+const treeBadOptional = await run(readTree({ tag: "branch", id: "a", ids: [], note: 3, kids: [] }));
+const treeWritten = Exit.isSuccess(treeRead) ? await Effect.runPromise(writeTree(treeRead.value)) : undefined;
+
+const nodeRead = await run(readNode({ error: instance, kids: [{ error: instance, kids: [] }] }));
+const nodeWire = await run(readNode({ error: { _tag: "main#Stop", reason: "x" }, kids: [] }));
+const codecWire = nodeCodec.decode({ error: { _tag: "main#Stop", reason: "x" }, kids: [{ error: { _tag: "main#Stop", reason: "y" }, kids: [] }] });
+
+console.log(JSON.stringify({
+  brand: Exit.isSuccess(brand) ? brand.value : "failure",
+  brandBad: failed(brandBad),
+  brandWrite,
+  stopRead: Exit.isSuccess(stopRead) && stopRead.value === instance,
+  stopWire: failed(stopWire),
+  stopWrite: stopWrite === instance,
+  wrapped: Exit.isSuccess(wrapped) && wrapped.value.stop === instance && wrapped.value.id === "w",
+  wrappedWire: failed(wrappedWire),
+  treeRead: Exit.isSuccess(treeRead) ? JSON.stringify(treeRead.value) === JSON.stringify(sample) : false,
+  treeBad: failed(treeBad),
+  treeBadElement: failed(treeBadElement),
+  treeBadOptional: failed(treeBadOptional),
+  treeWritten: JSON.stringify(treeWritten) === JSON.stringify(sample),
+  nodeRead: Exit.isSuccess(nodeRead) && nodeRead.value.kids[0]?.error === instance,
+  nodeWire: failed(nodeWire),
+  codecWire: Option.isSome(codecWire),
+}));
+`,
+  );
+  assertEquals(output, {
+    brand: "u1",
+    brandBad: true,
+    brandWrite: "u1",
+    stopRead: true,
+    stopWire: true,
+    stopWrite: true,
+    wrapped: true,
+    wrappedWire: true,
+    treeRead: true,
+    treeBad: true,
+    treeBadElement: true,
+    treeBadOptional: true,
+    treeWritten: true,
+    nodeRead: true,
+    nodeWire: true,
+    codecWire: true,
+  });
 });

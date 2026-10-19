@@ -226,6 +226,7 @@ export class Scope {
   private temporaries = 0;
   private declarationTemporaries: string[] = [];
   private readonly typeOnlyMemo = new Map<DeclarationId, boolean>();
+  private readonly encodedMirrors = new Map<DeclarationId, string>();
 
   constructor(readonly ir: ModuleIR, readonly config: ProjectConfig) {
     this.module = ir.module;
@@ -351,6 +352,16 @@ export class Scope {
       this.effectAliases.set(module, alias);
     }
     return alias;
+  }
+
+  /** The name of the generated encoded type of a recursive alias: `NodeEncoded`. */
+  encodedMirrorName(id: DeclarationId): string {
+    let name = this.encodedMirrors.get(id);
+    if (name === undefined) {
+      name = this.fresh(`${this.nameOf(id)}Encoded`);
+      this.encodedMirrors.set(id, name);
+    }
+    return name;
   }
 
   /** The `int` helper function `$int`. */

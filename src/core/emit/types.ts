@@ -319,6 +319,84 @@ function schemaOfLiterals(
   ];
 }
 
+/**
+ * The TypeScript type that a type has after `schemaDoc` encodes it: a brand
+ * becomes its base, an error becomes its Schema encoding, and the recursive
+ * name becomes the generated mirror type. The type has no function in it.
+ */
+export function encodedTypeDoc(
+  scope: Scope,
+  type: Type,
+  recursiveId?: string,
+): Doc {
+  switch (type.kind) {
+    case "primitive":
+    case "literal":
+      return typeDoc(scope, type);
+    case "named":
+      return type.id === recursiveId ? scope.encodedMirrorName(type.id) : [
+        `${scope.effect("Schema")}.Codec.Encoded<typeof `,
+        scope.nameOf(type.id),
+        ">",
+      ];
+    case "array":
+      return [
+        "ReadonlyArray<",
+        encodedTypeDoc(scope, type.element, recursiveId),
+        ">",
+      ];
+    case "tuple":
+      return type.elements.length === 0 ? "readonly []" : [
+        "readonly [",
+        join(
+          ", ",
+          type.elements.map((t) => encodedTypeDoc(scope, t, recursiveId)),
+        ),
+        "]",
+      ];
+    case "option":
+      return [
+        `${scope.effect("Option")}.Option<`,
+        encodedTypeDoc(scope, type.element, recursiveId),
+        ">",
+      ];
+    case "record": {
+      if (type.fields.length === 0) return "{}";
+      const fields = type.fields.map((f) => [
+        "readonly ",
+        f.name,
+        f.optional ? "?" : "",
+        ": ",
+        encodedTypeDoc(scope, f.type, recursiveId),
+      ]);
+      return group([
+        "{",
+        indent([line, join([";", line], fields)]),
+        ifBreak(";"),
+        line,
+        "}",
+      ]);
+    }
+    case "union":
+      return unionDoc(
+        type.members.map((m) => encodedTypeDoc(scope, m, recursiveId)),
+      );
+    case "function":
+    case "effect":
+    case "stream":
+    case "sink":
+    case "schedule":
+    case "provider":
+    case "ref":
+    case "retry-schedule":
+    case "codec":
+    case "schema":
+    case "closeable-scope":
+    case "fiber":
+      throw unsupported("a deferred or function type has no schema");
+  }
+}
+
 /** The Effect Schema value of a type. The type has no function or provider in it. */
 export function schemaDoc(scope: Scope, type: Type, recursiveId?: string): Doc {
   const schema = scope.effect("Schema");
@@ -348,17 +426,18 @@ export function schemaDoc(scope: Scope, type: Type, recursiveId?: string): Doc {
         ? [
           `${schema}.suspend((): ${schema}.Codec<`,
           scope.nameOf(type.id),
+          ", ",
+          scope.encodedMirrorName(type.id),
           "> => ",
           scope.nameOf(type.id),
           ")",
         ]
         : scope.nameOf(type.id);
     case "array":
-      return [
-        `${schema}.Array(`,
+      return callWith(
+        `${schema}.Array`,
         schemaDoc(scope, type.element, recursiveId),
-        ")",
-      ];
+      );
     case "tuple":
       return [
         `${schema}.Tuple(`,

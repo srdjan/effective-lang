@@ -34,7 +34,7 @@ import {
   tokenOfId,
   unsupported,
 } from "./scope.ts";
-import { effectTypeDoc, schemaDoc, typeDoc } from "./types.ts";
+import { effectTypeDoc, encodedTypeDoc, schemaDoc, typeDoc } from "./types.ts";
 import { valueReferences } from "./walk.ts";
 
 const LINE_WIDTH = 80;
@@ -281,6 +281,7 @@ export class DeclarationEmitter {
       this.containsNamed(d.definition.type, d.id)
     ) {
       const schema = this.scope.effect("Schema");
+      const mirror = this.scope.encodedMirrorName(d.id);
       return [
         keyword,
         "type ",
@@ -290,9 +291,16 @@ export class DeclarationEmitter {
         ";",
         hard,
         keyword,
+        "type ",
+        mirror,
+        " = ",
+        encodedTypeDoc(this.scope, d.definition.type, d.id),
+        ";",
+        hard,
+        keyword,
         "const ",
         d.name,
-        `: ${schema}.Codec<${d.name}> = `,
+        `: ${schema}.Codec<${d.name}, ${mirror}> = `,
         schemaDoc(this.scope, d.definition.type, d.id),
         ";",
       ];
