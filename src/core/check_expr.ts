@@ -989,7 +989,7 @@ export class BodyChecker {
       case "aggregateWithinStream":
         return this.aggregateWithinStreamCall(node, args);
       case "scheduleFromStep":
-        return this.scheduleFromStepCall(node, args, expected);
+        return this.scheduleFromStepCall(node, args);
       case "scheduleRecurs":
       case "scheduleSpaced":
         return this.simpleScheduleCall(node, args, name);
@@ -4670,7 +4670,6 @@ export class BodyChecker {
   private scheduleFromStepCall(
     node: NodeId,
     args: readonly Arg[],
-    expected: TypeRef | undefined,
   ): NodeInfo {
     this.fact(node, { kind: "schedule-from-step" });
     if (!this.arity(node, "scheduleFromStep", 2, args)) {
@@ -4724,12 +4723,9 @@ export class BodyChecker {
       const output = variant.fields.find((field) => field.name === "output");
       if (output !== undefined) outputs.push(output.type);
     }
-    const hint = expected === undefined
-      ? undefined
-      : this.table.node(this.table.unfold(expected));
-    const output = hint?.kind === "schedule"
-      ? hint.output
-      : outputs.length > 0
+    // The output comes from the decision callback only. An annotation then
+    // checks through Schedule covariance, as the validator does.
+    const output = outputs.length > 0
       ? this.table.union(outputs)
       : this.table.error;
     if (
