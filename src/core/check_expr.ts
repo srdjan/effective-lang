@@ -232,6 +232,19 @@ interface MatchState {
   tagField: string | undefined;
 }
 
+/**
+ * True when `failures` is known and holds no failure or exactly one failure
+ * from `allowed`. A set with two failures fails the test, even when both are
+ * allowed.
+ */
+function failsOnlyWith(
+  failures: readonly string[] | undefined,
+  allowed: readonly string[],
+): boolean {
+  return failures !== undefined && failures.length <= 1 &&
+    failures.every((id) => allowed.includes(id));
+}
+
 /** How `schemaCall` treats one Schema builtin. */
 interface SchemaBuiltin {
   readonly op: Extract<NodeFact, { kind: "schema" }>["op"];
@@ -1906,13 +1919,9 @@ export class BodyChecker {
       );
       const decodeFn = this.functionOf(decode.info.type);
       const encodeFn = this.functionOf(encode.info.type);
-      const validIssueFailure = (failures: readonly string[] | undefined) =>
-        failures !== undefined &&
-        (failures.length === 0 ||
-          (failures.length === 1 && failures[0] === SCHEMA_ISSUE_ID));
       if (
-        !validIssueFailure(decodeFn?.failures) ||
-        !validIssueFailure(encodeFn?.failures)
+        !failsOnlyWith(decodeFn?.failures, [SCHEMA_ISSUE_ID]) ||
+        !failsOnlyWith(encodeFn?.failures, [SCHEMA_ISSUE_ID])
       ) {
         this.report(
           "type-mismatch/010",
@@ -2002,13 +2011,9 @@ export class BodyChecker {
       );
       const decodeFn = this.functionOf(decode.info.type);
       const encodeFn = this.functionOf(encode.info.type);
-      const validIssueFailure = (failures: readonly string[] | undefined) =>
-        failures !== undefined &&
-        (failures.length === 0 ||
-          (failures.length === 1 && failures[0] === SCHEMA_ISSUE_ID));
       if (
-        !validIssueFailure(decodeFn?.failures) ||
-        !validIssueFailure(encodeFn?.failures)
+        !failsOnlyWith(decodeFn?.failures, [SCHEMA_ISSUE_ID]) ||
+        !failsOnlyWith(encodeFn?.failures, [SCHEMA_ISSUE_ID])
       ) {
         this.report(
           "type-mismatch/010",
@@ -2078,8 +2083,7 @@ export class BodyChecker {
         kindOf(this.tree, args[1].node) !== SyntaxKind.ArrowExpr ||
         fn === undefined ||
         fn.requirements.length !== 0 ||
-        !(fn.failures.length === 0 ||
-          (fn.failures.length === 1 && fn.failures[0] === SCHEMA_ISSUE_ID)) ||
+        !failsOnlyWith(fn.failures, [SCHEMA_ISSUE_ID]) ||
         (schema !== undefined &&
           !this.table.isAssignable(
             callback.result,
@@ -2214,10 +2218,7 @@ export class BodyChecker {
       const fallbackFn = this.functionOf(fallback.info.type);
       if (
         fallbackFn !== undefined &&
-        !(fallbackFn.failures.length === 0 ||
-          (fallbackFn.failures.length === 1 &&
-            (fallbackFn.failures[0] === SCHEMA_ISSUE_ID ||
-              fallbackFn.failures[0] === SCHEMA_ERROR_ID)))
+        !failsOnlyWith(fallbackFn.failures, [SCHEMA_ISSUE_ID, SCHEMA_ERROR_ID])
       ) {
         this.report(
           "type-mismatch/010",
@@ -2372,12 +2373,9 @@ export class BodyChecker {
         node,
       );
     }
-    const validFailure = (failures: readonly string[] | undefined) =>
-      failures !== undefined &&
-      (failures.length === 0 ||
-        (failures.length === 1 && failures[0] === SCHEMA_ISSUE_ID));
     if (
-      !validFailure(decodeFn?.failures) || !validFailure(encodeFn?.failures)
+      !failsOnlyWith(decodeFn?.failures, [SCHEMA_ISSUE_ID]) ||
+      !failsOnlyWith(encodeFn?.failures, [SCHEMA_ISSUE_ID])
     ) {
       this.report(
         "type-mismatch/010",
