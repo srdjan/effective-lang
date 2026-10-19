@@ -48,9 +48,8 @@ import {
   unsupported,
 } from "./scope.ts";
 import {
-  failureUnion,
+  channelTypeArguments,
   hasSchemaMetadata,
-  requirementUnion,
   schemaDoc,
   typeArguments,
   typeDoc,
@@ -504,6 +503,19 @@ interface ArmTest {
 
 function armEquality(left: string, right: Doc): ArmTest {
   return { doc: equality(left, right), left, right };
+}
+
+/** The `_tag` value of an error: the Effect SchemaError class has a fixed tag. */
+function errorTag(id: string): string {
+  return id === "error:effect/SchemaError" ? "SchemaError" : tokenOfId(id);
+}
+
+/**
+ * True for a function type that runs as an effect. Unlike `isEffectfulFunction`,
+ * it does not resolve aliases.
+ */
+function isEffectfulCallback(type: Type): boolean {
+  return type.kind === "function" && type.execution === "effect";
 }
 
 function isIntType(type: Type): boolean {
@@ -1092,12 +1104,9 @@ export class ExprEmitter {
           `${this.scope.effect("Stream")}.transduce`,
           typeArguments([
             typeDoc(this.scope, sink.input),
-            failureUnion(this.scope, source.effects.failures) ?? "never",
-            requirementUnion(this.scope, source.effects.requirements) ??
-              "never",
+            ...channelTypeArguments(this.scope, source.effects),
             typeDoc(this.scope, sink.result),
-            failureUnion(this.scope, sink.effects.failures) ?? "never",
-            requirementUnion(this.scope, sink.effects.requirements) ?? "never",
+            ...channelTypeArguments(this.scope, sink.effects),
           ]),
           callArguments([kid(e.stream), kid(e.sink)]),
         ]);
@@ -1112,15 +1121,12 @@ export class ExprEmitter {
           `${this.scope.effect("Stream")}.aggregate`,
           typeArguments([
             typeDoc(this.scope, source.element),
-            failureUnion(this.scope, source.effects.failures) ?? "never",
-            requirementUnion(this.scope, source.effects.requirements) ??
-              "never",
+            ...channelTypeArguments(this.scope, source.effects),
             typeDoc(this.scope, sink.result),
             sink.leftover === undefined
               ? "never"
               : typeDoc(this.scope, sink.leftover),
-            failureUnion(this.scope, sink.effects.failures) ?? "never",
-            requirementUnion(this.scope, sink.effects.requirements) ?? "never",
+            ...channelTypeArguments(this.scope, sink.effects),
           ]),
           callArguments([kid(e.stream), kid(e.sink)]),
         ]);
@@ -1139,19 +1145,14 @@ export class ExprEmitter {
           `${this.scope.effect("Stream")}.aggregateWithin`,
           typeArguments([
             typeDoc(this.scope, source.element),
-            failureUnion(this.scope, source.effects.failures) ?? "never",
-            requirementUnion(this.scope, source.effects.requirements) ??
-              "never",
+            ...channelTypeArguments(this.scope, source.effects),
             typeDoc(this.scope, sink.result),
             sink.leftover === undefined
               ? "never"
               : typeDoc(this.scope, sink.leftover),
-            failureUnion(this.scope, sink.effects.failures) ?? "never",
-            requirementUnion(this.scope, sink.effects.requirements) ?? "never",
+            ...channelTypeArguments(this.scope, sink.effects),
             typeDoc(this.scope, schedule.output),
-            failureUnion(this.scope, schedule.effects.failures) ?? "never",
-            requirementUnion(this.scope, schedule.effects.requirements) ??
-              "never",
+            ...channelTypeArguments(this.scope, schedule.effects),
           ]),
           callArguments([kid(e.stream), kid(e.sink), kid(e.schedule)]),
         ]);
@@ -1404,8 +1405,7 @@ export class ExprEmitter {
           }
           const effect = this.scope.effect("Effect");
           const callback = this.pure(args[1]);
-          const effectful = args[1].type.kind === "function" &&
-            args[1].type.execution === "effect";
+          const effectful = isEffectfulCallback(args[1].type);
           return withSchemaView(emitted([
             `${schema}.make<(`,
             typeDoc(this.scope, sourceType),
@@ -1477,8 +1477,7 @@ export class ExprEmitter {
           const effect = this.scope.effect("Effect");
           const fallback = this.pure(args[1]);
           const callback = args[1].type;
-          const effectful = callback.kind === "function" &&
-            callback.execution === "effect";
+          const effectful = isEffectfulCallback(callback);
           const issueFailure = callback.kind === "function" &&
             callback.effects.failures.includes("error:effect/SchemaIssue");
           const deferred: Doc = [
@@ -1553,8 +1552,7 @@ export class ExprEmitter {
           const decode = this.pure(args[2]);
           const encode = this.pure(args[3]);
           const getterName = (index: number) =>
-            args[index].type.kind === "function" &&
-              args[index].type.execution === "effect"
+            isEffectfulCallback(args[index].type)
               ? "transformOptionalEffect"
               : "transformOptional";
           return withSchemaView(emitted([
@@ -1578,10 +1576,8 @@ export class ExprEmitter {
           const issue = this.scope.effect("SchemaIssue");
           const decode = this.pure(args[2]);
           const encode = this.pure(args[3]);
-          const decodeEffectful = args[2].type.kind === "function" &&
-            args[2].type.execution === "effect";
-          const encodeEffectful = args[3].type.kind === "function" &&
-            args[3].type.execution === "effect";
+          const decodeEffectful = isEffectfulCallback(args[2].type);
+          const encodeEffectful = isEffectfulCallback(args[3].type);
           const decodeValue = this.scope.temp();
           const encodeValue = this.scope.temp();
           const encodeResult: Doc = encodeEffectful
@@ -1737,8 +1733,7 @@ export class ExprEmitter {
             "error:effect/SchemaIssue",
           );
         const effectful = (index: number) =>
-          args[index].type.kind === "function" &&
-          args[index].type.execution === "effect";
+          isEffectfulCallback(args[index].type);
         return withSchemaView(emitted([
           at(source, PREC.member),
           ".pipe(",
@@ -2379,11 +2374,7 @@ export class ExprEmitter {
         }
         return armEquality(
           `${selector}._tag`,
-          JSON.stringify(
-            pattern.error === "error:effect/SchemaError"
-              ? "SchemaError"
-              : tokenOfId(pattern.error),
-          ),
+          JSON.stringify(errorTag(pattern.error)),
         );
       case "tag":
         return armEquality(
@@ -2954,11 +2945,7 @@ export class ExprEmitter {
     );
     const handlers = tagged.map((h: Handler) =>
       this.handlerEntry(
-        JSON.stringify(
-          h.error === "error:effect/SchemaError"
-            ? "SchemaError"
-            : tokenOfId(h.error),
-        ),
+        JSON.stringify(errorTag(h.error)),
         `(${h.binding.name})`,
         this.asEffect(h.body),
       )

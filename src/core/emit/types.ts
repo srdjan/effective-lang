@@ -67,6 +67,17 @@ export function requirementUnion(
   return names.length === 0 ? undefined : unionDoc(names);
 }
 
+/** The failure and requirement type arguments of an effect set, `never` when empty. */
+export function channelTypeArguments(
+  scope: Scope,
+  effects: Effects,
+): readonly Doc[] {
+  return [
+    failureUnion(scope, effects.failures) ?? "never",
+    requirementUnion(scope, effects.requirements) ?? "never",
+  ];
+}
+
 /**
  * `Effect.Effect<R, E, Rq>` with the trailing `never` arguments left out. The
  * failure and requirement sets are already in sorted identity order.
@@ -282,8 +293,7 @@ export function typeDoc(scope: Scope, type: Type): Doc {
         typeArguments([
           typeDoc(scope, type.output),
           typeDoc(scope, type.input),
-          failureUnion(scope, type.effects.failures) ?? "never",
-          requirementUnion(scope, type.effects.requirements) ?? "never",
+          ...channelTypeArguments(scope, type.effects),
         ]),
       ];
     case "sink":
@@ -293,8 +303,7 @@ export function typeDoc(scope: Scope, type: Type): Doc {
           typeDoc(scope, type.result),
           typeDoc(scope, type.input),
           type.leftover === undefined ? "never" : typeDoc(scope, type.leftover),
-          failureUnion(scope, type.effects.failures) ?? "never",
-          requirementUnion(scope, type.effects.requirements) ?? "never",
+          ...channelTypeArguments(scope, type.effects),
         ]),
       ];
     case "provider":
