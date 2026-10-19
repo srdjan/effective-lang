@@ -43,6 +43,7 @@ import {
   isBooleanLike,
   isNumeric,
   isStringLike,
+  isUnknown,
   members,
   NEVER,
   NUMBER,
@@ -90,6 +91,18 @@ function invocationOf(fn: {
     requirements: fn.effects.requirements,
     execution: fn.execution,
   };
+}
+
+function validSchemaCallback(
+  fn: Extract<Type, { kind: "function" }> | undefined,
+): boolean {
+  return fn !== undefined &&
+    (fn.effects.failures.length === 0 ||
+      (fn.effects.failures.length === 1 &&
+        fn.effects.failures[0] === SCHEMA_ISSUE_ID)) &&
+    (fn.execution !== "pure" ||
+      (fn.effects.failures.length === 0 &&
+        fn.effects.requirements.length === 0));
 }
 
 function literalValues(
@@ -1722,23 +1735,9 @@ export class BodyValidator {
           (acceptsDefault || found.constructorDefault !== true) &&
           (found.makeInput === undefined ||
             same(this.env, found.makeInput, found.decoded) ||
-            [
-              "array",
-              "struct",
-              "union",
-              "optional-key",
-              "null-to-missing-key",
-              "option-from-optional-key",
-              "default-key",
-              "default-null-key",
-              "default-encoded-key",
-              "optional-transform",
-              "optional-from-required",
-              "transform",
-              "constructor-default",
-              "recursive",
-              "both",
-            ].includes(e.op))
+            // "invalid" and "at" return before any schemaOf call, so only
+            // "identity" is left out of the make-input operations.
+            e.op !== "identity")
         ? found
         : undefined;
     };
@@ -2073,17 +2072,9 @@ export class BodyValidator {
       const encode = args[3] === undefined
         ? undefined
         : asFunction(this.env, args[3].type);
-      const validCallback = (fn: typeof decode) =>
-        fn !== undefined &&
-        (fn.effects.failures.length === 0 ||
-          (fn.effects.failures.length === 1 &&
-            fn.effects.failures[0] === SCHEMA_ISSUE_ID)) &&
-        (fn.execution !== "pure" ||
-          (fn.effects.failures.length === 0 &&
-            fn.effects.requirements.length === 0));
       if (
         args.length !== 4 || source === undefined || target === undefined ||
-        !validCallback(decode) || !validCallback(encode) ||
+        !validSchemaCallback(decode) || !validSchemaCallback(encode) ||
         decode?.parameters.length !== 1 || encode?.parameters.length !== 1 ||
         !fits(this.env, source.decoded, decode.parameters[0]) ||
         !fits(
@@ -2143,17 +2134,9 @@ export class BodyValidator {
       const encode = args[3] === undefined
         ? undefined
         : asFunction(this.env, args[3].type);
-      const validCallback = (fn: typeof decode) =>
-        fn !== undefined &&
-        (fn.effects.failures.length === 0 ||
-          (fn.effects.failures.length === 1 &&
-            fn.effects.failures[0] === SCHEMA_ISSUE_ID)) &&
-        (fn.execution !== "pure" ||
-          (fn.effects.failures.length === 0 &&
-            fn.effects.requirements.length === 0));
       if (
         args.length !== 4 || source === undefined || target === undefined ||
-        !validCallback(decode) || !validCallback(encode) ||
+        !validSchemaCallback(decode) || !validSchemaCallback(encode) ||
         decode?.parameters.length !== 1 || encode?.parameters.length !== 1 ||
         !fits(
           this.env,
@@ -2246,7 +2229,7 @@ export class BodyValidator {
           });
         }
         return fn.effects.failures.length === 1 &&
-          fn.effects.failures[0] === "error:effect/SchemaIssue" &&
+          fn.effects.failures[0] === SCHEMA_ISSUE_ID &&
           fits(this.env, fn.result, value);
       };
       if (
@@ -2415,7 +2398,7 @@ export class BodyValidator {
       type.kind !== "schema" || type.constructorDefault === true ||
       (e.kind === "schema-make" &&
         (type.optionalKey === true || type.encodedOptionalKey === true ||
-          type.decodedOptionalKey === true || type.constructorDefault === true))
+          type.decodedOptionalKey === true))
     ) {
       this.add(
         AREA.types,
@@ -4677,7 +4660,7 @@ export class BodyValidator {
     return this.sinkTransformStream(e, path, "aggregateStream");
   }
 
-  private scheduleInput(input: Type): Type {
+  private scheduleInput(input: Type): Extract<Type, { kind: "record" }> {
     return {
       kind: "record",
       fields: [
@@ -4835,7 +4818,6 @@ export class BodyValidator {
       return this.poison();
     }
     const base = this.scheduleInput(policy.input);
-    if (base.kind !== "record") return this.poison();
     const metadata: Type = {
       kind: "record",
       fields: [
@@ -4893,11 +4875,8 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    const accepts = (input: Type, offered: Type): boolean => {
-      const type = unfold(this.env, input);
-      return (type.kind === "primitive" && type.name === "unknown") ||
-        fits(this.env, offered, input);
-    };
+    const accepts = (input: Type, offered: Type): boolean =>
+      isUnknown(this.env, input) || fits(this.env, offered, input);
     const input = accepts(second.input, first.input)
       ? first.input
       : accepts(first.input, second.input)
@@ -4946,9 +4925,7 @@ export class BodyValidator {
     const consumer = unfold(this.env, sink.type);
     const policy = unfold(this.env, schedule.type);
     const unknownInput = policy.kind === "schedule" &&
-      unfold(this.env, policy.input).kind === "primitive" &&
-      (unfold(this.env, policy.input) as Extract<Type, { kind: "primitive" }>)
-          .name === "unknown";
+      isUnknown(this.env, policy.input);
     if (
       source.kind !== "stream" || consumer.kind !== "sink" ||
       policy.kind !== "schedule" ||

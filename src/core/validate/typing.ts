@@ -218,10 +218,7 @@ function assignable(
     case "schedule":
       return s.kind === "schedule" &&
         assignable(env, s.output, t.output, false, depth + 1) &&
-        (unfold(env, s.input).kind === "primitive" &&
-            (unfold(env, s.input) as Extract<Type, { kind: "primitive" }>)
-                .name ===
-              "unknown" ||
+        (isUnknown(env, s.input) ||
           assignable(env, t.input, s.input, false, depth + 1)) &&
         isSubset(s.effects.failures, t.effects.failures) &&
         isSubset(s.effects.requirements, t.effects.requirements);
@@ -352,6 +349,11 @@ export function fieldsOf(
 export function asFunction(env: TypeEnv, type: Type): FunctionType | undefined {
   const unfolded = unfold(env, type);
   return unfolded.kind === "function" ? unfolded : undefined;
+}
+
+export function isUnknown(env: TypeEnv, type: Type): boolean {
+  const unfolded = unfold(env, type);
+  return unfolded.kind === "primitive" && unfolded.name === "unknown";
 }
 
 export function isBooleanLike(env: TypeEnv, type: Type): boolean {
