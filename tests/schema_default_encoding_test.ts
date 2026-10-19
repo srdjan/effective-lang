@@ -84,3 +84,41 @@ const bad = schemaEncode(omitted, {})`,
     ),
   );
 });
+
+Deno.test("Schema default callbacks may fail only with SchemaIssue or SchemaError", () => {
+  for (
+    const failures of ["SchemaIssue", "SchemaError"]
+  ) {
+    const accepted = checked(
+      prefix +
+        `const ok = schemaDefaultKey(text, (): Text fails ${failures} => "Ada")`,
+    );
+    assertEquals(accepted.diagnostics, [], failures);
+  }
+  for (
+    const [failures, body] of [
+      ["Other", "fail(Other({}))"],
+      ["SchemaIssue | SchemaError", '"Ada"'],
+    ]
+  ) {
+    const callback = `(): Text fails ${failures} => ${body}`;
+    const source = prefix + "error Other = {}\n" +
+      `const bad = schemaDefaultKey(text, ${callback})`;
+    const { diagnostics } = checked(source);
+    assertEquals(
+      diagnostics.map((d) => d.code),
+      ["type-mismatch/010"],
+      failures,
+    );
+    assert(
+      diagnostics[0].message.includes(
+        "callback may fail only with SchemaIssue or SchemaError",
+      ),
+      diagnostics[0].message,
+    );
+    assertEquals(
+      source.slice(diagnostics[0].span.start, diagnostics[0].span.end),
+      callback,
+    );
+  }
+});

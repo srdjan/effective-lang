@@ -55,7 +55,6 @@ Deno.test("encoded defaults reject decoded callbacks and invalid construction bo
       'const bad = schemaDefaultEncodedKey(schemaOptionalKey(text), (): Text => "1")',
       'const make = (): Text => "1"\nconst bad = schemaDefaultEncodedKey(converted, make)',
       "const bad = schemaDefaultEncodedKey(converted, (value: Text): Text => value)",
-      "error Other {}\nconst bad = schemaDefaultEncodedKey(converted, (): Text fails Other => fail(Other {}))",
       'const bad = schemaDefaultEncodedKey(converted, (): Text => "1", { encodingStrategy: "other" })',
       'const policy = { encodingStrategy: "omit" }\nconst bad = schemaDefaultEncodedKey(converted, (): Text => "1", policy)',
       'const bad = schemaDefaultEncodedKey(converted, (): Text => "1", { encodingStrategy: "omit", extra: true })',
@@ -64,6 +63,44 @@ Deno.test("encoded defaults reject decoded callbacks and invalid construction bo
       'const s: Schema<Decoded, Encoded> = schemaStruct({ score: schemaDefaultEncodedKey(converted, (): Text => "1") })\nconst bad = schemaEncode(s, {})',
     ]
   ) assert(checked(prefix + declaration).diagnostics.length > 0, declaration);
+});
+
+Deno.test("encoded default callbacks may fail only with SchemaIssue or SchemaError", () => {
+  for (
+    const failures of ["SchemaIssue", "SchemaError"]
+  ) {
+    const accepted = checked(
+      prefix +
+        `const ok = schemaDefaultEncodedKey(converted, (): Text fails ${failures} => "1")`,
+    );
+    assertEquals(accepted.diagnostics, [], failures);
+  }
+  for (
+    const [failures, body] of [
+      ["Other", "fail(Other({}))"],
+      ["SchemaIssue | SchemaError", '"1"'],
+    ]
+  ) {
+    const callback = `(): Text fails ${failures} => ${body}`;
+    const source = prefix + "error Other = {}\n" +
+      `const bad = schemaDefaultEncodedKey(converted, ${callback})`;
+    const { diagnostics } = checked(source);
+    assertEquals(
+      diagnostics.map((d) => d.code),
+      ["type-mismatch/010"],
+      failures,
+    );
+    assert(
+      diagnostics[0].message.includes(
+        "callback may fail only with SchemaIssue or SchemaError",
+      ),
+      diagnostics[0].message,
+    );
+    assertEquals(
+      source.slice(diagnostics[0].span.start, diagnostics[0].span.end),
+      callback,
+    );
+  }
 });
 
 Deno.test("validator distinguishes encoded defaults from decoded defaults and checks policies", () => {
