@@ -1783,11 +1783,11 @@ export class BodyChecker {
         );
         return this.finish(node, this.table.error, combine([input]));
       }
-      const fields = record.fields.map((field) => ({
-        field,
-        schema: this.table.node(this.table.unfold(field.type)),
-      }));
-      if (fields.some((field) => field.schema.kind !== "schema")) {
+      const fields = record.fields.flatMap((field) => {
+        const schema = this.table.node(this.table.unfold(field.type));
+        return schema.kind === "schema" ? [{ field, schema }] : [];
+      });
+      if (fields.length !== record.fields.length) {
         this.report(
           "type-mismatch/010",
           "`schemaStruct` fields must be Schema values or schemaOptionalKey descriptors",
@@ -1798,18 +1798,17 @@ export class BodyChecker {
       const decoded = this.table.record(
         fields.map(({ field, schema }) => ({
           name: field.name,
-          type: schema.kind === "schema" ? schema.decoded : this.table.error,
-          optional: schema.kind === "schema" &&
-            (schema.optionalKey === true ||
-              schema.decodedOptionalKey === true),
+          type: schema.decoded,
+          optional: schema.optionalKey === true ||
+            schema.decodedOptionalKey === true,
         })),
       );
       const encoded = this.table.record(
         fields.map(({ field, schema }) => ({
           name: field.name,
-          type: schema.kind === "schema" ? schema.encoded : this.table.error,
-          optional: schema.kind === "schema" &&
-            (schema.optionalKey === true || schema.encodedOptionalKey === true),
+          type: schema.encoded,
+          optional: schema.optionalKey === true ||
+            schema.encodedOptionalKey === true,
         })),
       );
       return this.finish(
@@ -1817,24 +1816,17 @@ export class BodyChecker {
         this.table.schema(
           decoded,
           encoded,
-          fields.flatMap(({ schema }) =>
-            schema.kind === "schema" ? schema.decodeRequirements : []
-          ),
-          fields.flatMap(({ schema }) =>
-            schema.kind === "schema" ? schema.encodeRequirements : []
-          ),
+          fields.flatMap(({ schema }) => schema.decodeRequirements),
+          fields.flatMap(({ schema }) => schema.encodeRequirements),
           false,
           false,
           false,
           this.table.record(fields.map(({ field, schema }) => ({
             name: field.name,
-            type: schema.kind === "schema"
-              ? schema.makeInput ?? schema.decoded
-              : this.table.error,
-            optional: schema.kind === "schema" &&
-              (schema.optionalKey === true ||
-                schema.decodedOptionalKey === true ||
-                schema.constructorDefault === true),
+            type: schema.makeInput ?? schema.decoded,
+            optional: schema.optionalKey === true ||
+              schema.decodedOptionalKey === true ||
+              schema.constructorDefault === true,
           }))),
         ),
         combine([input]),
