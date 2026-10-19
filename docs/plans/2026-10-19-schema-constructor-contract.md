@@ -106,6 +106,7 @@ SchemaError, and exercises predicate-based mixed error matching and catches.
 
 The [metadata extension](2026-10-19-schema-constructor-metadata-contract.md)
 now supplies nonrecursive constructor-default fields and propagates M through
-selected composition forms. Optional adapters and recursive make-input
-propagation remain the next investigations. Broader package interoperability, item 9, stays deferred
+selected composition forms. The optional-adapter and
+[recursive extensions](2026-10-19-schema-constructor-recursive-contract.md) now
+propagate M through those forms. Distinct recursive D/E remains open. Broader package interoperability, item 9, stays deferred
 by user instruction.

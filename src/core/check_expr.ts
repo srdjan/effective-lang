@@ -1535,6 +1535,7 @@ export class BodyChecker {
           "optional-from-required",
           "transform",
           "constructor-default",
+          "recursive",
           "make",
           "decode",
           "encode",
@@ -1615,7 +1616,10 @@ export class BodyChecker {
             : combine(args.map((a) => this.argInfo(a))),
         );
       }
-      if (!this.dataOnly(hint.decoded) || !this.dataOnly(hint.encoded)) {
+      if (
+        !this.dataOnly(hint.decoded) || !this.dataOnly(hint.encoded) ||
+        !this.dataOnly(hint.makeInput ?? hint.decoded)
+      ) {
         this.report(
           "type-mismatch/010",
           "Schema data must be compiler-derived",
@@ -2344,19 +2348,22 @@ export class BodyChecker {
     const name = first === undefined
       ? undefined
       : this.kidsOfKind(first, SyntaxKind.Name)[0];
-    const self = name === undefined ? undefined : nameTextOf(this.tree, name);
+    const self = name === undefined ? undefined : this.targets.get(name);
     const body = parts.at(-1);
     if (
-      self === undefined || body === undefined ||
+      self?.kind !== "local" || body === undefined ||
       kindOf(this.tree, body) !== SyntaxKind.CallExpr ||
       !["schemaStruct", "schemaUnion"].includes(
         nodeText(this.tree, this.kids(body)[0]),
       )
     ) return false;
+    const isSelf = (part: NodeId): boolean => {
+      const target = this.targets.get(part);
+      return kindOf(this.tree, part) === SyntaxKind.NameExpr &&
+        target?.kind === "local" && target.id === self.id;
+    };
     const containsSelf = (part: NodeId): boolean =>
-      (kindOf(this.tree, part) === SyntaxKind.NameExpr &&
-        nodeText(this.tree, part) === self) ||
-      this.kids(part).some(containsSelf);
+      isSelf(part) || this.kids(part).some(containsSelf);
     const union = nodeText(this.tree, this.kids(body)[0]) === "schemaUnion";
     const findList = (part: NodeId): NodeId | undefined =>
       kindOf(this.tree, part) === SyntaxKind.ListExpr
@@ -2401,18 +2408,29 @@ export class BodyChecker {
       this.kids(list).some((branch) => !containsSelf(branch));
     let found = false;
     const visit = (part: NodeId, guarded: boolean): boolean => {
-      if (
-        kindOf(this.tree, part) === SyntaxKind.NameExpr &&
-        nodeText(this.tree, part) === self
-      ) {
+      if (!containsSelf(part)) return true;
+      if (isSelf(part)) {
         found = true;
         return guarded;
       }
       if (kindOf(this.tree, part) === SyntaxKind.CallExpr) {
         const children = this.kids(part);
+        if (nodeText(this.tree, children[0]) === "schemaConstructorDefault") {
+          const args = children.find((child) =>
+            kindOf(this.tree, child) === SyntaxKind.ArgList
+          );
+          const values = args === undefined ? [] : this.kids(args);
+          return values.length === 2 && !containsSelf(values[1]) &&
+            visit(values[0], guarded);
+        }
         const guard = ["schemaArray", "schemaOptionalKey"].includes(
           nodeText(this.tree, children[0]),
         );
+        if (
+          !guard && !["schemaStruct", "schemaUnion"].includes(
+            nodeText(this.tree, children[0]),
+          )
+        ) return false;
         return children.every((child, index) =>
           visit(child, guarded || (guard && index > 0))
         );

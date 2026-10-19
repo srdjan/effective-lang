@@ -1726,6 +1726,7 @@ export class BodyValidator {
               "optional-from-required",
               "transform",
               "constructor-default",
+              "recursive",
               "both",
             ].includes(e.op))
         ? found
@@ -2203,6 +2204,7 @@ export class BodyValidator {
         !fits(this.env, fn.result, hint) || fn.execution !== "pure" ||
         fn.effects.failures.length || fn.effects.requirements.length ||
         !this.dataOnly(hint.decoded) || !this.dataOnly(hint.encoded) ||
+        !this.dataOnly(hint.makeInput ?? hint.decoded) ||
         !this.guardedSchemaBody(e.arguments[0])
       ) {
         return bad(
@@ -2280,18 +2282,15 @@ export class BodyValidator {
       (callback.body.op !== "struct" && callback.body.op !== "union")
     ) return false;
     const self = callback.parameters[0].id;
-    const containsSelf = (value: Expr): boolean => {
-      if (value.kind === "reference") return value.target === self;
-      if (value.kind === "record") {
-        return value.fields.some((field) => containsSelf(field.value));
-      }
-      if (value.kind === "tuple" || value.kind === "array") {
-        return value.elements.some(containsSelf);
-      }
-      if (value.kind === "schema") {
-        return value.arguments.some(containsSelf);
-      }
-      return false;
+    const containsSelf = (value: unknown): boolean => {
+      if (Array.isArray(value)) return value.some(containsSelf);
+      if (value === null || typeof value !== "object") return false;
+      const fields = value as Record<string, unknown>;
+      if (fields.kind === "reference" && fields.target === self) return true;
+      return Object.entries(fields).some(([key, child]) =>
+        key !== "type" && key !== "effects" && key !== "span" &&
+        containsSelf(child)
+      );
     };
     const branches = callback.body.op === "union" &&
         callback.body.arguments[0]?.kind === "tuple"
@@ -2332,6 +2331,7 @@ export class BodyValidator {
       branches.some((branch) => !containsSelf(branch));
     let found = false;
     const visit = (value: Expr, guarded: boolean): boolean => {
+      if (!containsSelf(value)) return true;
       if (value.kind === "reference") {
         if (value.target !== self) return true;
         found = true;
@@ -2339,6 +2339,11 @@ export class BodyValidator {
       }
       if (value.kind === "record") {
         return value.fields.every((field) => visit(field.value, guarded));
+      }
+      if (value.kind === "schema" && value.op === "constructor-default") {
+        return value.arguments.length === 2 &&
+          !containsSelf(value.arguments[1]) &&
+          visit(value.arguments[0], guarded);
       }
       if (
         value.kind === "schema" &&

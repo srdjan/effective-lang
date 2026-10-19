@@ -143,6 +143,12 @@ A `schema()` for `Tree` refers to this lazy identity Schema. `schemaRecursive`
 emits a lazy self Schema and constructs its body once; each parse follows the
 self reference only when it reaches an array element.
 
+The [recursive constructor extension](2026-10-19-schema-constructor-recursive-contract.md)
+now retains a separate, guarded make-input M in the self Schema. It adds
+constructor defaults to these recursive bodies without changing their decoded
+or encoded shapes or their directional wire services. Distinct recursive D/E
+remains separate work.
+
 ## Execution and acceptance gate
 
 Constructing any Schema value runs no decode or encode callback and resolves no

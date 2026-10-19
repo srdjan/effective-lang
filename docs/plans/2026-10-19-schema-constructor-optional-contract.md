@@ -61,7 +61,8 @@ erased M, missing required fields, partial Option contents, partial wire default
 and forged adapter make inputs. The target probe also checks both encoding
 strategies and confirms Option's complete-data constructor behavior.
 
-Recursive make-input propagation is next. Attaching a constructor default
+The [recursive extension](2026-10-19-schema-constructor-recursive-contract.md)
+now adds guarded make-input propagation with D=E. Distinct recursive D/E is next. Attaching a constructor default
 directly to an optional descriptor, constructor options, and arbitrary Schema AST
 access remain outside this slice. Broader package interoperability, item 9,
 stays deferred by user instruction.

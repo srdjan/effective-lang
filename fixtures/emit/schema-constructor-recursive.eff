@@ -1,0 +1,50 @@
+export type Int = int
+export type Tree = { score: Int, children: Tree[] }
+export type TreeInput = { score?: Int, children?: TreeInput[] }
+export type Node = { score: Int, next?: Node }
+export type NodeInput = { score?: Int, next?: NodeInput }
+export type Choice = { kind: "end" } | { kind: "more", next: Choice }
+export type ChoiceInput = { kind: "end" } | { kind: "more", next?: ChoiceInput }
+type End = "end"
+type More = "more"
+
+export service Read { next(value: Int): Int }
+export service Write { previous(value: Int): Int }
+
+const integer: Schema<Int> = schema()
+const endTag: Schema<End> = schema()
+const moreTag: Schema<More> = schema()
+const shifted: Schema<Int, Int, Read.next, Write.previous> = schemaTransform(
+  integer, integer,
+  (value: Int): Option<Int> uses Read.next => Some(Read.next(value)),
+  (value: Int): Option<Int> uses Write.previous => Some(Write.previous(value))
+)
+export const tree: Schema<Tree, Tree, Read.next, Write.previous, TreeInput> = schemaRecursive(
+  (self: Schema<Tree, Tree, Read.next, Write.previous, TreeInput>): Schema<Tree, Tree, Read.next, Write.previous, TreeInput> =>
+    schemaStruct({
+      score: schemaConstructorDefault(shifted, (): Int => 4),
+      children: schemaConstructorDefault(schemaArray(self), (): TreeInput[] => [])
+    })
+)
+export const node: Schema<Node, Node, never, never, NodeInput> = schemaRecursive(
+  (self: Schema<Node, Node, never, never, NodeInput>): Schema<Node, Node, never, never, NodeInput> =>
+    schemaStruct({ score: schemaConstructorDefault(integer, (): Int => 4), next: schemaOptionalKey(self) })
+)
+export const choice: Schema<Choice, Choice, never, never, ChoiceInput> = schemaRecursive(
+  (self: Schema<Choice, Choice, never, never, ChoiceInput>): Schema<Choice, Choice, never, never, ChoiceInput> => schemaUnion([
+    schemaStruct({ kind: endTag }),
+    schemaStruct({ kind: moreTag, next: schemaConstructorDefault(self, (): ChoiceInput => ({ kind: "end" })) })
+  ])
+)
+export const waiting = (pending: Effect<Int, SchemaIssue>): Schema<Tree, Tree, never, never, TreeInput> => schemaRecursive(
+  (self: Schema<Tree, Tree, never, never, TreeInput>): Schema<Tree, Tree, never, never, TreeInput> =>
+    schemaStruct({
+      score: schemaConstructorDefault(integer, (): Int fails SchemaIssue => run(pending)),
+      children: schemaConstructorDefault(schemaArray(self), (): TreeInput[] => [])
+    })
+)
+export const makeTree = (input: TreeInput): Tree fails SchemaIssue => schemaMake(tree, input)
+export const makeNode = (input: NodeInput): Node fails SchemaIssue => schemaMake(node, input)
+export const makeChoice = (input: ChoiceInput): Choice fails SchemaIssue => schemaMake(choice, input)
+export const readTree = (input: unknown): Tree fails SchemaError uses Read.next => schemaDecode(tree, input)
+export const writeTree = (input: Tree): Tree fails SchemaError uses Write.previous => schemaEncode(tree, input)
