@@ -328,6 +328,7 @@ export class TypeTable {
 
   // -------------------------------------------------------------- interning
 
+  /** The intern key of a node. Each kind has its own prefix, so keys of different kinds never collide. */
   private keyOf(node: TypeNode): string {
     switch (node.kind) {
       case "closeable-scope":
@@ -371,7 +372,7 @@ export class TypeTable {
           ])
         }`;
       case "fiber":
-        return `f:${node.result}:${JSON.stringify(node.failures)}`;
+        return `i:${node.result}:${JSON.stringify(node.failures)}`;
       case "effect":
         return `x:${
           JSON.stringify([node.result, node.failures, node.requirements])
@@ -381,7 +382,7 @@ export class TypeTable {
           JSON.stringify([node.element, node.failures, node.requirements])
         }`;
       case "schedule":
-        return `h:${
+        return `d:${
           JSON.stringify([
             node.output,
             node.input,
