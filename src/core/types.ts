@@ -37,7 +37,8 @@ export interface RecordField {
   readonly optional: boolean;
 }
 
-function importedGuardedRecord(
+/** A single recursive data alias needs an array, optional key, or tagged terminal choice. */
+export function guardedRecord(
   type: Type,
   id: TypeId,
   tagOf: (type: Type) => string | undefined,
@@ -737,7 +738,7 @@ export class TypeTable {
       if (this.isDefined(decl.id)) continue;
       if (decl.definition.kind === "alias") {
         this.defineAlias(decl.id, this.fromIr(decl.definition.type));
-        if (importedGuardedRecord(decl.definition.type, decl.id, tagOf)) {
+        if (guardedRecord(decl.definition.type, decl.id, tagOf)) {
           this.markGuardedAlias(decl.id);
         }
       } else {

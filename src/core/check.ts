@@ -54,7 +54,12 @@ import {
   type SyntaxTree,
   walk,
 } from "./syntax.ts";
-import { sortedUnique, type TypeRef, type TypeTable } from "./types.ts";
+import {
+  guardedRecord,
+  sortedUnique,
+  type TypeRef,
+  type TypeTable,
+} from "./types.ts";
 
 // ------------------------------------------------------------------ shapes
 
@@ -1119,75 +1124,6 @@ interface TypeNodeInfo {
   readonly start: number;
   readonly kind: "alias" | "brand" | "error";
   readonly refs: ReadonlySet<string>;
-}
-
-/** A single recursive data alias needs an array, optional key, or tagged terminal choice. */
-function guardedRecord(
-  type: Type,
-  id: TypeId,
-  tagOf: (type: Type) => string | undefined,
-): boolean {
-  const containsSelf = (part: Type): boolean => {
-    switch (part.kind) {
-      case "named":
-        return part.id === id;
-      case "array":
-      case "option":
-        return containsSelf(part.element);
-      case "record":
-        return part.fields.some((field) => containsSelf(field.type));
-      case "union":
-        return part.members.some(containsSelf);
-      default:
-        return false;
-    }
-  };
-  const tagged = type.kind === "union" && type.members.length >= 2 &&
-    type.members.every((member) => member.kind === "record") &&
-    type.members.some((member) => !containsSelf(member));
-  const tagNames = tagged && type.kind === "union"
-    ? (type.members[0] as Extract<Type, { kind: "record" }>).fields
-      .filter((field) => !field.optional && tagOf(field.type) !== undefined)
-      .map((field) => field.name)
-    : [];
-  const hasDistinctTag = type.kind === "union" && tagNames.some((name) => {
-    const values = type.members.map((member) =>
-      member.kind === "record"
-        ? member.fields.find((field) => field.name === name)
-        : undefined
-    );
-    return values.every((field) =>
-      field !== undefined && !field.optional &&
-      tagOf(field.type) !== undefined
-    ) && new Set(values.map((field) =>
-          field === undefined ? undefined : tagOf(field.type)
-        )).size === values.length;
-  });
-  if (type.kind !== "record" && !(tagged && hasDistinctTag)) return false;
-  let sawSelf = false;
-  const walk = (part: Type, guarded: boolean): boolean => {
-    switch (part.kind) {
-      case "named":
-        if (part.id !== id) return true;
-        sawSelf = true;
-        return guarded;
-      case "array":
-        return walk(part.element, true);
-      case "record":
-        return part.fields.every((field) =>
-          walk(field.type, guarded || field.optional)
-        );
-      case "union":
-        return (guarded || (part === type && tagged && hasDistinctTag)) &&
-          part.members.every((member) => walk(member, true));
-      case "primitive":
-      case "literal":
-        return true;
-      default:
-        return false;
-    }
-  };
-  return walk(type, false) && sawSelf;
 }
 
 function compareText(a: string, b: string): number {
