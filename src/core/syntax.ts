@@ -87,6 +87,60 @@ export enum SyntaxKind {
   SpreadPattern,
 }
 
+/** The key and constructor options that one Schema type word selects. */
+export interface SchemaFlags {
+  readonly optionalKey: boolean;
+  readonly encodedOptionalKey: boolean;
+  readonly decodedOptionalKey: boolean;
+  readonly constructorDefault: boolean;
+}
+
+/** A type word that takes `<...>` arguments: its node kind and, for Schema words, its flags. */
+export interface TypeWord {
+  readonly kind: SyntaxKind;
+  readonly schema?: SchemaFlags;
+}
+
+function schemaWord(
+  optionalKey: boolean,
+  encodedOptionalKey: boolean,
+  decodedOptionalKey: boolean,
+  constructorDefault: boolean,
+): TypeWord {
+  return {
+    kind: SyntaxKind.SchemaType,
+    schema: {
+      optionalKey,
+      encodedOptionalKey,
+      decodedOptionalKey,
+      constructorDefault,
+    },
+  };
+}
+
+/** Every type word that the parser reads as `Word<...>`. */
+export const TYPE_WORDS: ReadonlyMap<string, TypeWord> = new Map([
+  ["Effect", { kind: SyntaxKind.EffectType }],
+  ["Stream", { kind: SyntaxKind.StreamType }],
+  ["Sink", { kind: SyntaxKind.SinkType }],
+  ["Schedule", { kind: SyntaxKind.ScheduleType }],
+  ["Layer", { kind: SyntaxKind.LayerType }],
+  ["Schema", schemaWord(false, false, false, false)],
+  ["SchemaOptional", schemaWord(true, false, false, false)],
+  ["SchemaEncodedOptional", schemaWord(false, true, false, false)],
+  ["SchemaDecodedOptional", schemaWord(false, false, true, false)],
+  ["SchemaConstructorDefault", schemaWord(false, false, false, true)],
+  ["SchemaOptionalConstructorDefault", schemaWord(true, false, false, true)],
+  [
+    "SchemaEncodedOptionalConstructorDefault",
+    schemaWord(false, true, false, true),
+  ],
+  [
+    "SchemaDecodedOptionalConstructorDefault",
+    schemaWord(false, false, true, true),
+  ],
+]);
+
 export interface SyntaxTree {
   readonly source: string;
   readonly text: string;

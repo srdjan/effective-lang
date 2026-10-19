@@ -52,6 +52,7 @@ import {
   nodeText,
   SyntaxKind,
   type SyntaxTree,
+  TYPE_WORDS,
   walk,
 } from "./syntax.ts";
 import {
@@ -732,17 +733,16 @@ export class TypeLowerer {
       ? this.errorLowered()
       : this.lower(typeNodes[0]);
     if (kindOf(this.tree, node) === SyntaxKind.SchemaType) {
-      const optionalKey = nodeText(this.tree, node).startsWith(
-        "SchemaOptional",
-      );
-      const encodedOptionalKey = nodeText(this.tree, node).startsWith(
-        "SchemaEncodedOptional",
-      );
-      const constructorDefault = nodeText(this.tree, node).split("<", 1)[0]
-        .trim().endsWith("ConstructorDefault");
-      const decodedOptionalKey = nodeText(this.tree, node).startsWith(
-        "SchemaDecodedOptional",
-      );
+      // The word is the leading identifier. A comment between the word and `<`
+      // still drops constructorDefault: that gate is removed in the next commit.
+      const head = nodeText(this.tree, node).split("<", 1)[0];
+      const word = /^[\w$]*/.exec(head)?.[0] ?? "";
+      const flags = TYPE_WORDS.get(word)?.schema;
+      const optionalKey = flags?.optionalKey === true;
+      const encodedOptionalKey = flags?.encodedOptionalKey === true;
+      const decodedOptionalKey = flags?.decodedOptionalKey === true;
+      const constructorDefault = flags?.constructorDefault === true &&
+        head.trim() === word;
       const encoded = typeNodes[1] === undefined
         ? first
         : this.lower(typeNodes[1]);

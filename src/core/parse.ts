@@ -34,6 +34,7 @@ import {
   type NodeId,
   SyntaxKind,
   type SyntaxTree,
+  TYPE_WORDS,
 } from "./syntax.ts";
 
 export interface ParseResult {
@@ -990,33 +991,14 @@ class Parser {
     const k = this.kind();
     switch (k) {
       case TokenKind.Ident: {
-        if (
-          (this.isWordAt(this.pos, "Effect") ||
-            this.isWordAt(this.pos, "Stream") ||
-            this.isWordAt(this.pos, "Sink") ||
-            this.isWordAt(this.pos, "Schedule") ||
-            this.isWordAt(this.pos, "Schema") ||
-            this.isWordAt(this.pos, "SchemaOptional") ||
-            this.isWordAt(this.pos, "SchemaEncodedOptional") ||
-            this.isWordAt(this.pos, "SchemaDecodedOptional") ||
-            this.isWordAt(this.pos, "SchemaConstructorDefault") ||
-            this.isWordAt(this.pos, "SchemaOptionalConstructorDefault") ||
-            this.isWordAt(
-              this.pos,
-              "SchemaEncodedOptionalConstructorDefault",
-            ) ||
-            this.isWordAt(
-              this.pos,
-              "SchemaDecodedOptionalConstructorDefault",
-            ) ||
-            this.isWordAt(this.pos, "Layer")) &&
-          this.kinds[this.pos + 1] === TokenKind.Lt
-        ) {
+        const name = this.text.slice(
+          this.starts[this.pos],
+          this.ends[this.pos],
+        );
+        const word = TYPE_WORDS.get(name);
+        if (word !== undefined && this.kinds[this.pos + 1] === TokenKind.Lt) {
+          const isSchema = word.schema !== undefined;
           this.begin();
-          const name = this.text.slice(
-            this.starts[this.pos],
-            this.ends[this.pos],
-          );
           this.tok();
           const group = this.open("free");
           if (name === "Layer") {
@@ -1031,29 +1013,11 @@ class Parser {
           } else if (name === "Schedule" && this.kind() === TokenKind.Comma) {
             this.tok();
             this.parseType();
-          } else if (
-            (name === "Schema" || name === "SchemaOptional" ||
-              name === "SchemaEncodedOptional" ||
-              name === "SchemaDecodedOptional" ||
-              name === "SchemaConstructorDefault" ||
-              name === "SchemaOptionalConstructorDefault" ||
-              name === "SchemaEncodedOptionalConstructorDefault" ||
-              name === "SchemaDecodedOptionalConstructorDefault") &&
-            this.kind() === TokenKind.Comma
-          ) {
+          } else if (isSchema && this.kind() === TokenKind.Comma) {
             this.tok();
             this.parseType();
           }
-          if (
-            (name === "Schema" || name === "SchemaOptional" ||
-              name === "SchemaEncodedOptional" ||
-              name === "SchemaDecodedOptional" ||
-              name === "SchemaConstructorDefault" ||
-              name === "SchemaOptionalConstructorDefault" ||
-              name === "SchemaEncodedOptionalConstructorDefault" ||
-              name === "SchemaDecodedOptionalConstructorDefault") &&
-            this.kind() === TokenKind.Comma
-          ) {
+          if (isSchema && this.kind() === TokenKind.Comma) {
             this.tok();
             this.begin();
             this.parseNameSet(true);
@@ -1068,16 +1032,7 @@ class Parser {
                 this.parseType();
               }
             }
-          } else if (
-            name !== "Schema" && name !== "SchemaOptional" &&
-            name !== "SchemaEncodedOptional" &&
-            name !== "SchemaDecodedOptional" &&
-            name !== "SchemaConstructorDefault" &&
-            name !== "SchemaOptionalConstructorDefault" &&
-            name !== "SchemaEncodedOptionalConstructorDefault" &&
-            name !== "SchemaDecodedOptionalConstructorDefault" &&
-            this.kind() === TokenKind.Comma
-          ) {
+          } else if (!isSchema && this.kind() === TokenKind.Comma) {
             this.tok();
             this.begin();
             this.parseNameSet(false);
@@ -1094,25 +1049,7 @@ class Parser {
             }
           }
           this.close(group, TokenKind.Gt, "`>`");
-          this.end(
-            name === "Effect"
-              ? SyntaxKind.EffectType
-              : name === "Stream"
-              ? SyntaxKind.StreamType
-              : name === "Schedule"
-              ? SyntaxKind.ScheduleType
-              : name === "Schema" || name === "SchemaOptional" ||
-                  name === "SchemaEncodedOptional" ||
-                  name === "SchemaDecodedOptional" ||
-                  name === "SchemaConstructorDefault" ||
-                  name === "SchemaOptionalConstructorDefault" ||
-                  name === "SchemaEncodedOptionalConstructorDefault" ||
-                  name === "SchemaDecodedOptionalConstructorDefault"
-              ? SyntaxKind.SchemaType
-              : name === "Layer"
-              ? SyntaxKind.LayerType
-              : SyntaxKind.SinkType,
-          );
+          this.end(word.kind);
           return;
         }
         this.begin();
