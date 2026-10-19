@@ -1230,7 +1230,7 @@ export class ExprEmitter {
           throw internal("schedule decision is not a function");
         }
         return emitted([
-          `${schedule}.fromStepWithMetadata(${effect}.map(`,
+          `${schedule}.fromStepWithMetadata(${effect}.suspend(() => ${effect}.map(`,
           at(initialCallback, PREC.member),
           "(), (",
           state,
@@ -1250,7 +1250,7 @@ export class ExprEmitter {
           `${state} = ${decision}.state; `,
           `return ${effect}.succeed([${decision}.output, ${duration}.millis(${decision}.delayMillis)] as [`,
           typeDoc(this.scope, policy.output),
-          `, ${duration}.Duration]); }); }))`,
+          `, ${duration}.Duration]); }); })))`,
         ]);
       }
       case "buffer-stream": {
