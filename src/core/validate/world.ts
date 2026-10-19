@@ -203,6 +203,20 @@ export function checkTypeIds(
         if (t.makeInput !== undefined) {
           walk(t.makeInput, `${at}.makeInput`, depth + 1);
         }
+        // The IR allows each flag to be absent or exactly true.
+        for (
+          const flag of [
+            "optionalKey",
+            "encodedOptionalKey",
+            "decodedOptionalKey",
+            "constructorDefault",
+          ] as const
+        ) {
+          const value: unknown = t[flag];
+          if (value !== undefined && value !== true) {
+            fail(at, `the Schema flag ${flag} must be absent or true`);
+          }
+        }
         if (
           Number(t.optionalKey === true) +
               Number(t.encodedOptionalKey === true) +

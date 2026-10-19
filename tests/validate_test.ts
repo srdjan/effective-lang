@@ -2955,3 +2955,28 @@ type Text = string
   setAt(nameOf, "body.field", "missing");
   assertEquals(codesOf(mutated, lowered.sources), ["validation/002"]);
 });
+
+Deno.test("identity: a Schema flag is absent or true, never false", () => {
+  const lowered = lowerText(`
+type Text = string
+const name: Schema<Text> = schema()
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  for (
+    const flag of [
+      "optionalKey",
+      "encodedOptionalKey",
+      "decodedOptionalKey",
+      "constructorDefault",
+    ]
+  ) {
+    const forged = copy(lowered.ir);
+    const name = forged.declarations.find((d) => d.name === "name");
+    assert(name?.kind === "constant" && name.type.kind === "schema", flag);
+    Object.assign(name.type, { [flag]: false });
+    const found = validateModule(forged, lowered.sources).filter((d) =>
+      d.code === "validation/001" && d.message.includes(flag)
+    );
+    assert(found.length > 0, flag);
+  }
+});
