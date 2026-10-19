@@ -747,3 +747,96 @@ Deno.test("declaration checking never throws when one character is deleted", () 
     }
   }
 });
+
+// ------------------------------------------------------------------ aliased literal tags
+
+function diagnosticCodes(project: ProjectCheck): string[] {
+  return project.diagnostics.map((d) => d.code);
+}
+
+Deno.test("a guarded recursive alias accepts tags that are literal aliases", () => {
+  for (
+    const text of [
+      // The tag aliases come before the recursive alias.
+      `type A = "a"\ntype B = "b"\ntype T = { tag: A, next: T } | { tag: B }`,
+      // The tag aliases come after the recursive alias.
+      `type T = { tag: A, next: T } | { tag: B }\ntype A = "a"\ntype B = "b"`,
+      // An alias of an alias still names one literal.
+      `type T = { tag: A2, next: T } | { tag: B }\ntype A2 = A\ntype A = "a"\ntype B = "b"`,
+      // Aliased and inline tags mix.
+      `type A = "a"\ntype T = { tag: A, next: T } | { tag: "b" }`,
+    ]
+  ) assertEquals(diagnosticCodes(checkText(text)), [], text);
+});
+
+Deno.test("a guarded recursive alias rejects tag aliases that are not distinct literals", () => {
+  for (
+    const text of [
+      // Two tag aliases hold one value.
+      `type A = "a"\ntype B = "a"\ntype T = { tag: A, next: T } | { tag: B }`,
+      // An aliased tag repeats an inline tag.
+      `type A = "a"\ntype T = { tag: A, next: T } | { tag: "a" }`,
+      // Every branch recurses, so there is no terminal branch.
+      `type A = "a"\ntype B = "b"\ntype T = { tag: A, next: T } | { tag: B, next: T }`,
+      // A union of literals is not a single tag value.
+      `type A = "a" | "c"\ntype B = "b"\ntype T = { tag: A, next: T } | { tag: B }`,
+      // A tag alias of a non-literal type is not a discriminant.
+      `type A = string\ntype B = "b"\ntype T = { tag: A, next: T } | { tag: B }`,
+    ]
+  ) {
+    const project = checkText(text);
+    assertEquals(diagnosticCodes(project), ["declaration/007"], text);
+  }
+});
+
+Deno.test("a guarded recursive alias rejects a cycle among its tag aliases", () => {
+  const project = checkText(
+    `type A = B\ntype B = A\ntype T = { tag: A, next: T } | { tag: "b" }`,
+  );
+  const messages = project.diagnostics.map((d) => d.message);
+  assert(
+    messages.some((m) => m.includes("the type `T` is defined in terms")),
+    messages.join("\n"),
+  );
+  assert(
+    messages.some((m) => m.includes("recursive type definition: A -> B")),
+    messages.join("\n"),
+  );
+  assertEquals(
+    new Set(diagnosticCodes(project)),
+    new Set(["declaration/007"]),
+  );
+});
+
+Deno.test("an imported guarded alias accepts tags that are literal aliases", () => {
+  const files = {
+    "effective.json": "{}",
+    "a.eff": `
+export type T = { tag: A, next: T } | { tag: B }
+type A = "a"
+type B = "b"
+`,
+    "b.eff": `
+import { T } from "./a.eff"
+export const first = (t: T): T => t
+`,
+  };
+  const analysis = analyzeFiles(files, ["b.eff"]);
+  const project = checkDeclarations(
+    analysis,
+    new Map([["value:b#first", "pure"]]),
+  );
+  assertEquals(diagnosticCodes(project), []);
+  const aGraph = interfaceOf(project, "a").payload;
+  // A fresh table loads the recursive alias before the tag aliases that it uses.
+  const fresh = new TypeTable();
+  const reordered = {
+    types: [...aGraph.types].sort((x, y) => (x.name < y.name ? 1 : -1)),
+    errors: aGraph.errors,
+    services: aGraph.services,
+  };
+  assertEquals(reordered.types.map((t) => t.name), ["T", "B", "A"]);
+  checkModuleDeclarations(analysis, "b", fresh, new Map([["a", reordered]]));
+  // The table walks a guarded alias once, and it walks an unguarded cycle forever.
+  assert(!fresh.exceedsDepth(fresh.named("type:a#T"), 128, new Map()));
+});

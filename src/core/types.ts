@@ -37,7 +37,11 @@ export interface RecordField {
   readonly optional: boolean;
 }
 
-function importedGuardedRecord(type: Type, id: TypeId): boolean {
+function importedGuardedRecord(
+  type: Type,
+  id: TypeId,
+  tagOf: (type: Type) => string | undefined,
+): boolean {
   const containsSelf = (part: Type): boolean => {
     switch (part.kind) {
       case "named":
@@ -58,10 +62,8 @@ function importedGuardedRecord(type: Type, id: TypeId): boolean {
     type.members.some((member) => !containsSelf(member));
   const tagNames = tagged && type.kind === "union"
     ? (type.members[0] as Extract<Type, { kind: "record" }>).fields
-      .filter((field) =>
-        !field.optional && field.type.kind === "literal" &&
-        typeof field.type.value === "string"
-      ).map((field) => field.name)
+      .filter((field) => !field.optional && tagOf(field.type) !== undefined)
+      .map((field) => field.name)
     : [];
   const hasDistinctTag = type.kind === "union" && tagNames.some((name) => {
     const fields = type.members.map((member) =>
@@ -71,9 +73,9 @@ function importedGuardedRecord(type: Type, id: TypeId): boolean {
     );
     return fields.every((field) =>
       field !== undefined && !field.optional &&
-      field.type.kind === "literal" && typeof field.type.value === "string"
+      tagOf(field.type) !== undefined
     ) && new Set(fields.map((field) =>
-          field?.type.kind === "literal" ? field.type.value : undefined
+          field === undefined ? undefined : tagOf(field.type)
         )).size === fields.length;
   });
   if (type.kind !== "record" && !(tagged && hasDistinctTag)) return false;
@@ -710,11 +712,32 @@ export class TypeTable {
    * the table already has stays as it is.
    */
   load(source: DefinitionSource): void {
+    // The table registers the declarations one at a time, so a tag alias may
+    // come after the alias that uses it. The source lists all of them.
+    const aliasTypes = new Map<string, Type>();
+    for (const decl of source.types) {
+      if (decl.definition.kind === "alias") {
+        aliasTypes.set(decl.id, decl.definition.type);
+      }
+    }
+    const tagOf = (type: Type): string | undefined => {
+      const seen = new Set<string>();
+      let current: Type | undefined = type;
+      while (current !== undefined) {
+        if (current.kind === "literal") {
+          return typeof current.value === "string" ? current.value : undefined;
+        }
+        if (current.kind !== "named" || seen.has(current.id)) return undefined;
+        seen.add(current.id);
+        current = aliasTypes.get(current.id);
+      }
+      return undefined;
+    };
     for (const decl of source.types) {
       if (this.isDefined(decl.id)) continue;
       if (decl.definition.kind === "alias") {
         this.defineAlias(decl.id, this.fromIr(decl.definition.type));
-        if (importedGuardedRecord(decl.definition.type, decl.id)) {
+        if (importedGuardedRecord(decl.definition.type, decl.id, tagOf)) {
           this.markGuardedAlias(decl.id);
         }
       } else {

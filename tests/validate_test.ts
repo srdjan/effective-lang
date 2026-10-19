@@ -2956,6 +2956,27 @@ type Text = string
   assertEquals(codesOf(mutated, lowered.sources), ["validation/002"]);
 });
 
+Deno.test("a guarded recursive alias with literal alias tags validates and its aliases are rechecked", () => {
+  const lowered = lowerText(`
+type T = { tag: A, next: T } | { tag: B }
+type A = "a"
+type B = "b"
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  // Two tag aliases now hold one value, so the branches are not distinct.
+  const duplicate = copy(lowered.ir);
+  const second = duplicate.declarations.find((d) => d.name === "B");
+  assert(second?.kind === "type" && second.definition.kind === "alias");
+  Object.assign(second.definition.type, { value: "a" });
+  assertEquals(codesOf(duplicate, lowered.sources), ["validation/002"]);
+  // A tag alias that is no longer a string literal is not a discriminant.
+  const widened = copy(lowered.ir);
+  const first = widened.declarations.find((d) => d.name === "A");
+  assert(first?.kind === "type" && first.definition.kind === "alias");
+  Object.assign(first.definition, { type: STRING });
+  assertEquals(codesOf(widened, lowered.sources), ["validation/002"]);
+});
+
 Deno.test("identity: a Schema flag is absent or true, never false", () => {
   const lowered = lowerText(`
 type Text = string

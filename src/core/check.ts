@@ -1122,7 +1122,11 @@ interface TypeNodeInfo {
 }
 
 /** A single recursive data alias needs an array, optional key, or tagged terminal choice. */
-function guardedRecord(type: Type, id: TypeId): boolean {
+function guardedRecord(
+  type: Type,
+  id: TypeId,
+  tagOf: (type: Type) => string | undefined,
+): boolean {
   const containsSelf = (part: Type): boolean => {
     switch (part.kind) {
       case "named":
@@ -1143,10 +1147,8 @@ function guardedRecord(type: Type, id: TypeId): boolean {
     type.members.some((member) => !containsSelf(member));
   const tagNames = tagged && type.kind === "union"
     ? (type.members[0] as Extract<Type, { kind: "record" }>).fields
-      .filter((field) =>
-        !field.optional && field.type.kind === "literal" &&
-        typeof field.type.value === "string"
-      ).map((field) => field.name)
+      .filter((field) => !field.optional && tagOf(field.type) !== undefined)
+      .map((field) => field.name)
     : [];
   const hasDistinctTag = type.kind === "union" && tagNames.some((name) => {
     const values = type.members.map((member) =>
@@ -1156,9 +1158,9 @@ function guardedRecord(type: Type, id: TypeId): boolean {
     );
     return values.every((field) =>
       field !== undefined && !field.optional &&
-      field.type.kind === "literal" && typeof field.type.value === "string"
+      tagOf(field.type) !== undefined
     ) && new Set(values.map((field) =>
-          field?.type.kind === "literal" ? field.type.value : undefined
+          field === undefined ? undefined : tagOf(field.type)
         )).size === values.length;
   });
   if (type.kind !== "record" && !(tagged && hasDistinctTag)) return false;
@@ -1481,7 +1483,11 @@ class ModuleChecker {
         const declaration = this.types.find((d) => d.id === first.id);
         if (
           declaration?.definition.kind === "alias" &&
-          guardedRecord(declaration.definition.type, first.id as TypeId) &&
+          guardedRecord(
+            declaration.definition.type,
+            first.id as TypeId,
+            (type) => this.literalTag(type),
+          ) &&
           this.lowerer.schemaData(this.table.aliasOf(first.id as TypeId)!)
         ) {
           this.guardedAliases.add(first.id as TypeId);
@@ -1509,6 +1515,32 @@ class ModuleChecker {
         }
       }
     }
+  }
+
+  /**
+   * The string value of a tag field type: an inline string literal, or a name
+   * that reaches one through literal aliases. The table holds every definition
+   * before the cycle analysis, and a repeated name stops an alias cycle.
+   */
+  private literalTag(type: Type): string | undefined {
+    if (type.kind === "literal") {
+      return typeof type.value === "string" ? type.value : undefined;
+    }
+    if (type.kind !== "named") return undefined;
+    const seen = new Set<string>();
+    let id: string = type.id;
+    while (!seen.has(id)) {
+      seen.add(id);
+      const target = this.table.aliasOf(id as TypeId);
+      if (target === undefined) return undefined;
+      const node = this.table.node(target);
+      if (node.kind === "literal") {
+        return typeof node.value === "string" ? node.value : undefined;
+      }
+      if (node.kind !== "named") return undefined;
+      id = node.id;
+    }
+    return undefined;
   }
 
   /**

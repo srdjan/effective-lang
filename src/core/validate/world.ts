@@ -590,7 +590,11 @@ export function checkDeclarationHeaders(ctx: Ctx, ir: ModuleIR): void {
 // ------------------------------------------------------------------ recursion
 
 /** Rechecks finite self recursion without trusting the checker. */
-function guardedRecord(type: Type, id: string): boolean {
+function guardedRecord(
+  type: Type,
+  id: string,
+  tagOf: (type: Type) => string | undefined,
+): boolean {
   const containsSelf = (part: Type): boolean => {
     switch (part.kind) {
       case "named":
@@ -611,10 +615,8 @@ function guardedRecord(type: Type, id: string): boolean {
     type.members.some((member) => !containsSelf(member));
   const tagNames = tagged && type.kind === "union"
     ? (type.members[0] as Extract<Type, { kind: "record" }>).fields
-      .filter((field) =>
-        !field.optional && field.type.kind === "literal" &&
-        typeof field.type.value === "string"
-      ).map((field) => field.name)
+      .filter((field) => !field.optional && tagOf(field.type) !== undefined)
+      .map((field) => field.name)
     : [];
   const hasDistinctTag = type.kind === "union" && tagNames.some((name) => {
     const fields = type.members.map((member) =>
@@ -624,9 +626,9 @@ function guardedRecord(type: Type, id: string): boolean {
     );
     return fields.every((field) =>
       field !== undefined && !field.optional &&
-      field.type.kind === "literal" && typeof field.type.value === "string"
+      tagOf(field.type) !== undefined
     ) && new Set(fields.map((field) =>
-          field?.type.kind === "literal" ? field.type.value : undefined
+          field === undefined ? undefined : tagOf(field.type)
         )).size === fields.length;
   });
   if (type.kind !== "record" && !(tagged && hasDistinctTag)) return false;
@@ -709,10 +711,25 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
     if (d.kind === "type" || d.kind === "error") index.set(d.id, i);
   });
   const guarded = new Set<string>();
+  // A tag is an inline string literal or a name that reaches one through
+  // literal aliases. The validator reads the aliases from its own world.
+  const tagOf = (type: Type): string | undefined => {
+    const seen = new Set<string>();
+    let current: Type | undefined = type;
+    while (current !== undefined) {
+      if (current.kind === "literal") {
+        return typeof current.value === "string" ? current.value : undefined;
+      }
+      if (current.kind !== "named" || seen.has(current.id)) return undefined;
+      seen.add(current.id);
+      current = world.env.aliases.get(current.id);
+    }
+    return undefined;
+  };
   ir.declarations.forEach((d) => {
     if (
       d.kind === "type" && d.definition.kind === "alias" &&
-      guardedRecord(d.definition.type, d.id) &&
+      guardedRecord(d.definition.type, d.id, tagOf) &&
       recursiveDataOnly(world, d.definition.type)
     ) guarded.add(d.id);
   });
