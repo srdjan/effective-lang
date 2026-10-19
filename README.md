@@ -10,7 +10,7 @@ The accepted [application acceptance rule](docs/plans/2026-10-19-application-acc
 
 The [scheduled worker](fixtures/applications/scheduled-worker/README.md) now passes with existing language forms, including nine compiled runtime cases. The [service workflow](fixtures/applications/service-workflow/README.md) also passes with a registered atomic SQL adapter and fourteen compiled runtime cases. The [stream processor](fixtures/applications/stream-processor/README.md) passes with ordered concurrent mapping, backpressure, selective fallback and thirteen compiled runtime cases.
 
-All three application gates are complete. The accepted stopping rule selects no further automatic API additions; release acceptance remains separate work. Item 9 remains deferred.
+All three application gates are complete. The accepted stopping rule selects no further automatic API additions; release acceptance remains separate work. Item 9 remains deferred. The [remaining and deferred gaps](docs/effect-4-gap-audit.md#remaining-and-deferred-gaps) distinguish open API boundaries, runtime limits and separate release acceptance.
 
 Parts A1, A2, A3a, A3b, A4, A5, A6a, A6b, A7, and A8 exist. Part A1 adds the project skeleton, the lexer, a lossless parser with error recovery, and the `syntax` diagnostics. The parser reads `.eff` source files and `.effi` host interface files.
 

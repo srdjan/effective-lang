@@ -42,8 +42,8 @@ limits alongside each completed application witness.
 
 ## Feature selection
 
-Start with the scheduled worker baseline and investigate general Schedule
-consumers for retry and repetition. Try the existing source forms first.
+All three application gates pass with existing source forms. For a newly
+required behavior, try existing source compositions first.
 If a required behavior fails, record the minimal witness, compiler diagnostic
 or runtime difference, and the reason an existing composition cannot express it.
 
@@ -52,12 +52,16 @@ Keep the existing spec, checker, independent validator, emitted target checks,
 runtime checks, and documentation gates for any selected feature. Commit each
 complete addition separately.
 
-Time control and explicit user generics are subsequent candidates. They are
+Time control and explicit user generics remain open candidates. They are
 not mandatory additions if the application gates pass without them. Further
 coordination primitives, Sink builders, and Schema extensions follow the same
 evidence rule. Recursive Option data no longer takes automatic priority.
 
 ## Deferred boundary
+
+The [remaining and deferred gap record](../effect-4-gap-audit.md#remaining-and-deferred-gaps)
+consolidates current open APIs, explicit deferrals and evidence limits. It is
+not an implementation queue.
 
 Broader package interoperability, gap item 9, remains deferred by user instruction.
 Direct package imports and package-specific builders are not application gate
