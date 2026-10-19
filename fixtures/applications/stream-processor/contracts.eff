@@ -1,0 +1,19 @@
+export type Int = int
+export type Bool = boolean
+export type Text = string
+export type Item = { id: Int, value: Int }
+export type Processed = { id: Int, value: Int, recovered: Bool }
+export error InputFailure = { stage: Text }
+export error TransformFailure = { kind: "Recoverable" | "Fatal", id: Int }
+export error OutputFailure = { stage: Text }
+export service Input {
+  open(): Int fails InputFailure
+  next(session: Int, index: Int): Option<[Item, Int]> fails InputFailure
+  close(session: Int): void
+}
+export service Transform { apply(item: Item): Int fails TransformFailure }
+export service Output {
+  open(): Int fails OutputFailure
+  write(session: Int, batch: Processed[]): void fails OutputFailure
+  close(session: Int): void
+}

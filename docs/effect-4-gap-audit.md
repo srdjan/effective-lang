@@ -491,7 +491,8 @@ orchestration stays in `.eff`; typed host adapters may supply drivers and the
 runtime entry point. The [scheduled worker](plans/2026-10-19-scheduled-worker-application.md)
 now passes its application gate. The
 [service workflow](plans/2026-10-19-service-workflow-application.md) also passes.
-The stream processor remains pending.
+The [stream processor](plans/2026-10-19-stream-processor-application.md) also
+passes. All three application gates are complete using existing source forms.
 
 The scheduled worker uses existing source recursion, RetrySchedule, primitive
 clock waits and withResource. Nine compiled application checks cover virtual
@@ -506,7 +507,23 @@ commit, input rejection, retry timing and replay, failure classification,
 rollback, defects and cancellation. Body interruption awaits rollback and release;
 interruption after COMMIT starts can preserve a committed row. No new API is
 selected. Recording drivers establish no external database integration.
-The stream processor baseline is next.
+
+The stream processor keeps live pulls, ordered concurrent mapping, selective
+fallback, buffering, batching and session brackets in source. Thirteen runtime
+cases cover order, partial and empty batches, replay, live arrivals, stalled
+upstream progress under blocked output, failures, defects and awaited cleanup.
+The pinned pipeline stops at seven pull calls while the first write is blocked.
+Queue capacity is no global memory limit.
+
+Native transduction can emit a
+partial batch before input failure. Item recovery follows native catchTags
+and can discard accompanying reasons from a mixed transformation cause.
+Session finalizers run outside item recovery. No new API is selected.
+
+The accepted stopping rule is satisfied. Stop automatic feature additions.
+Editor, packaging, performance and external integration acceptance remain
+separate work. Further language work requires a demonstrated application
+blocker or an explicit change to the accepted target.
 Try equivalent existing source compositions before selecting a new builtin.
 Time control, general Schedule consumers and user generics remain candidates, subject to demonstrated
 application blockers. Further Schema expansion, including recursive Option,

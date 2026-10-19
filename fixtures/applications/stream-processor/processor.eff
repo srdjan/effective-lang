@@ -1,0 +1,51 @@
+import { Int, Item, Processed, InputFailure, TransformFailure, OutputFailure, Input, Transform, Output } from "./contracts.eff"
+
+const convert = (item: Item): Processed fails TransformFailure uses Transform.apply =>
+  try { { id: item.id, value: Transform.apply(item), recovered: false } } catch {
+    TransformFailure(error) =>
+      if (error.kind === "Recoverable") { { id: item.id, value: item.value, recovered: true } }
+      else { fail(error) }
+  }
+
+const process = (input: Int, output: Int): void
+  fails InputFailure | TransformFailure | OutputFailure
+  uses Input.next | Transform.apply | Output.write => {
+    const incoming = bufferStream(unfold(0, (index) => Input.next(input, index)), { capacity: 2 })
+    const converted = mapEffect(incoming, (item) => convert(item), { concurrency: 2 })
+    const batches = transduceStream(converted, takeSink(2))
+    const sink = sinkForEach((batch: Processed[]) =>
+      if ((batch |> fold(0, (count, _item) => count + 1)) > 0) { Output.write(output, batch) } else {})
+    runStream(batches, sink)
+  }
+
+const withOutput = (input: Int): void
+  fails InputFailure | TransformFailure | OutputFailure
+  uses Input.next | Transform.apply | Output.open | Output.write | Output.close =>
+  withResource(
+    () => {
+      const output = Output.open()
+      {
+        run: (): void fails InputFailure | TransformFailure | OutputFailure
+          uses Input.next | Transform.apply | Output.write => process(input, output),
+        close: (): void uses Output.close => Output.close(output)
+      }
+    },
+    (consumer) => consumer.run(),
+    (consumer) => consumer.close()
+  )
+
+export const runProcessor = (): void
+  fails InputFailure | TransformFailure | OutputFailure
+  uses Input.open | Input.next | Input.close | Transform.apply | Output.open | Output.write | Output.close =>
+  withResource(
+    () => {
+      const input = Input.open()
+      {
+        run: (): void fails InputFailure | TransformFailure | OutputFailure
+          uses Input.next | Transform.apply | Output.open | Output.write | Output.close => withOutput(input),
+        close: (): void uses Input.close => Input.close(input)
+      }
+    },
+    (source) => source.run(),
+    (source) => source.close()
+  )

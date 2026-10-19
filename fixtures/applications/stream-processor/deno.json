@@ -1,0 +1,11 @@
+{
+  "imports": {
+    "effect": "npm:effect@4.0.5",
+    "@std/assert": "jsr:@std/assert@^1"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true
+  }
+}

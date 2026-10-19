@@ -1,6 +1,6 @@
 # Application acceptance rule
 
-Date: 2026-10-19. Status: accepted by the user; scheduled worker and service workflow complete, stream processor pending.
+Date: 2026-10-19. Status: accepted by the user; all three application gates complete.
 Compiler target: Deno 2.9.7 and `effect@4.0.5`.
 
 ## Decision
@@ -17,9 +17,9 @@ commit or rollback lifecycle under the existing host contract.
 
 This rule bounds the application target. It does not establish full Effect API
 parity or completion of editor, packaging, performance, or external integration
-acceptance checks. Each application gate remains pending until its complete witness passes.
-The scheduled worker and service workflow now pass; the stream processor
-remains pending.
+acceptance checks. All three application witnesses now pass using existing language forms.
+The accepted language stopping rule is satisfied. This does not complete
+the separate release acceptance checks.
 
 ## Application gates
 
@@ -27,7 +27,7 @@ remains pending.
 | --- | --- | --- |
 | Service workflow | Validate input, call services, retry a transient failure, and use a scoped transaction adapter. Check the successful result, rejected input, exhausted retries, rollback after failure or cancellation, and completed release. | Complete: [service workflow witness](2026-10-19-service-workflow-application.md). |
 | Scheduled worker | Run repeated work under a policy, handle selected transient failures, and shut down while work or a delay is pending. Check policy completion, terminal failure, fresh state on another execution, and completed cleanup after cancellation. | Complete: [worker witness](2026-10-19-scheduled-worker-application.md). |
-| Stream processor | Transform and batch a live input under backpressure, with explicit recovery behavior. Check ordered results where promised, partial batches, failure propagation, cancellation of pending work, and completed upstream and consumer cleanup. | Pending |
+| Stream processor | Transform and batch a live input under backpressure, with explicit recovery behavior. Check ordered results where promised, partial batches, failure propagation, cancellation of pending work, and completed upstream and consumer cleanup. | Complete: [stream processor witness](2026-10-19-stream-processor-application.md). |
 
 Each witness must pass source checking, independent IR validation, and strict
 checking of emitted TypeScript against the pinned target. Negative source
@@ -70,6 +70,8 @@ the explicit deferral of item 9 until the user revisits it.
 
 ## Next action
 
-The implementing agent owns the stream processor baseline next. The scheduled
-worker and service workflow established no need for new language forms. Update this plan and
-the gap audit with each application result.
+The implementing agent will stop automatic API additions under this accepted
+rule. All three applications pass without new language forms. Further language
+work requires a demonstrated application blocker or an explicit target change.
+Editor, packaging, performance and external integration acceptance remain
+separate work. Item 9 stays deferred until the user revisits it.
