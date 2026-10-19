@@ -1,0 +1,50 @@
+type Text = string
+type Nil = null
+type Nullable = Text | Nil
+type Required = { name: Text }
+type Optional = { name?: Text }
+type NullableRequired = { name: Nullable }
+type NullableOptional = { name?: Nullable }
+
+service Read { normalize(value: Text): Text }
+service Write { restore(value: Text): Text fails SchemaIssue }
+service Defaults { make(): Text }
+
+const text: Schema<Text> = schema()
+const nullable: Schema<Nullable> = schema()
+const transformed: Schema<Text, Text, Read.normalize, Write.restore> = schemaTransform(
+  text,
+  text,
+  (value: Text): Option<Text> uses Read.normalize => Some(Read.normalize(value)),
+  (value: Text): Text fails SchemaIssue uses Write.restore => Write.restore(value)
+)
+const makeDefault = (): Text fails SchemaIssue uses Defaults.make => {
+  const value = Defaults.make()
+  if (value === "blocked") { fail(schemaInvalid("default blocked")) } else { value }
+}
+
+export const omitField: SchemaEncodedOptional<Text, Text, Read.normalize | Defaults.make, Write.restore> =
+  schemaDefaultKey(transformed,
+    (): Text fails SchemaIssue uses Defaults.make => makeDefault(),
+    { encodingStrategy: "omit" })
+export const omitted: Schema<Required, Optional, Read.normalize | Defaults.make, Write.restore> =
+  schemaStruct({ name: omitField })
+export const passed: Schema<Required, Optional, Read.normalize | Defaults.make, Write.restore> =
+  schemaStruct({ name: schemaDefaultKey(transformed,
+    (): Text fails SchemaIssue uses Defaults.make => makeDefault(),
+    { encodingStrategy: "passthrough" }) })
+export const implicit: Schema<Required, Optional, Read.normalize | Defaults.make, Write.restore> =
+  schemaStruct({ name: schemaDefaultKey(transformed,
+    (): Text fails SchemaIssue uses Defaults.make => makeDefault()) })
+
+export const pureOmitted: Schema<Required, Optional> = schemaStruct({
+  name: schemaDefaultKey(text, (): Text => "DEFAULT", { encodingStrategy: "omit" })
+})
+export const nullableOmitted: Schema<NullableRequired, NullableOptional> = schemaStruct({
+  name: schemaDefaultKey(nullable, (): Nullable => null, { encodingStrategy: "omit" })
+})
+
+export const readOmitted = (input: unknown): Required fails SchemaError uses Read.normalize | Defaults.make =>
+  schemaDecode(omitted, input)
+export const writeOmitted = (input: Required): Optional fails SchemaError uses Write.restore =>
+  schemaEncode(omitted, input)

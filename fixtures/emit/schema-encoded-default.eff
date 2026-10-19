@@ -1,0 +1,51 @@
+type Text = string
+type Int = int
+type Nil = null
+type Nullable = Text | Nil
+type Decoded = { score: Int }
+type Encoded = { score?: Text }
+
+service Read { parse(value: Text): Int fails SchemaIssue }
+service Write { print(value: Int): Text fails SchemaIssue }
+service Defaults { make(): Text fails SchemaIssue }
+service Errors { make(): Text fails SchemaError }
+
+const text: Schema<Text> = schema()
+const integer: Schema<Int> = schema()
+const nullable: Schema<Nullable> = schema()
+const transformed: Schema<Int, Text, Read.parse, Write.print> = schemaTransform(
+  text,
+  integer,
+  (value: Text): Int fails SchemaIssue uses Read.parse => Read.parse(value),
+  (value: Int): Text fails SchemaIssue uses Write.print => Write.print(value)
+)
+export const field: SchemaEncodedOptional<Int, Text, Read.parse | Defaults.make, Write.print> =
+  schemaDefaultEncodedKey(transformed,
+    (): Text fails SchemaIssue uses Defaults.make => Defaults.make())
+export const defaulted: Schema<Decoded, Encoded, Read.parse | Defaults.make, Write.print> =
+  schemaStruct({ score: field })
+export const omitted: Schema<Decoded, Encoded, Read.parse | Defaults.make, Write.print> =
+  schemaStruct({ score: schemaDefaultEncodedKey(transformed,
+    (): Text fails SchemaIssue uses Defaults.make => Defaults.make(),
+    { encodingStrategy: "omit" }) })
+export const passed: Schema<Decoded, Encoded, Read.parse | Defaults.make, Write.print> =
+  schemaStruct({ score: schemaDefaultEncodedKey(transformed,
+    (): Text fails SchemaIssue uses Defaults.make => Defaults.make(),
+    { encodingStrategy: "passthrough" }) })
+export const errorDefault: Schema<Decoded, Encoded, Read.parse | Errors.make, Write.print> =
+  schemaStruct({ score: schemaDefaultEncodedKey(transformed,
+    (): Text fails SchemaError uses Errors.make => Errors.make()) })
+export const decodedOmitted: Schema<Decoded, Encoded, Read.parse | Errors.make, Write.print> =
+  schemaStruct({ score: schemaDefaultKey(transformed,
+    (): Int fails SchemaError uses Read.parse | Errors.make => schemaDecode(transformed, Errors.make()),
+    { encodingStrategy: "omit" }) })
+export const pureDefault: Schema<{ name: Text }, { name?: Text }> =
+  schemaStruct({ name: schemaDefaultEncodedKey(text, (): Text => "Ada") })
+export const nullableDefault: Schema<{ name: Nullable }, { name?: Nullable }, Defaults.make> =
+  schemaStruct({ name: schemaDefaultEncodedKey(nullable,
+    (): Nullable fails SchemaIssue uses Defaults.make => Defaults.make()) })
+
+export const readDefault = (input: unknown): Decoded fails SchemaError uses Read.parse | Defaults.make =>
+  schemaDecode(defaulted, input)
+export const writeOmitted = (input: Decoded): Encoded fails SchemaError uses Write.print =>
+  schemaEncode(omitted, input)

@@ -866,6 +866,8 @@ export class BodyChecker {
       case "schemaNullToMissingKey":
       case "schemaOptionFromOptionalKey":
       case "schemaDefaultKey":
+      case "schemaDefaultNullKey":
+      case "schemaDefaultEncodedKey":
       case "schemaOptionalTransform":
       case "schemaOptionalFromRequired":
       case "schemaUnion":
@@ -1454,6 +1456,8 @@ export class BodyChecker {
       schemaNullToMissingKey: "null-to-missing-key",
       schemaOptionFromOptionalKey: "option-from-optional-key",
       schemaDefaultKey: "default-key",
+      schemaDefaultNullKey: "default-null-key",
+      schemaDefaultEncodedKey: "default-encoded-key",
       schemaOptionalTransform: "optional-transform",
       schemaOptionalFromRequired: "optional-from-required",
       schemaUnion: "union",
@@ -1475,10 +1479,14 @@ export class BodyChecker {
       : op === "both"
       ? 3
       : op === "decode" || op === "encode" || op === "at" ||
-          op === "default-key"
+          op === "default-key" || op === "default-null-key" ||
+          op === "default-encoded-key"
       ? 2
       : 1;
-    const actualCount = op === "default-key" && args.length === 3 ? 3 : count;
+    const actualCount = (op === "default-key" || op === "default-null-key" ||
+        op === "default-encoded-key") && args.length === 3
+      ? 3
+      : count;
     if (!this.arity(node, name, actualCount, args)) {
       return this.finish(
         node,
@@ -1968,12 +1976,31 @@ export class BodyChecker {
         combine([first]),
       );
     }
-    if (op === "default-key") {
+    if (
+      op === "default-key" || op === "default-null-key" ||
+      op === "default-encoded-key"
+    ) {
+      const nil = this.table.literal(null);
+      if (
+        op === "default-null-key" && schema !== undefined &&
+        (this.table.isAssignable(nil, schema.decoded) ||
+          this.table.isAssignable(nil, schema.encoded))
+      ) {
+        this.report(
+          "type-mismatch/010",
+          `${name} needs nonnullable decoded and encoded field types`,
+          args[0].node,
+        );
+      }
+      const defaultType = op === "default-encoded-key"
+        ? schema?.encoded
+        : schema?.decoded;
+      const direction = op === "default-encoded-key" ? "encoded" : "decoded";
       const fallback = this.callback(
         name,
         args[1],
         [],
-        schema?.decoded,
+        defaultType,
         true,
       );
       const fallbackFn = this.functionOf(fallback.info.type);
@@ -1986,24 +2013,24 @@ export class BodyChecker {
       ) {
         this.report(
           "type-mismatch/010",
-          "schemaDefaultKey callback may fail only with SchemaIssue or SchemaError",
+          `${name} callback may fail only with SchemaIssue or SchemaError`,
           args[1].node,
         );
       }
       if (kindOf(this.tree, args[1].node) !== SyntaxKind.ArrowExpr) {
         this.report(
           "type-mismatch/010",
-          "schemaDefaultKey needs an inline default callback",
+          `${name} needs an inline default callback`,
           args[1].node,
         );
       }
       if (
-        schema !== undefined &&
-        !this.table.isAssignable(fallback.result, schema.decoded)
+        defaultType !== undefined &&
+        !this.table.isAssignable(fallback.result, defaultType)
       ) {
         this.report(
           "type-mismatch/003",
-          "schemaDefaultKey callback must return the decoded field type",
+          `${name} callback must return the ${direction} field type`,
           args[1].node,
         );
       }
@@ -2020,7 +2047,12 @@ export class BodyChecker {
       );
       if (options !== undefined) {
         const fields = this.kids(args[2].node);
-        const value = fields.length === 1 ? this.kids(fields[0]).at(-1) : undefined;
+        const value = fields.length === 1
+          ? this.kids(fields[0]).at(-1)
+          : undefined;
+        const strategy = value === undefined
+          ? undefined
+          : literalOf(this.tree, value);
         const record = this.table.node(this.table.unfold(options.type));
         if (
           kindOf(this.tree, args[2].node) !== SyntaxKind.RecordExpr ||
@@ -2028,12 +2060,13 @@ export class BodyChecker {
           kindOf(this.tree, fields[0]) !== SyntaxKind.RecordField ||
           record.kind !== "record" || record.fields.length !== 1 ||
           record.fields[0].name !== "encodingStrategy" ||
-          value === undefined || kindOf(this.tree, value) !== SyntaxKind.LiteralExpr ||
-          !["omit", "passthrough"].includes(String(literalOf(this.tree, value)))
+          value === undefined ||
+          kindOf(this.tree, value) !== SyntaxKind.LiteralExpr ||
+          (strategy !== "omit" && strategy !== "passthrough")
         ) {
           this.report(
             "type-mismatch/010",
-            'schemaDefaultKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record with a literal strategy',
+            `${name} options must be an inline { encodingStrategy: "omit" | "passthrough" } record with a literal strategy`,
             args[2].node,
           );
         }
@@ -2042,13 +2075,19 @@ export class BodyChecker {
         node,
         schema === undefined ? this.table.error : this.table.schema(
           schema.decoded,
-          schema.encoded,
+          op === "default-null-key"
+            ? this.table.union([schema.encoded, nil])
+            : schema.encoded,
           [...schema.decodeRequirements, ...(fallbackFn?.requirements ?? [])],
           schema.encodeRequirements,
           false,
           true,
         ),
-        combine([first, fallback.info, ...(options === undefined ? [] : [options])]),
+        combine([
+          first,
+          fallback.info,
+          ...(options === undefined ? [] : [options]),
+        ]),
       );
     }
     if (op === "decode" || op === "encode") {

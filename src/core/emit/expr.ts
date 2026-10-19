@@ -1430,7 +1430,10 @@ export class ExprEmitter {
             callArguments([kid(args[0])]),
           ]);
         }
-        if (e.op === "default-key") {
+        if (
+          e.op === "default-key" || e.op === "default-null-key" ||
+          e.op === "default-encoded-key"
+        ) {
           const effect = this.scope.effect("Effect");
           const fallback = this.pure(args[1]);
           const callback = args[1].type;
@@ -1456,10 +1459,50 @@ export class ExprEmitter {
               "))",
             ]
             : deferred;
+          if (e.op === "default-null-key") {
+            const getter = this.scope.effect("SchemaGetter");
+            const option = this.scope.effect("Option");
+            const source = this.scope.temp();
+            const value = this.scope.temp();
+            const issueDefault: Doc = callback.kind === "function" &&
+                callback.effects.failures.includes("error:effect/SchemaError")
+              ? [
+                `${effect}.mapError(`,
+                deferred,
+                `, (${issue}) => ${issue}.issue)`,
+              ]
+              : deferred;
+            const options = args[2];
+            const omit = options?.kind === "record" &&
+              options.fields[0].value.kind === "literal" &&
+              options.fields[0].value.value === "omit";
+            return emitted([
+              "((",
+              source,
+              ": ",
+              typeDoc(this.scope, args[0].type),
+              ") => ",
+              `${schema}.optionalKey(${schema}.NullOr(${source})).pipe(`,
+              `${schema}.decodeTo(${schema}.toType(${source}), { `,
+              `decode: ${getter}.transformOptionalEffect((${value}) => { `,
+              `const ${issue} = ${option}.filter(${value}, (${value}) => ${value} !== null); `,
+              `return ${option}.isSome(${issue}) ? ${effect}.succeed(${issue}) : ${effect}.map(`,
+              issueDefault,
+              `, ${option}.some); }), `,
+              `encode: ${getter}.${omit ? "omit" : "passthrough"}() })))`,
+              "(",
+              free(kid(args[0])),
+              ")",
+            ]);
+          }
           return emitted([
             at(kid(args[0]), PREC.member),
             ".pipe(",
-            `${schema}.withDecodingDefaultTypeKey(`,
+            `${schema}.${
+              e.op === "default-encoded-key"
+                ? "withDecodingDefaultKey"
+                : "withDecodingDefaultTypeKey"
+            }(`,
             defaultValue,
             ...(args[2] === undefined ? [] : [", ", free(kid(args[2]))]),
             "))",

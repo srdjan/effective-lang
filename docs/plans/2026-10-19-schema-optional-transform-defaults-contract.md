@@ -17,6 +17,12 @@ The [required-to-optional extension](2026-10-19-schema-required-optional-contrac
 adds a guarded decoded-only optional field descriptor with a required encoded
 key.
 
+The [default encoding extension](2026-10-19-schema-default-encoding-contract.md)
+adds explicit passthrough and unconditional omission strategies through a third
+options argument. The two-argument baseline below remains valid. The
+[missing-or-null default extension](2026-10-19-schema-null-default-contract.md)
+adds schemaDefaultNullKey for required nonnullable decoded fields.
+
 ## Decision
 
 Extend the

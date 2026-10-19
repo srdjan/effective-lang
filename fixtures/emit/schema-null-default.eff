@@ -1,0 +1,43 @@
+type Text = string
+type Int = int
+type Nil = null
+type WireValue = Text | Nil
+type Decoded = { score: Int }
+type Encoded = { score?: WireValue }
+
+service Read { parse(value: Text): Int }
+service Write { print(value: Int): Text }
+service Defaults { make(): Int fails SchemaIssue }
+service Errors { make(): Int fails SchemaError }
+
+const text: Schema<Text> = schema()
+const integer: Schema<Int> = schema()
+const transformed: Schema<Int, Text, Read.parse, Write.print> = schemaTransform(
+  text,
+  integer,
+  (value: Text): Option<Int> uses Read.parse => Some(Read.parse(value)),
+  (value: Int): Option<Text> uses Write.print => Some(Write.print(value))
+)
+export const field: SchemaEncodedOptional<Int, WireValue, Read.parse | Defaults.make, Write.print> =
+  schemaDefaultNullKey(transformed, (): Int fails SchemaIssue uses Defaults.make => Defaults.make())
+export const defaulted: Schema<Decoded, Encoded, Read.parse | Defaults.make, Write.print> =
+  schemaStruct({ score: field })
+export const omitted: Schema<Decoded, Encoded, Read.parse | Defaults.make, Write.print> =
+  schemaStruct({ score: schemaDefaultNullKey(transformed,
+    (): Int fails SchemaIssue uses Defaults.make => Defaults.make(),
+    { encodingStrategy: "omit" }) })
+export const passed: Schema<Decoded, Encoded, Read.parse | Defaults.make, Write.print> =
+  schemaStruct({ score: schemaDefaultNullKey(transformed,
+    (): Int fails SchemaIssue uses Defaults.make => Defaults.make(),
+    { encodingStrategy: "passthrough" }) })
+export const errorDefault: Schema<Decoded, Encoded, Read.parse | Errors.make, Write.print> =
+  schemaStruct({ score: schemaDefaultNullKey(transformed,
+    (): Int fails SchemaError uses Errors.make => Errors.make()) })
+export const pureDefault: Schema<Decoded, { score?: Int | Nil }> =
+  schemaStruct({ score: schemaDefaultNullKey(integer, (): Int => 7) })
+
+
+export const readDefault = (input: unknown): Decoded fails SchemaError uses Read.parse | Defaults.make =>
+  schemaDecode(defaulted, input)
+export const writeDefault = (input: Decoded): Encoded fails SchemaError uses Write.print =>
+  schemaEncode(defaulted, input)

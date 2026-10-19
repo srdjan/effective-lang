@@ -219,9 +219,7 @@ export function typeDoc(scope: Scope, type: Type): Doc {
         return [
           `${schema}.decodeTo<${schema}.Codec<`,
           typeDoc(scope, type.decoded),
-          ", ",
-          typeDoc(scope, type.decoded),
-          ", ",
+          ", unknown, ",
           requirementUnion(scope, type.decodeRequirements) ?? "never",
           ", ",
           requirementUnion(scope, type.encodeRequirements) ?? "never",

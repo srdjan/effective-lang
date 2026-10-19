@@ -1827,7 +1827,17 @@ export class BodyValidator {
         active: combine(args),
       };
     }
-    if (e.op === "default-key") {
+    if (
+      e.op === "default-key" || e.op === "default-null-key" ||
+      e.op === "default-encoded-key"
+    ) {
+      const name = e.op === "default-key"
+        ? "schemaDefaultKey"
+        : e.op === "default-null-key"
+        ? "schemaDefaultNullKey"
+        : "schemaDefaultEncodedKey";
+      const direction = e.op === "default-encoded-key" ? "encoded" : "decoded";
+      const nil: Type = { kind: "literal", value: null };
       const input = args[0] === undefined ? undefined : schemaOf(args[0].type);
       const fallback = args[1] === undefined
         ? undefined
@@ -1843,27 +1853,43 @@ export class BodyValidator {
           ? options.fields[0]
           : undefined;
         if (
-          field?.name !== "encodingStrategy" || field.value.kind !== "literal" ||
+          field?.name !== "encodingStrategy" ||
+          field.value.kind !== "literal" ||
           (field.value.value !== "omit" && field.value.value !== "passthrough")
-        ) return bad('schemaDefaultKey options need one literal "omit" or "passthrough" encodingStrategy');
+        ) {
+          return bad(
+            `${name} options need one literal "omit" or "passthrough" encodingStrategy`,
+          );
+        }
       }
       if (
-        (args.length !== 2 && args.length !== 3) || input === undefined || fallback === undefined ||
+        (args.length !== 2 && args.length !== 3) || input === undefined ||
+        fallback === undefined ||
         e.arguments[1]?.kind !== "closure" ||
         fallback.parameters.length !== 0 ||
         !validFailure ||
         (fallback.execution === "pure" &&
           (fallback.effects.failures.length !== 0 ||
             fallback.effects.requirements.length !== 0)) ||
-        !fits(this.env, fallback.result, input.decoded)
+        !fits(this.env, fallback.result, input[direction])
       ) {
         return bad(
-          "schemaDefaultKey needs a decoded callback with only SchemaIssue or SchemaError failure",
+          `${name} needs a callback returning the ${direction} field type with only SchemaIssue or SchemaError failure`,
         );
+      }
+      if (
+        e.op === "default-null-key" &&
+        (fits(this.env, nil, input.decoded) ||
+          fits(this.env, nil, input.encoded))
+      ) {
+        return bad(`${name} needs nonnullable decoded and encoded field types`);
       }
       return {
         type: {
           ...input,
+          encoded: e.op === "default-null-key"
+            ? { kind: "union", members: [input.encoded, nil] }
+            : input.encoded,
           encodedOptionalKey: true,
           decodeRequirements: sortedUnique([
             ...input.decodeRequirements,

@@ -87,13 +87,16 @@ defect; a null value can bypass that transformation.
 `schemaOptionFromOptionalKey(nullable)` maps a missing encoded key to a required
 `None`, while a present null becomes `Some(null)`. Encoding reverses that
 distinction. `schemaDefaultKey(nullable, callback)` calls its default only for a
-missing key. A present null bypasses the callback, and encoding null always
-includes the key. This follows the existing default rule and the target's
+missing key. A present null bypasses the callback, and encoding null includes
+the key under passthrough. This follows the existing default rule and the
+target's
 [optional-field distinction](https://effect.website/docs/v4/schema/advanced-usage#default-for-a-missing-key).
 The missing-key default does not treat null as missing; null-as-missing fields
 require the explicit constructor above.
 
-Defaults for missing-or-null keys, alternate default encoding strategies,
-arbitrary Schema AST construction, and source-side schema annotations remain
-separate work. Broader package interoperability stays deferred by user
-instruction.
+The [default encoding extension](2026-10-19-schema-default-encoding-contract.md)
+now adds explicit passthrough and unconditional omission, including omission of
+nullable values. The [missing-or-null default extension](2026-10-19-schema-null-default-contract.md)
+now adds an explicit required-field default constructor. Arbitrary Schema AST
+construction and source-side schema annotations remain separate work. Broader
+package interoperability stays deferred by user instruction.

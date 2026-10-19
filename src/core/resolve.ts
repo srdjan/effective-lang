@@ -117,6 +117,8 @@ export type PreludeName =
   | "schemaNullToMissingKey"
   | "schemaOptionFromOptionalKey"
   | "schemaDefaultKey"
+  | "schemaDefaultNullKey"
+  | "schemaDefaultEncodedKey"
   | "schemaOptionalTransform"
   | "schemaOptionalFromRequired"
   | "schemaUnion"
@@ -218,6 +220,8 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "schemaNullToMissingKey",
   "schemaOptionFromOptionalKey",
   "schemaDefaultKey",
+  "schemaDefaultNullKey",
+  "schemaDefaultEncodedKey",
   "schemaOptionalTransform",
   "schemaOptionalFromRequired",
   "schemaUnion",
@@ -520,7 +524,8 @@ class Resolver {
         name !== "schemaOptionalKey" && name !== "schemaNullToMissingKey" &&
         name !== "schemaUnion" &&
         name !== "schemaOptionFromOptionalKey" &&
-        name !== "schemaDefaultKey" &&
+        name !== "schemaDefaultKey" && name !== "schemaDefaultNullKey" &&
+        name !== "schemaDefaultEncodedKey" &&
         name !== "schemaOptionalTransform" &&
         name !== "schemaOptionalFromRequired" &&
         name !== "schemaRecursive" && name !== "schemaDecode" &&
@@ -709,7 +714,8 @@ class Resolver {
       name !== "schemaOptionalKey" && name !== "schemaNullToMissingKey" &&
       name !== "schemaUnion" &&
       name !== "schemaOptionFromOptionalKey" &&
-      name !== "schemaDefaultKey" &&
+      name !== "schemaDefaultKey" && name !== "schemaDefaultNullKey" &&
+      name !== "schemaDefaultEncodedKey" &&
       name !== "schemaOptionalTransform" &&
       name !== "schemaOptionalFromRequired" &&
       name !== "schemaRecursive" && name !== "schemaDecode" &&
