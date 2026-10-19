@@ -232,6 +232,151 @@ interface MatchState {
   tagField: string | undefined;
 }
 
+/** How `schemaCall` treats one Schema builtin. */
+interface SchemaBuiltin {
+  readonly op: Extract<NodeFact, { kind: "schema" }>["op"];
+  /** The number of arguments. */
+  readonly arity: number;
+  /** A third options argument is also accepted. */
+  readonly acceptsOptions?: true;
+  /** The Schema argument may carry a constructor default. */
+  readonly acceptsDefault: boolean;
+  /** Constructor make-input metadata passes through this builtin. */
+  readonly preservesMakeInput: boolean;
+}
+
+const SCHEMA_BUILTINS = {
+  schema: {
+    op: "identity",
+    arity: 0,
+    acceptsDefault: false,
+    preservesMakeInput: false,
+  },
+  schemaArray: {
+    op: "array",
+    arity: 1,
+    acceptsDefault: false,
+    preservesMakeInput: true,
+  },
+  schemaStruct: {
+    op: "struct",
+    arity: 1,
+    acceptsDefault: false,
+    preservesMakeInput: true,
+  },
+  schemaOptionalKey: {
+    op: "optional-key",
+    arity: 1,
+    acceptsDefault: true,
+    preservesMakeInput: true,
+  },
+  schemaNullToMissingKey: {
+    op: "null-to-missing-key",
+    arity: 1,
+    acceptsDefault: true,
+    preservesMakeInput: true,
+  },
+  schemaOptionFromOptionalKey: {
+    op: "option-from-optional-key",
+    arity: 1,
+    acceptsDefault: true,
+    preservesMakeInput: true,
+  },
+  schemaDefaultKey: {
+    op: "default-key",
+    arity: 2,
+    acceptsOptions: true,
+    acceptsDefault: true,
+    preservesMakeInput: true,
+  },
+  schemaConstructorDefault: {
+    op: "constructor-default",
+    arity: 2,
+    acceptsDefault: false,
+    preservesMakeInput: true,
+  },
+  schemaDefaultNullKey: {
+    op: "default-null-key",
+    arity: 2,
+    acceptsOptions: true,
+    acceptsDefault: true,
+    preservesMakeInput: true,
+  },
+  schemaDefaultEncodedKey: {
+    op: "default-encoded-key",
+    arity: 2,
+    acceptsOptions: true,
+    acceptsDefault: true,
+    preservesMakeInput: true,
+  },
+  schemaOptionalTransform: {
+    op: "optional-transform",
+    arity: 4,
+    acceptsDefault: false,
+    preservesMakeInput: true,
+  },
+  schemaOptionalFromRequired: {
+    op: "optional-from-required",
+    arity: 4,
+    acceptsDefault: true,
+    preservesMakeInput: true,
+  },
+  schemaUnion: {
+    op: "union",
+    arity: 1,
+    acceptsDefault: false,
+    preservesMakeInput: true,
+  },
+  schemaTransform: {
+    op: "transform",
+    arity: 4,
+    acceptsDefault: false,
+    preservesMakeInput: true,
+  },
+  schemaRecursive: {
+    op: "recursive",
+    arity: 1,
+    acceptsDefault: false,
+    preservesMakeInput: true,
+  },
+  schemaDecode: {
+    op: "decode",
+    arity: 2,
+    acceptsDefault: false,
+    preservesMakeInput: true,
+  },
+  schemaEncode: {
+    op: "encode",
+    arity: 2,
+    acceptsDefault: false,
+    preservesMakeInput: true,
+  },
+  schemaMake: {
+    op: "make",
+    arity: 2,
+    acceptsDefault: false,
+    preservesMakeInput: true,
+  },
+  schemaInvalid: {
+    op: "invalid",
+    arity: 1,
+    acceptsDefault: false,
+    preservesMakeInput: false,
+  },
+  schemaAt: {
+    op: "at",
+    arity: 2,
+    acceptsDefault: false,
+    preservesMakeInput: false,
+  },
+  schemaBoth: {
+    op: "both",
+    arity: 3,
+    acceptsDefault: false,
+    preservesMakeInput: true,
+  },
+} as const satisfies Record<string, SchemaBuiltin>;
+
 // ------------------------------------------------------------------ the checker
 
 export class BodyChecker {
@@ -1450,48 +1595,13 @@ export class BodyChecker {
     args: readonly Arg[],
     expected: TypeRef | undefined,
   ): NodeInfo {
-    const operations = {
-      schema: "identity",
-      schemaArray: "array",
-      schemaStruct: "struct",
-      schemaOptionalKey: "optional-key",
-      schemaNullToMissingKey: "null-to-missing-key",
-      schemaOptionFromOptionalKey: "option-from-optional-key",
-      schemaDefaultKey: "default-key",
-      schemaConstructorDefault: "constructor-default",
-      schemaDefaultNullKey: "default-null-key",
-      schemaDefaultEncodedKey: "default-encoded-key",
-      schemaOptionalTransform: "optional-transform",
-      schemaOptionalFromRequired: "optional-from-required",
-      schemaUnion: "union",
-      schemaTransform: "transform",
-      schemaRecursive: "recursive",
-      schemaDecode: "decode",
-      schemaEncode: "encode",
-      schemaMake: "make",
-      schemaInvalid: "invalid",
-      schemaAt: "at",
-      schemaBoth: "both",
-    } as const;
-    const op = operations[name as keyof typeof operations];
+    const builtin: SchemaBuiltin =
+      SCHEMA_BUILTINS[name as keyof typeof SCHEMA_BUILTINS];
+    const op = builtin.op;
     this.fact(node, { kind: "schema", op });
-    const count = op === "identity"
-      ? 0
-      : op === "transform" || op === "optional-transform" ||
-          op === "optional-from-required"
-      ? 4
-      : op === "both"
+    const actualCount = builtin.acceptsOptions === true && args.length === 3
       ? 3
-      : op === "decode" || op === "encode" || op === "make" || op === "at" ||
-          op === "constructor-default" || op === "default-key" ||
-          op === "default-null-key" ||
-          op === "default-encoded-key"
-      ? 2
-      : 1;
-    const actualCount = (op === "default-key" || op === "default-null-key" ||
-        op === "default-encoded-key") && args.length === 3
-      ? 3
-      : count;
+      : builtin.arity;
     if (!this.arity(node, name, actualCount, args)) {
       return this.finish(
         node,
@@ -1506,21 +1616,12 @@ export class BodyChecker {
         this.table.isAssignable(type.decoded, type.makeInput));
     const asSchema = (info: NodeInfo, at: NodeId) => {
       const type = this.table.node(this.table.unfold(info.type));
-      const acceptsDefault = [
-        "optional-key",
-        "null-to-missing-key",
-        "default-key",
-        "default-null-key",
-        "default-encoded-key",
-        "option-from-optional-key",
-        "optional-from-required",
-      ].includes(op);
       if (
         (type.kind !== "schema" ||
           (op !== "constructor-default" && (type.optionalKey === true ||
             type.encodedOptionalKey === true ||
             type.decodedOptionalKey === true)) ||
-          (!acceptsDefault && type.constructorDefault === true)) &&
+          (!builtin.acceptsDefault && type.constructorDefault === true)) &&
         !this.isError(info.type)
       ) {
         this.report(
@@ -1531,26 +1632,7 @@ export class BodyChecker {
       }
       if (
         type.kind === "schema" && changedMakeInput(type) &&
-        ![
-          "struct",
-          "array",
-          "union",
-          "optional-key",
-          "null-to-missing-key",
-          "option-from-optional-key",
-          "default-key",
-          "default-null-key",
-          "default-encoded-key",
-          "optional-transform",
-          "optional-from-required",
-          "transform",
-          "constructor-default",
-          "recursive",
-          "make",
-          "decode",
-          "encode",
-          "both",
-        ].includes(op)
+        !builtin.preservesMakeInput
       ) {
         this.report(
           "type-mismatch/010",
@@ -1562,7 +1644,7 @@ export class BodyChecker {
           (op === "constructor-default" || (type.optionalKey !== true &&
             type.encodedOptionalKey !== true &&
             type.decodedOptionalKey !== true)) &&
-          (acceptsDefault || type.constructorDefault !== true)
+          (builtin.acceptsDefault || type.constructorDefault !== true)
         ? type
         : undefined;
     };
