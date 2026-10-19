@@ -1,6 +1,6 @@
 # Application acceptance rule
 
-Date: 2026-10-19. Status: accepted by the user; application gates pending.
+Date: 2026-10-19. Status: accepted by the user; scheduled worker complete, two application gates pending.
 Compiler target: Deno 2.9.7 and `effect@4.0.5`.
 
 ## Decision
@@ -17,15 +17,16 @@ commit or rollback lifecycle under the existing host contract.
 
 This rule bounds the application target. It does not establish full Effect API
 parity or completion of editor, packaging, performance, or external integration
-acceptance checks. The three application gates remain pending until their
-complete witnesses pass.
+acceptance checks. Each application gate remains pending until its complete witness passes.
+The scheduled worker now passes; the service workflow and stream processor
+remain pending.
 
 ## Application gates
 
 | Application | Required behavior | Status |
 | --- | --- | --- |
 | Service workflow | Validate input, call services, retry a transient failure, and use a scoped transaction adapter. Check the successful result, rejected input, exhausted retries, rollback after failure or cancellation, and completed release. | Pending |
-| Scheduled worker | Run repeated work under a policy, handle selected transient failures, and shut down while work or a delay is pending. Check policy completion, terminal failure, fresh state on another execution, and completed cleanup after cancellation. | Pending |
+| Scheduled worker | Run repeated work under a policy, handle selected transient failures, and shut down while work or a delay is pending. Check policy completion, terminal failure, fresh state on another execution, and completed cleanup after cancellation. | Complete: [worker witness](2026-10-19-scheduled-worker-application.md). |
 | Stream processor | Transform and batch a live input under backpressure, with explicit recovery behavior. Check ordered results where promised, partial batches, failure propagation, cancellation of pending work, and completed upstream and consumer cleanup. | Pending |
 
 Each witness must pass source checking, independent IR validation, and strict
@@ -69,5 +70,6 @@ the explicit deferral of item 9 until the user revisits it.
 
 ## Next action
 
-The implementing agent owns the scheduled worker baseline and Schedule consumer
-investigation. Update this plan and the gap audit with each application result.
+The implementing agent owns the service workflow baseline next. The scheduled
+worker established no need for a new Schedule consumer. Update this plan and
+the gap audit with each application result.

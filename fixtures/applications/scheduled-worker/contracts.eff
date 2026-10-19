@@ -1,0 +1,11 @@
+export type Int = int
+export type Policy = { runs: Int, delayMillis: Int, retries: Int, retryMillis: Int }
+export type Report = { completed: Int, last: Option<Int> }
+export error JobFailure = { kind: "Transient" | "Fatal", id: Int }
+export error InvalidPolicy = {}
+export service Jobs {
+  open(): Int fails JobFailure
+  execute(id: Int): Int fails JobFailure
+  close(id: Int): void
+}
+export service Clock { wait(millis: Int): void }

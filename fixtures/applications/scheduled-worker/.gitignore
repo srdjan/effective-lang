@@ -1,0 +1,9 @@
+/contracts.ts
+/contracts.ts.map
+/worker.ts
+/worker.ts.map
+/deno.lock
+!/driver.ts
+!/main.ts
+!/reference.ts
+!/runtime_test.ts

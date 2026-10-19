@@ -1,0 +1,42 @@
+import { Int, Policy, Report, JobFailure, InvalidPolicy, Jobs, Clock } from "./contracts.eff"
+
+const policySchema: Schema<Policy> = schema()
+
+export const retryPolicy = (policy: Policy): RetrySchedule<JobFailure> =>
+  retrySchedule((error: JobFailure, attempt: Int): Option<Int> =>
+    if (error.kind === "Transient" && attempt <= policy.retries) {
+      Some(policy.retryMillis)
+    } else { None })
+
+const attempt = (): Int fails JobFailure uses Jobs.open | Jobs.execute | Jobs.close =>
+  withResource(
+    () => {
+      const id = Jobs.open()
+      {
+        execute: (): Int fails JobFailure uses Jobs.execute => Jobs.execute(id),
+        close: (): void uses Jobs.close => Jobs.close(id)
+      }
+    },
+    (job) => job.execute(),
+    (job) => job.close()
+  )
+
+const cycle = (policy: Policy, completed: Int, last: Option<Int>): Report
+  fails JobFailure uses Jobs.open | Jobs.execute | Jobs.close | Clock.wait =>
+  if (completed >= policy.runs) {
+    { completed, last }
+  } else {
+    const value = retry(() => attempt(), { schedule: retryPolicy(policy) })
+    const count = completed + 1
+    if (count < policy.runs) { Clock.wait(policy.delayMillis) } else {}
+    cycle(policy, count, Some(value))
+  }
+
+export const runWorker = (input: unknown): Report
+  fails SchemaError | InvalidPolicy | JobFailure
+  uses Jobs.open | Jobs.execute | Jobs.close | Clock.wait => {
+    const policy = schemaDecode(policySchema, input)
+    if (policy.runs < 0 || policy.delayMillis < 0 || policy.retries < 0 || policy.retryMillis < 0) {
+      fail(InvalidPolicy({}))
+    } else { cycle(policy, 0, None) }
+  }

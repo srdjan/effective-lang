@@ -488,11 +488,18 @@ The stopping rule requires three complete applications: a service workflow,
 a scheduled worker, and a stream processor. Each must compile with precise
 contracts and pass failure, cancellation, and cleanup checks. Application
 orchestration stays in `.eff`; typed host adapters may supply drivers and the
-runtime entry point. All three application gates are pending.
+runtime entry point. The [scheduled worker](plans/2026-10-19-scheduled-worker-application.md)
+now passes its application gate. The service workflow and stream processor
+remain pending.
 
-Start with the scheduled worker and investigate general Schedule consumers.
+The scheduled worker uses existing source recursion, RetrySchedule, primitive
+clock waits and withResource. Nine compiled application checks cover virtual
+time, Effect replay, selective retry, validation, failures, defects and awaited
+cleanup during work and both kinds of wait. No new API is selected. Separate
+source probes retain the opaque Schedule retry and repetition consumer gaps.
+The service workflow baseline is next.
 Try equivalent existing source compositions before selecting a new builtin.
-Time control and user generics are subsequent candidates, subject to demonstrated
+Time control, general Schedule consumers and user generics remain candidates, subject to demonstrated
 application blockers. Further Schema expansion, including recursive Option,
 does not take priority without such a blocker. Item 9 remains deferred.
 
