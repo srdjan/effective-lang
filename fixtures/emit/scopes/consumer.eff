@@ -1,0 +1,11 @@
+import { Owner, create } from "./owner.eff"
+
+export const stash = (owner: Owner): Ref<{ owner: Owner }> => makeRef({ owner })
+export const stop = (ref: Ref<{ owner: Owner }>): void => closeScope(getRef(ref).owner)
+type Close = () => void
+export const alias = (owner: Owner): Close => () => closeScope(owner)
+export const copied = (owner: Owner): Option<[Owner, Owner[]]> => Some([owner, [owner]])
+export const register = (owner: Owner, job: Effect<void>): void => addScopeFinalizer(owner, job)
+export const stopNew = (): void => closeScope(create())
+export const provideNew = (job: Effect<void>): void => create() |> provideScope(job)
+export const registerNew = (job: Effect<void>): void => create() |> addScopeFinalizer(job)

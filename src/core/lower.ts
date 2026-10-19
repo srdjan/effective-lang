@@ -47,6 +47,7 @@ import type {
   Type,
   ValueId,
 } from "./ir.ts";
+import { SCOPE_CAPABILITY } from "./ir.ts";
 import { TokenKind } from "./lex.ts";
 import type { ModuleInfo } from "./project.ts";
 import type { ModuleResolution, Target } from "./resolve.ts";
@@ -566,6 +567,20 @@ class BodyLowerer {
         };
       case "codec":
         return { kind: "codec", decode: arg(0), encode: arg(1), ...annotation };
+      case "schema":
+        return fact.op === "decode" || fact.op === "encode"
+          ? {
+            kind: fact.op === "decode" ? "schema-decode" : "schema-encode",
+            schema: arg(0),
+            input: arg(1),
+            ...annotation,
+          }
+          : {
+            kind: "schema",
+            op: fact.op,
+            arguments: args.map((_, i) => arg(i)),
+            ...annotation,
+          };
       case "decode":
         return { kind: "decode", codec: arg(0), input: arg(1), ...annotation };
       case "encode":
@@ -603,6 +618,13 @@ class BodyLowerer {
         return { kind: "scoped", value: arg(0), ...annotation };
       case "fork-scoped":
         return { kind: "fork-scoped", job: arg(0), ...annotation };
+      case "make-scope":
+        return { kind: "make-scope", ...annotation };
+      case "provide-scope":
+      case "add-scope-finalizer":
+        return { kind: fact.kind, owner: arg(0), job: arg(1), ...annotation };
+      case "close-scope":
+        return { kind: "close-scope", owner: arg(0), ...annotation };
       case "with-resource": {
         const acquire = arg(0);
         const use = arg(1);
@@ -625,6 +647,27 @@ class BodyLowerer {
       }
       case "unfold":
         return { kind: "unfold", seed: arg(0), next: arg(1), ...annotation };
+      case "map-groups": {
+        const stream = arg(0);
+        const key = arg(1);
+        const use = arg(2);
+        if (use.kind !== "closure" || use.parameters[1] === undefined) {
+          throw internal("mapGroups needs an inline use callback");
+        }
+        return {
+          kind: "map-groups",
+          stream,
+          key,
+          use,
+          bufferSize: this.required(
+            fact.bufferSize,
+            "the group capacity",
+            node,
+          ),
+          groupBinding: use.parameters[1].id,
+          ...annotation,
+        };
+      }
       case "map-effect":
         return {
           kind: "map-effect",
@@ -819,6 +862,56 @@ class BodyLowerer {
         };
       case "sink-for-each":
         return { kind: "sink-for-each", consume: arg(0), ...annotation };
+      case "take-sink":
+        return {
+          kind: "take-sink",
+          count: this.required(fact.count, "the sink count", node),
+          ...annotation,
+        };
+      case "transduce-stream":
+        return {
+          kind: "transduce-stream",
+          stream: arg(0),
+          sink: arg(1),
+          ...annotation,
+        };
+      case "aggregate-stream":
+        return {
+          kind: "aggregate-stream",
+          stream: arg(0),
+          sink: arg(1),
+          ...annotation,
+        };
+      case "aggregate-within-stream":
+        return {
+          kind: "aggregate-within-stream",
+          stream: arg(0),
+          sink: arg(1),
+          schedule: arg(2),
+          ...annotation,
+        };
+      case "schedule-from-step":
+        return {
+          kind: "schedule-from-step",
+          initial: arg(0),
+          decide: arg(1),
+          ...annotation,
+        };
+      case "schedule-recurs":
+        return { kind: "schedule-recurs", times: arg(0), ...annotation };
+      case "schedule-spaced":
+        return { kind: "schedule-spaced", delayMillis: arg(0), ...annotation };
+      case "schedule-map":
+        return {
+          kind: "schedule-map",
+          schedule: arg(0),
+          transform: arg(1),
+          ...annotation,
+        };
+      case "schedule-max":
+      case "schedule-min":
+      case "schedule-concat":
+        return { kind: fact.kind, left: arg(0), right: arg(1), ...annotation };
       case "run-stream":
         return {
           kind: "run-stream",
@@ -1105,6 +1198,7 @@ class BodyLowerer {
           setOf(this.required(args[0], "the retry schedule step", stage)),
         ]);
       case "codec":
+      case "schema":
       case "decode":
       case "encode":
         return combine(args.map((a) => setOf(a)));
@@ -1125,6 +1219,25 @@ class BodyLowerer {
         return combine([
           setOf(this.required(args[0], "the deferred job", stage)),
         ]);
+      case "close-scope":
+        return combine([...parts, EFFECT_ONLY]);
+      case "provide-scope":
+      case "add-scope-finalizer": {
+        const job = this.required(argNodes[0], "the scope job", stage);
+        const effect = this.ctx.types.node(
+          this.ctx.types.unfold(this.info(job).type),
+        );
+        if (effect.kind !== "effect") {
+          throw internal("the scope stage has no Effect type");
+        }
+        return combine([...parts, {
+          failures: fact.kind === "provide-scope" ? effect.failures : [],
+          requirements: fact.kind === "provide-scope"
+            ? without(effect.requirements, [SCOPE_CAPABILITY])
+            : effect.requirements,
+          mode: "effect",
+        }]);
+      }
       case "run": {
         const value = this.ctx.types.node(
           this.ctx.types.unfold(leftInfo.type),

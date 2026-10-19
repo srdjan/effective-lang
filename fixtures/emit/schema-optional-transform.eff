@@ -1,0 +1,50 @@
+type Int = int
+type OptionRecord = { score: Option<Int> }
+type WireRecord = { score?: Int }
+type DefaultRecord = { score: Int }
+type OptionalRecord = { score?: Int }
+
+service Read { next(value: Int): Option<Int> }
+service Write { previous(value: Int): Option<Int> }
+
+const integer: Schema<Int> = schema()
+const shifted: Schema<Int, Int, Read.next, Write.previous> = schemaTransform(
+  integer,
+  integer,
+  (value: Int): Option<Int> uses Read.next => Read.next(value),
+  (value: Int): Option<Int> uses Write.previous => Write.previous(value)
+)
+
+export const optionField: SchemaEncodedOptional<Option<Int>, Int, Read.next, Write.previous> =
+  schemaOptionFromOptionalKey(shifted)
+export const optionRecord: Schema<OptionRecord, WireRecord, Read.next, Write.previous> =
+  schemaStruct({ score: optionField })
+export const defaultField: SchemaEncodedOptional<Int> =
+  schemaDefaultKey(integer, (): Int => 3)
+export const defaultRecord: Schema<DefaultRecord, WireRecord> =
+  schemaStruct({ score: defaultField })
+const exact: SchemaOptional<Int> = schemaOptionalKey(integer)
+export const normalizedField: SchemaOptional<Int> = schemaOptionalTransform(
+  exact,
+  exact,
+  (value: Option<Int>): Option<Int> => match value {
+    Some(score) => if (score > 0) { Some(score) } else { None },
+    None => None
+  },
+  (value: Option<Int>): Option<Int> => value
+)
+export const normalizedRecord: Schema<OptionalRecord> =
+  schemaStruct({ score: normalizedField })
+
+export const readOption = (input: unknown): OptionRecord fails SchemaError uses Read.next =>
+  schemaDecode(optionRecord, input)
+export const writeOption = (value: OptionRecord): WireRecord fails SchemaError uses Write.previous =>
+  schemaEncode(optionRecord, value)
+export const readDefault = (input: unknown): DefaultRecord fails SchemaError =>
+  schemaDecode(defaultRecord, input)
+export const writeDefault = (value: DefaultRecord): WireRecord fails SchemaError =>
+  schemaEncode(defaultRecord, value)
+export const readNormalized = (input: unknown): OptionalRecord fails SchemaError =>
+  schemaDecode(normalizedRecord, input)
+export const writeNormalized = (value: OptionalRecord): OptionalRecord fails SchemaError =>
+  schemaEncode(normalizedRecord, value)

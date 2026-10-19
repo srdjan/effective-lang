@@ -4,6 +4,7 @@ export error AdapterError = { operation: Text }
 export service Policy { allow(): void fails AdapterError }
 export service Operations {
   lookup(value: Int): Int fails AdapterError
+  tree(body: Text): Int fails AdapterError
   http(body: Text): Int fails AdapterError
   sql(mode: Text): Int fails AdapterError
   rpc(body: Text): Int fails AdapterError

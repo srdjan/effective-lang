@@ -1,0 +1,31 @@
+type Int = int
+type Bool = boolean
+type Text = string
+export type Event = { kind: "Value" | "End", value: Int }
+type Pair = [Event, Bool]
+type Nested = [Option<Event>, [Int, Text]]
+
+export const source: Stream<Event> =
+  unfold(false, (done): Option<Pair> =>
+    if (done) { None } else { Some([{ kind: "End", value: 0 }, true]) })
+
+export const nested: Effect<Option<Nested>> =
+  defer((): Option<Nested> => Some([Some({ kind: "Value", value: 1 }), [2, "ok"]]))
+export const record: Effect<Option<Event>> =
+  defer((): Option<Event> => Some({ kind: "End", value: 3 }))
+export const array: Effect<Option<Int[]>> =
+  defer((): Option<Int[]> => Some([1, 2, 3]))
+export const tupleArray: Effect<Option<Pair[]>> =
+  defer((): Option<Pair[]> => Some([[{ kind: "Value", value: 4 }, false]]))
+export const emptyTuple: Effect<Option<[]>> = defer((): Option<[]> => Some([]))
+
+export const selected = (input: Option<Int>): Option<Pair> =>
+  match input {
+    Some(value) => Some([{ kind: "Value", value }, false]),
+    None => Some([{ kind: "End", value: 0 }, true])
+  }
+
+export error Stop = {}
+export service Probe { next(): Int fails Stop }
+export const effectful = (done: Bool): Option<Pair> fails Stop uses Probe.next =>
+  if (done) { None } else { Some([{ kind: "Value", value: Probe.next() }, true]) }

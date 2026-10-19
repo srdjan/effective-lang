@@ -1,4 +1,4 @@
-// Audit reproducer: checks and validates, but emitted target widens the tuple.
+// Regression: the emitted Some payload retains its checked tuple shape.
 type Int = int
 type Bool = boolean
 type Event = { kind: "Value" | "End", value: Int }

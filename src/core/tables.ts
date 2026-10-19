@@ -118,6 +118,13 @@ export type NodeFact =
   | { readonly kind: "defer" }
   | { readonly kind: "run" }
   | { readonly kind: "scoped" | "fork-scoped" }
+  | {
+    readonly kind:
+      | "make-scope"
+      | "provide-scope"
+      | "add-scope-finalizer"
+      | "close-scope";
+  }
   | { readonly kind: "with-resource" }
   | { readonly kind: "unfold" }
   | {
@@ -170,6 +177,16 @@ export type NodeFact =
     readonly concurrency: number | "unbounded" | undefined;
   }
   | { readonly kind: "sink-for-each" }
+  | { readonly kind: "take-sink"; readonly count: number | undefined }
+  | { readonly kind: "transduce-stream" }
+  | { readonly kind: "aggregate-stream" }
+  | { readonly kind: "aggregate-within-stream" }
+  | { readonly kind: "schedule-from-step" }
+  | { readonly kind: "schedule-recurs" }
+  | { readonly kind: "schedule-spaced" }
+  | { readonly kind: "schedule-map" }
+  | { readonly kind: "schedule-max" | "schedule-min" | "schedule-concat" }
+  | { readonly kind: "map-groups"; readonly bufferSize: number | undefined }
   | { readonly kind: "run-stream" }
   | { readonly kind: "buffer-stream"; readonly capacity: number | undefined }
   | { readonly kind: "merge-streams" }
@@ -181,6 +198,25 @@ export type NodeFact =
   | { readonly kind: "merge-layers" }
   | { readonly kind: "retry-schedule" | "retry-with-schedule" }
   | { readonly kind: "codec" | "decode" | "encode" }
+  | {
+    readonly kind: "schema";
+    readonly op:
+      | "identity"
+      | "array"
+      | "struct"
+      | "optional-key"
+      | "option-from-optional-key"
+      | "default-key"
+      | "optional-transform"
+      | "union"
+      | "transform"
+      | "recursive"
+      | "decode"
+      | "encode"
+      | "invalid"
+      | "at"
+      | "both";
+  }
   | { readonly kind: "with-fiber" | "join-fiber" | "interrupt-fiber" }
   /** A bracket literal, classified by its checked contextual type. */
   | { readonly kind: "list"; readonly shape: "array" | "tuple" }

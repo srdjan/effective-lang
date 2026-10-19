@@ -57,6 +57,20 @@ function kindsOfChildren(tree: SyntaxTree, node: NodeId): string[] {
   return nodeChildren(tree, node).map((c) => kindName(kindOf(tree, c)));
 }
 
+Deno.test("Sink appends leftovers after its existing effect channels", () => {
+  parseClean(
+    "type S = Sink<int, int[], never, never, { rest: Option<int[]> }>",
+  );
+  parseClean("type S = Sink<int, int[], E, Service.call, int | string>");
+  for (
+    const text of [
+      "type S = Sink<int, int[], never, never, int, string>",
+      "type S = Stream<int, never, never, int>",
+      "type S = Sink<int, int[], never, never, >",
+    ]
+  ) assertNotEquals(parseChecked(text).diagnostics.length, 0, text);
+});
+
 Deno.test("a newline continues an item before fails, uses, =>, |>, else, and catch", () => {
   const cases: [string, string, SyntaxKind][] = [
     ["fails", "const f = (): int\n  fails E\n  => 1", SyntaxKind.FailsClause],

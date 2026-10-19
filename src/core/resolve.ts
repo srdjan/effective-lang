@@ -51,10 +51,15 @@ export type PreludeName =
   | "run"
   | "scoped"
   | "forkScoped"
+  | "makeScope"
+  | "provideScope"
+  | "addScopeFinalizer"
+  | "closeScope"
   | "withResource"
   | "unfold"
   | "mapEffect"
   | "mapStream"
+  | "mapGroups"
   | "scanStream"
   | "mapAccumStream"
   | "foldStream"
@@ -64,6 +69,17 @@ export type PreludeName =
   | "lastStream"
   | "drainStream"
   | "sinkForEach"
+  | "takeSink"
+  | "transduceStream"
+  | "aggregateStream"
+  | "aggregateWithinStream"
+  | "scheduleFromStep"
+  | "scheduleRecurs"
+  | "scheduleSpaced"
+  | "scheduleMap"
+  | "scheduleMax"
+  | "scheduleMin"
+  | "scheduleConcat"
   | "runStream"
   | "bufferStream"
   | "mergeStreams"
@@ -94,6 +110,21 @@ export type PreludeName =
   | "mergeLayers"
   | "retrySchedule"
   | "codec"
+  | "schema"
+  | "schemaArray"
+  | "schemaStruct"
+  | "schemaOptionalKey"
+  | "schemaOptionFromOptionalKey"
+  | "schemaDefaultKey"
+  | "schemaOptionalTransform"
+  | "schemaUnion"
+  | "schemaTransform"
+  | "schemaRecursive"
+  | "schemaDecode"
+  | "schemaEncode"
+  | "schemaInvalid"
+  | "schemaAt"
+  | "schemaBoth"
   | "decode"
   | "encode"
   | "withFiber"
@@ -119,10 +150,15 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "run",
   "scoped",
   "forkScoped",
+  "makeScope",
+  "provideScope",
+  "addScopeFinalizer",
+  "closeScope",
   "withResource",
   "unfold",
   "mapEffect",
   "mapStream",
+  "mapGroups",
   "scanStream",
   "mapAccumStream",
   "foldStream",
@@ -132,6 +168,17 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "lastStream",
   "drainStream",
   "sinkForEach",
+  "takeSink",
+  "transduceStream",
+  "aggregateStream",
+  "aggregateWithinStream",
+  "scheduleFromStep",
+  "scheduleRecurs",
+  "scheduleSpaced",
+  "scheduleMap",
+  "scheduleMax",
+  "scheduleMin",
+  "scheduleConcat",
   "runStream",
   "bufferStream",
   "mergeStreams",
@@ -162,6 +209,21 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "mergeLayers",
   "retrySchedule",
   "codec",
+  "schema",
+  "schemaArray",
+  "schemaStruct",
+  "schemaOptionalKey",
+  "schemaOptionFromOptionalKey",
+  "schemaDefaultKey",
+  "schemaOptionalTransform",
+  "schemaUnion",
+  "schemaTransform",
+  "schemaRecursive",
+  "schemaDecode",
+  "schemaEncode",
+  "schemaInvalid",
+  "schemaAt",
+  "schemaBoth",
   "decode",
   "encode",
   "withFiber",
@@ -192,8 +254,12 @@ export type BuiltinTypeName =
   | "Brand"
   | "Ref"
   | "RetrySchedule"
+  | "ScheduleInput"
+  | "ScheduleMetadata"
+  | "ScheduleDecision"
   | "Codec"
-  | "Fiber";
+  | "Fiber"
+  | "CloseableScope";
 
 export const BUILTIN_TYPE_NAMES: ReadonlySet<string> = new Set<
   BuiltinTypeName
@@ -209,8 +275,12 @@ export const BUILTIN_TYPE_NAMES: ReadonlySet<string> = new Set<
   "Brand",
   "Ref",
   "RetrySchedule",
+  "ScheduleInput",
+  "ScheduleMetadata",
+  "ScheduleDecision",
   "Codec",
   "Fiber",
+  "CloseableScope",
 ]);
 
 /**
@@ -223,6 +293,8 @@ export const TARGET_NAMES: ReadonlySet<string> = new Set([
   "undefined",
   "Number",
   "RangeError",
+  "SchemaError",
+  "SchemaIssue",
   "ReadonlyArray",
   "any",
   "bigint",
@@ -432,6 +504,24 @@ class Resolver {
         name !== "partitionAll" &&
         name !== "validateAll" &&
         name !== "allResults" &&
+        name !== "takeSink" && name !== "transduceStream" &&
+        name !== "aggregateStream" &&
+        name !== "aggregateWithinStream" &&
+        name !== "scheduleFromStep" && name !== "scheduleRecurs" &&
+        name !== "scheduleSpaced" && name !== "scheduleMap" &&
+        name !== "scheduleMax" && name !== "scheduleMin" &&
+        name !== "scheduleConcat" &&
+        name !== "schema" && name !== "schemaArray" &&
+        name !== "schemaStruct" && name !== "schemaTransform" &&
+        name !== "schemaOptionalKey" && name !== "schemaUnion" &&
+        name !== "schemaOptionFromOptionalKey" &&
+        name !== "schemaDefaultKey" &&
+        name !== "schemaOptionalTransform" &&
+        name !== "schemaRecursive" && name !== "schemaDecode" &&
+        name !== "schemaEncode" && name !== "schemaInvalid" &&
+        name !== "schemaAt" && name !== "schemaBoth" &&
+        name !== "makeScope" && name !== "provideScope" &&
+        name !== "addScopeFinalizer" && name !== "closeScope" &&
         name !== "scoped" && name !== "forkScoped" && name !== "zipStreams" &&
         name !== "concatStreams" && name !== "flatMapStreams" &&
         name !== "switchMapStreams" &&
@@ -444,7 +534,7 @@ class Resolver {
         name !== "takeWhileEffectStream" &&
         name !== "takeUntilEffectStream" &&
         name !== "dropWhileEffectStream" &&
-        name !== "mapStream" && name !== "scanStream" &&
+        name !== "mapGroups" && name !== "mapStream" && name !== "scanStream" &&
         name !== "mapAccumStream" && name !== "foldStream" &&
         name !== "foldEffectStream" && name !== "collectStream" &&
         name !== "headStream" && name !== "lastStream" &&
@@ -601,6 +691,24 @@ class Resolver {
       name !== "partitionAll" &&
       name !== "validateAll" &&
       name !== "allResults" &&
+      name !== "takeSink" && name !== "transduceStream" &&
+      name !== "aggregateStream" &&
+      name !== "aggregateWithinStream" &&
+      name !== "scheduleFromStep" && name !== "scheduleRecurs" &&
+      name !== "scheduleSpaced" && name !== "scheduleMap" &&
+      name !== "scheduleMax" && name !== "scheduleMin" &&
+      name !== "scheduleConcat" &&
+      name !== "schema" && name !== "schemaArray" &&
+      name !== "schemaStruct" && name !== "schemaTransform" &&
+      name !== "schemaOptionalKey" && name !== "schemaUnion" &&
+      name !== "schemaOptionFromOptionalKey" &&
+      name !== "schemaDefaultKey" &&
+      name !== "schemaOptionalTransform" &&
+      name !== "schemaRecursive" && name !== "schemaDecode" &&
+      name !== "schemaEncode" && name !== "schemaInvalid" &&
+      name !== "schemaAt" && name !== "schemaBoth" &&
+      name !== "makeScope" && name !== "provideScope" &&
+      name !== "addScopeFinalizer" && name !== "closeScope" &&
       name !== "scoped" && name !== "forkScoped" && name !== "zipStreams" &&
       name !== "concatStreams" && name !== "flatMapStreams" &&
       name !== "switchMapStreams" &&
@@ -613,7 +721,7 @@ class Resolver {
       name !== "takeWhileEffectStream" &&
       name !== "takeUntilEffectStream" &&
       name !== "dropWhileEffectStream" &&
-      name !== "mapStream" && name !== "scanStream" &&
+      name !== "mapGroups" && name !== "mapStream" && name !== "scanStream" &&
       name !== "mapAccumStream" && name !== "foldStream" &&
       name !== "foldEffectStream" && name !== "collectStream" &&
       name !== "headStream" && name !== "lastStream" &&
@@ -792,6 +900,13 @@ class Resolver {
       }
       return;
     }
+    if (name === "SchemaError" || name === "SchemaIssue") {
+      this.set(nameNode, {
+        kind: "error",
+        id: `error:effect/${name}`,
+      });
+      return;
+    }
     const builtin = asBuiltinType(name);
     if (builtin !== undefined) {
       this.set(nameNode, { kind: "builtin-type", name: builtin });
@@ -806,6 +921,13 @@ class Resolver {
     if (name === undefined) return;
     const binding = this.namespace.get(name);
     if (binding === undefined) {
+      if (name === "SchemaError" || name === "SchemaIssue") {
+        this.set(nameNode, {
+          kind: "error",
+          id: `error:effect/${name}`,
+        });
+        return;
+      }
       this.unknown(nameNode, name, "error");
       return;
     }
@@ -988,6 +1110,8 @@ class Resolver {
       case SyntaxKind.EffectType:
       case SyntaxKind.StreamType:
       case SyntaxKind.SinkType:
+      case SyntaxKind.ScheduleType:
+      case SyntaxKind.SchemaType:
       case SyntaxKind.LayerType:
         for (const kid of this.kids(node)) {
           const k = kindOf(this.tree, kid);

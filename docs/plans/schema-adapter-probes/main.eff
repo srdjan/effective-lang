@@ -10,6 +10,8 @@ const resolve = (input: unknown): Int fails AdapterError uses Operations.lookup 
 
 export const decodeLookup = (input: unknown): Int fails AdapterError uses Policy.allow =>
   provide(AdapterLive, () => resolve(input))
+export const tree = (body: Text): Int fails AdapterError uses Policy.allow =>
+  provide(AdapterLive, () => Operations.tree(body))
 export const http = (body: Text): Int fails AdapterError uses Policy.allow =>
   provide(AdapterLive, () => Operations.http(body))
 export const sql = (mode: Text): Int fails AdapterError uses Policy.allow =>
@@ -27,5 +29,14 @@ export const cursor = (chunk: Text): Int fails AdapterError =>
   provide(CursorLive, () => withResource(
     () => Cursor.open(),
     (session) => push(session, chunk),
+    (session) => Cursor.close(session),
+  ))
+export const cursorChunks = (first: Text, second: Text): Int fails AdapterError =>
+  provide(CursorLive, () => withResource(
+    () => Cursor.open(),
+    (session) => {
+      push(session, first)
+      push(session, second)
+    },
     (session) => Cursor.close(session),
   ))

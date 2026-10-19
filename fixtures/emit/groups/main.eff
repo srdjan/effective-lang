@@ -1,0 +1,22 @@
+import { Int, Text, Key, Batch, First, SourceStop, UseStop, BuildStop, Pull, Use, Worker, Factory } from "./contracts.eff"
+
+export const grouped = (source: Stream<Int>): Stream<Batch> =>
+  mapGroups(source, (n) => if (n < 3) { n } else { n - 3 }, (key, group) => ({ key, items: collectStream(group) }), { bufferSize: 1 })
+export const skipped = (source: Stream<Int>): Stream<Int> =>
+  mapGroups(source, (n) => n, (key, group) => key, { bufferSize: 1 })
+export const firsts = (source: Stream<Int>): Stream<First> =>
+  mapGroups(source, (n) => n, (key, group) => ({ key, first: headStream(group) }), { bufferSize: 1 })
+export const branded = (source: Stream<Key>): Stream<Key[]> =>
+  mapGroups(source, (n) => n, (key, group) => collectStream(group), { bufferSize: 2 })
+export const deferred = (): Stream<Int, SourceStop | UseStop, Pull.next | Use.value>
+  fails BuildStop uses Factory.source =>
+  mapGroups(Factory.source(), (n) => n, (key, group) => { headStream(group); Use.value(key) }, { bufferSize: 1 })
+export const supervised = (source: Stream<Int, SourceStop, Pull.next>): Stream<Int, SourceStop | UseStop, Pull.next | Use.value> =>
+  mapGroups(source, (n) => n, (key, group) => { headStream(group); Use.value(key) }, { bufferSize: 1 })
+export const scopedWork = (source: Stream<Int>): Stream<Int, never, Worker.run | Worker.wait> =>
+  mapGroups(source, (n) => n, (key, group) => {
+    forkScoped(defer(() => Worker.run(key)))
+    Worker.wait(key)
+    drainStream(group)
+    key
+  }, { bufferSize: 1 })

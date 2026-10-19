@@ -36,17 +36,23 @@ function emitted(source: string): string {
   return result.value.text;
 }
 
-Deno.test("general stream and schedule source boundaries have concrete diagnostics", () => {
+Deno.test("Sink aggregation and basic general Schedule values compile", () => {
+  const accepted = emitted(`type Int = int
+  type WithLeftovers = Sink<Int, Int[], never, never, Int>
+  const pairs: WithLeftovers = takeSink(2)
+  export const batches = (source: Stream<Int>): Stream<Int[]> => transduceStream(source, pairs)`);
+  assertStringIncludes(accepted, "Sink.take");
+  const aggregated = emitted(`type Int = int
+  type WithLeftovers = Sink<Int, Int[], never, never, Int>
+  const pairs: WithLeftovers = takeSink(2)
+  export const batches = (source: Stream<Int>): Stream<Int[]> => aggregateStream(source, pairs)`);
+  assertStringIncludes(aggregated, "Stream.aggregate");
+  const scheduled = emitted(`type Int = int
+export const policy: Schedule<Int> = scheduleRecurs(1)`);
+  assertStringIncludes(scheduled, "Schedule.recurs");
   const probes = {
     grouping: `type Int = int
 const grouped = groupByKey(unfold(0, (n): Option<[Int, Int]> => None), (n: Int): Int => n)`,
-    aggregation: `type Int = int
-const sink = takeSink(2)
-const batches = transduceStream(unfold(0, (n): Option<[Int, Int]> => None), sink)`,
-    leftovers: `type Int = int
-type WithLeftovers = Sink<Int, Int[], never, never, Int>`,
-    schedule: `type Text = string
-type General = Schedule<Text, Text>`,
     effectfulPolicy: `type Int = int
 error Stop = {}
 service Policy { delay(attempt: Int): Option<Int> }
@@ -65,15 +71,13 @@ const policy = retrySchedule((_: Stop, attempt: Int): Option<Int> uses Policy.de
           d.code === "execution-mode/001" && d.message.includes("must be pure")
         ),
       );
-    } else if (name !== "leftovers") {
-      assert(diagnostics.some((d) => d.code === "unknown-name/001"));
     } else {
-      assert(diagnostics.some((d) => d.code === "syntax/008"));
+      assert(diagnostics.some((d) => d.code === "unknown-name/001"));
     }
   }
 });
 
-Deno.test("native compositions cover selected stop traces and retry delays; target checks expose two boundaries", () => {
+Deno.test("native compositions cover stop traces, retry delays and inline tuples; legacy Sink annotations retain the no-leftover boundary", () => {
   const source = Deno.readTextFileSync(
     new URL("compositions.eff", import.meta.url),
   );
@@ -261,12 +265,25 @@ void pairs;
         Deno.readTextFileSync(new URL("inline-marker.eff", import.meta.url)),
       ),
     );
-    const widened = command("check", `${dir}/inline.ts`);
-    assert(!widened.success);
-    const widening = decoder.decode(widened.stderr);
-    console.log(widening);
-    assertStringIncludes(widening, "TS2375");
-    assertStringIncludes(widening, "Target requires 2 element(s)");
+    const inlineCheck = command("check", `${dir}/inline.ts`);
+    assert(inlineCheck.success, decoder.decode(inlineCheck.stderr));
+    Deno.writeTextFileSync(
+      `${dir}/inline-run.ts`,
+      `
+import { Effect, Stream } from "effect";
+import { source } from "./inline.ts";
+console.log(JSON.stringify([
+  await Effect.runPromise(Stream.runCollect(source)),
+  await Effect.runPromise(Stream.runCollect(source)),
+]));
+`,
+    );
+    const inlineRun = command("run", `${dir}/inline-run.ts`);
+    assert(inlineRun.success, decoder.decode(inlineRun.stderr));
+    assertEquals(JSON.parse(decoder.decode(inlineRun.stdout)), [
+      [{ kind: "End", value: 0 }],
+      [{ kind: "End", value: 0 }],
+    ]);
   } finally {
     Deno.removeSync(dir, { recursive: true });
   }

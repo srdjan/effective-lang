@@ -1,7 +1,6 @@
 type Int = int
 type Bool = boolean
 type Event = { kind: "Value" | "End", value: Int }
-const endStep: [Event, Bool] = [{ kind: "End", value: 0 }, true]
 
 export error SourceError = {}
 export error SignalError = {}
@@ -12,11 +11,11 @@ export service Signal { wait(): void fails SignalError }
 const source = unfold(0, (state) => Source.next(state))
 const values = mapStream(source, (value): Event => ({ kind: "Value", value }))
 const ended = concatStreams(values, unfold(false, (done): Option<[Event, Bool]> =>
-  if (done) { None } else { Some(endStep) }))
+  if (done) { None } else { Some([{ kind: "End", value: 0 }, true]) }))
 const signal = unfold(false, (done): Option<[Event, Bool]> fails SignalError uses Signal.wait =>
   if (done) { None } else {
     Signal.wait()
-    Some(endStep)
+    Some([{ kind: "End", value: 0 }, true])
   })
 
 const merged = mergeStreams(ended, signal)

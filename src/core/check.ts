@@ -248,6 +248,40 @@ export class TypeLowerer {
     return this.env.tree;
   }
 
+  schemaData(ref: TypeRef, seen = new Set<TypeRef>()): boolean {
+    const value = this.env.table.unfold(ref);
+    if (seen.has(value)) return true;
+    seen.add(value);
+    const type = this.env.table.node(value);
+    switch (type.kind) {
+      case "primitive":
+        return type.name !== "unknown" && type.name !== "unit";
+      case "literal":
+        return true;
+      case "record":
+        return type.fields.every((field) => this.schemaData(field.type, seen));
+      case "array":
+      case "option":
+        return this.schemaData(type.element, seen);
+      case "tuple":
+        return type.elements.every((element) => this.schemaData(element, seen));
+      case "union":
+        return type.members.every((member) => this.schemaData(member, seen));
+      case "named": {
+        if (
+          type.id === "error:effect/SchemaError" ||
+          type.id === "error:effect/SchemaIssue"
+        ) return false;
+        const nested = type.id.startsWith("error:")
+          ? this.env.table.errorRecordOf(type.id as ErrorId)
+          : this.env.table.brandBaseOf(type.id as TypeId);
+        return nested !== undefined && this.schemaData(nested, seen);
+      }
+      default:
+        return false;
+    }
+  }
+
   report(
     code: Diagnostic["code"],
     message: string,
@@ -293,6 +327,8 @@ export class TypeLowerer {
       case SyntaxKind.EffectType:
       case SyntaxKind.StreamType:
       case SyntaxKind.SinkType:
+      case SyntaxKind.ScheduleType:
+      case SyntaxKind.SchemaType:
       case SyntaxKind.LayerType:
         return this.deferredType(node);
       case SyntaxKind.LiteralType:
@@ -383,6 +419,9 @@ export class TypeLowerer {
     }
     if (target.kind !== "builtin-type") return this.errorLowered();
     switch (target.name) {
+      case "CloseableScope":
+        this.noArguments(name, args, argsNode);
+        return { ref: table.closeableScope, ir: { kind: "closeable-scope" } };
       case "string":
       case "boolean":
       case "int":
@@ -437,6 +476,23 @@ export class TypeLowerer {
           ref: table.retrySchedule(error.ref),
           ir: { kind: "retry-schedule", error: error.ir },
         };
+      }
+      case "ScheduleInput":
+      case "ScheduleMetadata":
+      case "ScheduleDecision": {
+        const required = target.name === "ScheduleInput" ? 1 : 2;
+        if (args.length !== required) {
+          this.arity(name, required, args, node);
+          return this.errorLowered();
+        }
+        const first = this.lower(args[0]);
+        const second = args[1] === undefined ? undefined : this.lower(args[1]);
+        const ref = target.name === "ScheduleInput"
+          ? table.scheduleInput(first.ref)
+          : target.name === "ScheduleMetadata"
+          ? table.scheduleMetadata(first.ref, second!.ref)
+          : table.scheduleDecision(first.ref, second!.ref);
+        return { ref, ir: table.toIr(ref) };
       }
       case "Codec": {
         if (args.length !== 2) {
@@ -669,6 +725,48 @@ export class TypeLowerer {
     const first = typeNodes[0] === undefined
       ? this.errorLowered()
       : this.lower(typeNodes[0]);
+    if (kindOf(this.tree, node) === SyntaxKind.SchemaType) {
+      const optionalKey = nodeText(this.tree, node).startsWith(
+        "SchemaOptional<",
+      );
+      const encodedOptionalKey = nodeText(this.tree, node).startsWith(
+        "SchemaEncodedOptional<",
+      );
+      const encoded = typeNodes[1] === undefined
+        ? first
+        : this.lower(typeNodes[1]);
+      if (!this.schemaData(first.ref) || !this.schemaData(encoded.ref)) {
+        this.report(
+          "type-mismatch/010",
+          "Schema decoded and encoded types must be data only",
+          this.span(node),
+        );
+      }
+      const uses = kids.filter((k) =>
+        kindOf(this.tree, k) === SyntaxKind.UsesClause
+      );
+      const decodeRequirements = this.requirements(uses[0]);
+      const encodeRequirements = this.requirements(uses[1]);
+      return {
+        ref: this.env.table.schema(
+          first.ref,
+          encoded.ref,
+          decodeRequirements,
+          encodeRequirements,
+          optionalKey,
+          encodedOptionalKey,
+        ),
+        ir: {
+          kind: "schema",
+          decoded: first.ir,
+          encoded: encoded.ir,
+          decodeRequirements,
+          encodeRequirements,
+          ...(optionalKey ? { optionalKey: true as const } : {}),
+          ...(encodedOptionalKey ? { encodedOptionalKey: true as const } : {}),
+        },
+      };
+    }
     const failures = this.failures(
       kids.find((k) => kindOf(this.tree, k) === SyntaxKind.FailsClause),
     );
@@ -708,13 +806,50 @@ export class TypeLowerer {
         ir: { kind: "stream", element: first.ir, effects },
       };
     }
+    if (kind === SyntaxKind.ScheduleType) {
+      const input = typeNodes[1] === undefined
+        ? {
+          ref: this.env.table.unknown,
+          ir: { kind: "primitive" as const, name: "unknown" as const },
+        }
+        : this.lower(typeNodes[1]);
+      return {
+        ref: this.env.table.schedule(
+          first.ref,
+          input.ref,
+          failures,
+          requirements,
+        ),
+        ir: { kind: "schedule", output: first.ir, input: input.ir, effects },
+      };
+    }
     if (kind === SyntaxKind.SinkType) {
       const second = typeNodes[1] === undefined
         ? this.errorLowered()
         : this.lower(typeNodes[1]);
+      const leftover = typeNodes[2] === undefined
+        ? {
+          ref: this.env.table.never,
+          ir: { kind: "primitive" as const, name: "never" as const },
+        }
+        : this.lower(typeNodes[2]);
       return {
-        ref: this.env.table.sink(first.ref, second.ref, failures, requirements),
-        ir: { kind: "sink", input: first.ir, result: second.ir, effects },
+        ref: this.env.table.sink(
+          first.ref,
+          second.ref,
+          failures,
+          requirements,
+          leftover.ref,
+        ),
+        ir: {
+          kind: "sink",
+          input: first.ir,
+          result: second.ir,
+          ...(leftover.ref === this.env.table.never
+            ? {}
+            : { leftover: leftover.ir }),
+          effects,
+        },
       };
     }
     return {
@@ -859,6 +994,7 @@ export function decodeString(text: string): string | undefined {
 /** Adds the type and error identities that an IR type mentions, and the services of its capabilities. */
 export function referencedIds(type: Type, ids: Set<string>): void {
   switch (type.kind) {
+    case "closeable-scope":
     case "primitive":
     case "literal":
       return;
@@ -880,6 +1016,12 @@ export function referencedIds(type: Type, ids: Set<string>): void {
       referencedIds(type.decoded, ids);
       referencedIds(type.encoded, ids);
       return;
+    case "schema":
+      referencedIds(type.decoded, ids);
+      referencedIds(type.encoded, ids);
+      effectIds([], type.decodeRequirements, ids);
+      effectIds([], type.encodeRequirements, ids);
+      return;
     case "fiber":
       referencedIds(type.result, ids);
       effectIds(type.failures, [], ids);
@@ -892,9 +1034,15 @@ export function referencedIds(type: Type, ids: Set<string>): void {
       referencedIds(type.element, ids);
       effectIds(type.effects.failures, type.effects.requirements, ids);
       return;
+    case "schedule":
+      referencedIds(type.output, ids);
+      referencedIds(type.input, ids);
+      effectIds(type.effects.failures, type.effects.requirements, ids);
+      return;
     case "sink":
       referencedIds(type.input, ids);
       referencedIds(type.result, ids);
+      if (type.leftover !== undefined) referencedIds(type.leftover, ids);
       effectIds(type.effects.failures, type.effects.requirements, ids);
       return;
     case "tuple":
@@ -954,6 +1102,73 @@ interface TypeNodeInfo {
   readonly refs: ReadonlySet<string>;
 }
 
+/** A single recursive data alias needs an array, optional key, or tagged terminal choice. */
+function guardedRecord(type: Type, id: TypeId): boolean {
+  const containsSelf = (part: Type): boolean => {
+    switch (part.kind) {
+      case "named":
+        return part.id === id;
+      case "array":
+      case "option":
+        return containsSelf(part.element);
+      case "record":
+        return part.fields.some((field) => containsSelf(field.type));
+      case "union":
+        return part.members.some(containsSelf);
+      default:
+        return false;
+    }
+  };
+  const tagged = type.kind === "union" && type.members.length >= 2 &&
+    type.members.every((member) => member.kind === "record") &&
+    type.members.some((member) => !containsSelf(member));
+  const tagNames = tagged && type.kind === "union"
+    ? (type.members[0] as Extract<Type, { kind: "record" }>).fields
+      .filter((field) =>
+        !field.optional && field.type.kind === "literal" &&
+        typeof field.type.value === "string"
+      ).map((field) => field.name)
+    : [];
+  const hasDistinctTag = type.kind === "union" && tagNames.some((name) => {
+    const values = type.members.map((member) =>
+      member.kind === "record"
+        ? member.fields.find((field) => field.name === name)
+        : undefined
+    );
+    return values.every((field) =>
+      field !== undefined && !field.optional &&
+      field.type.kind === "literal" && typeof field.type.value === "string"
+    ) && new Set(values.map((field) =>
+          field?.type.kind === "literal" ? field.type.value : undefined
+        )).size === values.length;
+  });
+  if (type.kind !== "record" && !(tagged && hasDistinctTag)) return false;
+  let sawSelf = false;
+  const walk = (part: Type, guarded: boolean): boolean => {
+    switch (part.kind) {
+      case "named":
+        if (part.id !== id) return true;
+        sawSelf = true;
+        return guarded;
+      case "array":
+        return walk(part.element, true);
+      case "record":
+        return part.fields.every((field) =>
+          walk(field.type, guarded || field.optional)
+        );
+      case "union":
+        return part === type && tagged && hasDistinctTag &&
+          part.members.every((member) => walk(member, true));
+      case "primitive":
+      case "literal":
+        return true;
+      default:
+        return false;
+    }
+  };
+  return walk(type, false) && sawSelf;
+}
+
 function compareText(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
@@ -967,6 +1182,7 @@ class ModuleChecker {
   private readonly tree: SyntaxTree;
   private readonly table: TypeTable;
   private readonly types: TypeDecl[] = [];
+  private readonly guardedAliases = new Set<TypeId>();
   private readonly errors: ErrorDecl[] = [];
   private readonly services: ServiceDecl[] = [];
   private readonly methodTypes = new Map<CapabilityId, TypeRef>();
@@ -1242,6 +1458,18 @@ class ModuleChecker {
     for (const component of components) {
       component.sort((a, b) => a.start - b.start);
       const first = component[0];
+      if (component.length === 1 && first.kind === "alias") {
+        const declaration = this.types.find((d) => d.id === first.id);
+        if (
+          declaration?.definition.kind === "alias" &&
+          guardedRecord(declaration.definition.type, first.id as TypeId) &&
+          this.lowerer.schemaData(this.table.aliasOf(first.id as TypeId)!)
+        ) {
+          this.guardedAliases.add(first.id as TypeId);
+          this.table.markGuardedAlias(first.id as TypeId);
+          continue;
+        }
+      }
       const names = component.map((m) => m.name);
       this.lowerer.report(
         "declaration/007",
@@ -1274,6 +1502,7 @@ class ModuleChecker {
     const memo = new Map<TypeRef, number>();
     for (const info of this.typeInfos) {
       if (info.kind !== "alias") continue;
+      if (this.guardedAliases.has(info.id as TypeId)) continue;
       const body = this.table.aliasOf(info.id as TypeId);
       if (body === undefined) continue;
       if (!this.table.exceedsDepth(body, MAX_TYPE_DEPTH, memo)) continue;

@@ -1,0 +1,73 @@
+type Int = int
+type Text = string
+type LeftTag = "left"
+type RightTag = "right"
+type Left = { kind: LeftTag, value: Int }
+type Right = { kind: RightTag, value: Int }
+type Choice = Left | Right
+type Optional = { value?: Int }
+type OptionalNode = { next?: OptionalNode }
+type TaggedNode = { kind: "end" } | { kind: "more", next: TaggedNode }
+type EndTag = "end"
+type MoreTag = "more"
+
+service Read { next(value: Int): Option<Int> }
+service Write { previous(value: Int): Option<Int> }
+
+const integer: Schema<Int> = schema()
+const leftTag: Schema<LeftTag> = schema()
+const rightTag: Schema<RightTag> = schema()
+const endTag: Schema<EndTag> = schema()
+const moreTag: Schema<MoreTag> = schema()
+const shifted: Schema<Int, Int, Read.next, Write.previous> = schemaTransform(
+  integer,
+  integer,
+  (value: Int): Option<Int> uses Read.next => Read.next(value),
+  (value: Int): Option<Int> uses Write.previous => Write.previous(value)
+)
+const left: Schema<Left, Left, Read.next, Write.previous> = schemaStruct({ kind: leftTag, value: shifted })
+const right: Schema<Right> = schemaStruct({ kind: rightTag, value: integer })
+export const choice: Schema<Choice, Choice, Read.next, Write.previous> = schemaUnion([left, right])
+const optionalField: SchemaOptional<Int, Int, Read.next, Write.previous> = schemaOptionalKey(shifted)
+export const optional: Schema<Optional, Optional, Read.next, Write.previous> = schemaStruct({ value: optionalField })
+export const optionalNode: Schema<OptionalNode> = schemaRecursive(
+  (self: Schema<OptionalNode>): Schema<OptionalNode> =>
+    schemaStruct({ next: schemaOptionalKey(self) })
+)
+export const taggedNode: Schema<TaggedNode> = schemaRecursive(
+  (self: Schema<TaggedNode>): Schema<TaggedNode> => schemaUnion([
+    schemaStruct({ kind: endTag }),
+    schemaStruct({ kind: moreTag, next: self })
+  ])
+)
+
+export const positive: Schema<Int> = schemaTransform(
+  integer,
+  integer,
+  (value: Int): Int fails SchemaIssue =>
+    if (value > 0) { value } else {
+      fail(schemaAt("value", schemaBoth(integer,
+        schemaInvalid("not positive"), schemaInvalid("try another value"))))
+    },
+  (value: Int): Option<Int> => Some(value)
+)
+export const positiveEncode: Schema<Int> = schemaTransform(
+  integer,
+  integer,
+  (value: Int): Option<Int> => Some(value),
+  (value: Int): Int fails SchemaIssue =>
+    if (value > 0) { value } else { fail(schemaAt("encode", schemaInvalid("cannot encode zero"))) }
+)
+
+export const readChoice = (input: unknown): Choice fails SchemaError uses Read.next =>
+  schemaDecode(choice, input)
+export const writeChoice = (value: Choice): Choice fails SchemaError uses Write.previous =>
+  schemaEncode(choice, value)
+export const readOptional = (input: unknown): Optional fails SchemaError uses Read.next =>
+  schemaDecode(optional, input)
+export const writeOptional = (value: Optional): Optional fails SchemaError uses Write.previous =>
+  schemaEncode(optional, value)
+export const readPositive = (input: unknown): Int fails SchemaError =>
+  schemaDecode(positive, input)
+export const writePositive = (value: Int): Int fails SchemaError =>
+  schemaEncode(positiveEncode, value)

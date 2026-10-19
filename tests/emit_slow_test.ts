@@ -12,6 +12,7 @@ import {
   parseDenoCheck,
 } from "../src/core/emit/tsc.ts";
 import { lowerProject } from "../src/core/lower.ts";
+import { validateProject } from "../src/core/validate_project.ts";
 import type { Project } from "../src/core/project.ts";
 import {
   lineStarts,
@@ -181,6 +182,50 @@ function buildForms(dir: string): string[] {
   ]);
 }
 
+Deno.test("host providers preserve shared scope handles and reject raw target scopes", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/scopes/", FIXTURES), dir);
+    Deno.writeTextFileSync(
+      `${dir}/effective.json`,
+      JSON.stringify({
+        host: {
+          boundary: { interface: "./host.effi", module: "./host.ts" },
+        },
+      }),
+    );
+    build(dir, ["host-main.eff"]);
+    await check(dir, ["host-main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect } from "effect";
+import { create, close } from "./owner.ts";
+import { pass } from "./host-main.ts";
+const owner = await Effect.runPromise(create());
+const received = await Effect.runPromise(pass(owner));
+await Effect.runPromise(close(received));
+console.log(JSON.stringify({ same: received === owner }));
+`,
+    );
+    assertEquals(result, { same: true });
+    Deno.writeTextFileSync(
+      `${dir}/host.ts`,
+      `
+import { Layer, Scope } from "effect";
+import { Boundary } from "./boundary.ts";
+import type { Owner } from "./owner.ts";
+export const BoundaryLive = Layer.succeed(Boundary)({ accept: (_owner: Owner) => Scope.make() });
+`,
+    );
+    const wrong = await deno(dir, ["check", "host-main.ts"]);
+    assert(wrong.code !== 0, wrong.stdout + wrong.stderr);
+    assert(
+      wrong.stderr.includes("Closeable") && wrong.stderr.includes("done"),
+      wrong.stderr,
+    );
+  });
+});
+
 // ------------------------------------------------------------------ type check
 
 Deno.test("the emitted examples and users-live.ts pass deno check under strict settings", async () => {
@@ -197,6 +242,61 @@ Deno.test("the emitted examples and users-live.ts pass deno check under strict s
 Deno.test("the emitted forms and name-collision modules pass deno check", async () => {
   await withTemporary(async (dir) => {
     await check(dir, buildForms(dir));
+  });
+});
+
+Deno.test("contextual Some payloads retain tuple shape and literals through Effect callbacks", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.copyFileSync(
+      new URL("emit/contextual-options.eff", FIXTURES),
+      `${dir}/main.eff`,
+    );
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Cause, Effect, Exit, Layer, Option, Stream } from "effect";
+import { source, nested, record, array, tupleArray, emptyTuple, selected, effectful, Probe, Stop } from "./main.ts";
+const unwrap = <A>(value: Option.Option<A>): A => {
+  if (Option.isNone(value)) throw new Error("expected Some");
+  return value.value;
+};
+let calls = 0;
+const live = Layer.succeed(Probe)({ next: () => Effect.sync(() => { calls++; return 7; }) });
+const first = await Effect.runPromise(Stream.runCollect(source));
+const second = await Effect.runPromise(Stream.runCollect(source));
+const nestedValue = unwrap(await Effect.runPromise(nested));
+const present = unwrap(await Effect.runPromise(effectful(false).pipe(Effect.provide(live))));
+const absent = await Effect.runPromise(effectful(true).pipe(Effect.provide(live)));
+const failed = await Effect.runPromiseExit(effectful(false).pipe(Effect.provide(
+  Layer.succeed(Probe)({ next: () => Effect.fail(new Stop({})) }),
+)));
+const error = Exit.isFailure(failed) ? Option.getOrUndefined(Cause.findErrorOption(failed.cause)) : undefined;
+console.log(JSON.stringify({ first, second, nested: [unwrap(nestedValue[0]), nestedValue[1]],
+  record: unwrap(await Effect.runPromise(record)), array: unwrap(await Effect.runPromise(array)),
+  tupleArray: unwrap(await Effect.runPromise(tupleArray)), emptyTuple: unwrap(await Effect.runPromise(emptyTuple)),
+  selectedSome: unwrap(selected(Option.some(9))), selectedNone: unwrap(selected(Option.none())),
+  present, absent: Option.isNone(absent), calls, failed: error instanceof Stop,
+}));
+`,
+    );
+    assertEquals(result, {
+      first: [{ kind: "End", value: 0 }],
+      second: [{ kind: "End", value: 0 }],
+      nested: [{ kind: "Value", value: 1 }, [2, "ok"]],
+      record: { kind: "End", value: 3 },
+      array: [1, 2, 3],
+      tupleArray: [[{ kind: "Value", value: 4 }, false]],
+      emptyTuple: [],
+      selectedSome: [{ kind: "Value", value: 9 }, false],
+      selectedNone: [{ kind: "End", value: 0 }, true],
+      present: [{ kind: "Value", value: 7 }, true],
+      absent: true,
+      calls: 1,
+      failed: true,
+    });
   });
 });
 
@@ -3047,6 +3147,7 @@ const Live = Layer.succeed(Child)({
   wait: () => Deferred.await(ready),
   alive: () => Effect.sync(() => active),
 });
+
 const observed = await Effect.runPromise(main().pipe(Effect.provide(Live)));
 console.log(JSON.stringify({ observed, active, released }));
 `,
@@ -3749,5 +3850,1030 @@ Deno.test("a host layer of the declared service that lacks a method gives one ho
       "users-live.ts",
       3,
     ]);
+  });
+});
+
+Deno.test("explicit scopes survive root return and share aliases across modules", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/scopes/", FIXTURES), dir);
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    const project = checkProject(fileHost, dir, ["consumer.eff"]);
+    assert(project.ok);
+    assertEquals(project.value.diagnostics, []);
+    for (
+      const diagnostics of validateProject(
+        project.value.analysis.project,
+        lowerProject(project.value),
+      ).values()
+    ) {
+      assertEquals(diagnostics, []);
+    }
+    build(dir, ["consumer.eff"]);
+    await check(dir, ["owner.ts", "consumer.ts"]);
+    const formatted = await deno(dir, [
+      "fmt",
+      "--check",
+      "owner.ts",
+      "consumer.ts",
+    ]);
+    assertEquals(formatted.code, 0, formatted.stderr);
+    const result = await runScript(
+      dir,
+      `
+import { Deferred, Effect, Layer, Option } from "effect";
+import { Child, open, openProvided, close, piped } from "./owner.ts";
+import { alias, copied, stash, stop, stopNew, provideNew, registerNew } from "./consumer.ts";
+const events: string[] = [];
+const ready = Deferred.makeUnsafe<void>();
+const live = Layer.succeed(Child)({
+  run: () => Effect.acquireUseRelease(
+    Effect.sync(() => { events.push("start"); }),
+    () => Deferred.succeed(ready, undefined).pipe(Effect.andThen(Effect.never)),
+    () => Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => { events.push("release"); }))),
+  ),
+  ready: () => Deferred.await(ready),
+});
+const owner = await Effect.runPromise(open().pipe(Effect.provide(live)));
+events.push("root-returned");
+const saved = await Effect.runPromise(stash(owner));
+const both = Option.getOrThrow(copied(owner));
+const same = both[0] === owner && both[1][0] === owner;
+const deferredClose = alias(owner);
+await Effect.runPromise(stop(saved));
+events.push("closed");
+await Effect.runPromise(deferredClose());
+await Effect.runPromise(close(owner));
+await Effect.runPromise(piped());
+await Effect.runPromise(stopNew());
+await Effect.runPromise(provideNew(Effect.void));
+await Effect.runPromise(registerNew(Effect.void));
+const providerReady = Deferred.makeUnsafe<void>();
+const provider = Layer.effect(Child)(Effect.acquireRelease(
+  Effect.sync(() => {
+    events.push("acquire-provider");
+    return { run: () => Deferred.succeed(providerReady, undefined).pipe(Effect.andThen(Effect.never)), ready: () => Effect.void };
+  }),
+  () => Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => { events.push("release-provider"); }))),
+));
+const external = Layer.succeed(Child)({ run: () => Effect.void, ready: () => Deferred.await(providerReady) });
+const provided = await Effect.runPromise(openProvided(provider).pipe(Effect.provide(external)));
+events.push("provider-root-returned");
+await Effect.runPromise(close(provided));
+console.log(JSON.stringify({ same, events }));
+`,
+    );
+    assertEquals(result, {
+      same: true,
+      events: [
+        "start",
+        "root-returned",
+        "release",
+        "closed",
+        "acquire-provider",
+        "provider-root-returned",
+        "release-provider",
+      ],
+    });
+  });
+});
+
+Deno.test("explicit close callers wait for one cleanup and retain its defects", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/scopes/", FIXTURES), dir);
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    build(dir, ["consumer.eff"]);
+    const result = await runScript(
+      dir,
+      `
+import { Cause, Deferred, Effect, Exit, Fiber } from "effect";
+import { create, close } from "./owner.ts";
+import { register, alias } from "./consumer.ts";
+const events: string[] = [];
+const owner = await Effect.runPromise(create());
+const entered = Deferred.makeUnsafe<void>();
+const release = Deferred.makeUnsafe<void>();
+await Effect.runPromise(register(owner, Deferred.succeed(entered, undefined).pipe(
+  Effect.andThen(Deferred.await(release)),
+  Effect.andThen(Effect.sync(() => { events.push("release"); })),
+)));
+await Effect.runPromise(Effect.gen(function* () {
+  const first = yield* Effect.forkChild(close(owner));
+  yield* Deferred.await(entered);
+  const second = yield* Effect.forkChild(alias(owner)().pipe(Effect.andThen(Effect.sync(() => { events.push("second"); }))));
+  yield* Effect.yieldNow;
+  if (events.length !== 0) throw new Error("close returned before release");
+  yield* register(owner, Effect.sync(() => { events.push("late-during-close"); }));
+  const cancel = yield* Effect.forkChild(Fiber.interrupt(first));
+  yield* Deferred.succeed(release, undefined);
+  yield* Fiber.join(cancel);
+  yield* Fiber.join(second);
+}));
+await Effect.runPromise(close(owner));
+await Effect.runPromise(register(owner, Effect.sync(() => { events.push("late"); })));
+await Effect.runPromise(close(owner));
+const defective = await Effect.runPromise(create());
+await Effect.runPromise(register(defective, Effect.sync(() => { events.push("remaining"); })));
+await Effect.runPromise(register(defective, Effect.die("cleanup-defect")));
+const first = await Effect.runPromiseExit(close(defective));
+const second = await Effect.runPromiseExit(alias(defective)());
+const replayed = Exit.isFailure(first) && Exit.isFailure(second) && Cause.hasDies(first.cause) && JSON.stringify(first.cause) === JSON.stringify(second.cause);
+const lateDefect = await Effect.runPromiseExit(register(owner, Effect.die("late-defect")));
+const stillClosed = await Effect.runPromiseExit(close(owner));
+console.log(JSON.stringify({ events, replayed, lateIsSeparate: Exit.isFailure(lateDefect) && Exit.isSuccess(stillClosed) }));
+`,
+    );
+    assertEquals(result, {
+      events: ["late-during-close", "release", "second", "late", "remaining"],
+      replayed: true,
+      lateIsSeparate: true,
+    });
+  });
+});
+
+Deno.test("scope registration captures services and evaluates arguments before execution", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/scopes/", FIXTURES), dir);
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    build(dir, ["consumer.eff"]);
+    const result = await runScript(
+      dir,
+      `
+import { Deferred, Effect, Fiber, Layer } from "effect";
+import { Audit, Work, Order, create, register, ordinary, close, ordered, provideOrdered } from "./owner.ts";
+const events: string[] = [];
+const owner = await Effect.runPromise(create());
+const audit = (name: string) => Layer.succeed(Audit)({ release: () => Effect.sync(() => { events.push(name); }) });
+await Effect.runPromise(register(owner).pipe(Effect.provide(audit("registration-context"))));
+events.push("registered");
+await Effect.runPromise(close(owner).pipe(Effect.provide(audit("closing-context"))));
+await Effect.runPromise(register(owner).pipe(Effect.provide(audit("late-context"))));
+const orderOwner = await Effect.runPromise(create());
+const order = Layer.succeed(Order)({
+  owner: () => Effect.sync(() => { events.push("owner"); return orderOwner; }),
+  job: () => Effect.sync(() => { events.push("job"); return Effect.sync(() => { events.push("execute"); }); }),
+  mark: (value: string) => Effect.sync(() => { events.push(value); }),
+});
+await Effect.runPromise(ordered().pipe(Effect.provide(order)));
+await Effect.runPromise(provideOrdered().pipe(Effect.provide(order)));
+await Effect.runPromise(close(orderOwner));
+const another = await Effect.runPromise(create());
+const entered = Deferred.makeUnsafe<void>();
+const release = Deferred.makeUnsafe<void>();
+const work = Layer.succeed(Work)({ wait: () => Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(release)), Effect.as(7)) });
+const value = await Effect.runPromise(Effect.gen(function* () {
+  const fiber = yield* Effect.forkChild(ordinary(another).pipe(Effect.provide(work)));
+  yield* Deferred.await(entered);
+  yield* close(another);
+  events.push("ordinary-still-running");
+  yield* Deferred.succeed(release, undefined);
+  return yield* Fiber.join(fiber);
+}));
+const after = await Effect.runPromise(ordinary(another).pipe(Effect.provide(work)));
+console.log(JSON.stringify({ events, value, after }));
+`,
+    );
+    assertEquals(result, {
+      events: [
+        "registered",
+        "registration-context",
+        "late-context",
+        "owner",
+        "job",
+        "registered",
+        "owner",
+        "job",
+        "execute",
+        "execute",
+        "ordinary-still-running",
+      ],
+      value: 7,
+      after: 7,
+    });
+  });
+});
+
+Deno.test("mapGroups emits typed live routing with fresh state and closes unused or partial groups", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/groups/", FIXTURES), dir);
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    const checked = checkProject(fileHost, dir, ["main.eff"]);
+    assert(checked.ok);
+    assertEquals(checked.value.diagnostics, []);
+    for (
+      const diagnostics of validateProject(
+        checked.value.analysis.project,
+        lowerProject(checked.value),
+      ).values()
+    ) assertEquals(diagnostics, []);
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const formatted = await deno(dir, [
+      "fmt",
+      "--check",
+      "main.ts",
+      "contracts.ts",
+    ]);
+    assertEquals(formatted.code, 0, formatted.stderr);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Stream } from "effect";
+import { grouped, skipped, firsts, branded } from "./main.ts";
+import { Key } from "./contracts.ts";
+let pulls = 0;
+const source = Stream.unfold(0, n => Effect.sync(() => { pulls++; return n < 6 ? [n, n + 1] as const : undefined; }));
+const saved = grouped(source);
+const before = pulls;
+const runs = [];
+for (let run = 0; run < 2; run++) runs.push((await Effect.runPromise(Stream.runCollect(saved))).sort((a, b) => a.key - b.key));
+const unused = (await Effect.runPromise(Stream.runCollect(skipped(Stream.make(0, 0, 0, 1, 1, 0, 2, 2, 0))))).sort();
+const partial = (await Effect.runPromise(Stream.runCollect(firsts(Stream.make(0, 0, 0, 1, 1, 0, 2, 2, 0))))).sort((a, b) => a.key - b.key);
+const keys = await Effect.runPromise(Stream.runCollect(branded(Stream.make(Key.make("a"), Key.make("b"), Key.make("a")))));
+const empty = await Effect.runPromise(Stream.runCollect(grouped(Stream.empty)));
+console.log(JSON.stringify({ before, pulls, runs, unused, partial, keys: keys.sort((a, b) => a[0]!.localeCompare(b[0]!)), empty }));
+`,
+    );
+    const groups = [{ key: 0, items: [0, 3] }, { key: 1, items: [1, 4] }, {
+      key: 2,
+      items: [2, 5],
+    }];
+    assertEquals(result, {
+      before: 0,
+      pulls: 14,
+      runs: [groups, groups],
+      unused: [0, 1, 2],
+      partial: [0, 1, 2].map((key) => ({
+        key,
+        first: { _id: "Option", _tag: "Some", value: key },
+      })),
+      keys: [["a", "a"], ["b"]],
+      empty: [],
+    });
+  });
+});
+
+Deno.test("mapGroups emits a later live key, waits for cleanup, and applies per-key backpressure", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/groups/", FIXTURES), dir);
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Deferred, Effect, Fiber, Option, Stream } from "effect";
+import { supervised } from "./main.ts";
+import { Pull, Use } from "./contracts.ts";
+const ready = Deferred.makeUnsafe<void>();
+const events: string[] = [];
+const source = Stream.unfold(0, (n): Effect.Effect<readonly [number, number]> => n < 2 ? Effect.succeed([n, n + 1] as const) : Effect.acquireUseRelease(
+  Deferred.succeed(ready, undefined), () => Effect.never,
+  () => Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => { events.push("source-release"); })))));
+const service = { value: (key: number) => Effect.acquireUseRelease(Effect.void,
+  () => key === 0 ? Effect.never : Deferred.await(ready).pipe(Effect.as(key)),
+  () => Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => { events.push("group-release:" + key); })))) };
+const first = await Effect.runPromise(Stream.runHead(supervised(source)).pipe(Effect.provideService(Use, service), Effect.provideService(Pull, { next: () => Effect.die("unexpected pull service") }), Effect.timeout("5 seconds")));
+const entered = Deferred.makeUnsafe<void>();
+const release = Deferred.makeUnsafe<void>();
+const trace: string[] = [];
+const pausedSource = Stream.unfold(0, n => Effect.sync(() => { trace.push("pull:" + n); return n < 4 ? [n < 3 ? 0 : 1, n + 1] as const : undefined; }));
+let paused: string[] = [];
+const outputs = await Effect.runPromise(Effect.gen(function* () {
+  const child = yield* Effect.forkChild(Stream.runCollect(supervised(pausedSource)).pipe(Effect.provideService(Use, {
+    value: key => key === 0 ? Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(release)), Effect.as(key)) : Effect.succeed(key)
+  })));
+  yield* Deferred.await(entered);
+  yield* Effect.yieldNow;
+  paused = trace.slice();
+  yield* Deferred.succeed(release, undefined);
+  return yield* Fiber.join(child);
+}).pipe(Effect.provideService(Pull, { next: () => Effect.die("unexpected pull service") }), Effect.timeout("5 seconds")));
+console.log(JSON.stringify({ first: Option.getOrUndefined(first), events: events.sort(), paused, outputs: outputs.sort(), trace }));
+`,
+    );
+    assertEquals(result, {
+      first: 1,
+      events: ["group-release:0", "group-release:1", "source-release"],
+      paused: ["pull:0", "pull:1", "pull:2"],
+      outputs: [0, 1],
+      trace: ["pull:0", "pull:1", "pull:2", "pull:3", "pull:4"],
+    });
+  });
+});
+
+Deno.test("mapGroups preserves construction and deferred services and closes callback-owned scoped workers", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/groups/", FIXTURES), dir);
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Cause, Deferred, Effect, Exit, Option, Stream } from "effect";
+import { deferred, scopedWork } from "./main.ts";
+import { BuildStop, Factory, Pull, Use, Worker } from "./contracts.ts";
+const calls: string[] = [];
+const saved = await Effect.runPromise(deferred().pipe(Effect.provideService(Factory, {
+  source: () => Effect.sync(() => { calls.push("build"); return Stream.unfold(0, n => Pull.use(p => p.next(n)).pipe(Effect.map(Option.getOrUndefined))); })
+})));
+const before = calls.slice();
+const runs = [];
+for (const prefix of [10, 20]) runs.push((await Effect.runPromise(Stream.runCollect(saved).pipe(
+  Effect.provideService(Pull, { next: n => Effect.sync(() => { calls.push("pull:" + prefix + ":" + n); return n < 2 ? Option.some([n, n + 1] as const) : Option.none(); }) }),
+  Effect.provideService(Use, { value: key => Effect.sync(() => { calls.push("use:" + prefix + ":" + key); return prefix + key; }) })
+))).sort());
+const failed = await Effect.runPromiseExit(deferred().pipe(Effect.provideService(Factory, { source: () => Effect.fail(new BuildStop({})) })));
+const started = new Map<number, Deferred.Deferred<void>>([[0, Deferred.makeUnsafe<void>()], [1, Deferred.makeUnsafe<void>()]]);
+const workerEvents: string[] = [];
+const worker = {
+  run: (key: number) => Effect.acquireUseRelease(Deferred.succeed(started.get(key)!, undefined), () => Effect.never,
+    () => Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => { workerEvents.push("release:" + key); })))),
+  wait: (key: number) => Deferred.await(started.get(key)!)
+};
+const worked: number[] = [];
+await Effect.runPromise(Stream.runForEach(scopedWork(Stream.make(0, 1)), key => Effect.sync(() => {
+  if (!workerEvents.includes("release:" + key)) throw new Error("result before callback worker cleanup");
+  worked.push(key);
+})).pipe(Effect.provideService(Worker, worker), Effect.timeout("5 seconds")));
+console.log(JSON.stringify({ before, runs, buildFailure: Exit.isFailure(failed) && Option.getOrUndefined(Cause.findErrorOption(failed.cause))?._tag,
+  pulls: calls.filter(c => c.startsWith("pull:")).length, uses: calls.filter(c => c.startsWith("use:")).length,
+  worked: worked.sort(), workerEvents: workerEvents.sort() }));
+`,
+    );
+    assertEquals(result, {
+      before: ["build"],
+      runs: [[10, 11], [20, 21]],
+      buildFailure: "contracts#BuildStop",
+      pulls: 6,
+      uses: 4,
+      worked: [0, 1],
+      workerEvents: ["release:0", "release:1"],
+    });
+  });
+});
+
+Deno.test("mapGroups source failure, callback failure, and interruption await peer cleanup", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/groups/", FIXTURES), dir);
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Cause, Deferred, Effect, Exit, Fiber, Option, Stream } from "effect";
+import { supervised } from "./main.ts";
+import { Pull, SourceStop, Use, UseStop } from "./contracts.ts";
+const outcomes = [];
+for (const mode of ["source", "callback", "interrupt"] as const) {
+  const entered = Deferred.makeUnsafe<void>();
+  const ready = Deferred.makeUnsafe<void>();
+  const peer = Deferred.makeUnsafe<void>();
+  const events: string[] = [];
+  const source = mode === "source" ? Stream.concat(Stream.make(0), Stream.fromEffect(Deferred.await(entered).pipe(Effect.andThen(Effect.fail(new SourceStop({}))))))
+    : mode === "interrupt" ? Stream.make(0) : Stream.concat(Stream.make(0, 1), Stream.fromEffect(Effect.acquireUseRelease(Deferred.succeed(ready, undefined), () => Effect.never,
+      () => Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => { events.push("source-release"); }))))));
+  const program = Stream.runDrain(supervised(source)).pipe(Effect.provideService(Use, {
+    value: key => Effect.acquireUseRelease(Deferred.succeed(entered, undefined),
+      () => mode === "callback" ? key === 0 ? Deferred.await(peer).pipe(Effect.andThen(Deferred.await(ready)), Effect.andThen(Effect.fail(new UseStop({}))))
+        : Deferred.succeed(peer, undefined).pipe(Effect.andThen(Effect.never)) : Effect.never,
+      () => Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => { events.push("group-release:" + key); }))))
+  }), Effect.provideService(Pull, { next: () => Effect.die("unexpected pull service") }));
+  const exit = mode === "interrupt" ? await Effect.runPromise(Effect.gen(function* () {
+    const child = yield* Effect.forkChild(program);
+    yield* Deferred.await(entered);
+    yield* Fiber.interrupt(child);
+    return yield* Fiber.await(child);
+  }).pipe(Effect.timeout("5 seconds"))) : await Effect.runPromiseExit(program.pipe(Effect.timeout("5 seconds")));
+  outcomes.push({ mode, failed: Exit.isFailure(exit), error: Exit.isFailure(exit) ? Option.getOrUndefined(Cause.findErrorOption(exit.cause))?._tag ?? null : null, events: events.sort() });
+}
+console.log(JSON.stringify(outcomes));
+`,
+    );
+    assertEquals(result, [
+      {
+        mode: "source",
+        failed: true,
+        error: "contracts#SourceStop",
+        events: ["group-release:0"],
+      },
+      {
+        mode: "callback",
+        failed: true,
+        error: "contracts#UseStop",
+        events: ["group-release:0", "group-release:1", "source-release"],
+      },
+      {
+        mode: "interrupt",
+        failed: true,
+        error: null,
+        events: ["group-release:0"],
+      },
+    ]);
+  });
+});
+
+Deno.test("Sink transduction replays chunks, repeats with fresh state, and preserves terminal semantics", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/sinks/", FIXTURES), dir);
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    const checked = checkProject(fileHost, dir, ["main.eff"]);
+    assert(checked.ok);
+    assertEquals(checked.value.diagnostics, []);
+    for (
+      const diagnostics of validateProject(
+        checked.value.analysis.project,
+        lowerProject(checked.value),
+      ).values()
+    ) assertEquals(diagnostics, []);
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const formatted = await deno(dir, [
+      "fmt",
+      "--check",
+      "main.ts",
+      "contracts.ts",
+    ]);
+    assertEquals(formatted.code, 0, formatted.stderr);
+    const result = await runScript(
+      dir,
+      `
+import { Cause, Effect, Sink, Stream } from "effect";
+import { batches, inline, first, broad, discardForeign, makePairs, withSink } from "./main.ts";
+const outputs: Array<Array<ReadonlyArray<number>>> = [];
+for (const size of [1, 2, 3, 10]) {
+  const source = Stream.fromArray([1, 2, 3, 4, 5]).pipe(Stream.rechunk(size));
+  const saved = batches(source);
+  for (let run = 0; run < 2; run++) outputs.push(await Effect.runPromise(Stream.runCollect(saved)));
+}
+const exact = await Effect.runPromise(Stream.runCollect(inline(Stream.make(1, 2, 3, 4))));
+const empty = await Effect.runPromise(Stream.runCollect(inline(Stream.empty)));
+const terminal = await Effect.runPromise(first(Stream.make(1, 2, 3, 4)));
+const wider = await Effect.runPromise(Stream.runCollect(broad(Stream.make("a", "b"), Sink.take<string | number>(2))));
+const foreign = await Effect.runPromise(discardForeign(Stream.make(1, 2), Sink.succeed("ok", ["rest"])));
+const made = await Effect.runPromise(Stream.runCollect(withSink(Stream.make(1, 2, 3), makePairs())));
+const trace: string[] = [];
+const chunked = Stream.fromPull(Effect.sync(() => {
+  let index = 0;
+  return Effect.suspend(() => { trace.push("pull:" + index); return index++ === 0 ? Effect.succeed([1, 2, 3, 4, 5] as const) : Cause.done(); });
+}));
+await Effect.runPromise(Stream.runForEach(batches(chunked), (batch) => Effect.sync(() => { trace.push("batch:" + batch.join(",")); })));
+let zeroPulls = 0;
+const unpulled = Stream.unfold(0, (n) => Effect.sync(() => { zeroPulls++; return [n, n + 1] as const; }));
+const zero = await Effect.runPromise(Stream.runCollect(withSink(unpulled, Sink.succeed([42])).pipe(Stream.take(3))));
+console.log(JSON.stringify({ outputs, exact, empty, terminal, wider, foreign, made, trace, zeroPulls, zero }));
+`,
+    );
+    assertEquals(result, {
+      outputs: Array.from({ length: 8 }, () => [[1, 2], [3, 4], [5]]),
+      exact: [[1, 2], [3, 4], []],
+      empty: [[]],
+      terminal: [1, 2],
+      wider: [["a", "b"], []],
+      foreign: "ok",
+      made: [[1, 2], [3]],
+      trace: ["pull:0", "batch:1,2", "batch:3,4", "pull:1", "batch:5"],
+      zeroPulls: 0,
+      zero: [[42], [42], [42]],
+    });
+  });
+});
+
+Deno.test("Sink construction effects stay separate from consumption services and failures", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/sinks/", FIXTURES), dir);
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    build(dir, ["main.eff"]);
+    const result = await runScript(
+      dir,
+      `
+import { Cause, Effect, Exit, Layer, Option, Sink, Stream } from "effect";
+import { Add, Factory, Pull, SourceStop, SinkStop, BuildStop } from "./contracts.ts";
+import { fromFactory } from "./main.ts";
+const events: string[] = [];
+const factory = Layer.succeed(Factory)({
+  source: () => Effect.sync(() => { events.push("source"); return Stream.unfold(0, (n) => Pull.use((pull) => pull.next(n)).pipe(Effect.map(Option.getOrUndefined))); }),
+  sink: () => Effect.sync(() => { events.push("sink"); return Sink.foldUntil(() => 0, 2, (sum: number, n: number) => Add.use((add) => add.add(sum, n))); }),
+});
+const stream: Stream.Stream<number, SourceStop | SinkStop, Pull | Add> = await Effect.runPromise(fromFactory().pipe(Effect.provide(factory)));
+const atConstruction = [...events];
+const consume = (sourceFail: boolean, sinkFail: boolean) => {
+  const seen: number[] = [];
+  const job = Stream.runForEach(stream, (value) => Effect.sync(() => { seen.push(value); })).pipe(
+    Effect.provideService(Pull, { next: (state) => Effect.sync(() => { events.push("pull:" + state); }).pipe(Effect.andThen(sourceFail && state === 3 ? Effect.fail(new SourceStop({})) : Effect.succeed(state < 4 ? Option.some([state + 1, state + 1] as const) : Option.none()))) }),
+    Effect.provideService(Add, { add: (sum, n) => Effect.sync(() => { events.push("add:" + n); }).pipe(Effect.andThen(sinkFail && n === 3 ? Effect.fail(new SinkStop({})) : Effect.succeed(sum + n))) }),
+  );
+  return Effect.exit(job).pipe(Effect.map((exit) => ({ seen, tag: Exit.isFailure(exit) ? Option.getOrUndefined(Cause.findErrorOption(exit.cause))?._tag : "Success" })));
+};
+const sinkFailure = await Effect.runPromise(consume(false, true));
+const sourceFailure = await Effect.runPromise(consume(true, false));
+const success = await Effect.runPromise(consume(false, false));
+const failed = await Effect.runPromiseExit(fromFactory().pipe(Effect.provideService(Factory, {
+  source: () => Effect.fail(new BuildStop({})),
+  sink: () => Effect.sync(() => { throw new Error("sink constructed after failed source"); }),
+})));
+console.log(JSON.stringify({ atConstruction, sinkFailure, sourceFailure, success, buildFailure: Exit.isFailure(failed) && Cause.hasFails(failed.cause) }));
+`,
+    );
+    assertEquals(result, {
+      atConstruction: ["source", "sink"],
+      sinkFailure: { seen: [3], tag: "contracts#SinkStop" },
+      sourceFailure: { seen: [3, 3], tag: "contracts#SourceStop" },
+      success: { seen: [3, 7, 0], tag: "Success" },
+      buildFailure: true,
+    });
+  });
+});
+
+Deno.test("Sink transduction retains consumption scopes and closes pending pulls on interruption", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/sinks/", FIXTURES), dir);
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    build(dir, ["main.eff"]);
+    const result = await runScript(
+      dir,
+      `
+import { Cause, Deferred, Effect, Exit, Fiber, Scope, Sink, Stream } from "effect";
+import { batches, withSink } from "./main.ts";
+const events: string[] = [];
+let index = 0;
+const tracked = Sink.fromTransform<number, number[], never, never, number>((upstream, scope) => Effect.gen(function* () {
+  const current = ++index;
+  events.push("start:" + current);
+  yield* Scope.addFinalizer(scope, Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => { events.push("release:" + current); }))));
+  return yield* Sink.take<number>(2).transform(upstream, scope);
+}));
+await Effect.runPromise(Stream.runForEach(withSink(Stream.make(1, 2, 3), tracked), (value) => Effect.sync(() => { events.push("batch:" + value.join(",")); })));
+const normal = [...events];
+events.length = 0;
+const failure = await Effect.runPromiseExit(Stream.runForEach(withSink(Stream.make(1, 2, 3), tracked), () => Effect.fail("consumer-stop")));
+const consumerReleased = events.includes("release:3") && Exit.isFailure(failure);
+events.length = 0;
+const entered = Deferred.makeUnsafe<void>();
+const pending = Stream.unfold(0, (state): Effect.Effect<readonly [number, number]> => state === 0 ? Effect.succeed([1, 1] as const) : Effect.acquireUseRelease(
+  Deferred.succeed(entered, undefined), () => Effect.never,
+  () => Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => { events.push("source-release"); }))),
+));
+await Effect.runPromise(Effect.gen(function* () {
+  const child = yield* Effect.forkChild(Stream.runDrain(withSink(pending, tracked)));
+  yield* Deferred.await(entered);
+  yield* Fiber.interrupt(child);
+}));
+const interrupted = [...events].sort();
+const seen: Array<ReadonlyArray<number>> = [];
+const defect = await Effect.runPromiseExit(Stream.runForEach(batches(Stream.concat(Stream.make(1, 2, 3), Stream.fromEffect(Effect.die("source-defect")))), (value) => Effect.sync(() => { seen.push(value); })));
+console.log(JSON.stringify({ normal, consumerReleased, interrupted, seen, defect: Exit.isFailure(defect) && Cause.hasDies(defect.cause) }));
+`,
+    );
+    assertEquals(result, {
+      normal: [
+        "start:1",
+        "batch:1,2",
+        "start:2",
+        "batch:3",
+        "release:2",
+        "release:1",
+      ],
+      consumerReleased: true,
+      interrupted: ["release:4", "source-release", "start:4"],
+      seen: [[1, 2]],
+      defect: true,
+    });
+  });
+});
+
+Deno.test("Sink host providers retain leftover types across the existing interface boundary", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/sinks/", FIXTURES), dir);
+    Deno.writeTextFileSync(
+      `${dir}/effective.json`,
+      JSON.stringify({
+        host: { sinks: { interface: "./host.effi", module: "./host.ts" } },
+      }),
+    );
+    build(dir, ["host-main.eff"]);
+    await check(dir, ["host-main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect, Stream } from "effect";
+import { make } from "./host-main.ts";
+import { Add, Pull } from "./contracts.ts";
+const source = await Effect.runPromise(make());
+const values = await Effect.runPromise(Stream.runCollect(source).pipe(
+  Effect.provideService(Add, { add: (sum, n) => Effect.succeed(sum + n) }),
+  Effect.provideService(Pull, { next: () => Effect.die("unexpected pull service") }),
+));
+console.log(JSON.stringify(values));
+`,
+    );
+    assertEquals(result, [3, 3]);
+    Deno.writeTextFileSync(
+      `${dir}/host.ts`,
+      `
+import { Effect, Layer, Sink, Stream } from "effect";
+import { Factory } from "./contracts.ts";
+export const FactoryLive = Layer.succeed(Factory)({
+  source: () => Effect.succeed(Stream.make(1)),
+  sink: () => Effect.succeed(Sink.succeed(1, ["wrong leftover"])),
+});
+`,
+    );
+    const wrong = await deno(dir, ["check", "host-main.ts"]);
+    assert(
+      wrong.code !== 0 && wrong.stderr.includes("string") &&
+        wrong.stderr.includes("number"),
+      wrong.stderr,
+    );
+  });
+});
+
+Deno.test("aggregateStream emits target batches, replay, and demand behavior", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/sinks/", FIXTURES), dir);
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    const checked = checkProject(fileHost, dir, ["main.eff"]);
+    assert(checked.ok);
+    assertEquals(checked.value.diagnostics, []);
+    for (
+      const diagnostics of validateProject(
+        checked.value.analysis.project,
+        lowerProject(checked.value),
+      ).values()
+    ) assertEquals(diagnostics, []);
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Deferred, Effect, Fiber, Sink, Stream } from "effect";
+import { aggregated, aggregatedInline, aggregateOne, aggregatedBroad, aggregateWithSink } from "./main.ts";
+const outputs: Array<Array<ReadonlyArray<number>>> = [];
+const targetOutputs: Array<Array<ReadonlyArray<number>>> = [];
+for (const size of [1, 2, 3, 10]) {
+  const source = Stream.fromArray([1, 2, 3, 4, 5]).pipe(Stream.rechunk(size));
+  const saved = aggregated(source);
+  for (let run = 0; run < 2; run++) {
+    outputs.push(await Effect.runPromise(Stream.runCollect(saved)));
+    targetOutputs.push(await Effect.runPromise(Stream.runCollect(Stream.aggregate(source, Sink.take<number>(2)))));
+  }
+}
+const exact = await Effect.runPromise(Stream.runCollect(aggregatedInline(Stream.make(1, 2, 3, 4))));
+const empty = await Effect.runPromise(Stream.runCollect(aggregatedInline(Stream.empty)));
+const broad = await Effect.runPromise(Stream.runCollect(aggregatedBroad(Stream.make("a", "b"), Sink.take<string | number>(2))));
+const zero = await Effect.runPromise(Stream.runCollect(aggregateWithSink(Stream.never, Sink.succeed([42])).pipe(Stream.take(3))));
+let pulls = 0;
+const demand = await Effect.runPromise(Effect.gen(function* () {
+  const first = yield* Deferred.make<void>();
+  const release = yield* Deferred.make<void>();
+  const source = Stream.unfold(0, (n) => Effect.sync(() => { pulls++; return n < 3 ? [n + 1, n + 1] as const : undefined; }));
+  const child = yield* Stream.runForEach(aggregateOne(source), (batch) => batch[0] === 1
+    ? Deferred.succeed(first, undefined).pipe(Effect.andThen(Deferred.await(release)))
+    : Effect.void).pipe(Effect.forkChild);
+  yield* Deferred.await(first);
+  yield* Effect.yieldNow;
+  const blocked = pulls;
+  yield* Deferred.succeed(release, undefined);
+  yield* Fiber.join(child);
+  return { blocked, total: pulls };
+}).pipe(Effect.timeout("5 seconds")));
+console.log(JSON.stringify({ outputs, targetOutputs, exact, empty, broad, zero, demand }));
+`,
+    );
+    const actual = result as {
+      outputs: unknown[];
+      targetOutputs: unknown[];
+      exact: unknown;
+      empty: unknown;
+      broad: unknown;
+      zero: unknown;
+      demand: unknown;
+    };
+    assertEquals(actual.outputs, actual.targetOutputs);
+    assertEquals(actual.outputs.length, 8);
+    assertEquals({
+      exact: actual.exact,
+      empty: actual.empty,
+      broad: actual.broad,
+      zero: actual.zero,
+      demand: actual.demand,
+    }, {
+      exact: [[1, 2], [3, 4]],
+      empty: [],
+      broad: [["a", "b"]],
+      zero: [[42], [42], [42]],
+      demand: { blocked: 1, total: 4 },
+    });
+  });
+});
+
+Deno.test("aggregateStream retains deferred failures and awaits cancellation cleanup", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/sinks/", FIXTURES), dir);
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Cause, Deferred, Effect, Exit, Fiber, Layer, Option, Sink, Stream } from "effect";
+import { aggregatedFailing, aggregateWithSink, aggregateFromFactory } from "./main.ts";
+import { Add, BuildStop, Factory, Pull, SinkStop, SourceStop } from "./contracts.ts";
+const seen: Array<ReadonlyArray<number>> = [];
+const sourceFailure = await Effect.runPromiseExit(Stream.runForEach(
+  aggregatedFailing(Stream.concat(Stream.fromArray([1, 2, 3]), Stream.fail(new SourceStop({})))),
+  (batch) => Effect.sync(() => { seen.push(batch); }),
+));
+const events: string[] = [];
+const factory = Layer.succeed(Factory)({
+  source: () => Effect.sync(() => { events.push("source"); return Stream.unwrap(Pull.use((pull) => pull.next(0)).pipe(Effect.map(() => Stream.fromArray([1, 2, 3, 4])))); }),
+  sink: () => Effect.sync(() => { events.push("sink"); return Sink.foldUntil(() => 0, 2, (sum: number, n: number) => Add.use((add) => add.add(sum, n))); }),
+});
+
+const saved = await Effect.runPromise(aggregateFromFactory().pipe(Effect.provide(factory)));
+const atConstruction = [...events];
+const consume = (failSink: boolean) => {
+  const values: number[] = [];
+  return Effect.exit(Stream.runForEach(saved, (n) => Effect.sync(() => { values.push(n); })).pipe(
+    Effect.provideService(Pull, { next: (state) => Effect.succeed(state < 4 ? Option.some([state + 1, state + 1] as const) : Option.none()) }),
+    Effect.provideService(Add, { add: (sum, n) => failSink && n === 3 ? Effect.fail(new SinkStop({})) : Effect.succeed(sum + n) }),
+  )).pipe(Effect.map((exit) => ({ values, tag: Exit.isFailure(exit) ? Option.getOrUndefined(Cause.findErrorOption(exit.cause))?._tag : "Success" })));
+};
+const failed = await Effect.runPromise(consume(true));
+const succeeded = await Effect.runPromise(consume(false));
+const buildFailure = await Effect.runPromiseExit(aggregateFromFactory().pipe(Effect.provideService(Factory, {
+  source: () => Effect.fail(new BuildStop({})),
+  sink: () => Effect.sync(() => { throw new Error("sink should not be constructed"); }),
+})));
+const cleanup: string[] = [];
+const cancellation = await Effect.runPromise(Effect.gen(function* () {
+  const pending = yield* Deferred.make<void>();
+  const source = Stream.unfold(0, (n): Effect.Effect<readonly [number, number] | undefined> => n === 0
+    ? Effect.succeed([1, 1] as const)
+    : Effect.acquireUseRelease(
+      Deferred.succeed(pending, undefined), () => Effect.never,
+      () => Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => { cleanup.push("source-release"); }))),
+    ));
+  const child = yield* Stream.runCollect(aggregateWithSink(source, Sink.take<number>(2))).pipe(Effect.forkChild);
+  yield* Deferred.await(pending);
+  yield* Fiber.interrupt(child);
+  return yield* Effect.exit(Fiber.join(child));
+}).pipe(Effect.timeout("5 seconds")));
+console.log(JSON.stringify({
+  seen, sourceFailure: Exit.isFailure(sourceFailure) && Option.getOrUndefined(Cause.findErrorOption(sourceFailure.cause))?._tag,
+  atConstruction, failed, succeeded, buildFailure: Exit.isFailure(buildFailure) && Cause.hasFails(buildFailure.cause),
+  cancellation: Exit.isFailure(cancellation) && Cause.hasInterrupts(cancellation.cause), cleanup,
+}));
+`,
+    );
+    assertEquals(result, {
+      seen: [[1, 2], [3]],
+      sourceFailure: "contracts#SourceStop",
+      atConstruction: ["source", "sink"],
+      failed: { values: [3], tag: "contracts#SinkStop" },
+      succeeded: { values: [3, 7], tag: "Success" },
+      buildFailure: true,
+      cancellation: true,
+      cleanup: ["source-release"],
+    });
+  });
+});
+
+Deno.test("general Schedule values drive timed aggregation with fresh state and cleanup", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/schedules/", FIXTURES), dir);
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    const checked = checkProject(fileHost, dir, ["main.eff"]);
+    assert(checked.ok);
+    assertEquals(checked.value.diagnostics, []);
+    for (
+      const diagnostics of validateProject(
+        checked.value.analysis.project,
+        lowerProject(checked.value),
+      ).values()
+    ) {
+      assertEquals(diagnostics, []);
+    }
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Cause, Deferred, Duration, Effect, Exit, Fiber, Option, Pull, Schedule, Stream } from "effect";
+import { TestClock } from "effect/testing";
+import { controlled, custom, early, mapped, Policy, Stop, timed } from "./main.ts";
+let chooseCalls = 0;
+let labelCalls = 0;
+const good = {
+  choose: (_input: Option.Option<ReadonlyArray<number>>, attempt: number) => Effect.sync(() => { chooseCalls++; return attempt; }),
+  label: (output: number) => Effect.sync(() => { labelCalls++; return output + 100; }),
+};
+const atConstruction = [chooseCalls, labelCalls];
+const run = Effect.gen(function* () {
+  const step = yield* Schedule.toStep(mapped);
+  const [first, firstDelay] = yield* step(0, Option.none());
+  const [second] = yield* step(1, Option.some([1]));
+  const done = yield* Pull.matchEffect(step(2, Option.some([2])), {
+    onSuccess: () => Effect.succeed(-1),
+    onDone: Effect.succeed,
+    onFailure: Effect.failCause,
+  });
+  return [first, Duration.toMillis(firstDelay), second, done];
+});
+
+const first = await Effect.runPromise(Effect.provideService(run, Policy, good));
+const second = await Effect.runPromise(Effect.provideService(run, Policy, good));
+let failedLabels = 0;
+const completionFailure = await Effect.runPromiseExit(Effect.provideService(run, Policy, {
+  choose: good.choose,
+  label: (output: number) => Effect.sync(() => ++failedLabels).pipe(Effect.flatMap((n) =>
+    n === 3 ? Effect.fail(new Stop({})) : Effect.succeed(output + 100))),
+}));
+let pulls = 0;
+const ended = await Effect.runPromise(Stream.runCollect(early(Stream.unfold(0, (n) => Effect.sync(() => {
+  pulls++;
+  return n < 3 ? [n + 1, n + 1] as const : undefined;
+})))).pipe(Effect.timeout("5 seconds")));
+const flushed = await Effect.runPromise(Effect.gen(function* () {
+  const firstPull = yield* Deferred.make<void>();
+  const source = Stream.unfold(0, (n): Effect.Effect<readonly [number, number] | undefined> =>
+    n === 0 ? Deferred.succeed(firstPull, undefined).pipe(Effect.as([1, 1] as const)) : Effect.never);
+  const fiber = yield* Stream.runCollect(Stream.take(timed(source), 1)).pipe(Effect.forkChild);
+  yield* Deferred.await(firstPull);
+  yield* TestClock.adjust("1 seconds");
+  return yield* Fiber.join(fiber);
+}).pipe(Effect.provide(TestClock.layer()), Effect.timeout("5 seconds")));
+const events: string[] = [];
+const source = Stream.scoped(Stream.fromEffect(Effect.acquireRelease(
+  Effect.sync(() => { events.push("acquire"); return 1; }),
+  () => Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => { events.push("release"); }))),
+))).pipe(Stream.concat(Stream.never));
+const failed = await Effect.runPromiseExit(Stream.runCollect(controlled(source)).pipe(
+  Effect.provideService(Policy, {
+    choose: good.choose,
+    label: (_output: number) => Effect.fail(new Stop({})),
+  }),
+  Effect.timeout("5 seconds"),
+));
+console.log(JSON.stringify({
+  atConstruction, first, second, chooseCalls, labelCalls, failedLabels,
+  completionFailure: Exit.isFailure(completionFailure) ? Option.getOrUndefined(Cause.findErrorOption(completionFailure.cause))?._tag : "Success",
+  ended, pulls, flushed, events,
+  failed: Exit.isFailure(failed) ? Option.getOrUndefined(Cause.findErrorOption(failed.cause))?._tag : "Success",
+}));
+`,
+    );
+    assertEquals(result, {
+      atConstruction: [0, 0],
+      first: [101, 0, 102, 102],
+      second: [101, 0, 102, 102],
+      chooseCalls: 11,
+      labelCalls: 6,
+      failedLabels: 3,
+      completionFailure: "main#Stop",
+      ended: [[1]],
+      pulls: 1,
+      flushed: [[1]],
+      events: ["acquire", "release"],
+      failed: "main#Stop",
+    });
+  });
+});
+
+Deno.test("composed Schedule values preserve delays, phases, fresh state, and failure", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/schedules/", FIXTURES), dir);
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    const checked = checkProject(fileHost, dir, ["composition.eff"]);
+    assert(checked.ok);
+    assertEquals(checked.value.diagnostics, []);
+    for (
+      const diagnostics of validateProject(
+        checked.value.analysis.project,
+        lowerProject(checked.value),
+      ).values()
+    ) {
+      assertEquals(diagnostics, []);
+    }
+    build(dir, ["composition.eff"]);
+    await check(dir, ["composition.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Cause, Duration, Effect, Exit, Option, Pull, Schedule, Stream } from "effect";
+import { assembled, batches, combined, Factory, fastest, LeftPolicy, LeftStop, phases, RightPolicy, RightStop, short, slowest } from "./composition.ts";
+const trace = (policy: Schedule.Schedule<number>) => Effect.gen(function* () {
+  const step = yield* Schedule.toStep(policy);
+  const decisions: unknown[] = [];
+  for (let index = 0; index < 6; index++) {
+    const result = yield* Pull.matchEffect(step(index * 100, undefined), {
+      onSuccess: ([output, delay]) => Effect.succeed({ kind: "Continue" as const, output, delay: Duration.toMillis(delay) }),
+      onDone: (output) => Effect.succeed({ kind: "Done" as const, output }),
+      onFailure: Effect.failCause,
+    });
+    decisions.push(result);
+    if (result.kind === "Done") break;
+  }
+  return decisions;
+});
+const first = [
+  await Effect.runPromise(trace(slowest)),
+  await Effect.runPromise(trace(fastest)),
+  await Effect.runPromise(trace(phases)),
+];
+const second = [
+  await Effect.runPromise(trace(slowest)),
+  await Effect.runPromise(trace(fastest)),
+  await Effect.runPromise(trace(phases)),
+];
+let leftCalls = 0;
+let rightCalls = 0;
+const service = {
+  left: { next: () => Effect.sync(() => ++leftCalls).pipe(Effect.flatMap((n) => n === 2 ? Effect.fail(new LeftStop({})) : Effect.succeed(n))) },
+  right: { next: () => Effect.sync(() => ++rightCalls) },
+};
+const atConstruction = [leftCalls, rightCalls];
+let factoryCalls = 0;
+const built = await Effect.runPromise(assembled().pipe(Effect.provideService(Factory, {
+  make: () => Effect.sync(() => { factoryCalls++; return short; }),
+})));
+const beforeStep = [factoryCalls, leftCalls, rightCalls];
+const constructed = await Effect.runPromise(Effect.gen(function* () {
+  const step = yield* Schedule.toStep(built);
+  const [output, delay] = yield* step(0, Option.none());
+  return [output, Duration.toMillis(delay)];
+}).pipe(Effect.provideService(LeftPolicy, { next: () => Effect.succeed(7) })));
+const failure = await Effect.runPromise(Effect.gen(function* () {
+  const step = yield* Schedule.toStep(combined);
+  const [output, delay] = yield* step(0, Option.none());
+  const exit = yield* Effect.exit(step(1, Option.some([1])));
+  return { output, delay: Duration.toMillis(delay), exit };
+}).pipe(
+  Effect.provideService(LeftPolicy, service.left),
+  Effect.provideService(RightPolicy, service.right),
+));
+let otherRightCalls = 0;
+const rightFailure = await Effect.runPromiseExit(Effect.gen(function* () {
+  const step = yield* Schedule.toStep(combined);
+  return yield* step(0, Option.none());
+}).pipe(
+  Effect.provideService(LeftPolicy, { next: () => Effect.succeed(1) }),
+  Effect.provideService(RightPolicy, { next: () => Effect.sync(() => ++otherRightCalls).pipe(Effect.flatMap(() => Effect.fail(new RightStop({})))) }),
+));
+const events: string[] = [];
+const source = Stream.scoped(Stream.fromEffect(Effect.acquireRelease(
+  Effect.sync(() => { events.push("acquire"); return 1; }),
+  () => Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => { events.push("release"); }))),
+))).pipe(Stream.concat(Stream.never));
+const stopped = await Effect.runPromiseExit(Stream.runCollect(batches(source)).pipe(
+  Effect.provideService(LeftPolicy, { next: () => Effect.fail(new LeftStop({})) }),
+  Effect.provideService(RightPolicy, { next: () => Effect.succeed(1) }),
+  Effect.timeout("5 seconds"),
+));
+console.log(JSON.stringify({
+  first, second, atConstruction, factoryCalls, beforeStep, constructed, leftCalls, rightCalls,
+  initial: [failure.output, failure.delay],
+  failed: Exit.isFailure(failure.exit) ? Option.getOrUndefined(Cause.findErrorOption(failure.exit.cause))?._tag : "Success",
+  rightFailed: Exit.isFailure(rightFailure) ? Option.getOrUndefined(Cause.findErrorOption(rightFailure.cause))?._tag : "Success",
+  otherRightCalls,
+  events,
+  stopped: Exit.isFailure(stopped) ? Option.getOrUndefined(Cause.findErrorOption(stopped.cause))?._tag : "Success",
+}));
+`,
+    );
+    const shortExpected = [
+      { kind: "Continue", output: 20, delay: 20 },
+      { kind: "Done", output: 0 },
+    ];
+    const longExpected = [
+      { kind: "Continue", output: 10, delay: 10 },
+      { kind: "Continue", output: 20, delay: 20 },
+      { kind: "Continue", output: 20, delay: 20 },
+      { kind: "Done", output: 0 },
+    ];
+    const phasesExpected = [
+      { kind: "Continue", output: 0, delay: 10 },
+      { kind: "Continue", output: 0, delay: 20 },
+      { kind: "Continue", output: 1, delay: 20 },
+      { kind: "Continue", output: 2, delay: 20 },
+      { kind: "Done", output: 3 },
+    ];
+    assertEquals(result, {
+      first: [shortExpected, longExpected, phasesExpected],
+      second: [shortExpected, longExpected, phasesExpected],
+      atConstruction: [0, 0],
+      factoryCalls: 1,
+      beforeStep: [1, 0, 0],
+      constructed: [10, 10],
+      leftCalls: 2,
+      rightCalls: 1,
+      initial: [1, 1],
+      failed: "composition#LeftStop",
+      rightFailed: "composition#RightStop",
+      otherRightCalls: 1,
+      events: ["acquire", "release"],
+      stopped: "composition#LeftStop",
+    });
   });
 });

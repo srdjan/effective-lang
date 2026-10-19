@@ -247,43 +247,66 @@ snapshot and should be read with these updates.
 
 ## Answer and boundary
 
-**Yes. There are valid Effect 4 programs whose behavior and typed API cannot currently be authored in Effective source.** General stream combinators, raw `Scope` values, effectful Schema transformations, and direct ecosystem package APIs remain examples. Effective now supports the selected core 1 forms in the [language spec](../../effective/public/effective-spec.html#core1) and [typed IR](../src/core/ir.ts). Effect's documentation describes the broader [concurrency](https://effect.website/docs/v4/concurrency/basic-concurrency), [stream](https://effect.website/docs/v4/stream/introduction), and [scope](https://effect.website/docs/v4/resource-management/scope) APIs.
+**Yes. There are valid Effect 4 programs whose behavior and typed API cannot
+currently be authored in Effective source.** General stream combinators, raw
+`Scope` values, general Schema union backtracking, required-to-optional field
+transformations, and direct ecosystem package APIs remain examples. Effective
+now supports the selected core 1 forms in the
+[language spec](../../effective/public/effective-spec.html#core1) and
+[typed IR](../src/core/ir.ts). Effect's documentation describes the broader
+[concurrency](https://effect.website/docs/v4/concurrency/basic-concurrency),
+[stream](https://effect.website/docs/v4/stream/introduction), and
+[scope](https://effect.website/docs/v4/resource-management/scope) APIs.
 
 Here, **native support** means a program can be written in `.eff`, checked with its intended contract, and emitted to equivalent Effect behavior. A host TypeScript module may implement any of these behaviors behind an Effective service, but that implementation is then authored in TypeScript. This distinction matters for ecosystem coverage. The `host:` boundary accepts declared providers, service tags, and opaque types from a registered interface; it does not import arbitrary package functions or Effect constants. `.effi` still rejects `const`, and imports accept only relative `.eff` files or registered `host:` modules. A service method can return a nested Effect value ([parser](../src/core/parse.ts), [project linker](../src/core/project.ts), [emitter](../src/core/emit/decls.ts)).
 
-This is an expressiveness result for the current language and compiler, not a claim that an Effective application cannot *use* these services through an adapter. It also does not claim that every Effect combinator needs a same-named Effective construct. An equivalent composition in `.eff` would count as support.
+This is an expressiveness result for the current language and compiler, not a
+claim that an Effective application cannot _use_ these services through an
+adapter. It also does not claim that every Effect combinator needs a same-named
+Effective construct. An equivalent composition in `.eff` would count as support.
 
 ## Coverage map
 
-| Effect 4 program family | Native Effective status | Limiting boundary and evidence | Host route |
-| --- | --- | --- | --- |
-| Ordinary typed effects, service calls, tagged failures, recovery, and fixed-count retry | **Supported subset.** Effective emits `Effect`, `Context`, `Layer`, `Option`, and `Schema`; its examples cover these forms. | [Examples](../fixtures/examples/), [emitter import set](../src/core/emit/scope.ts#L26), [source control rules](../../effective/public/effective-spec.html#control). | Host supplies the provider and invokes exported entry functions. |
-| First-class Effect values and general combinators | **Partial.** `Effect<A,E,R>`, `defer`, and `run` let source construct, store, pass, return, and execute a typed Effect value. General Effect combinators remain absent. | [IR type model](../src/core/ir.ts#L31), [spec: execution](../../effective/public/effective-spec.html#execution), [Phase 4 runtime test](../tests/emit_slow_test.ts); Effect [the Effect type](https://effect.website/docs/v4/getting-started/the-effect-type). The original probe below predates Phase 4. | Host may expose a specific composed operation as a service method. |
-| Concurrency, racing, fibers, interruption | **Supported core 1 subset.** Bounded and unbounded `traverse`, heterogeneous `all` and `allResults` over Effect tuples and records, `partitionAll` and `validateAll` over homogeneous arrays, `race`, supervised `withFiber`, and scope-bound `forkScoped` are native. Discarding an `all` result is expressible with a block. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime tests](../tests/emit_slow_test.ts); Effect [concurrency](https://effect.website/docs/v4/concurrency/basic-concurrency) and [fibers](https://effect.website/docs/v4/concurrency/fibers). | A service can expose other concurrent policies. |
-| Effectful collection traversal | **Supported sequentially and concurrently.** `traverse` accepts effectful callbacks and preserves their failure and requirement sets. `map`, `filter`, and `fold` still require pure callbacks. | [Spec: collections](../../effective/public/effective-spec.html#pipelines), [prelude names](../src/core/resolve.ts#L53), [Phase 3 runtime test](../tests/emit_slow_test.ts); Effect [`forEach`](https://effect.website/docs/v4/code-style/control-flow). The original `filter` probe still fails. | A host service can expose other traversal policies. |
-| Streams and sinks | **Supported core 1 subset.** `unfold`, `mapEffect`, `mapStream`, `scanStream`, `mapAccumStream`, `foldStream`, `foldEffectStream`, `collectStream`, `headStream`, `lastStream`, `drainStream`, `sinkForEach`, `runStream`, `bufferStream`, `mergeStreams`, `zipStreams`, `concatStreams`, bounded and unbounded `mapEffect` and `flatMapStreams`, `switchMapStreams`, `catchStream`, `retryStream`, `debounceStream`, `throttleStream`, `takeStream`, `takeWhileStream`, `takeUntilStream`, `dropStream`, `dropWhileStream`, `filterStream`, `filterEffectStream`, `takeWhileEffectStream`, `takeUntilEffectStream`, and `dropWhileEffectStream` are native. Other stream combinators remain absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime tests](../tests/emit_slow_test.ts); Effect [streams](https://effect.website/docs/v4/stream/introduction) and [sinks](https://effect.website/docs/v4/sink/introduction). | A host adapter can expose other stream policies. |
-| Resource scopes and finalizers | **Supported core 1 subset.** `withResource` scopes operation records and opaque host handles; borrow-qualified methods and checked source helpers prevent handle escape. `scoped` supplies a local scope for `forkScoped` jobs. Raw `Scope` composition remains absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [borrow runtime test](../tests/cli_slow_test.ts), [scoped fiber runtime test](../tests/emit_slow_test.ts); Effect [scope](https://effect.website/docs/v4/resource-management/scope). | A host adapter owns the handle and its operations. |
-| Schedules and timed repetition | **Supported core 1 subset.** `retrySchedule` authors a conditional millisecond policy for `retry`. General Schedule operators and cron policies remain absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime test](../tests/emit_slow_test.ts); Effect [schedules](https://effect.website/docs/v4/scheduling/using-schedules). | Host can implement other policies. |
-| Mutable concurrent state | **Supported core 1 subset.** `Ref<A>` and make/get/set/update operations are native; update is atomic under bounded traversal. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime test](../tests/emit_slow_test.ts); Effect [`Ref`](https://effect.website/docs/v4/state-management/ref). | Other state primitives can live in services. |
-| Schema codecs, filters, and transformations | **Supported core 1 subset.** Pure `Codec` values validate inputs and outputs with derived schemas. General Schema values and effectful transformations remain absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime test](../tests/emit_slow_test.ts); Effect [Schema introduction](https://effect.website/docs/v4/schema/introduction) and [transformations](https://effect.website/docs/v4/schema/transformations). | Host handles other validation needs. |
-| Layer construction and runtime assembly | **Supported core 1 subset.** `layer`, `mergeLayers`, and expression-valued `provide` build source Layer graphs. Launching an Effect runtime remains a host concern. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime tests](../tests/emit_slow_test.ts); Effect [Layers](https://effect.website/docs/v4/requirements-management/layers). | Host runs exported functions. |
-| Platform, HTTP, SQL, RPC, AI, observability | **Adapter access only.** No arbitrary Effect package import, platform DSL, tagged SQL template, or first-class API/schema object in `.eff`. Some operations can be modeled as Effective service methods. | [Project linker](../src/core/project.ts#L412), [host assertion](../src/core/emit/decls.ts#L451); Effect [platform](https://effect.website/docs/v4/platform/introduction), [HTTP API](https://effect.website/docs/v4/api/effect/http-api/HttpApi), [SQL client](https://effect.website/docs/v4/api/effect/sql/SqlClient), [RPC serialization](https://effect.website/docs/v4/api/effect/rpc/RpcSerialization), [AI language model](https://effect.website/docs/v4/api/effect/ai/LanguageModel), and [metrics](https://effect.website/docs/v4/observability/metrics). | Implement the integration in TypeScript and expose a narrower Effective service. Streaming, schemas, transactions, and scoped handles need special scrutiny. |
-| User generics and recursive schemas | **Native gap.** The source spec defers user generics and rejects recursive type definitions. | [Spec: types](../../effective/public/effective-spec.html#types) and [deferred work](../../effective/public/effective-spec.html#examples); Effect [recursive Schema](https://effect.website/docs/v4/schema/json-schema#references-and-recursion). | Host can retain the richer type and expose a concrete interface. |
+| Effect 4 program family                                                                 | Native Effective status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Limiting boundary and evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Host route                                                                                                                                                   |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Ordinary typed effects, service calls, tagged failures, recovery, and fixed-count retry | **Supported subset.** Effective emits `Effect`, `Context`, `Layer`, `Option`, and `Schema`; its examples cover these forms.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | [Examples](../fixtures/examples/), [emitter import set](../src/core/emit/scope.ts#L26), [source control rules](../../effective/public/effective-spec.html#control).                                                                                                                                                                                                                                                                                                                                                                                                 | Host supplies the provider and invokes exported entry functions.                                                                                             |
+| First-class Effect values and general combinators                                       | **Partial.** `Effect<A,E,R>`, `defer`, and `run` let source construct, store, pass, return, and execute a typed Effect value. General Effect combinators remain absent.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | [IR type model](../src/core/ir.ts#L31), [spec: execution](../../effective/public/effective-spec.html#execution), [Phase 4 runtime test](../tests/emit_slow_test.ts); Effect [the Effect type](https://effect.website/docs/v4/getting-started/the-effect-type). The original probe below predates Phase 4.                                                                                                                                                                                                                                                           | Host may expose a specific composed operation as a service method.                                                                                           |
+| Concurrency, racing, fibers, interruption                                               | **Supported core 1 subset.** Bounded and unbounded `traverse`, heterogeneous `all` and `allResults` over Effect tuples and records, `partitionAll` and `validateAll` over homogeneous arrays, `race`, supervised `withFiber`, and scope-bound `forkScoped` are native. Discarding an `all` result is expressible with a block.                                                                                                                                                                                                                                                                                                                                                                                                                                                               | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime tests](../tests/emit_slow_test.ts); Effect [concurrency](https://effect.website/docs/v4/concurrency/basic-concurrency) and [fibers](https://effect.website/docs/v4/concurrency/fibers).                                                                                                                                                                                                                                                                                                   | A service can expose other concurrent policies.                                                                                                              |
+| Effectful collection traversal                                                          | **Supported sequentially and concurrently.** `traverse` accepts effectful callbacks and preserves their failure and requirement sets. `map`, `filter`, and `fold` still require pure callbacks.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | [Spec: collections](../../effective/public/effective-spec.html#pipelines), [prelude names](../src/core/resolve.ts#L53), [Phase 3 runtime test](../tests/emit_slow_test.ts); Effect [`forEach`](https://effect.website/docs/v4/code-style/control-flow). The original `filter` probe still fails.                                                                                                                                                                                                                                                                    | A host service can expose other traversal policies.                                                                                                          |
+| Streams and sinks                                                                       | **Supported core 1 subset.** `unfold`, `mapEffect`, `mapStream`, `mapGroups`, `scanStream`, `mapAccumStream`, `foldStream`, `foldEffectStream`, `collectStream`, `headStream`, `lastStream`, `drainStream`, `sinkForEach`, `takeSink`, `transduceStream`, `aggregateStream`, `aggregateWithinStream`, `runStream`, `bufferStream`, `mergeStreams`, `zipStreams`, `concatStreams`, bounded and unbounded `mapEffect` and `flatMapStreams`, `switchMapStreams`, `catchStream`, `retryStream`, `debounceStream`, `throttleStream`, `takeStream`, `takeWhileStream`, `takeUntilStream`, `dropStream`, `dropWhileStream`, `filterStream`, `filterEffectStream`, `takeWhileEffectStream`, `takeUntilEffectStream`, and `dropWhileEffectStream` are native. Other stream combinators remain absent. | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime tests](../tests/emit_slow_test.ts); Effect [streams](https://effect.website/docs/v4/stream/introduction) and [sinks](https://effect.website/docs/v4/sink/introduction).                                                                                                                                                                                                                                                                                                                   | A host adapter can expose other stream policies.                                                                                                             |
+| Resource scopes and finalizers                                                          | **Supported core 1 subset.** `withResource` scopes operation records and opaque host handles; borrow-qualified methods and checked source helpers prevent handle escape. `scoped` supplies a local scope for `forkScoped` jobs. `CloseableScope` and make/provide/register/close operations add manual shared authority across roots. General close Exits and raw Scope composition remain deferred.                                                                                                                                                                                                                                                                                                                                                                                         | [Core 1 spec](../../effective/public/effective-spec.html#core1), [borrow runtime test](../tests/cli_slow_test.ts), [scoped fiber runtime test](../tests/emit_slow_test.ts); Effect [scope](https://effect.website/docs/v4/resource-management/scope).                                                                                                                                                                                                                                                                                                               | A host adapter owns the handle and its operations.                                                                                                           |
+| Schedules and timed repetition                                                          | **Supported core 1 subset.** `retrySchedule` authors a pure retry policy. Four-channel `Schedule` values use `scheduleFromStep`, `scheduleRecurs`, `scheduleSpaced`, and `scheduleMap`; binary `scheduleMax`, `scheduleMin`, and `scheduleConcat` compose policies with comparable inputs. `aggregateWithinStream` is their first consumer. General input intersections, other consumers, and cron policies remain absent.                                                                                                                                                                                                                                                                                                                                                                   | [Schedule contract](plans/2026-10-18-general-schedule-contract.md), [composition contract](plans/2026-10-18-schedule-composition-contract.md), [runtime test](../tests/emit_slow_test.ts); Effect [schedules](https://effect.website/docs/v4/scheduling/using-schedules).                                                                                                                                                                                                                                                                                           | Host can implement other policies.                                                                                                                           |
+| Mutable concurrent state                                                                | **Supported core 1 subset.** `Ref<A>` and make/get/set/update operations are native; update is atomic under bounded traversal.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime test](../tests/emit_slow_test.ts); Effect [`Ref`](https://effect.website/docs/v4/state-management/ref).                                                                                                                                                                                                                                                                                                                                                                                   | Other state primitives can live in services.                                                                                                                 |
+| Schema codecs, filters, and transformations                                             | **Supported core 1 subset.** Pure `Codec` remains; four-channel `Schema` values compose exact optional and required records, arrays, tagged unions, and effectful transformations with Option rejection or authored `SchemaIssue` trees. Runners use `SchemaError` and separate decode and encode services. General union backtracking and required-to-optional field transformations remain open.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | [Schema contract](plans/2026-10-18-schema-optional-union-issues-contract.md), [compiled runtime test](../tests/schema_optional_slow_test.ts); Effect [transformations](https://effect.website/docs/v4/schema/transformations).                                                                                                                                                                                                                                                                                                                                               | Host handles other validation needs.                                                                                                                         |
+| Layer construction and runtime assembly                                                 | **Supported core 1 subset.** `layer`, `mergeLayers`, and expression-valued `provide` build source Layer graphs. Launching an Effect runtime remains a host concern.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | [Core 1 spec](../../effective/public/effective-spec.html#core1), [runtime tests](../tests/emit_slow_test.ts); Effect [Layers](https://effect.website/docs/v4/requirements-management/layers).                                                                                                                                                                                                                                                                                                                                                                       | Host runs exported functions.                                                                                                                                |
+| Platform, HTTP, SQL, RPC, AI, observability                                             | **Adapter access only.** No arbitrary Effect package import, platform DSL, tagged SQL template, or first-class package API object in `.eff`. Some operations can be modeled as Effective service methods.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | [Project linker](../src/core/project.ts#L412), [host assertion](../src/core/emit/decls.ts#L451); Effect [platform](https://effect.website/docs/v4/platform/introduction), [HTTP API](https://effect.website/docs/v4/api/effect/http-api/HttpApi), [SQL client](https://effect.website/docs/v4/api/effect/sql/SqlClient), [RPC serialization](https://effect.website/docs/v4/api/effect/rpc/RpcSerialization), [AI language model](https://effect.website/docs/v4/api/effect/ai/LanguageModel), and [metrics](https://effect.website/docs/v4/observability/metrics). | Implement the integration in TypeScript and expose a narrower Effective service. Streaming, schemas, transactions, and scoped handles need special scrutiny. |
+| User generics and recursive schemas                                                     | **Partial.** One self-recursive data record with every self-reference beneath an array compiles to a lazy Schema. User generics, mutual recursion, and broader recursive shapes remain gaps.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | [Schema contract](plans/2026-10-18-schema-composition-recursion-contract.md), [runtime test](../tests/schema_slow_test.ts); Effect [recursive Schema](https://effect.website/docs/v4/schema/advanced-usage).                                                                                                                                                                                                                                                                                                                                                        | Host can retain the richer type and expose a concrete interface.                                                                                             |
 
-The ecosystem row is an **interface audit**, not a claim that HTTP, SQL, RPC, AI, or telemetry calls all fail when wrapped as service methods. For example, a `readFile(path): string` method is a plausible Effective interface over an Effect platform adapter. An HTTP API builder or SQL statement value is a different kind of program: its API object, schema, or statement must exist in source if Effective authors are to compose it themselves. The current import and type rules do not provide that route. [Effect's platform guide](https://effect.website/docs/v4/platform/introduction) and [HTTP API reference](https://effect.website/docs/v4/api/effect/http-api/HttpApi) show the distinction.
+The ecosystem row began as an **interface audit**, not a claim that HTTP, SQL,
+RPC, AI, or telemetry calls all fail when wrapped as service methods. The
+[local adapter follow-up](plans/2026-10-18-schema-ecosystem-design.md) now
+executes selected package operations through checked source, fake
+drivers/providers, and in-memory data. An HTTP API builder or SQL statement
+value is a different kind of program: its API object, schema, or statement must
+exist in source if Effective authors are to compose it themselves. The current
+import and type rules do not provide that route.
+[Effect's platform guide](https://effect.website/docs/v4/platform/introduction)
+and
+[HTTP API reference](https://effect.website/docs/v4/api/effect/http-api/HttpApi)
+show the distinction.
 
 ## Reproduced probes
 
 Each `.eff` probe below used a separate temporary project containing `effective.json` with `{"host":{}}`. Run `deno task effective check <project>` from this repository. The results are the original audit observations; the updates above and in the last column identify behavior that has since changed.
 
-| `main.eff` body | Original result | Current interpretation |
-| --- | --- | --- |
-| `export const pair = (): int[] => [1, 2]` | `syntax/008: expected an expression, found [` | Phase 2 now accepts the array literal. The [source rule](phase-a-rules.md#lexer-and-parser-a1) records its inference and contextual behavior. |
-| `import { Effect } from "effect"` followed by `export const answer = (): int => 1` | `module/001: import effect must start with ./ or ../, or use the host: prefix` | `.eff` cannot directly import the package API. |
-| `export const delayed = (): Effect<int> => 1` | `unknown-name/001: unknown type Effect` | Phase 4 now recognizes the type. The initializer remains invalid because `1` is not an Effect value; `defer(() => 1)` constructs one. |
-| `export const numbers = (): Stream<int> => 1` | `unknown-name/001: unknown type Stream` | Phase 7 recognizes `Stream<int>`. The body remains invalid because `1` is not a Stream; `unfold(0, (n) => ...)` constructs one. |
-| `service Metrics { keep(x: int): boolean }` and a `filter` callback calling `Metrics.keep`, in a function with `uses Metrics.keep` | `execution-mode/001: the callback of filter must be pure with empty failure and requirement sets` | `filter` still requires a pure callback. Phase 3's `traverse` accepts an effectful mapping callback. |
-| `export const answer = (): int => retry(() => 1, { times: 2 })` | 0 diagnostics | The fixed-count retry subset works; its existence does not imply general Schedule support. |
+| `main.eff` body                                                                                                                    | Original result                                                                                   | Current interpretation                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `export const pair = (): int[] => [1, 2]`                                                                                          | `syntax/008: expected an expression, found [`                                                     | Phase 2 now accepts the array literal. The [source rule](phase-a-rules.md#lexer-and-parser-a1) records its inference and contextual behavior. |
+| `import { Effect } from "effect"` followed by `export const answer = (): int => 1`                                                 | `module/001: import effect must start with ./ or ../, or use the host: prefix`                    | `.eff` cannot directly import the package API.                                                                                                |
+| `export const delayed = (): Effect<int> => 1`                                                                                      | `unknown-name/001: unknown type Effect`                                                           | Phase 4 now recognizes the type. The initializer remains invalid because `1` is not an Effect value; `defer(() => 1)` constructs one.         |
+| `export const numbers = (): Stream<int> => 1`                                                                                      | `unknown-name/001: unknown type Stream`                                                           | Phase 7 recognizes `Stream<int>`. The body remains invalid because `1` is not a Stream; `unfold(0, (n) => ...)` constructs one.               |
+| `service Metrics { keep(x: int): boolean }` and a `filter` callback calling `Metrics.keep`, in a function with `uses Metrics.keep` | `execution-mode/001: the callback of filter must be pure with empty failure and requirement sets` | `filter` still requires a pure callback. Phase 3's `traverse` accepts an effectful mapping callback.                                          |
+| `export const answer = (): int => retry(() => 1, { times: 2 })`                                                                    | 0 diagnostics                                                                                     | The fixed-count retry subset works; its existence does not imply general Schedule support.                                                    |
 
 The effectful collection probe used this complete source:
 
@@ -347,12 +370,12 @@ operators could not express while staying within the existing `Stream` and
 checker and independent IR validation, strict Effect 4.0.5 target checking,
 and a runtime witness:
 
-| Behavior | Source function | Runtime witness |
-| --- | --- | --- |
-| Keep prior output, then replace a failed source | `catchStream` | Earlier values survive; replacement failure propagates. |
-| Restart the whole source after typed failure | `retryStream` | Prior values replay; schedule resets after new output. |
-| Coalesce a burst by elapsed time | `debounceStream` | A synchronous burst emits its last element. |
-| Apply element-rate policy | `throttleStream` | `enforce` drops excess; `shape` delays without dropping. |
+| Behavior                                        | Source function  | Runtime witness                                          |
+| ----------------------------------------------- | ---------------- | -------------------------------------------------------- |
+| Keep prior output, then replace a failed source | `catchStream`    | Earlier values survive; replacement failure propagates.  |
+| Restart the whole source after typed failure    | `retryStream`    | Prior values replay; schedule resets after new output.   |
+| Coalesce a burst by elapsed time                | `debounceStream` | A synchronous burst emits its last element.              |
+| Apply element-rate policy                       | `throttleStream` | `enforce` drops excess; `shape` delays without dropping. |
 
 Some common Effect Stream names are compositions of forms already present.
 `runForEach` is `runStream` with `sinkForEach`; `runCount` is `foldStream` with
@@ -376,18 +399,24 @@ lifetime is expressible with `scoped` and `forkScoped`: the emitted source
 records startup, body, completed release, then continuation after close.
 `withResource` similarly handles a lexical acquisition/use/release bracket.
 
-The stronger witness returns a live raw scope from one root execution and
-closes it in a later root execution, waiting for the child's finalizer.
-Current source cannot return equivalent scope or borrowed Fiber authority;
-unscoped `forkScoped` is rejected for its reserved requirement. Raw Scope
-composition therefore remains a native gap. The investigation records the
-diagnostics, equivalent-program boundary, and proposed operational rule for
-scope identity, transfer, explicit close Exit, finalizer completion, and
-abandonment before implementation. It also verifies that providing a scope
-alone does not interrupt ordinary work when that scope closes.
+The stronger witness returns live scope authority from one root execution and
+closes it in a later root, waiting for the child's finalizer. Design draft 0.34
+implements the bounded
+[ownership contract](plans/2026-10-18-scope-ownership-contract.md) with
+`CloseableScope`, `makeScope`, `provideScope`, `addScopeFinalizer`, and
+`closeScope`. Authority is shared across aliases and source modules. Closing
+waits uninterruptibly for one cached cleanup outcome, including defect replay;
+registration captures service bindings while preserving provider-lifetime
+responsibility. Existing borrowed resource and Fiber escape rules remain.
 
-Seven target tests and two compiler/runtime probe tests pass. This is a
-disposition of the raw Scope witness, not a claim of general concurrency parity.
+The original seven raw-target tests and two compiler probes, eight ownership
+prototype tests, checker/validator tests, and four strict target/runtime tests
+cover the boundary. Source witnesses retain a live child and child-owned
+provider across root return, close through an alias in another module, and
+verify finalizer services, concurrent completion, late registration, argument
+order, and host-wrapper compatibility. Ordinary provided work remains
+unsupervised. Close currently supplies `Exit.void`; general Exits, exit-aware
+callbacks, and other concurrency APIs remain outside this slice.
 
 ## General Stream and Schedule disposition
 
@@ -398,31 +427,126 @@ cases, including interruption of a pending pull and cleanup of the signal on
 source completion. A fixed combined retry-delay policy also fits the current
 pure `RetrySchedule` callback. These witnesses do not select new builtins.
 
-Keyed live substreams, arbitrary Sink leftovers, and general Schedule values
-remain uncovered native contracts. The investigation records target behavior,
-source diagnostics, equivalent-program limits, and the lifetime/type rules
-needed before implementation. In particular, current source Sink types fix
-the target leftover channel to `never`, rejecting a target `Sink.take(2)`.
+Untimed async aggregation and the selected general Schedule slice now have
+implemented source rules. General source Sink constructors and Schedule
+composition with incomparable inputs remain uncovered native contracts. The
+investigation records target behavior, source diagnostics, equivalent-program
+limits, and lifetime/type rules. The four-argument Sink form retains its `never`
+leftover default. The implemented
+[Sink leftover contract](plans/2026-10-18-sink-leftover-contract.md) adds a
+fifth type argument, positive-count `takeSink`, and synchronous
+`transduceStream`. Nine contract probes, compiler/validator tests, and four
+strict target/runtime tests verify replay, final partial/empty results, deferred
+channels, zero-progress host behavior, and whole-consumption cleanup.
 
-The investigation also found an existing compiler defect:
-[inline `Some([record, state])`](plans/stream-schedule-probes/inline-marker.eff)
-passes source checking and IR validation but widens to an array in emitted
-TypeScript, failing strict target checking with `TS2375`. An explicitly typed
-tuple binding allows the working composition. The probe retains both cases;
-repairing the inline case needs no new source rule.
+The [live keyed grouping contract](plans/2026-10-18-keyed-group-contract.md)
+implements `mapGroups` in draft 0.36: primitive keys, callback-owned borrowed
+group inputs, concurrent consumers, unordered data results, and explicit per-key
+capacity. Nine target probes verify online later-key output, fresh routing,
+closed-key discard, backpressure, deferred providers, and completed
+failure/cancellation cleanup. The tested lowering uses concurrent
+`Stream.flatMap`; an unordered `mapEffect` lowering failed the source-failure
+and cleanup gates. Source checking, independent IR validation, typed emission,
+and four compiled-source runtime tests now enforce the rule.
 
-## Remaining investigation queue
+The
+[inline `Some([record, state])` regression](plans/stream-schedule-probes/inline-marker.eff)
+now passes source checking, IR validation, strict target checking, and repeated
+stream execution. Emission supplies the checked payload type to `Option.some`,
+preserving tuple shape and record literals through lifted callbacks. The
+[compiler regression](../fixtures/emit/contextual-options.eff) also covers
+nested Options and tuples, arrays, empty tuples, and effectful payloads.
 
-1. **Schema and ecosystem APIs.** Test effectful transformations, recursive schemas, and representative HTTP, SQL, RPC, AI, and observability objects through typed adapters. Preserve failures, requirements, and scoped lifetimes.
+## Schema and ecosystem disposition
 
-The raw Scope investigation above is complete; implementation remains gated on
-a source ownership/transfer decision. Other general concurrency APIs need their
-own witnesses before any parity claim. `Effect.all` discard mode remains
-expressible by calling `all` and ignoring its result in a block.
+The
+[Schema/ecosystem investigation](plans/2026-10-18-schema-ecosystem-design.md)
+adds three target tests and two compiler/adapter probes. A concrete source
+decoder can validate with a pure Codec and then call an effectful service. The
+follow-up
+[Schema/recursion contract](plans/2026-10-18-schema-composition-recursion-contract.md)
+adds two pinned target probes and selects a four-channel Schema value, an
+explicit SchemaError rule, and an array-guarded self-recursive source type. The
+bounded source forms now compile, validate independently, and run against the
+pinned target. Pure `Codec` callbacks still reject effects; guarded recursive
+record aliases are accepted while direct and mutual cycles remain rejected.
 
-The representative general Stream/Schedule investigation is complete. New
-grouping, aggregation, or Schedule forms still require the source decisions
-recorded above; this is not full API parity. The contextual tuple emission
-defect is a separate compiler repair follow-up.
+Typed host adapters now execute representative HTTP response validation, SQL
+transactions, RPC framing/validation, AI generation, local metrics, and
+recursive tree validation through emitted source. Provider failures and
+requirements are checked. SQL commits or rolls back and releases its scoped
+connection; borrowed parser sessions close after success, failure, and
+interruption. The write-up records intentional error translation and the limits
+of each fixture. It does not claim native package builders or external
+integration coverage.
+
+## Follow-up queue
+
+The representative investigation queue, explicit shared scopes,
+[Sink leftovers](plans/2026-10-18-sink-leftover-contract.md), and
+[live keyed grouping](plans/2026-10-18-keyed-group-contract.md) are complete.
+All three source slices have canonical spec/IR rules, checker and independent
+validator enforcement, typed emission, and runtime evidence.
+
+The [async aggregation contract](plans/2026-10-18-async-aggregation-contract.md)
+now implements untimed `aggregateStream` from eleven target probes and a
+compiled source witness. Checker, IR validation, typed emission, and two
+compiled-source runtime tests cover the target's capacity-zero handoff, Sink
+leftover replay, distinct completion results, deferred channels, and awaited
+interruption cleanup. Buffered transduction has a different read-ahead trace;
+aggregation partitions can also change across chunk boundaries. Timed flushing
+now uses general Schedule values, with virtual-time and schedule-stop target
+witnesses.
+
+The [general Schedule contract](plans/2026-10-18-general-schedule-contract.md)
+now implements a four-channel source value, a per-execution state factory and
+decision callback, and `aggregateWithinStream` as the first consumer. Four
+target probes cover fresh state, normal completion versus typed failure,
+deferred services, awaited upstream cleanup, and the consumer's
+`Option<SinkOutput>` input constraint. Checker and independent validator tests,
+strict emission, and one compiled runtime test cover the selected source slice.
+The [composition contract](plans/2026-10-18-schedule-composition-contract.md)
+now adds binary `scheduleMax`, `scheduleMin`, and `scheduleConcat` when one
+source input type fits the other. Target probes and a compiled source witness
+cover delays, normal end, phase input, fresh state, and both failure channels.
+The remaining native Schedule boundary is general intersections for incomparable
+inputs. The selected Schema composition and guarded-recursion rule now has a
+compiled source witness and runtime regression. The
+[optional/union/issue contract](plans/2026-10-18-schema-optional-union-issues-contract.md)
+now implements exact optional keys, tagged unions, authored issue trees, and
+finite optional and tagged recursion from seven pinned target probes. A compiled
+source witness and independent IR mutations cover the selected rule. The
+[optional-field transformation and default contract](plans/2026-10-19-schema-optional-transform-defaults-contract.md)
+now implements exact Option-from-optional-key conversion, a per-decode
+missing-key default, and pure optional-to-optional field transformation. Seven
+target tests, a compiled source witness, and independent IR validation pin the
+selected behavior. The [effectful optional callback contract](plans/2026-10-19-schema-effectful-optional-contract.md)
+now permits effectful optional getters and defaults with direction-specific
+services and bounded authored issues. Five target tests, a strict compiled
+runtime witness, source boundary probes, and independent IR mutations cover
+missing and present keys, repeated defaults, issue paths, defects, and
+interruption. The next bounded Schema investigation is required-to-optional
+field transformation: the target admits a missing encoded key despite a
+required encoded type, so that direction needs an explicit source rule.
+General union backtracking needs a separate rule. Ecosystem builders need their own
+object and lifetime contracts; concrete adapters already cover the selected
+operations.
+
+Broader package interoperability, item 9 in the API design gap list, is deferred
+to later work by user instruction. This includes arbitrary external package
+imports and external values/constructors beyond the current registered host
+boundary. The Sink implementation uses that existing boundary.
+
+The [explicit Scope contract](plans/2026-10-18-scope-ownership-contract.md) now
+has spec, checker, IR/validator, emitter, strict host assertions, and source
+runtime evidence. General close Exits remain deferred. Other general concurrency
+APIs need their own witnesses before any parity claim. `Effect.all` discard mode
+remains expressible by calling `all` and ignoring its result in a block.
+
+The representative general Stream/Schedule investigation is complete. Untimed
+and timed aggregation are implemented for the selected Schedule slice. Other
+Schedule combinators and consumers remain open. Contextual tuple emission is
+fixed under the existing source rule. These slices do not establish full API
+parity.
 
 For each item, record a minimal `.eff` or TypeScript witness, the observed compiler phase and diagnostic (or emitted output), an equivalent-program argument, and a disposition. This audit did not execute external HTTP, SQL, RPC, AI, or telemetry services.

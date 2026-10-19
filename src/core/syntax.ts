@@ -40,6 +40,8 @@ export enum SyntaxKind {
   EffectType,
   StreamType,
   SinkType,
+  ScheduleType,
+  SchemaType,
   LayerType,
   TypeArgs,
   LiteralType,

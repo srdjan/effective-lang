@@ -13,6 +13,8 @@ import type {
 /** The direct sub-expressions of `expr`, in evaluation order. */
 export function childrenOf(expr: Expr): Expr[] {
   switch (expr.kind) {
+    case "take-sink":
+    case "make-scope":
     case "literal":
     case "reference":
     case "none":
@@ -35,13 +37,25 @@ export function childrenOf(expr: Expr): Expr[] {
       return [expr.value];
     case "closure":
       return [expr.body];
+    case "schema":
+      return [...expr.arguments];
+    case "schema-decode":
+    case "schema-encode":
+      return [expr.schema, expr.input];
     case "defer":
     case "fork-scoped":
       return [expr.job];
+    case "provide-scope":
+    case "add-scope-finalizer":
+      return [expr.owner, expr.job];
+    case "close-scope":
+      return [expr.owner];
     case "with-resource":
       return [expr.acquire, expr.use, expr.release];
     case "unfold":
       return [expr.seed, expr.next];
+    case "map-groups":
+      return [expr.stream, expr.key, expr.use];
     case "map-effect":
     case "map-stream":
     case "flat-map-streams":
@@ -88,8 +102,24 @@ export function childrenOf(expr: Expr): Expr[] {
       return [expr.jobs];
     case "sink-for-each":
       return [expr.consume];
+    case "transduce-stream":
+    case "aggregate-stream":
     case "run-stream":
       return [expr.stream, expr.sink];
+    case "aggregate-within-stream":
+      return [expr.stream, expr.sink, expr.schedule];
+    case "schedule-from-step":
+      return [expr.initial, expr.decide];
+    case "schedule-recurs":
+      return [expr.times];
+    case "schedule-spaced":
+      return [expr.delayMillis];
+    case "schedule-map":
+      return [expr.schedule, expr.transform];
+    case "schedule-max":
+    case "schedule-min":
+    case "schedule-concat":
+      return [expr.left, expr.right];
     case "buffer-stream":
       return [expr.stream];
     case "merge-streams":

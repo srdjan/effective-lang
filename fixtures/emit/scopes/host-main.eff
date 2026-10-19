@@ -1,0 +1,4 @@
+import { Owner } from "./owner.eff"
+import { Boundary } from "./boundary.eff"
+import { BoundaryLive } from "host:boundary"
+export const pass = (owner: Owner): Owner => provide(BoundaryLive, () => Boundary.accept(owner))

@@ -1,0 +1,63 @@
+type Int = int
+type Millis = number
+type Text = string
+
+export error LeftStop = {}
+export error RightStop = {}
+export error BuildStop = {}
+export service LeftPolicy { next(): Int fails LeftStop }
+export service RightPolicy { next(): Int fails RightStop }
+export service Factory { make(): Schedule<Int> fails BuildStop }
+
+export const short: Schedule<Int> = scheduleFromStep(
+  (): Int => 0,
+  (state: Int, meta: ScheduleInput<unknown>): ScheduleDecision<Int, Int> =>
+    if (state < 1) {
+      { kind: "Continue", state: state + 1, output: state, delayMillis: 10 }
+    } else {
+      { kind: "Done", output: state }
+    }
+)
+
+export const long: Schedule<Int> = scheduleFromStep(
+  (): Int => 0,
+  (state: Int, meta: ScheduleInput<unknown>): ScheduleDecision<Int, Int> =>
+    if (state < 3) {
+      { kind: "Continue", state: state + 1, output: state, delayMillis: 20 }
+    } else {
+      { kind: "Done", output: state }
+    }
+)
+
+export const slowest: Schedule<Millis> = scheduleMax(short, long)
+export const fastest: Schedule<Millis> = scheduleMin(short, long)
+export const phases: Schedule<Int> = scheduleConcat(short, long)
+export const comparable = (a: Schedule<Int, Int>, b: Schedule<Int, Millis>): Schedule<Millis, Int> =>
+  scheduleMax(a, b)
+
+export const left: Schedule<Int, Option<Int[]>, LeftStop, LeftPolicy.next> =
+  scheduleFromStep(
+    (): Int => 0,
+    (state: Int, meta: ScheduleInput<Option<Int[]>>): ScheduleDecision<Int, Int> fails LeftStop uses LeftPolicy.next =>
+      ({ kind: "Continue", state: state + 1, output: LeftPolicy.next(), delayMillis: 1 })
+  )
+
+export const right: Schedule<Text, unknown, RightStop, RightPolicy.next> =
+  scheduleFromStep(
+    (): Int => 0,
+    (state: Int, meta: ScheduleInput<unknown>): ScheduleDecision<Int, Text> fails RightStop uses RightPolicy.next =>
+      if (state < 1) {
+        { kind: "Continue", state: state + 1, output: "right", delayMillis: RightPolicy.next() }
+      } else {
+        { kind: "Done", output: "done" }
+      }
+  )
+
+export const combined: Schedule<Millis, Option<Int[]>, LeftStop | RightStop, LeftPolicy.next | RightPolicy.next> =
+  scheduleMin(left, right)
+export const assembled = (): Schedule<Millis, Option<Int[]>, LeftStop, LeftPolicy.next> fails BuildStop uses Factory.make =>
+  scheduleMax(Factory.make(), left)
+export const sequential: Schedule<Int | Text, Option<Int[]>, LeftStop | RightStop, LeftPolicy.next | RightPolicy.next> =
+  scheduleConcat(left, right)
+export const batches = (source: Stream<Int>): Stream<Int[], LeftStop | RightStop, LeftPolicy.next | RightPolicy.next> =>
+  aggregateWithinStream(source, takeSink(2), combined)

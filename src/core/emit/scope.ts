@@ -31,6 +31,9 @@ export type EffectModule =
   | "Layer"
   | "Option"
   | "Schema"
+  | "SchemaIssue"
+  | "SchemaGetter"
+  | "SchemaTransformation"
   | "Stream"
   | "Sink"
   | "Ref"
@@ -38,7 +41,17 @@ export type EffectModule =
   | "Duration"
   | "Cause"
   | "Fiber"
+  | "Deferred"
+  | "Exit"
   | "Scope";
+
+export interface ScopeRuntimeNames {
+  readonly type: string;
+  readonly make: string;
+  readonly provide: string;
+  readonly register: string;
+  readonly close: string;
+}
 
 export type EmitFailureData =
   | {
@@ -209,6 +222,7 @@ export class Scope {
   private intHelper: string | undefined;
   private intSchema: string | undefined;
   private serviceName: string | undefined;
+  private scopeRuntimeNames: ScopeRuntimeNames | undefined;
   private temporaries = 0;
   private declarationTemporaries: string[] = [];
   private readonly typeOnlyMemo = new Map<DeclarationId, boolean>();
@@ -365,6 +379,21 @@ export class Scope {
     return this.intSchema !== undefined;
   }
 
+  scopeRuntime(): ScopeRuntimeNames {
+    this.scopeRuntimeNames ??= {
+      type: this.fresh("$CloseableScope"),
+      make: this.fresh("$makeScope"),
+      provide: this.fresh("$provideScope"),
+      register: this.fresh("$addScopeFinalizer"),
+      close: this.fresh("$closeScope"),
+    };
+    return this.scopeRuntimeNames;
+  }
+
+  usesScopeRuntime(): boolean {
+    return this.scopeRuntimeNames !== undefined;
+  }
+
   // -------------------------------------------------------------- declarations
 
   /** A type, error, or service declaration of this module or of an import. */
@@ -421,10 +450,13 @@ export class Scope {
       case "effect":
       case "stream":
       case "sink":
+      case "schedule":
       case "provider":
       case "ref":
       case "retry-schedule":
       case "codec":
+      case "schema":
+      case "closeable-scope":
       case "fiber":
         return true;
       case "primitive":
@@ -446,6 +478,12 @@ export class Scope {
 
   /** The name that this module uses for a declaration. A foreign declaration is imported on first use. */
   nameOf(id: DeclarationId): string {
+    if (id === "error:effect/SchemaError") {
+      return `${this.effect("Schema")}.SchemaError`;
+    }
+    if (id === "error:effect/SchemaIssue") {
+      return `${this.effect("SchemaIssue")}.Issue`;
+    }
     const local = this.localDecls.get(id);
     if (local !== undefined) return local.name;
     const bound = this.bound.get(id);

@@ -21,7 +21,7 @@ import type {
   Span,
   Type,
 } from "../ir.ts";
-import { SCOPE_CAPABILITY } from "../ir.ts";
+import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID, SCOPE_CAPABILITY } from "../ir.ts";
 import { AREA } from "./report.ts";
 import {
   type Active,
@@ -463,6 +463,16 @@ export class BodyValidator {
         return this.scoped(e, path);
       case "fork-scoped":
         return this.forkScoped(e, path);
+      case "make-scope":
+        return {
+          type: { kind: "closeable-scope" },
+          match: "exact",
+          active: EFFECT_ONLY,
+        };
+      case "provide-scope":
+      case "add-scope-finalizer":
+      case "close-scope":
+        return this.explicitScope(e, path);
       case "with-resource":
         return this.withResource(e, path);
       case "unfold":
@@ -471,6 +481,8 @@ export class BodyValidator {
         return this.mapEffect(e, path);
       case "map-stream":
         return this.mapStream(e, path);
+      case "map-groups":
+        return this.mapGroups(e, path);
       case "scan-stream":
         return this.scanStream(e, path);
       case "map-accum-stream":
@@ -518,6 +530,25 @@ export class BodyValidator {
         return this.takeUntilStream(e, path);
       case "sink-for-each":
         return this.sinkForEach(e, path);
+      case "take-sink":
+        return this.takeSink(e, path);
+      case "transduce-stream":
+        return this.transduceStream(e, path);
+      case "aggregate-stream":
+        return this.aggregateStream(e, path);
+      case "aggregate-within-stream":
+        return this.aggregateWithinStream(e, path);
+      case "schedule-from-step":
+        return this.scheduleFromStep(e, path);
+      case "schedule-recurs":
+      case "schedule-spaced":
+        return this.simpleSchedule(e, path);
+      case "schedule-map":
+        return this.scheduleMap(e, path);
+      case "schedule-max":
+      case "schedule-min":
+      case "schedule-concat":
+        return this.scheduleCompose(e, path);
       case "run-stream":
         return this.runStream(e, path);
       case "buffer-stream":
@@ -545,6 +576,11 @@ export class BodyValidator {
         return this.retryWithSchedule(e, path);
       case "codec":
         return this.codec(e, path);
+      case "schema":
+        return this.schema(e, path);
+      case "schema-decode":
+      case "schema-encode":
+        return this.schemaOperation(e, path);
       case "decode":
       case "encode":
         return this.codecOperation(e, path);
@@ -902,6 +938,15 @@ export class BodyValidator {
       this.check(f.value, `${path}.fields[${i}].value`)
     );
     const active = combine(outs);
+    if (e.error === SCHEMA_ERROR_ID || e.error === SCHEMA_ISSUE_ID) {
+      this.add(
+        AREA.types,
+        path,
+        "reserved Schema errors cannot be constructed as source errors",
+        e.span,
+      );
+      return { type: undefined, match: "exact", active };
+    }
     const decl = this.ctx.world.errors.get(e.error);
     if (decl === undefined) {
       this.add(
@@ -1648,6 +1693,500 @@ export class BodyValidator {
     };
   }
 
+  private schema(e: Extract<Expr, { kind: "schema" }>, path: string): Comp {
+    const args = e.arguments.map((arg, i) =>
+      this.check(arg, `${path}.arguments[${i}]`)
+    );
+    const schemaOf = (type: Type) => {
+      const found = unfold(this.env, type);
+      return found.kind === "schema" && found.optionalKey !== true &&
+          found.encodedOptionalKey !== true
+        ? found
+        : undefined;
+    };
+    const optionalOf = (type: Type) => {
+      const found = unfold(this.env, type);
+      return found.kind === "schema" && found.optionalKey === true &&
+          found.encodedOptionalKey !== true
+        ? found
+        : undefined;
+    };
+    const bad = (message: string): Comp => {
+      this.add(AREA.types, path, message, e.span);
+      return this.poison();
+    };
+    if (e.op === "invalid" || e.op === "at" || e.op === "both") {
+      const issue: Type = { kind: "named", id: SCHEMA_ISSUE_ID };
+      if (
+        e.op === "invalid" &&
+        (args.length !== 1 || !fits(this.env, args[0].type, {
+          kind: "primitive",
+          name: "string",
+        }))
+      ) return bad("schemaInvalid needs a string message");
+      if (
+        e.op === "at" &&
+        (args.length !== 2 ||
+          !fits(this.env, args[0].type, {
+            kind: "union",
+            members: [
+              { kind: "primitive", name: "string" },
+              { kind: "primitive", name: "int" },
+            ],
+          }) || !fits(this.env, args[1].type, issue))
+      ) return bad("schemaAt needs a key and a SchemaIssue");
+      if (
+        e.op === "both" &&
+        (args.length !== 3 || schemaOf(args[0].type) === undefined ||
+          !fits(this.env, args[1].type, issue) ||
+          !fits(this.env, args[2].type, issue))
+      ) return bad("schemaBoth needs a Schema and two issues");
+      return { type: issue, match: "exact", active: combine(args) };
+    }
+    if (e.op === "identity") {
+      const hint = schemaOf(e.type);
+      if (
+        args.length !== 0 || hint === undefined ||
+        !same(this.env, hint.decoded, hint.encoded) ||
+        hint.decodeRequirements.length || hint.encodeRequirements.length ||
+        !this.dataOnly(hint.decoded)
+      ) {
+        return bad("schema() needs an identity data Schema with no services");
+      }
+      return { type: hint, match: "exact", active: QUIET };
+    }
+    if (e.op === "array") {
+      const input = args[0] === undefined ? undefined : schemaOf(args[0].type);
+      if (args.length !== 1 || input === undefined) {
+        return bad("schemaArray needs one Schema");
+      }
+      return {
+        type: {
+          kind: "schema",
+          decoded: { kind: "array", element: input.decoded },
+          encoded: { kind: "array", element: input.encoded },
+          decodeRequirements: input.decodeRequirements,
+          encodeRequirements: input.encodeRequirements,
+        },
+        match: "exact",
+        active: combine(args),
+      };
+    }
+    if (e.op === "optional-key") {
+      const input = args[0] === undefined ? undefined : schemaOf(args[0].type);
+      if (args.length !== 1 || input === undefined) {
+        return bad("schemaOptionalKey needs one ordinary Schema");
+      }
+      return {
+        type: { ...input, optionalKey: true },
+        match: "exact",
+        active: combine(args),
+      };
+    }
+    if (e.op === "option-from-optional-key") {
+      const input = args[0] === undefined ? undefined : schemaOf(args[0].type);
+      if (args.length !== 1 || input === undefined) {
+        return bad("schemaOptionFromOptionalKey needs one ordinary Schema");
+      }
+      return {
+        type: {
+          ...input,
+          decoded: { kind: "option", element: input.decoded },
+          encodedOptionalKey: true,
+        },
+        match: "exact",
+        active: combine(args),
+      };
+    }
+    if (e.op === "default-key") {
+      const input = args[0] === undefined ? undefined : schemaOf(args[0].type);
+      const fallback = args[1] === undefined
+        ? undefined
+        : asFunction(this.env, args[1].type);
+      const validFailure = fallback !== undefined &&
+        (fallback.effects.failures.length === 0 ||
+          (fallback.effects.failures.length === 1 &&
+            (fallback.effects.failures[0] === SCHEMA_ISSUE_ID ||
+              fallback.effects.failures[0] === SCHEMA_ERROR_ID)));
+      if (
+        args.length !== 2 || input === undefined || fallback === undefined ||
+        e.arguments[1]?.kind !== "closure" ||
+        fallback.parameters.length !== 0 ||
+        !validFailure ||
+        (fallback.execution === "pure" &&
+          (fallback.effects.failures.length !== 0 ||
+            fallback.effects.requirements.length !== 0)) ||
+        !fits(this.env, fallback.result, input.decoded)
+      ) {
+        return bad(
+          "schemaDefaultKey needs a decoded callback with only SchemaIssue or SchemaError failure",
+        );
+      }
+      return {
+        type: {
+          ...input,
+          encodedOptionalKey: true,
+          decodeRequirements: sortedUnique([
+            ...input.decodeRequirements,
+            ...fallback.effects.requirements,
+          ]),
+        },
+        match: "exact",
+        active: combine(args),
+      };
+    }
+    if (e.op === "struct") {
+      const record = args[0] === undefined
+        ? undefined
+        : unfold(this.env, args[0].type);
+      if (
+        args.length !== 1 || record?.kind !== "record" ||
+        record.fields.some((field) => field.optional)
+      ) return bad("schemaStruct needs required Schema fields");
+      const fields = record.fields.map((field) => ({
+        field,
+        schema: unfold(this.env, field.type),
+      }));
+      if (fields.some((field) => field.schema.kind !== "schema")) {
+        return bad("schemaStruct field is not a Schema or optional descriptor");
+      }
+      return {
+        type: {
+          kind: "schema",
+          decoded: {
+            kind: "record",
+            fields: fields.map(({ field, schema }) => ({
+              name: field.name,
+              optional: schema.kind === "schema" && schema.optionalKey === true,
+              type: schema.kind === "schema" ? schema.decoded : field.type,
+            })),
+          },
+          encoded: {
+            kind: "record",
+            fields: fields.map(({ field, schema }) => ({
+              name: field.name,
+              optional: schema.kind === "schema" &&
+                (schema.optionalKey === true ||
+                  schema.encodedOptionalKey === true),
+              type: schema.kind === "schema" ? schema.encoded : field.type,
+            })),
+          },
+          decodeRequirements: sortedUnique(
+            fields.flatMap(({ schema }) =>
+              schema.kind === "schema" ? schema.decodeRequirements : []
+            ),
+          ),
+          encodeRequirements: sortedUnique(
+            fields.flatMap(({ schema }) =>
+              schema.kind === "schema" ? schema.encodeRequirements : []
+            ),
+          ),
+        },
+        match: "exact",
+        active: combine(args),
+      };
+    }
+    if (e.op === "union") {
+      const list = e.arguments[0];
+      const tuple = args[0] === undefined
+        ? undefined
+        : unfold(this.env, args[0].type);
+      if (
+        args.length !== 1 || list?.kind !== "tuple" ||
+        tuple?.kind !== "tuple" || tuple.elements.length < 2
+      ) return bad("schemaUnion needs an inline tuple of branches");
+      const branches = tuple.elements.map(schemaOf);
+      if (branches.some((branch) => branch === undefined)) {
+        return bad("schemaUnion branches must be ordinary Schema values");
+      }
+      const schemas = branches.filter((branch) => branch !== undefined);
+      const tagMaps = schemas.map((branch) => {
+        const decoded = unfold(this.env, branch.decoded);
+        const encoded = unfold(this.env, branch.encoded);
+        const candidates = new Map<string, string>();
+        if (decoded.kind !== "record" || encoded.kind !== "record") {
+          return candidates;
+        }
+        for (const field of decoded.fields) {
+          if (field.optional) continue;
+          const other = encoded.fields.find((item) => item.name === field.name);
+          if (other === undefined || other.optional) continue;
+          const left = unfold(this.env, field.type);
+          const right = unfold(this.env, other.type);
+          if (
+            left.kind === "literal" && right.kind === "literal" &&
+            typeof left.value === "string" && left.value === right.value
+          ) candidates.set(field.name, left.value);
+        }
+        return candidates;
+      });
+      const sharedTag = [...tagMaps[0].keys()].find((name) => {
+        const values = tagMaps.map((candidate) => candidate.get(name));
+        return values.every((value) => value !== undefined) &&
+          new Set(values).size === values.length;
+      });
+      if (sharedTag === undefined) {
+        return bad(
+          "schemaUnion needs distinct shared literal tags in both directions",
+        );
+      }
+      return {
+        type: {
+          kind: "schema",
+          decoded: { kind: "union", members: schemas.map((s) => s.decoded) },
+          encoded: { kind: "union", members: schemas.map((s) => s.encoded) },
+          decodeRequirements: sortedUnique(
+            schemas.flatMap((s) => s.decodeRequirements),
+          ),
+          encodeRequirements: sortedUnique(
+            schemas.flatMap((s) => s.encodeRequirements),
+          ),
+        },
+        match: "exact",
+        active: combine(args),
+      };
+    }
+    if (e.op === "optional-transform") {
+      const source = args[0] === undefined
+        ? undefined
+        : optionalOf(args[0].type);
+      const target = args[1] === undefined
+        ? undefined
+        : optionalOf(args[1].type);
+      const decode = args[2] === undefined
+        ? undefined
+        : asFunction(this.env, args[2].type);
+      const encode = args[3] === undefined
+        ? undefined
+        : asFunction(this.env, args[3].type);
+      const validCallback = (fn: typeof decode) =>
+        fn !== undefined &&
+        (fn.effects.failures.length === 0 ||
+          (fn.effects.failures.length === 1 &&
+            fn.effects.failures[0] === SCHEMA_ISSUE_ID)) &&
+        (fn.execution !== "pure" ||
+          (fn.effects.failures.length === 0 &&
+            fn.effects.requirements.length === 0));
+      if (
+        args.length !== 4 || source === undefined || target === undefined ||
+        !validCallback(decode) || !validCallback(encode) ||
+        decode?.parameters.length !== 1 || encode?.parameters.length !== 1 ||
+        !fits(
+          this.env,
+          { kind: "option", element: source.decoded },
+          decode.parameters[0],
+        ) ||
+        !fits(
+          this.env,
+          { kind: "option", element: target.encoded },
+          encode.parameters[0],
+        ) ||
+        !fits(this.env, decode.result, {
+          kind: "option",
+          element: target.encoded,
+        }) ||
+        !fits(this.env, encode.result, {
+          kind: "option",
+          element: source.decoded,
+        }) ||
+        e.arguments[2]?.kind !== "closure" ||
+        e.arguments[3]?.kind !== "closure"
+      ) {
+        return bad(
+          "schemaOptionalTransform needs directional Option callbacks with only SchemaIssue failure",
+        );
+      }
+      return {
+        type: {
+          kind: "schema",
+          decoded: target.decoded,
+          encoded: source.encoded,
+          decodeRequirements: sortedUnique([
+            ...source.decodeRequirements,
+            ...target.decodeRequirements,
+            ...decode.effects.requirements,
+          ]),
+          encodeRequirements: sortedUnique([
+            ...source.encodeRequirements,
+            ...target.encodeRequirements,
+            ...encode.effects.requirements,
+          ]),
+          optionalKey: true,
+        },
+        match: "exact",
+        active: combine(args),
+      };
+    }
+    if (e.op === "recursive") {
+      const hint = schemaOf(e.type);
+      const fn = args[0] === undefined
+        ? undefined
+        : asFunction(this.env, args[0].type);
+      if (
+        args.length !== 1 || hint === undefined || fn === undefined ||
+        fn.parameters.length !== 1 ||
+        !same(this.env, hint.decoded, hint.encoded) ||
+        !same(this.env, fn.parameters[0], hint) ||
+        !fits(this.env, fn.result, hint) || fn.execution !== "pure" ||
+        fn.effects.failures.length || fn.effects.requirements.length ||
+        !this.dataOnly(hint.decoded) || !this.dataOnly(hint.encoded) ||
+        !this.guardedSchemaBody(e.arguments[0])
+      ) {
+        return bad(
+          "schemaRecursive needs a pure body from self to the expected data Schema",
+        );
+      }
+      return { type: hint, match: "exact", active: combine(args) };
+    }
+    if (e.op === "transform") {
+      const source = args[0] === undefined ? undefined : schemaOf(args[0].type);
+      const target = args[1] === undefined ? undefined : schemaOf(args[1].type);
+      const decode = args[2] === undefined
+        ? undefined
+        : asFunction(this.env, args[2].type);
+      const encode = args[3] === undefined
+        ? undefined
+        : asFunction(this.env, args[3].type);
+      const callbackResult = (fn: typeof decode, value: Type) => {
+        if (fn === undefined) return false;
+        if (fn.effects.failures.length === 0) {
+          return fits(this.env, fn.result, {
+            kind: "option",
+            element: value,
+          });
+        }
+        return fn.effects.failures.length === 1 &&
+          fn.effects.failures[0] === "error:effect/SchemaIssue" &&
+          fits(this.env, fn.result, value);
+      };
+      if (
+        args.length !== 4 || source === undefined || target === undefined ||
+        decode === undefined || encode === undefined ||
+        decode.parameters.length !== 1 || encode.parameters.length !== 1 ||
+        !fits(this.env, source.decoded, decode.parameters[0]) ||
+        !fits(this.env, target.encoded, encode.parameters[0]) ||
+        !callbackResult(decode, target.encoded) ||
+        !callbackResult(encode, source.decoded) ||
+        e.arguments[2]?.kind !== "closure" ||
+        e.arguments[3]?.kind !== "closure"
+      ) {
+        return bad(
+          "schemaTransform callback types or failure channels do not match",
+        );
+      }
+      return {
+        type: {
+          kind: "schema",
+          decoded: target.decoded,
+          encoded: source.encoded,
+          decodeRequirements: sortedUnique([
+            ...source.decodeRequirements,
+            ...target.decodeRequirements,
+            ...decode.effects.requirements,
+          ]),
+          encodeRequirements: sortedUnique([
+            ...source.encodeRequirements,
+            ...target.encodeRequirements,
+            ...encode.effects.requirements,
+          ]),
+        },
+        match: "exact",
+        active: combine(args),
+      };
+    }
+    return bad("unknown schema constructor");
+  }
+
+  private guardedSchemaBody(callback: Expr | undefined): boolean {
+    if (
+      callback?.kind !== "closure" || callback.parameters.length !== 1 ||
+      callback.body.kind !== "schema" ||
+      (callback.body.op !== "struct" && callback.body.op !== "union")
+    ) return false;
+    const self = callback.parameters[0].id;
+    const containsSelf = (value: Expr): boolean => {
+      if (value.kind === "reference") return value.target === self;
+      if (value.kind === "record") {
+        return value.fields.some((field) => containsSelf(field.value));
+      }
+      if (value.kind === "tuple" || value.kind === "array") {
+        return value.elements.some(containsSelf);
+      }
+      if (value.kind === "schema") {
+        return value.arguments.some(containsSelf);
+      }
+      return false;
+    };
+    const branches = callback.body.op === "union" &&
+        callback.body.arguments[0]?.kind === "tuple"
+      ? callback.body.arguments[0].elements
+      : undefined;
+    const finiteChoice = branches !== undefined && branches.length >= 2 &&
+      branches.some((branch) => !containsSelf(branch));
+    let found = false;
+    const visit = (value: Expr, guarded: boolean): boolean => {
+      if (value.kind === "reference") {
+        if (value.target !== self) return true;
+        found = true;
+        return guarded;
+      }
+      if (value.kind === "record") {
+        return value.fields.every((field) => visit(field.value, guarded));
+      }
+      if (
+        value.kind === "schema" &&
+        (value.op === "array" || value.op === "struct" ||
+          value.op === "optional-key" || value.op === "union")
+      ) {
+        return value.arguments.every((argument) =>
+          visit(
+            argument,
+            guarded || value.op === "array" || value.op === "optional-key",
+          )
+        );
+      }
+      if (value.kind === "tuple") {
+        return value.elements.every((element) => visit(element, guarded));
+      }
+      return false;
+    };
+    return visit(callback.body, finiteChoice) && found;
+  }
+
+  private schemaOperation(
+    e: Extract<Expr, { kind: "schema-decode" | "schema-encode" }>,
+    path: string,
+  ): Comp {
+    const schema = this.check(e.schema, `${path}.schema`);
+    const input = this.check(e.input, `${path}.input`);
+    const type = unfold(this.env, schema.type);
+    if (type.kind !== "schema") {
+      this.add(AREA.types, path, "schema runner needs a Schema value", e.span);
+      return this.poison();
+    }
+    if (
+      e.kind === "schema-encode" && !fits(this.env, input.type, type.decoded)
+    ) {
+      this.add(
+        AREA.types,
+        `${path}.input`,
+        "schemaEncode input does not fit decoded type",
+        e.input.span,
+      );
+    }
+    return {
+      type: e.kind === "schema-decode" ? type.decoded : type.encoded,
+      match: "exact",
+      active: combine([schema, input, {
+        execution: "effect",
+        failures: [SCHEMA_ERROR_ID],
+        requirements: e.kind === "schema-decode"
+          ? type.decodeRequirements
+          : type.encodeRequirements,
+      }]),
+    };
+  }
+
   private codecOperation(
     e: Extract<Expr, { kind: "decode" | "encode" }>,
     path: string,
@@ -2109,6 +2648,62 @@ export class BodyValidator {
     };
   }
 
+  private explicitScope(
+    e: Extract<
+      Expr,
+      { kind: "provide-scope" | "add-scope-finalizer" | "close-scope" }
+    >,
+    path: string,
+  ): Comp {
+    const owner = this.check(e.owner, `${path}.owner`);
+    if (!fits(this.env, owner.type, { kind: "closeable-scope" })) {
+      this.add(
+        AREA.control,
+        path,
+        `${e.kind} needs a CloseableScope owner`,
+        e.span,
+      );
+    }
+    if (e.kind === "close-scope") {
+      return {
+        type: UNIT,
+        match: "exact",
+        active: combine([owner, EFFECT_ONLY]),
+      };
+    }
+    const job = this.check(e.job, `${path}.job`);
+    const effect = unfold(this.env, job.type);
+    if (effect.kind !== "effect") {
+      this.add(AREA.control, path, `${e.kind} needs an Effect value`, e.span);
+      return this.poison();
+    }
+    if (
+      e.kind === "add-scope-finalizer" && (
+        !fits(this.env, effect.result, UNIT) ||
+        effect.effects.failures.length > 0 ||
+        effect.effects.requirements.includes(SCOPE_CAPABILITY)
+      )
+    ) {
+      this.add(
+        AREA.control,
+        path,
+        "a scope finalizer must return void without typed failures or the reserved Scope requirement",
+        e.span,
+      );
+    }
+    return {
+      type: e.kind === "provide-scope" ? effect.result : UNIT,
+      match: "exact",
+      active: combine([owner, job, {
+        failures: e.kind === "provide-scope" ? effect.effects.failures : [],
+        requirements: e.kind === "provide-scope"
+          ? minus(effect.effects.requirements, [SCOPE_CAPABILITY])
+          : effect.effects.requirements,
+        execution: "effect",
+      }]),
+    };
+  }
+
   private dataOnly(type: Type, seen = new Set<Type>()): boolean {
     const value = unfold(this.env, type);
     if (seen.has(value)) return true;
@@ -2194,6 +2789,8 @@ export class BodyValidator {
       }
       const children: Expr[] = (() => {
         switch (e.kind) {
+          case "take-sink":
+          case "make-scope":
           case "literal":
           case "reference":
           case "none":
@@ -2224,10 +2821,17 @@ export class BodyValidator {
             return [e.body];
           case "call":
             return [e.callee, ...e.arguments];
+          case "provide-scope":
+          case "add-scope-finalizer":
+            return [e.owner, e.job];
+          case "close-scope":
+            return [e.owner];
           case "with-resource":
             return [e.acquire, e.use, e.release];
           case "unfold":
             return [e.seed, e.next];
+          case "map-groups":
+            return [e.stream, e.key, e.use];
           case "map-effect":
           case "map-stream":
           case "flat-map-streams":
@@ -2268,8 +2872,24 @@ export class BodyValidator {
             return [e.stream, e.predicate];
           case "sink-for-each":
             return [e.consume];
+          case "transduce-stream":
+          case "aggregate-stream":
           case "run-stream":
             return [e.stream, e.sink];
+          case "aggregate-within-stream":
+            return [e.stream, e.sink, e.schedule];
+          case "schedule-from-step":
+            return [e.initial, e.decide];
+          case "schedule-recurs":
+            return [e.times];
+          case "schedule-spaced":
+            return [e.delayMillis];
+          case "schedule-map":
+            return [e.schedule, e.transform];
+          case "schedule-max":
+          case "schedule-min":
+          case "schedule-concat":
+            return [e.left, e.right];
           case "buffer-stream":
             return [e.stream];
           case "merge-streams":
@@ -2296,6 +2916,11 @@ export class BodyValidator {
             return [e.job, e.options];
           case "codec":
             return [e.decode, e.encode];
+          case "schema":
+            return [...e.arguments];
+          case "schema-decode":
+          case "schema-encode":
+            return [e.schema, e.input];
           case "decode":
           case "encode":
             return [e.codec, e.input];
@@ -3571,6 +4196,563 @@ export class BodyValidator {
       },
       match: "exact",
       active: combine([consume]),
+    };
+  }
+
+  private takeSink(
+    e: Extract<Expr, { kind: "take-sink" }>,
+    path: string,
+  ): Comp {
+    if (!Number.isSafeInteger(e.count) || e.count <= 0) {
+      this.add(
+        AREA.control,
+        path,
+        "takeSink needs a positive safe integer count",
+        e.span,
+      );
+    }
+    const sink = unfold(this.env, e.type);
+    if (sink.kind !== "sink") {
+      this.add(AREA.types, path, "takeSink needs a Sink annotation", e.span);
+      return this.poison();
+    }
+    return {
+      type: {
+        kind: "sink",
+        input: sink.input,
+        result: { kind: "array", element: sink.input },
+        leftover: sink.input,
+        effects: { failures: [], requirements: [] },
+      },
+      match: "exact",
+      active: QUIET,
+    };
+  }
+
+  private mapGroups(
+    e: Extract<Expr, { kind: "map-groups" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const key = this.check(e.key, `${path}.key`);
+    const use = this.check(e.use, `${path}.use`);
+    const source = unfold(this.env, stream.type);
+    const classifier = asFunction(this.env, key.type);
+    const consumer = asFunction(this.env, use.type);
+    if (
+      source.kind !== "stream" || e.key.kind !== "closure" ||
+      e.use.kind !== "closure" ||
+      classifier === undefined || consumer === undefined ||
+      classifier.parameters.length !== 1 || consumer.parameters.length !== 2 ||
+      e.use.parameters[1]?.id !== e.groupBinding ||
+      e.use.parameters[0]?.id === e.groupBinding
+    ) {
+      this.add(
+        AREA.control,
+        path,
+        "mapGroups needs a Stream and inline key/use callbacks with the declared group binding",
+        e.span,
+      );
+      return this.poison();
+    }
+    if (!Number.isSafeInteger(e.bufferSize) || e.bufferSize <= 0) {
+      this.add(
+        AREA.control,
+        path,
+        "mapGroups needs a positive safe integer buffer size",
+        e.span,
+      );
+    }
+    const group: Type = {
+      kind: "stream",
+      element: source.element,
+      effects: { failures: [], requirements: [] },
+    };
+    if (
+      !fits(this.env, source.element, classifier.parameters[0]) ||
+      !fits(this.env, classifier.result, consumer.parameters[0]) ||
+      !same(this.env, group, consumer.parameters[1]) ||
+      this.groupKeyClass(classifier.result) === undefined ||
+      !this.dataOnly(consumer.result)
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "mapGroups needs a primitive key class, matching borrowed input, and data-only result",
+        e.span,
+      );
+    }
+    if (
+      classifier.execution !== "pure" || classifier.effects.failures.length ||
+      classifier.effects.requirements.length
+    ) {
+      this.add(
+        AREA.control,
+        path,
+        "the group classifier must be pure",
+        e.key.span,
+      );
+    }
+    this.groupReferences(e.use.body, e.groupBinding, `${path}.use.body`);
+    return {
+      type: {
+        kind: "stream",
+        element: consumer.result,
+        effects: {
+          failures: sortedUnique([
+            ...source.effects.failures,
+            ...consumer.effects.failures,
+          ]),
+          requirements: sortedUnique([
+            ...source.effects.requirements,
+            ...minus(consumer.effects.requirements, [SCOPE_CAPABILITY]),
+          ]),
+        },
+      },
+      match: "exact",
+      active: combine([stream, key, use]),
+    };
+  }
+
+  private groupKeyClass(type: Type, depth = 0): string | undefined {
+    if (depth > 128) return undefined;
+    let found: string | undefined;
+    for (const member of members(this.env, type)) {
+      let current: string | undefined;
+      if (member.kind === "literal") {
+        current = typeof member.value === "number"
+          ? Number.isSafeInteger(member.value) ? "int" : undefined
+          : typeof member.value;
+      } else if (member.kind === "primitive") {
+        if (
+          member.name === "int" || member.name === "string" ||
+          member.name === "boolean"
+        ) current = member.name;
+      } else if (member.kind === "named") {
+        const base = this.env.brands.get(member.id);
+        if (
+          base !== undefined &&
+          this.groupKeyClass(base, depth + 1) !== undefined
+        ) current = `brand:${member.id}`;
+      }
+      if (current === undefined || (found !== undefined && found !== current)) {
+        return undefined;
+      }
+      found = current;
+    }
+    return found;
+  }
+
+  private groupReferences(body: Expr, id: string, path: string): void {
+    let references = 0;
+    const visit = (
+      value: unknown,
+      parent: Expr | undefined,
+      nested: boolean,
+    ): void => {
+      if (Array.isArray(value)) {
+        value.forEach((item) => visit(item, parent, nested));
+        return;
+      }
+      if (value === null || typeof value !== "object") return;
+      const fields = value as Record<string, unknown>;
+      const expr =
+        "kind" in fields && "type" in fields && "effects" in fields &&
+          "span" in fields
+          ? value as Expr
+          : undefined;
+      if (expr?.kind === "reference" && expr.target === id) {
+        references++;
+        const terminal = parent?.kind === "collect-stream" ||
+          parent?.kind === "run-stream" ||
+          parent?.kind === "fold-stream" ||
+          parent?.kind === "fold-effect-stream" ||
+          parent?.kind === "head-stream" || parent?.kind === "last-stream" ||
+          parent?.kind === "drain-stream";
+        if (nested || references > 1 || !terminal || parent.stream !== expr) {
+          this.add(
+            AREA.control,
+            path,
+            "a borrowed group permits at most one direct terminal use and cannot escape or be captured",
+            expr.span,
+          );
+        }
+      }
+      for (const [key, child] of Object.entries(fields)) {
+        if (key === "type" || key === "effects" || key === "span") continue;
+        visit(child, expr ?? parent, nested || expr?.kind === "closure");
+      }
+    };
+    visit(body, undefined, false);
+  }
+
+  private transduceStream(
+    e: Extract<Expr, { kind: "transduce-stream" }>,
+    path: string,
+  ): Comp {
+    return this.sinkTransformStream(e, path, "transduceStream");
+  }
+
+  private aggregateStream(
+    e: Extract<Expr, { kind: "aggregate-stream" }>,
+    path: string,
+  ): Comp {
+    return this.sinkTransformStream(e, path, "aggregateStream");
+  }
+
+  private scheduleInput(input: Type): Type {
+    return {
+      kind: "record",
+      fields: [
+        { name: "input", type: input, optional: false },
+        { name: "attempt", type: INT, optional: false },
+        ...["start", "now", "elapsed", "elapsedSincePrevious"].map((name) => ({
+          name,
+          type: NUMBER,
+          optional: false,
+        })),
+      ],
+    };
+  }
+
+  private scheduleDecision(state: Type, output: Type): Type {
+    return {
+      kind: "union",
+      members: [
+        {
+          kind: "record",
+          fields: [
+            {
+              name: "kind",
+              type: { kind: "literal", value: "Continue" },
+              optional: false,
+            },
+            { name: "state", type: state, optional: false },
+            { name: "output", type: output, optional: false },
+            { name: "delayMillis", type: NUMBER, optional: false },
+          ],
+        },
+        {
+          kind: "record",
+          fields: [
+            {
+              name: "kind",
+              type: { kind: "literal", value: "Done" },
+              optional: false,
+            },
+            { name: "output", type: output, optional: false },
+          ],
+        },
+      ],
+    };
+  }
+
+  private simpleSchedule(
+    e: Extract<Expr, { kind: "schedule-recurs" | "schedule-spaced" }>,
+    path: string,
+  ): Comp {
+    const argument = e.kind === "schedule-recurs" ? e.times : e.delayMillis;
+    const value = this.check(argument, `${path}.argument`);
+    if (
+      !fits(this.env, value.type, e.kind === "schedule-recurs" ? INT : NUMBER)
+    ) {
+      this.add(AREA.types, path, "invalid schedule argument", argument.span);
+    }
+    return {
+      type: {
+        kind: "schedule",
+        output: INT,
+        input: { kind: "primitive", name: "unknown" },
+        effects: { failures: [], requirements: [] },
+      },
+      match: "exact",
+      active: combine([value]),
+    };
+  }
+
+  private scheduleFromStep(
+    e: Extract<Expr, { kind: "schedule-from-step" }>,
+    path: string,
+  ): Comp {
+    const initial = this.check(e.initial, `${path}.initial`);
+    const decide = this.check(e.decide, `${path}.decide`);
+    const factory = asFunction(this.env, initial.type);
+    const step = asFunction(this.env, decide.type);
+    if (
+      e.initial.kind !== "closure" || e.decide.kind !== "closure" ||
+      factory === undefined || factory.parameters.length !== 0 ||
+      step === undefined || step.parameters.length !== 2
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "scheduleFromStep needs inline state and decision callbacks",
+        e.span,
+      );
+      return this.poison();
+    }
+    const input = fieldsOf(this.env, step.parameters[1])?.find((field) =>
+      field.name === "input"
+    )?.type;
+    const outputs = members(this.env, step.result).map((member) =>
+      fieldsOf(this.env, member)?.find((field) => field.name === "output")?.type
+    ).filter((type): type is Type => type !== undefined);
+    const output = unionOf(this.env, outputs);
+    if (
+      input === undefined || outputs.length === 0 ||
+      !fits(this.env, factory.result, step.parameters[0]) ||
+      !fits(this.env, this.scheduleInput(input), step.parameters[1]) ||
+      !fits(
+        this.env,
+        step.result,
+        this.scheduleDecision(factory.result, output),
+      )
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "scheduleFromStep needs ScheduleInput and ScheduleDecision<State, Output>",
+        e.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: {
+        kind: "schedule",
+        output,
+        input,
+        effects: {
+          failures: sortedUnique([
+            ...factory.effects.failures,
+            ...step.effects.failures,
+          ]),
+          requirements: sortedUnique([
+            ...factory.effects.requirements,
+            ...step.effects.requirements,
+          ]),
+        },
+      },
+      match: "exact",
+      active: combine([initial, decide]),
+    };
+  }
+
+  private scheduleMap(
+    e: Extract<Expr, { kind: "schedule-map" }>,
+    path: string,
+  ): Comp {
+    const schedule = this.check(e.schedule, `${path}.schedule`);
+    const transform = this.check(e.transform, `${path}.transform`);
+    const policy = unfold(this.env, schedule.type);
+    const fn = asFunction(this.env, transform.type);
+    if (
+      e.transform.kind !== "closure" || policy.kind !== "schedule" ||
+      fn === undefined || fn.parameters.length !== 1
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "scheduleMap needs a Schedule and inline callback",
+        e.span,
+      );
+      return this.poison();
+    }
+    const base = this.scheduleInput(policy.input);
+    if (base.kind !== "record") return this.poison();
+    const metadata: Type = {
+      kind: "record",
+      fields: [
+        ...base.fields,
+        { name: "output", type: policy.output, optional: false },
+        { name: "durationMillis", type: NUMBER, optional: false },
+      ],
+    };
+    if (!fits(this.env, metadata, fn.parameters[0])) {
+      this.add(
+        AREA.types,
+        path,
+        "scheduleMap callback needs ScheduleMetadata<Output, Input>",
+        e.span,
+      );
+    }
+    return {
+      type: {
+        kind: "schedule",
+        output: fn.result,
+        input: policy.input,
+        effects: {
+          failures: sortedUnique([
+            ...policy.effects.failures,
+            ...fn.effects.failures,
+          ]),
+          requirements: sortedUnique([
+            ...policy.effects.requirements,
+            ...fn.effects.requirements,
+          ]),
+        },
+      },
+      match: "exact",
+      active: combine([schedule, transform]),
+    };
+  }
+
+  private scheduleCompose(
+    e: Extract<
+      Expr,
+      { kind: "schedule-max" | "schedule-min" | "schedule-concat" }
+    >,
+    path: string,
+  ): Comp {
+    const left = this.check(e.left, `${path}.left`);
+    const right = this.check(e.right, `${path}.right`);
+    const first = unfold(this.env, left.type);
+    const second = unfold(this.env, right.type);
+    if (first.kind !== "schedule" || second.kind !== "schedule") {
+      this.add(
+        AREA.types,
+        path,
+        "schedule composition needs two Schedules",
+        e.span,
+      );
+      return this.poison();
+    }
+    const accepts = (input: Type, offered: Type): boolean => {
+      const type = unfold(this.env, input);
+      return (type.kind === "primitive" && type.name === "unknown") ||
+        fits(this.env, offered, input);
+    };
+    const input = accepts(second.input, first.input)
+      ? first.input
+      : accepts(first.input, second.input)
+      ? second.input
+      : undefined;
+    if (input === undefined) {
+      this.add(
+        AREA.types,
+        path,
+        "schedule composition needs comparable input types",
+        e.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: {
+        kind: "schedule",
+        output: e.kind === "schedule-concat"
+          ? unionOf(this.env, [first.output, second.output])
+          : NUMBER,
+        input,
+        effects: {
+          failures: sortedUnique([
+            ...first.effects.failures,
+            ...second.effects.failures,
+          ]),
+          requirements: sortedUnique([
+            ...first.effects.requirements,
+            ...second.effects.requirements,
+          ]),
+        },
+      },
+      match: "exact",
+      active: combine([left, right]),
+    };
+  }
+
+  private aggregateWithinStream(
+    e: Extract<Expr, { kind: "aggregate-within-stream" }>,
+    path: string,
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const sink = this.check(e.sink, `${path}.sink`);
+    const schedule = this.check(e.schedule, `${path}.schedule`);
+    const source = unfold(this.env, stream.type);
+    const consumer = unfold(this.env, sink.type);
+    const policy = unfold(this.env, schedule.type);
+    const unknownInput = policy.kind === "schedule" &&
+      unfold(this.env, policy.input).kind === "primitive" &&
+      (unfold(this.env, policy.input) as Extract<Type, { kind: "primitive" }>)
+          .name === "unknown";
+    if (
+      source.kind !== "stream" || consumer.kind !== "sink" ||
+      policy.kind !== "schedule" ||
+      !fits(this.env, source.element, consumer.input) ||
+      !fits(this.env, consumer.leftover ?? NEVER, consumer.input) ||
+      !(unknownInput ||
+        fits(
+          this.env,
+          { kind: "option", element: consumer.result },
+          policy.input,
+        ))
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "aggregateWithinStream needs compatible Stream, Sink, and Schedule inputs",
+        e.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: {
+        kind: "stream",
+        element: consumer.result,
+        effects: {
+          failures: sortedUnique([
+            ...source.effects.failures,
+            ...consumer.effects.failures,
+            ...policy.effects.failures,
+          ]),
+          requirements: sortedUnique([
+            ...source.effects.requirements,
+            ...consumer.effects.requirements,
+            ...policy.effects.requirements,
+          ]),
+        },
+      },
+      match: "exact",
+      active: combine([stream, sink, schedule]),
+    };
+  }
+
+  private sinkTransformStream(
+    e: Extract<Expr, { kind: "transduce-stream" | "aggregate-stream" }>,
+    path: string,
+    name: "transduceStream" | "aggregateStream",
+  ): Comp {
+    const stream = this.check(e.stream, `${path}.stream`);
+    const sink = this.check(e.sink, `${path}.sink`);
+    const source = unfold(this.env, stream.type);
+    const consumer = unfold(this.env, sink.type);
+    if (
+      source.kind !== "stream" || consumer.kind !== "sink" ||
+      !fits(this.env, source.element, consumer.input) ||
+      !fits(this.env, consumer.leftover ?? NEVER, consumer.input)
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        `${name} needs compatible input and replayable Sink leftovers`,
+        e.span,
+      );
+      return this.poison();
+    }
+    return {
+      type: {
+        kind: "stream",
+        element: consumer.result,
+        effects: {
+          failures: sortedUnique([
+            ...source.effects.failures,
+            ...consumer.effects.failures,
+          ]),
+          requirements: sortedUnique([
+            ...source.effects.requirements,
+            ...consumer.effects.requirements,
+          ]),
+        },
+      },
+      match: "exact",
+      active: combine([stream, sink]),
     };
   }
 

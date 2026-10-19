@@ -1,0 +1,5 @@
+import { Int, SourceStop, SinkStop, BuildStop, Pull, Add } from "./contracts.eff"
+import { fromFactory } from "./main.eff"
+import { FactoryLive } from "host:sinks"
+export const make = (): Stream<Int, SourceStop | SinkStop, Pull.next | Add.add>
+  fails BuildStop => provide(FactoryLive, () => fromFactory())

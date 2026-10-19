@@ -1,0 +1,3 @@
+import { Boundary } from "./boundary.eff"
+export type ScopeAlias = CloseableScope
+export provider BoundaryLive provides Boundary

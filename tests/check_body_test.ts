@@ -66,6 +66,376 @@ function shortIds(ids: readonly string[]): string[] {
   return ids.map((id) => id.slice(id.indexOf("#") + 1));
 }
 
+Deno.test("mapGroups checks primitive key classes and direct terminal group uses", () => {
+  const project = checkText(`
+type Int = int
+type Key = Brand<string>
+type Alias = Key
+type Choice = "a" | "b"
+type Bool = boolean
+const one: Sink<Int, Int[], never, never, Int> = takeSink(1)
+const byBrand = (source: Stream<Alias>): Stream<Alias[]> => mapGroups(source, (n) => n, (key, group) => collectStream(group), { bufferSize: 1 })
+const byLiteral = (source: Stream<Choice>): Stream<Choice> => mapGroups(source, (n) => n, (key, group) => { drainStream(group); key }, { bufferSize: 2 })
+const byBool = (source: Stream<Bool>): Stream<Bool> => mapGroups(source, (n) => n, (key, group) => key, { bufferSize: 1 })
+const first = (source: Stream<Int>) => mapGroups(source, (n) => n, (key, group) => headStream(group), { bufferSize: 1 })
+const last = (source: Stream<Int>) => mapGroups(source, (n) => n, (key, group) => lastStream(group), { bufferSize: 1 })
+const folded = (source: Stream<Int>) => mapGroups(source, (n) => n, (key, group) => foldStream(group, 0, (sum, n) => sum + n), { bufferSize: 1 })
+const effectFold = (source: Stream<Int>) => mapGroups(source, (n) => n, (key, group) => foldEffectStream(group, 0, (sum, n) => sum + n), { bufferSize: 1 })
+const sink = (source: Stream<Int>) => mapGroups(source, (n) => n, (key, group) => runStream(group, one), { bufferSize: 1 })
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+  assertEquals(fn(project, "m", "first").mode, "pure");
+});
+
+Deno.test("mapGroups defers callback channels and discharges only callback Scope", () => {
+  const project = checkText(`
+type Int = int
+error SourceStop = {}
+error UseStop = {}
+error BuildStop = {}
+service Pull { next(): void }
+service Use { value(n: Int): Int fails UseStop; worker(): void }
+service Factory { source(): Stream<Int, SourceStop, Pull.next> fails BuildStop }
+const make = (): Stream<Int, SourceStop | UseStop, Pull.next | Use.value | Use.worker>
+ fails BuildStop uses Factory.source =>
+ mapGroups(Factory.source(), (n) => n, (key, group) => {
+   forkScoped(defer(() => Use.worker()))
+   drainStream(group)
+   Use.value(key)
+ }, { bufferSize: 1 })
+const runIt = (): Int[] fails BuildStop | SourceStop | UseStop
+ uses Factory.source | Pull.next | Use.value | Use.worker => collectStream(make())
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
+Deno.test("mapGroups rejects structural, mixed, general number, and impure keys", () => {
+  for (
+    const key of [
+      "(n) => ({ n })",
+      "(n): Num => n",
+      "(n) => [n]",
+      "(n) => Some(n)",
+      '(n) => if (n === 0) { "zero" } else { 1 }',
+      '(n) => if (n === 0) { A("a") } else { B("b") }',
+      '(n) => if (n === 0) { A("a") } else { "a" }',
+      "(n) => Read.key(n)",
+      "(n): never => fail(Stop({}))",
+    ]
+  ) {
+    const project = checkText(`type Int = int
+type Num = number
+type A = Brand<string>
+type B = Brand<string>
+error Stop = {}
+service Read { key(n: Int): Int }
+const bad = (source: Stream<Int>) => mapGroups(source, ${key}, (key, group) => key, { bufferSize: 1 })`);
+    assert(project.diagnostics.length > 0, key);
+    assert(
+      !codes(project).includes("syntax/001"),
+      messages(project).join("\n"),
+    );
+  }
+});
+
+Deno.test("mapGroups prevents aliasing, storage, repeated reads, helper calls, and captures", () => {
+  for (
+    const use of [
+      "(key, group) => group",
+      "(key, group) => ({ group })",
+      "(key, group) => { const alias = group; drainStream(alias); key }",
+      "(key, group) => { const saved = makeRef(group); key }",
+      "(key, group) => { const record = { group }; key }",
+      "(key, group) => { const tuple: [Stream<Int>] = [group]; key }",
+      "(key, group) => { setRef(saved, group); key }",
+      "(key, group) => { drainStream(group); headStream(group) }",
+      "(key, group) => if (key === 0) { headStream(group) } else { lastStream(group) }",
+      "(key, group) => helper(group)",
+      "(key, group) => { drainStream(takeStream(group, 1)); key }",
+      "(key, group) => { run(defer(() => drainStream(group))); key }",
+      "(key, group) => { forkScoped(defer(() => drainStream(group))); key }",
+      "(key, group) => { foldStream(other, 0, (sum, n) => { drainStream(group); sum }); key }",
+      "(key, group: unknown) => key",
+    ]
+  ) {
+    const project = checkText(`type Int = int
+const helper = (s: Stream<Int>): Int => { drainStream(s); 1 }
+const bad = (source: Stream<Int>, other: Stream<Int>, saved: Ref<Stream<Int>>) =>
+ mapGroups(source, (n) => n, ${use}, { bufferSize: 1 })`);
+    assert(
+      codes(project).includes("type-mismatch/010"),
+      `${use}\n${messages(project).join("\n")}`,
+    );
+  }
+  const shadowed = checkText(`type Int = int
+const headStream = (source: Stream<Int>): Int => 1
+const bad = (source: Stream<Int>) => mapGroups(source, (n) => n, (key, group) => headStream(group), { bufferSize: 1 })`);
+  assert(
+    codes(shadowed).includes("type-mismatch/010"),
+    messages(shadowed).join("\n"),
+  );
+});
+
+Deno.test("mapGroups requires inline callbacks and a literal positive per-key bound", () => {
+  for (
+    const options of [
+      "{}",
+      "{ bufferSize: 0 }",
+      "{ bufferSize: 0 - 1 }",
+      "{ bufferSize: 1.5 }",
+      "{ bufferSize: 9007199254740992 }",
+      "{ bufferSize: count }",
+      "{ bufferSize: 1, concurrency: 2 }",
+      "options",
+    ]
+  ) {
+    const project = checkText(`type Int = int
+const bad = (source: Stream<Int>, count: Int, options: { bufferSize: Int }) => mapGroups(source, (n) => n, (key, group) => key, ${options})`);
+    assert(
+      codes(project).includes("type-mismatch/010"),
+      `${options}: ${messages(project)}`,
+    );
+  }
+  for (
+    const call of [
+      "mapGroups(source, key, (key, group) => key, { bufferSize: 1 })",
+      "mapGroups(source, (n) => n, use, { bufferSize: 1 })",
+      "source |> mapGroups((n: Int) => n, (key: Int, group: Stream<Int>) => key, { bufferSize: 1 })",
+      "mapGroups(source, (n) => n)",
+    ]
+  ) {
+    const project = checkText(`type Int = int
+const key = (n: Int): Int => n
+const use = (key: Int, group: Stream<Int>): Int => key
+const bad = (source: Stream<Int>) => ${call}`);
+    assert(project.diagnostics.length > 0, call);
+  }
+  const shadowed = checkText(
+    "type Int = int\nconst mapGroups = (n: Int): Int => n\nconst use = (): Int => mapGroups(1)",
+  );
+  assertEquals(codes(shadowed), [], messages(shadowed).join("\n"));
+});
+
+Deno.test("takeSink infers input from bindings, returns, calls, and transduction", () => {
+  const project = checkText(`
+type Int = int
+type Pairs = Sink<Int, Int[], never, never, Int>
+const pairs: Pairs = takeSink(2)
+const make = (): Pairs => takeSink(2)
+const identity = (sink: Pairs): Pairs => sink
+const viaCall = (): Pairs => identity(takeSink(2))
+const batch = (source: Stream<Int>): Stream<Int[]> => transduceStream(source, pairs)
+const inline = (source: Stream<Int>): Stream<Int[]> => transduceStream(source, takeSink(2))
+const terminal = (source: Stream<Int>): Int[] => runStream(source, pairs)
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+  assertEquals(fn(project, "m", "batch").mode, "pure");
+  assertEquals(fn(project, "m", "terminal").mode, "effect");
+});
+
+Deno.test("Sink transduction preserves construction and deferred channels", () => {
+  const project = checkText(`
+type Int = int
+error SourceStop = {}
+error SinkStop = {}
+error BuildStop = {}
+service Pull { next(): void }
+service Add { add(): void }
+service Factory {
+  source(): Stream<Int, SourceStop, Pull.next> fails BuildStop
+  sink(): Sink<Int, Int, SinkStop, Add.add, Int>
+}
+const make = (): Stream<Int, SourceStop | SinkStop, Pull.next | Add.add>
+  fails BuildStop uses Factory.source | Factory.sink =>
+  transduceStream(Factory.source(), Factory.sink())
+const runIt = (): Int[] fails BuildStop | SourceStop | SinkStop
+  uses Factory.source | Factory.sink | Pull.next | Add.add => collectStream(make())
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+});
+
+Deno.test("Sink replay checks leftovers against sink input rather than original stream input", () => {
+  const prefix =
+    `type Text = string\ntype Int = int\ntype Item = string | int\n`;
+  const good = checkText(
+    prefix + `
+const broad = (source: Stream<Text>, sink: Sink<Item, Item[], never, never, Item>): Stream<Item[]> => transduceStream(source, sink)
+const terminal = (source: Stream<Int>, sink: Sink<Int, Text, never, never, Text>): Text => runStream(source, sink)
+`,
+  );
+  assertEquals(codes(good), [], messages(good).join("\n"));
+  const bad = checkText(
+    prefix +
+      `const bad = (source: Stream<Int>, sink: Sink<Int, Text, never, never, Text>) => transduceStream(source, sink)`,
+  );
+  assert(codes(bad).includes("type-mismatch/003"), messages(bad).join("\n"));
+});
+
+Deno.test("aggregateStream checks replay and defers source and Sink channels", () => {
+  const project = checkText(`
+type Int = int
+type Text = string
+type Item = int | string
+type Pairs = Sink<Int, Int[], never, never, Int>
+error SourceStop = {}
+error SinkStop = {}
+error BuildStop = {}
+service Pull { next(): void }
+service Add { add(): void }
+service Factory {
+  source(): Stream<Int, SourceStop, Pull.next> fails BuildStop
+  sink(): Sink<Int, Int, SinkStop, Add.add, Int>
+}
+const pairs: Pairs = takeSink(2)
+const batches = (source: Stream<Int>): Stream<Int[]> => aggregateStream(source, pairs)
+const inline = (source: Stream<Int>): Stream<Int[]> => aggregateStream(source, takeSink(2))
+const broad = (source: Stream<Text>, sink: Sink<Item, Item[], never, never, Item>): Stream<Item[]> => aggregateStream(source, sink)
+const make = (): Stream<Int, SourceStop | SinkStop, Pull.next | Add.add>
+  fails BuildStop uses Factory.source | Factory.sink =>
+  aggregateStream(Factory.source(), Factory.sink())
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+  assertEquals(fn(project, "m", "batches").mode, "pure");
+});
+
+Deno.test("aggregateStream rejects incompatible operands and preserves shadowing", () => {
+  const prefix = `type Int = int\ntype Text = string\n`;
+  for (
+    const body of [
+      "const bad = aggregateStream(1, takeSink(2))",
+      "const bad = aggregateStream()",
+      "const bad = (source: Stream<Int>) => source |> aggregateStream(takeSink(2))",
+      "const bad = (source: Stream<Int>, sink: Sink<Text, Int>) => aggregateStream(source, sink)",
+      "const bad = (source: Stream<Int>, sink: Sink<Int, Text, never, never, Text>) => aggregateStream(source, sink)",
+    ]
+  ) {
+    const checked = checkText(prefix + body);
+    assert(checked.diagnostics.length > 0, body);
+    assert(
+      !codes(checked).includes("unknown-name/001"),
+      messages(checked).join("\n"),
+    );
+  }
+  const shadowed = checkText(`type Int = int
+const aggregateStream = (a: Int, b: Int): Int => a + b
+const use = (): Int => aggregateStream(1, 2)`);
+  assertEquals(codes(shadowed), [], messages(shadowed).join("\n"));
+});
+
+Deno.test("general Schedule values retain four channels and scheduled aggregation checks input", () => {
+  const source = Deno.readTextFileSync(
+    new URL("../fixtures/emit/schedules/main.eff", import.meta.url),
+  );
+  const project = checkText(source);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+  assertEquals(fn(project, "m", "timed").mode, "pure");
+  for (
+    const body of [
+      "const bad = (source: Stream<Int>, policy: Schedule<Int, string>) => aggregateWithinStream(source, takeSink(2), policy)",
+      "const bad = (source: Stream<Int>, policy: RetrySchedule<Stop>) => aggregateWithinStream(source, takeSink(2), policy)",
+      "const bad = scheduleFromStep((): Int => 0, (state: Int, meta: ScheduleInput<Int>): Int => state)",
+      "const bad = (source: Stream<Int>) => source |> aggregateWithinStream(takeSink(2), scheduleRecurs(0))",
+    ]
+  ) {
+    const checked = checkText(`type Int = int\nerror Stop = {}\n${body}`);
+    assert(checked.diagnostics.length > 0, body);
+    assert(
+      !codes(checked).includes("unknown-name/001"),
+      messages(checked).join("\n"),
+    );
+  }
+  const shadowed = checkText(`type Int = int
+const scheduleRecurs = (n: Int): Int => n
+const use = (): Int => scheduleRecurs(1)`);
+  assertEquals(codes(shadowed), [], messages(shadowed).join("\n"));
+});
+
+Deno.test("Schedule composition keeps comparable input, output, and deferred channels", () => {
+  const source = Deno.readTextFileSync(
+    new URL("../fixtures/emit/schedules/composition.eff", import.meta.url),
+  );
+  const project = checkText(source);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+  assertEquals(fn(project, "m", "assembled").mode, "effect");
+  for (
+    const body of [
+      "const bad = scheduleMax(scheduleRecurs(1), 1)",
+      "const bad = scheduleMin()",
+      "const bad = (a: Schedule<Int, string>, b: Schedule<Int, Int>) => scheduleConcat(a, b)",
+      "const bad = (a: Schedule<Int, string>) => a |> scheduleMax(scheduleRecurs(1))",
+    ]
+  ) {
+    const checked = checkText(`type Int = int\n${body}`);
+    assert(checked.diagnostics.length > 0, body);
+    assert(
+      !codes(checked).includes("unknown-name/001"),
+      messages(checked).join("\n"),
+    );
+  }
+  const shadowed = checkText(`type Int = int
+const scheduleMax = (a: Int, b: Int): Int => a + b
+const use = (): Int => scheduleMax(1, 2)`);
+  assertEquals(codes(shadowed), [], messages(shadowed).join("\n"));
+});
+
+Deno.test("takeSink rejects invalid counts, erased leftovers, pipelines, and borrowed captures", () => {
+  for (
+    const body of [
+      "const bad = takeSink(2)",
+      "const bad: Sink<Int, Int[]> = takeSink(2)",
+      "const bad: Pairs = takeSink(0)",
+      "const bad: Pairs = takeSink(-1)",
+      "const bad: Pairs = takeSink(1.5)",
+      "const count = 2; const bad: Pairs = takeSink(count)",
+      "const bad: Pairs = takeSink()",
+      "const bad: Pairs = 2 |> takeSink",
+      "const bad = (s: Stream<Int>) => s |> transduceStream(takeSink(2))",
+      "const bad = () => withFiber(defer(() => 1), (fiber) => takeSink(2))",
+      "const bad = (s: Stream<Int>) => withFiber(defer(() => 1), (fiber) => { collectStream(transduceStream(s, sinkForEach((n: Int) => interruptFiber(fiber)))) })",
+    ]
+  ) {
+    const project = checkText(
+      `type Int = int\ntype Pairs = Sink<Int, Int[], never, never, Int>\n${body}`,
+    );
+    assert(project.diagnostics.length > 0, body);
+    assert(
+      !codes(project).includes("unknown-name/001"),
+      messages(project).join("\n"),
+    );
+  }
+  const shadowed = checkText(`type Int = int
+const takeSink = (n: Int): Int => n
+const transduceStream = (a: Int, b: Int): Int => a + b
+const use = (): Int => transduceStream(takeSink(2), 3)`);
+  assertEquals(codes(shadowed), [], messages(shadowed).join("\n"));
+});
+
+Deno.test("Sink leftover graphs reach private aliases, update hashes, and reject recursion", () => {
+  const project = (tail: string) =>
+    checkFiles({
+      "effective.json": "{}",
+      "a.eff":
+        `type Tail = ${tail}\nexport type S = Sink<int, int, never, never, Tail>`,
+      "b.eff":
+        `import { S } from "./a.eff"\nexport const identity = (sink: S): S => sink`,
+    }, ["b.eff"]);
+  const before = project("string");
+  const after = project("boolean");
+  assertEquals(codes(before), []);
+  assertEquals(codes(after), []);
+  assert(before.modules.get("b")!.hash !== after.modules.get("b")!.hash);
+  const old = checkText("export type S = Sink<int, int>");
+  const explicit = checkText(
+    "export type S = Sink<int, int, never, never, never>",
+  );
+  assertEquals(old.modules.get("m")!.hash, explicit.modules.get("m")!.hash);
+  const recursive = checkText("type Loop = Sink<int, int, never, never, Loop>");
+  assert(
+    codes(recursive).includes("declaration/007"),
+    messages(recursive).join("\n"),
+  );
+});
+
 Deno.test("withResource combines acquisition, use, and release contracts", () => {
   const project = checkText(`
 error OpenError = {}
@@ -1330,6 +1700,96 @@ const bad = (): void fails Stop =>
     codes(failed).includes("type-mismatch/010"),
     messages(failed).join("\n"),
   );
+});
+
+Deno.test("explicit scopes share authority and retain finalizer service requirements", () => {
+  const project = checkText(`
+service Jobs { run(): void; release(): void }
+type Owner = CloseableScope
+const open = (): Owner uses Jobs.run | Jobs.release => {
+  const owner = makeScope()
+  addScopeFinalizer(owner, defer(() => Jobs.release()))
+  provideScope(owner, defer(() => forkScoped(defer(() => Jobs.run()))))
+  owner
+}
+const close = (owner: Owner): void => closeScope(owner)
+const share = (owner: Owner) => { const copy = { owner }; () => closeScope(copy.owner) }
+const pipeline = (): void => makeScope() |> closeScope
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+  assertEquals(fn(project, "m", "open").mode, "effect");
+  assertEquals(fn(project, "m", "close").mode, "effect");
+});
+
+Deno.test("scope operations check arity, owners, finalizers, and escape boundaries", () => {
+  for (
+    const expression of [
+      "makeScope(1)",
+      "closeScope()",
+      "closeScope({})",
+      "provideScope(makeScope())",
+      "provideScope(makeScope(), 1)",
+      "addScopeFinalizer(makeScope(), defer(() => 1))",
+      "addScopeFinalizer(makeScope(), defer(() => fail(Stop())))",
+      "addScopeFinalizer(makeScope(), defer(() => forkScoped(defer(() => 1))))",
+      "withFiber(defer(() => 1), (fiber) => makeScope())",
+      "withResource(() => ({ close: () => {} }), (file) => ({ owner: makeScope() }), (file) => file.close())",
+      "withFiber(defer(() => 1), (fiber) => addScopeFinalizer(makeScope(), defer(() => interruptFiber(fiber))))",
+      "withResource(() => ({ close: () => {} }), (file) => addScopeFinalizer(makeScope(), defer(() => file.close())), (file) => file.close())",
+      "codec((owner: CloseableScope) => Some(owner), (owner: CloseableScope) => Some(owner))",
+      "makeScope() === makeScope()",
+    ]
+  ) {
+    const project = checkText(
+      `error Stop = {}\nconst bad = () => ${expression}`,
+    );
+    assert(project.diagnostics.length > 0, expression);
+    assert(
+      !codes(project).includes("unknown-name/001"),
+      messages(project).join("\n"),
+    );
+  }
+  const generic = checkText("type Bad = CloseableScope<CloseableScope>");
+  assert(generic.diagnostics.length > 0);
+  const missing = checkText(`service Audit { record(): void }
+const bad = (owner: CloseableScope): void => addScopeFinalizer(owner, defer(() => Audit.record()))`);
+  assert(
+    codes(missing).includes("requirement-contract/001"),
+    messages(missing).join("\n"),
+  );
+});
+
+Deno.test("explicit scope operations obey module and local shadowing", () => {
+  const project = checkText(`
+type Int = int
+const makeScope = (): Int => 1
+const provideScope = (a: Int, b: Int): Int => a + b
+const addScopeFinalizer = (a: Int, b: Int): Int => a + b
+const closeScope = (a: Int): Int => a
+const use = (): Int => provideScope(makeScope(), addScopeFinalizer(1, closeScope(2)))
+const local = (makeScope: () => Int): Int => makeScope()
+`);
+  assertEquals(codes(project), [], messages(project).join("\n"));
+  assertEquals(fn(project, "m", "use").mode, "pure");
+});
+
+Deno.test("provideScope only discharges latent Scope requirements", () => {
+  for (
+    const expression of [
+      "provideScope(owner, makeJob())",
+      "provideScope(makeOwner(), defer(() => {}))",
+    ]
+  ) {
+    const project = checkText(`
+const makeJob = () => { forkScoped(defer(() => {})); defer(() => {}) }
+const makeOwner = () => { forkScoped(defer(() => {})); makeScope() }
+const bad = (owner: CloseableScope): void => ${expression}
+`);
+    assert(
+      codes(project).includes("requirement-contract/001"),
+      messages(project).join("\n"),
+    );
+  }
 });
 
 Deno.test("withResource rejects escaped operation records and fields", () => {

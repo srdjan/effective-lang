@@ -1,0 +1,65 @@
+type Int = int
+type Optional = { score?: Int }
+type Required = { score: Int }
+
+service Read { next(value: Int): Int }
+service Write { previous(value: Int): Int }
+service Default { make(): Int }
+
+const integer: Schema<Int> = schema()
+const exact: SchemaOptional<Int> = schemaOptionalKey(integer)
+
+export const transformedField: SchemaOptional<Int, Int, Read.next, Write.previous> =
+  schemaOptionalTransform(
+    exact,
+    exact,
+    (value: Option<Int>): Option<Int> fails SchemaIssue uses Read.next =>
+      match value {
+        Some(score) => {
+          const next = Read.next(score)
+          if (next > 0) { Some(next) } else {
+            fail(schemaAt("decode", schemaInvalid("read blocked")))
+          }
+        },
+        None => Some(Read.next(0))
+      },
+    (value: Option<Int>): Option<Int> fails SchemaIssue uses Write.previous =>
+      match value {
+        Some(score) => {
+          const previous = Write.previous(score)
+          if (previous >= 0) { Some(previous) } else {
+            fail(schemaAt("encode", schemaInvalid("write blocked")))
+          }
+        },
+        None => Some(Write.previous(1))
+      }
+  )
+export const transformed: Schema<Optional, Optional, Read.next, Write.previous> =
+  schemaStruct({ score: transformedField })
+
+export const defaultField: SchemaEncodedOptional<Int, Int, Default.make> =
+  schemaDefaultKey(integer,
+    (): Int fails SchemaIssue uses Default.make => {
+      const value = Default.make()
+      if (value > 0) { value } else {
+        fail(schemaAt("missing", schemaInvalid("no default")))
+      }
+    })
+export const defaulted: Schema<Required, Optional, Default.make> =
+  schemaStruct({ score: defaultField })
+
+export const existingErrorField: SchemaEncodedOptional<Int> =
+  schemaDefaultKey(integer, (): Int fails SchemaError => schemaDecode(integer, 4))
+export const existingError: Schema<Required, Optional> =
+  schemaStruct({ score: existingErrorField })
+
+export const readOptional = (input: unknown): Optional fails SchemaError uses Read.next =>
+  schemaDecode(transformed, input)
+export const writeOptional = (value: Optional): Optional fails SchemaError uses Write.previous =>
+  schemaEncode(transformed, value)
+export const readDefault = (input: unknown): Required fails SchemaError uses Default.make =>
+  schemaDecode(defaulted, input)
+export const writeDefault = (value: Required): Optional fails SchemaError =>
+  schemaEncode(defaulted, value)
+export const readExistingError = (input: unknown): Required fails SchemaError =>
+  schemaDecode(existingError, input)

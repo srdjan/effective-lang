@@ -21,6 +21,7 @@ import {
   orderTypeLevel,
 } from "./decls.ts";
 import { EmitFailure, type ImportGroup, Scope } from "./scope.ts";
+import { scopeRuntimeDeclaration } from "./explicit_scope.ts";
 
 export interface EmitContext {
   /** The project configuration, for the paths of host modules. */
@@ -124,6 +125,7 @@ function build(ir: ModuleIR, context: EmitContext): EmittedModule {
   if (scope.usesIntSchema()) helpers.push([emitter.intSchemaDeclaration()]);
   if (scope.usesIntFunction()) helpers.push([emitter.intFunctionDeclaration()]);
   const hostAssertions = emitter.hostAssertions();
+  if (scope.usesScopeRuntime()) helpers.push([scopeRuntimeDeclaration(scope)]);
 
   const effectNames = scope.effectImports().map((n) =>
     n.exported === n.local ? n.exported : `${n.exported} as ${n.local}`

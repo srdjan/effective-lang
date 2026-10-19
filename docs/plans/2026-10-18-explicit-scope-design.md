@@ -1,12 +1,20 @@
 # Explicit Scope lifetime audit and source-rule prerequisite
 
 Date: 2026-10-18. Target: `effect@4.0.5`, Deno 2.9.7.
-Status: investigation complete for this witness; the source extension is proposed,
-not implemented or accepted into the language spec.
+Status: investigation complete; the bounded shared-scope extension is
+implemented in design draft 0.34. General raw Scope parity remains deferred.
+
+The follow-up [ownership/transfer contract](2026-10-18-scope-ownership-contract.md)
+specifies shared close authority, a cached close-completion barrier, and
+registration-time service capture for a bounded first source slice. Its
+success-only close deliberately leaves general supplied Exits outside that
+slice. Source and runtime acceptance tests now pass for this slice.
 
 ## Decision and evidence
 
-Keep raw Scope composition classified as a native gap. A straight-line manual
+Keep full raw Scope composition classified as a native gap. The implemented
+shared-scope slice below meets the returned-live-scope witness with success-only
+close. A straight-line manual
 close is expressible by ending a `scoped` block at that point. The missing
 contract is a caller-owned scope whose live work survives the creating root
 execution and is closed by a later execution. Adding another lexical bracket
@@ -113,7 +121,9 @@ must stay alive. Here `open` requires neither, and the first root really ends.
 
 ## Observed source boundaries
 
-The compiler probe records these diagnostics before lowering:
+The original compiler probe recorded these diagnostics before lowering.
+`Scope` remains unknown; `makeScope` now constructs the distinct
+`CloseableScope` type. Borrowed resource and Fiber escape remains rejected:
 
 | Attempt | Phase and diagnostic | Consequence |
 | --- | --- | --- |
@@ -125,9 +135,8 @@ The compiler probe records these diagnostics before lowering:
 Wrapping creation in `scoped` discharges its reserved requirement, but closes
 that scope before returning. `forkScoped` returns `void` in source, so it also
 cannot export its child handle. `withFiber` supervises its child within its
-inline callback. These restrictions prevent the supported constructs from
-implementing the requirement-free live return contract. A host service that
-starts unmanaged work can supply it, which remains adapter access.
+inline callback. These lexical forms alone cannot implement the requirement-free live return
+contract. The shared-scope extension now supplies that contract directly.
 
 ## Required operational rule before implementation
 
@@ -170,29 +179,29 @@ An extension claiming this raw Scope contract must specify all of the following:
    underlying borrowed resource or Fiber to escape. The checker and independent
    IR validator need the same lifetime rule and channel equations before emission.
 
-These are proposed semantic requirements, not newly available source functions.
-Source syntax, representation of a close Exit, and a safe ownership/transfer
-discipline are still design work. Concurrent close calls, parallel finalizer
-strategies, and defect aggregation were not established by these probes and
-need additional witnesses if included in an implementation.
+These requirements describe full raw Scope parity. The implemented follow-up
+contract specifies source syntax, shared authority, success-only close, and
+concurrent close completion. General close Exits, parallel finalizer
+strategies, and full defect aggregation remain outside that first slice.
 
 ## Options and disposition
 
 | Option | Value and effort | Risk and accepted trade-off |
 | --- | --- | --- |
-| Keep current lexical forms and document the raw gap | No compiler maintenance; sufficient for the lexical witness immediately. | Cannot satisfy the returned live-scope contract. Selected current disposition. |
+| Keep current lexical forms and document the raw gap | No compiler maintenance; sufficient for the lexical witness immediately. | Cannot satisfy the returned live-scope contract. Retained lexical behavior. |
 | Add a borrowed, explicitly closeable lexical scope | Smaller ownership surface than transferable scopes; implementation effort unmeasured. | Can add early close, but cannot claim parity with a scope returned beyond its owner. Requires its own bounded witness. |
-| Add transferable close authority | Meets the stronger witness; implementation effort unmeasured and spans types, checking, IR, validation, and emission. | Raw behavior permits abandonment; safe resource borrowing and ownership transfer need a design decision first. Proposed future direction only. |
+| Add transferable close authority | Meets the stronger witness; implementation effort unmeasured and spans types, checking, IR, validation, and emission. | Raw behavior permits abandonment. The follow-up implements shared authority with preserved borrow restrictions and a close-completion barrier. |
 
-The next implementation decision must explicitly select the ownership boundary
-and map it to the six rules above. Review this disposition when that design is
-proposed; supersede it only after a source program meets the live-return
-contract with strict target and runtime checks. No compiler implementation is
-part of this investigation.
+The ownership boundary is specified in the follow-up contract above, with
+eight additional target tests. It shares close authority without affine moves,
+preserves borrow restrictions, and strengthens concurrent close completion.
+The original full raw-Scope requirements remain a comparison point; arbitrary
+close Exits are not included in the implemented first slice. Checked source
+now meets the selected returned-live-scope contract with strict target and runtime checks.
 
-The next audit item is general Stream and Schedule composition, followed by
-Schema and ecosystem adapters. This scope witness does not establish full
-concurrency parity (queues, synchronization, and arbitrary fiber APIs included).
+The Stream/Schedule and Schema/ecosystem investigations are complete. This
+scope witness does not establish full concurrency parity (queues,
+synchronization, and arbitrary fiber APIs included).
 
 ## Reproduce and references
 
@@ -207,4 +216,4 @@ also distinguishes provision from closure; the
 [fiber guide](https://effect.website/docs/v4/concurrency/fibers) describes
 scope-bound forks. Related local decisions are the
 [operation-record rule](2026-10-17-scoped-resource-design.md) and the current
-[audit queue](../effect-4-gap-audit.md#remaining-investigation-queue).
+[audit queue](../effect-4-gap-audit.md#follow-up-queue).

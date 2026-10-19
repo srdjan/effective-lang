@@ -47,7 +47,13 @@ import {
   tokenOfId,
   unsupported,
 } from "./scope.ts";
-import { schemaDoc, typeDoc } from "./types.ts";
+import {
+  failureUnion,
+  requirementUnion,
+  schemaDoc,
+  typeArguments,
+  typeDoc,
+} from "./types.ts";
 
 // ------------------------------------------------------------------ precedence
 
@@ -776,12 +782,16 @@ export class ExprEmitter {
       case "some": {
         const option = this.scope.effect("Option");
         const resolved = this.scope.resolve(e.type);
-        const element = resolved.kind === "option"
-          ? resolved.element
-          : undefined;
+        if (resolved.kind !== "option") {
+          throw internal("a Some expression has a non-option type");
+        }
+        // Keep the checked context through generic wrappers and lifted callbacks.
+        // Inferring `some` can widen tuple payloads and record discriminants.
         return emitted([
-          `${option}.some`,
-          callArguments([kid(e.value, element)]),
+          `${option}.some<`,
+          typeDoc(this.scope, resolved.element),
+          ">",
+          callArguments([kid(e.value, resolved.element)]),
         ]);
       }
       case "none": {
@@ -854,6 +864,45 @@ export class ExprEmitter {
                   ? '"unbounded"'
                   : e.concurrency
               } }`)]),
+          ]),
+        ]);
+      }
+      case "map-groups": {
+        const stream = this.scope.effect("Stream");
+        const effect = this.scope.effect("Effect");
+        const key = this.scope.fresh("$key");
+        const group = this.scope.fresh("$group");
+        const pull = this.scope.fresh("$pull");
+        const use = this.effectCallback(e.use);
+        const owned = this.genCall([
+          [`const ${pull} = yield* ${stream}.toPull(${group});`],
+          [
+            "return yield* (",
+            use.doc,
+            `)(${key}, ${stream}.fromPull(${effect}.succeed(${pull})));`,
+          ],
+        ]);
+        const callback = emitted(this.arrow(
+          `([${key}, ${group}])`,
+          emitted([
+            `${stream}.fromEffect(${effect}.scoped(`,
+            owned.doc,
+            "))",
+          ]),
+        ));
+        return emitted([
+          `${stream}.flatMap`,
+          callArguments([
+            emitted([
+              `${stream}.groupByKey`,
+              callArguments([
+                kid(e.stream),
+                this.callback(e.key, kid),
+                emitted(`{ bufferSize: ${e.bufferSize} }`),
+              ]),
+            ]),
+            callback,
+            emitted('{ concurrency: "unbounded", bufferSize: 1 }'),
           ]),
         ]);
       }
@@ -1021,6 +1070,187 @@ export class ExprEmitter {
           callArguments([this.effectCallback(e.consume)]),
         ]);
       }
+      case "take-sink": {
+        const type = this.scope.resolve(e.type);
+        if (type.kind !== "sink") throw internal("takeSink has no Sink type");
+        return emitted([
+          `${this.scope.effect("Sink")}.take`,
+          typeArguments([typeDoc(this.scope, type.input)]),
+          callArguments([emitted(String(e.count))]),
+        ]);
+      }
+      case "transduce-stream": {
+        const source = this.scope.resolve(e.stream.type);
+        const sink = this.scope.resolve(e.sink.type);
+        if (source.kind !== "stream" || sink.kind !== "sink") {
+          throw internal("transduction has invalid operands");
+        }
+        return emitted([
+          `${this.scope.effect("Stream")}.transduce`,
+          typeArguments([
+            typeDoc(this.scope, sink.input),
+            failureUnion(this.scope, source.effects.failures) ?? "never",
+            requirementUnion(this.scope, source.effects.requirements) ??
+              "never",
+            typeDoc(this.scope, sink.result),
+            failureUnion(this.scope, sink.effects.failures) ?? "never",
+            requirementUnion(this.scope, sink.effects.requirements) ?? "never",
+          ]),
+          callArguments([kid(e.stream), kid(e.sink)]),
+        ]);
+      }
+      case "aggregate-stream": {
+        const source = this.scope.resolve(e.stream.type);
+        const sink = this.scope.resolve(e.sink.type);
+        if (source.kind !== "stream" || sink.kind !== "sink") {
+          throw internal("aggregation has invalid operands");
+        }
+        return emitted([
+          `${this.scope.effect("Stream")}.aggregate`,
+          typeArguments([
+            typeDoc(this.scope, source.element),
+            failureUnion(this.scope, source.effects.failures) ?? "never",
+            requirementUnion(this.scope, source.effects.requirements) ??
+              "never",
+            typeDoc(this.scope, sink.result),
+            sink.leftover === undefined
+              ? "never"
+              : typeDoc(this.scope, sink.leftover),
+            failureUnion(this.scope, sink.effects.failures) ?? "never",
+            requirementUnion(this.scope, sink.effects.requirements) ?? "never",
+          ]),
+          callArguments([kid(e.stream), kid(e.sink)]),
+        ]);
+      }
+      case "aggregate-within-stream": {
+        const source = this.scope.resolve(e.stream.type);
+        const sink = this.scope.resolve(e.sink.type);
+        const schedule = this.scope.resolve(e.schedule.type);
+        if (
+          source.kind !== "stream" || sink.kind !== "sink" ||
+          schedule.kind !== "schedule"
+        ) {
+          throw internal("scheduled aggregation has invalid operands");
+        }
+        return emitted([
+          `${this.scope.effect("Stream")}.aggregateWithin`,
+          typeArguments([
+            typeDoc(this.scope, source.element),
+            failureUnion(this.scope, source.effects.failures) ?? "never",
+            requirementUnion(this.scope, source.effects.requirements) ??
+              "never",
+            typeDoc(this.scope, sink.result),
+            sink.leftover === undefined
+              ? "never"
+              : typeDoc(this.scope, sink.leftover),
+            failureUnion(this.scope, sink.effects.failures) ?? "never",
+            requirementUnion(this.scope, sink.effects.requirements) ?? "never",
+            typeDoc(this.scope, schedule.output),
+            failureUnion(this.scope, schedule.effects.failures) ?? "never",
+            requirementUnion(this.scope, schedule.effects.requirements) ??
+              "never",
+          ]),
+          callArguments([kid(e.stream), kid(e.sink), kid(e.schedule)]),
+        ]);
+      }
+      case "schedule-recurs":
+        return emitted([
+          `${this.scope.effect("Schedule")}.recurs`,
+          callArguments([kid(e.times)]),
+        ]);
+      case "schedule-spaced":
+        return emitted([
+          `${this.scope.effect("Schedule")}.spaced`,
+          callArguments([emitted([
+            `${this.scope.effect("Duration")}.millis`,
+            callArguments([kid(e.delayMillis)]),
+          ])]),
+        ]);
+      case "schedule-map": {
+        const schedule = this.scope.effect("Schedule");
+        const duration = this.scope.effect("Duration");
+        const meta = this.scope.temp();
+        const callback = this.effectCallback(e.transform);
+        const enriched = emitted(
+          `{ ...${meta}, durationMillis: ${duration}.toMillis(${meta}.duration) }`,
+        );
+        return emitted([
+          `${schedule}.map`,
+          callArguments([
+            kid(e.schedule),
+            emitted(this.arrow(
+              `(${meta})`,
+              emitted([
+                at(callback, PREC.member),
+                callArguments([enriched]),
+              ]),
+            )),
+          ]),
+        ]);
+      }
+      case "schedule-max":
+      case "schedule-min": {
+        const schedule = this.scope.effect("Schedule");
+        const effect = this.scope.effect("Effect");
+        const duration = this.scope.effect("Duration");
+        const meta = this.scope.temp();
+        const operation = e.kind === "schedule-max" ? "max" : "min";
+        return emitted([
+          `${schedule}.map(${schedule}.${operation}([`,
+          at(kid(e.left), PREC.yield),
+          ", ",
+          at(kid(e.right), PREC.yield),
+          `]), (${meta}) => ${effect}.succeed(${duration}.toMillis(${meta}.output)))`,
+        ]);
+      }
+      case "schedule-concat":
+        return emitted([
+          `${this.scope.effect("Schedule")}.concat`,
+          callArguments([kid(e.left), kid(e.right)]),
+        ]);
+      case "schedule-from-step": {
+        const policy = this.scope.resolve(e.type);
+        if (policy.kind !== "schedule") {
+          throw internal("scheduleFromStep has wrong type");
+        }
+        const schedule = this.scope.effect("Schedule");
+        const effect = this.scope.effect("Effect");
+        const cause = this.scope.effect("Cause");
+        const duration = this.scope.effect("Duration");
+        const state = this.scope.temp();
+        const decide = this.scope.temp();
+        const meta = this.scope.temp();
+        const decision = this.scope.temp();
+        const initialCallback = this.effectCallback(e.initial);
+        const decideCallback = this.effectCallback(e.decide);
+        const decideType = this.scope.resolve(e.decide.type);
+        if (decideType.kind !== "function") {
+          throw internal("schedule decision is not a function");
+        }
+        return emitted([
+          `${schedule}.fromStepWithMetadata(${effect}.map(`,
+          at(initialCallback, PREC.member),
+          "(), (",
+          state,
+          ") => { const ",
+          decide,
+          ": ",
+          typeDoc(this.scope, { ...decideType, execution: "effect" }),
+          " = ",
+          decideCallback.doc,
+          "; return (",
+          meta,
+          `: ${schedule}.InputMetadata<`,
+          typeDoc(this.scope, policy.input),
+          ">) => ",
+          `${effect}.flatMap(${decide}(${state}, ${meta}), (${decision}) => { `,
+          `if (${decision}.kind === "Done") return ${cause}.done(${decision}.output); `,
+          `${state} = ${decision}.state; `,
+          `return ${effect}.succeed([${decision}.output, ${duration}.millis(${decision}.delayMillis)] as [`,
+          typeDoc(this.scope, policy.output),
+          `, ${duration}.Duration]); }); }))`,
+        ]);
+      }
       case "buffer-stream": {
         const stream = this.scope.effect("Stream");
         return emitted([
@@ -1150,6 +1380,219 @@ export class ExprEmitter {
           "; } } }",
         ]);
       }
+      case "schema": {
+        const schema = this.scope.effect("Schema");
+        const args = e.arguments;
+        if (e.op === "identity") {
+          const type = this.scope.resolve(e.type);
+          if (type.kind !== "schema") {
+            throw internal("schema identity has wrong type");
+          }
+          return emitted(schemaDoc(this.scope, type.decoded));
+        }
+        if (e.op === "array" || e.op === "struct") {
+          return emitted([
+            `${schema}.${e.op === "array" ? "Array" : "Struct"}`,
+            callArguments([kid(args[0])]),
+          ]);
+        }
+        if (e.op === "optional-key") {
+          return emitted([
+            `${schema}.optionalKey`,
+            callArguments([kid(args[0])]),
+          ]);
+        }
+        if (e.op === "option-from-optional-key") {
+          return emitted([
+            `${schema}.OptionFromOptionalKey`,
+            callArguments([kid(args[0])]),
+          ]);
+        }
+        if (e.op === "default-key") {
+          const effect = this.scope.effect("Effect");
+          const fallback = this.pure(args[1]);
+          const callback = args[1].type;
+          const effectful = callback.kind === "function" &&
+            callback.execution === "effect";
+          const issueFailure = callback.kind === "function" &&
+            callback.effects.failures.includes("error:effect/SchemaIssue");
+          const deferred: Doc = [
+            `${effect}.${effectful ? "suspend" : "sync"}(() => `,
+            at(fallback, PREC.member),
+            "())",
+          ];
+          const issue = this.scope.temp();
+          const defaultValue: Doc = issueFailure
+            ? [
+              `${effect}.mapError(`,
+              deferred,
+              ", (",
+              issue,
+              ") => new ",
+              `${schema}.SchemaError(`,
+              issue,
+              "))",
+            ]
+            : deferred;
+          return emitted([
+            at(kid(args[0]), PREC.member),
+            ".pipe(",
+            `${schema}.withDecodingDefaultTypeKey(`,
+            defaultValue,
+            "))",
+          ]);
+        }
+        if (e.op === "optional-transform") {
+          const getter = this.scope.effect("SchemaGetter");
+          const decode = this.pure(args[2]);
+          const encode = this.pure(args[3]);
+          const getterName = (index: number) =>
+            args[index].type.kind === "function" &&
+              args[index].type.execution === "effect"
+              ? "transformOptionalEffect"
+              : "transformOptional";
+          return emitted([
+            at(kid(args[0]), PREC.member),
+            ".pipe(",
+            `${schema}.decodeTo(`,
+            free(kid(args[1])),
+            ", { decode: ",
+            `${getter}.${getterName(2)}(`,
+            free(decode),
+            "), encode: ",
+            `${getter}.${getterName(3)}(`,
+            free(encode),
+            ") }))",
+          ]);
+        }
+        if (e.op === "union") {
+          return emitted([`${schema}.Union`, callArguments([kid(args[0])])]);
+        }
+        if (e.op === "invalid") {
+          const issue = this.scope.effect("SchemaIssue");
+          return emitted([
+            `new ${issue}.InvalidValue({ message: `,
+            free(kid(args[0])),
+            " })",
+          ]);
+        }
+        if (e.op === "at") {
+          const issue = this.scope.effect("SchemaIssue");
+          return emitted([
+            `new ${issue}.Pointer([`,
+            free(kid(args[0])),
+            "], ",
+            free(kid(args[1])),
+            ")",
+          ]);
+        }
+        if (e.op === "both") {
+          const issue = this.scope.effect("SchemaIssue");
+          return emitted([
+            `new ${issue}.Composite(`,
+            at(kid(args[0]), PREC.member),
+            ".ast, [",
+            free(kid(args[1])),
+            ", ",
+            free(kid(args[2])),
+            "])",
+          ]);
+        }
+        if (e.op === "recursive") {
+          const body = this.scope.temp();
+          const self = this.scope.temp();
+          const callback = this.pure(args[0]);
+          const type = typeDoc(this.scope, e.type);
+          return emitted([
+            "(() => { let ",
+            body,
+            ": ",
+            type,
+            "; const ",
+            self,
+            ": ",
+            type,
+            ` = ${schema}.suspend(() => `,
+            body,
+            "); ",
+            body,
+            " = ",
+            at(callback, PREC.member),
+            "(",
+            self,
+            "); return ",
+            self,
+            "; })()",
+          ]);
+        }
+        const source = kid(args[0]);
+        const target = kid(args[1]);
+        const decode = this.pure(args[2]);
+        const encode = this.pure(args[3]);
+        const transformation = this.scope.effect("SchemaTransformation");
+        const issue = this.scope.effect("SchemaIssue");
+        const effect = this.scope.effect("Effect");
+        const option = this.scope.effect("Option");
+        const value = this.scope.temp();
+        const result = this.scope.temp();
+        const conversion = (
+          callback: Emitted,
+          issueMode: boolean,
+          effectful: boolean,
+        ): Doc =>
+          issueMode
+            ? [
+              "(",
+              value,
+              ") => ",
+              at(callback, PREC.member),
+              "(",
+              value,
+              ")",
+            ]
+            : [
+              "(",
+              value,
+              ") => ",
+              `${effect}.flatMap(`,
+              ...(effectful ? [] : [`${effect}.succeed(`]),
+              at(callback, PREC.member),
+              "(",
+              value,
+              effectful ? "), (" : ")), (",
+              result,
+              ") => ",
+              `${option}.isSome(`,
+              result,
+              ") ? ",
+              `${effect}.succeed(`,
+              result,
+              ".value) : ",
+              `${effect}.fail(new ${issue}.InvalidValue({ message: \"schema transformation rejected\" }, `,
+              value,
+              ")))",
+            ];
+        const issueMode = (index: number) =>
+          args[index].type.kind === "function" &&
+          args[index].type.effects.failures.includes(
+            "error:effect/SchemaIssue",
+          );
+        const effectful = (index: number) =>
+          args[index].type.kind === "function" &&
+          args[index].type.execution === "effect";
+        return emitted([
+          at(source, PREC.member),
+          ".pipe(",
+          `${schema}.decodeTo(`,
+          free(target),
+          ", ",
+          `${transformation}.transformEffect({ decode: `,
+          conversion(decode, issueMode(2), effectful(2)),
+          ", encode: ",
+          conversion(encode, issueMode(3), effectful(3)),
+          " })))",
+        ]);
+      }
       case "decode":
       case "encode":
         return emitted([
@@ -1170,6 +1613,8 @@ export class ExprEmitter {
         return this.binary(e, kid);
       case "perform":
       case "fail":
+      case "schema-decode":
+      case "schema-encode":
       case "catch":
       case "retry":
       case "retry-with-schedule":
@@ -1183,6 +1628,10 @@ export class ExprEmitter {
       case "all-results":
       case "scoped":
       case "fork-scoped":
+      case "make-scope":
+      case "provide-scope":
+      case "add-scope-finalizer":
+      case "close-scope":
       case "with-resource":
       case "run-stream":
       case "fold-stream":
@@ -1761,7 +2210,11 @@ export class ExprEmitter {
       case "error":
         return armEquality(
           `${selector}._tag`,
-          JSON.stringify(tokenOfId(pattern.error)),
+          JSON.stringify(
+            pattern.error === "error:effect/SchemaError"
+              ? "SchemaError"
+              : tokenOfId(pattern.error),
+          ),
         );
       case "tag":
         return armEquality(
@@ -1803,6 +2256,9 @@ export class ExprEmitter {
     switch (e.kind) {
       case "call":
         return this.isEffectfulFunction(e.callee.type);
+      case "schema-decode":
+      case "schema-encode":
+        return true;
       case "perform":
       case "fail":
       case "retry":
@@ -1817,6 +2273,10 @@ export class ExprEmitter {
       case "all-results":
       case "scoped":
       case "fork-scoped":
+      case "make-scope":
+      case "provide-scope":
+      case "add-scope-finalizer":
+      case "close-scope":
       case "catch":
       case "with-resource":
       case "run-stream":
@@ -1846,6 +2306,9 @@ export class ExprEmitter {
           : [e.callee, ...e.arguments];
       case "perform":
         return [...e.arguments];
+      case "schema-decode":
+      case "schema-encode":
+        return [e.schema, e.input];
       case "fail":
         return [e.error];
       case "run":
@@ -1857,6 +2320,13 @@ export class ExprEmitter {
         return [e.jobs, e.onErrors];
       case "all-results":
         return [e.jobs];
+      case "make-scope":
+        return [];
+      case "provide-scope":
+      case "add-scope-finalizer":
+        return [e.owner, e.job];
+      case "close-scope":
+        return [e.owner];
       case "fork-scoped":
         return [e.job];
       case "run-stream":
@@ -2034,6 +2504,19 @@ export class ExprEmitter {
       }
       case "fail":
         return emitted([`${effect}.fail`, callArguments([children[0]])]);
+      case "schema-decode":
+      case "schema-encode": {
+        const schema = this.scope.effect("Schema");
+        return emitted([
+          `${schema}.${
+            e.kind === "schema-decode" ? "decodeUnknownEffect" : "encodeEffect"
+          }(`,
+          free(children[0]),
+          ")(",
+          free(children[1]),
+          ")",
+        ]);
+      }
       case "run":
         return children[0];
       case "partition-all":
@@ -2089,6 +2572,23 @@ export class ExprEmitter {
               } }`,
             ),
           ]),
+        ]);
+      case "make-scope":
+        return emitted([this.scope.scopeRuntime().make, callArguments([])]);
+      case "provide-scope":
+        return emitted([
+          this.scope.scopeRuntime().provide,
+          callArguments(children),
+        ]);
+      case "add-scope-finalizer":
+        return emitted([
+          this.scope.scopeRuntime().register,
+          callArguments(children),
+        ]);
+      case "close-scope":
+        return emitted([
+          this.scope.scopeRuntime().close,
+          callArguments(children),
         ]);
       case "scoped":
         return emitted([`${effect}.scoped`, callArguments([children[0]])]);
@@ -2268,7 +2768,11 @@ export class ExprEmitter {
     const effect = this.scope.effect("Effect");
     const handlers = e.handlers.map((h: Handler) =>
       this.handlerEntry(
-        JSON.stringify(tokenOfId(h.error)),
+        JSON.stringify(
+          h.error === "error:effect/SchemaError"
+            ? "SchemaError"
+            : tokenOfId(h.error),
+        ),
         `(${h.binding.name})`,
         this.asEffect(h.body),
       )

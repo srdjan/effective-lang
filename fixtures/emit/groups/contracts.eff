@@ -1,0 +1,12 @@
+export type Int = int
+export type Text = string
+export type Key = Brand<string>
+export type Batch = { key: Int, items: Int[] }
+export type First = { key: Int, first: Option<Int> }
+export error SourceStop = {}
+export error UseStop = {}
+export error BuildStop = {}
+export service Pull { next(state: Int): Option<[Int, Int]> fails SourceStop }
+export service Use { value(key: Int): Int fails UseStop }
+export service Worker { run(key: Int): void; wait(key: Int): void }
+export service Factory { source(): Stream<Int, SourceStop, Pull.next> fails BuildStop }

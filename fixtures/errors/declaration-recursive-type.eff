@@ -1,4 +1,4 @@
-// error: declaration/007
+// A self-reference beneath an array has a finite base case.
 type Tree = { value: int, children: Tree[] }
 
 // error: declaration/007

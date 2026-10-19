@@ -1,0 +1,33 @@
+export type Owner = CloseableScope
+export type Text = string
+export type Int = int
+export service Child { run(): void; ready(): void }
+export service Audit { release(): void }
+export service Work { wait(): Int }
+export service Order { owner(): Owner; job(): Effect<void>; mark(value: Text): void }
+
+export const create = (): Owner => makeScope()
+export const open = (): Owner uses Child.run | Child.ready => {
+  const owner = makeScope()
+  provideScope(owner, defer(() => forkScoped(defer(() => Child.run()))))
+  Child.ready()
+  owner
+}
+export const register = (owner: Owner): void uses Audit.release =>
+  addScopeFinalizer(owner, defer(() => Audit.release()))
+export const ordinary = (owner: Owner): Int uses Work.wait =>
+  provideScope(owner, defer(() => Work.wait()))
+export const ordered = (): void uses Order.owner | Order.job | Order.mark => {
+  addScopeFinalizer(Order.owner(), Order.job())
+  Order.mark("registered")
+}
+export const provideOrdered = (): void uses Order.owner | Order.job =>
+  provideScope(Order.owner(), Order.job())
+export const close = (owner: Owner): void => closeScope(owner)
+export const openProvided = (live: Layer<Child>): Owner uses Child.ready => {
+  const owner = makeScope()
+  provideScope(owner, defer(() => forkScoped(defer(() => provide(live, () => Child.run())))))
+  Child.ready()
+  owner
+}
+export const piped = (): void => makeScope() |> closeScope

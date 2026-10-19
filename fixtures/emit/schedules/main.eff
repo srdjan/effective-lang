@@ -1,0 +1,39 @@
+type Int = int
+
+export error Stop = {}
+export service Policy {
+  choose(input: Option<Int[]>, attempt: Int): Int fails Stop
+  label(output: Int): Int fails Stop
+}
+
+export const simple: Schedule<Int> = scheduleRecurs(0)
+export const timer: Schedule<Int, unknown> = scheduleSpaced(1000)
+
+export const custom: Schedule<Int, Option<Int[]>, Stop, Policy.choose> =
+  scheduleFromStep(
+    (): Int fails Stop uses Policy.choose => Policy.choose(None, 0),
+    (state: Int, meta: ScheduleInput<Option<Int[]>>): ScheduleDecision<Int, Int> fails Stop uses Policy.choose =>
+      if (meta.attempt > 2) {
+        { kind: "Done", output: state }
+      } else {
+        {
+          kind: "Continue",
+          state: state + 1,
+          output: Policy.choose(meta.input, meta.attempt),
+          delayMillis: 0
+        }
+      }
+  )
+
+export const mapped: Schedule<Int, Option<Int[]>, Stop, Policy.choose | Policy.label> =
+  scheduleMap(custom, (meta: ScheduleMetadata<Int, Option<Int[]>>): Int fails Stop uses Policy.label =>
+    Policy.label(meta.output))
+
+export const timed = (source: Stream<Int>): Stream<Int[]> =>
+  aggregateWithinStream(source, takeSink(2), timer)
+
+export const early = (source: Stream<Int>): Stream<Int[]> =>
+  aggregateWithinStream(source, takeSink(2), simple)
+
+export const controlled = (source: Stream<Int>): Stream<Int[], Stop, Policy.choose | Policy.label> =>
+  aggregateWithinStream(source, takeSink(2), mapped)

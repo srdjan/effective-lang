@@ -100,6 +100,330 @@ function lowerText(
   return { ir: result.value, sources: new Map([["m.eff", text]]) };
 }
 
+Deno.test("mapGroups validation recomputes bounds, binding identity, key types, and channels", () => {
+  const { ir, sources } = lowerText(`
+type Int = int
+type Text = string
+error Stop = {}
+service Work { run(): void; value(key: Int): Int fails Stop }
+const grouped = (source: Stream<Int, Stop, Work.value>): Stream<Int[], Stop, Work.value> =>
+ mapGroups(source, (n) => n, (key, group) => collectStream(group), { bufferSize: 1 })
+const used = (source: Stream<Int>): Stream<Int, Stop, Work.value | Work.run> =>
+ mapGroups(source, (n) => n, (key, group) => { forkScoped(defer(() => Work.run())); headStream(group); Work.value(key) }, { bufferSize: 1 })
+const latent = () => mapGroups(unfold(0, (n) => { forkScoped(defer(() => Work.run())); const pair: [Int, Int] = [n, n]; Some(pair) }), (n) => n, (key, group) => key, { bufferSize: 1 })
+`);
+  assertEquals(validateModule(ir, sources), []);
+  const root = ir.declarations[decl(ir, "grouped")];
+  const groupId = at(root, "body.groupBinding");
+  for (
+    const [name, path, value, code] of [
+      ["grouped", "body.bufferSize", 0, "validation/006"],
+      ["grouped", "body.bufferSize", 1.5, "validation/006"],
+      ["grouped", "body.groupBinding", "local:forged", "validation/006"],
+      [
+        "grouped",
+        "body.groupBinding",
+        at(root, "body.use.parameters[0].id"),
+        "validation/006",
+      ],
+      [
+        "grouped",
+        "body.key.type.result",
+        { kind: "primitive", name: "number" },
+        "validation/002",
+      ],
+      ["grouped", "body.key.type.execution", "effect", "validation/006"],
+      ["grouped", "body.type.effects.failures", [], "validation/002"],
+      ["grouped", "body.type.effects.requirements", [], "validation/002"],
+      [
+        "grouped",
+        "body.effects.requirements",
+        ["cap:m#Work.value"],
+        "validation/003",
+      ],
+      ["grouped", "body.execution", "effect", "validation/004"],
+      ["used", "body.type.effects.failures", [], "validation/002"],
+      ["used", "body.type.effects.requirements", [], "validation/002"],
+      [
+        "latent",
+        "body.type.effects.requirements",
+        ["cap:m#Work.run"],
+        "validation/002",
+      ],
+    ] as const
+  ) {
+    const wrong = copy(ir);
+    setAt(wrong.declarations[decl(wrong, name)], path, value);
+    assert(
+      codesOf(wrong, sources).includes(code),
+      `${name}.${path}: ${codesOf(wrong, sources)}`,
+    );
+  }
+  // A direct-looking ordinary call must not authorize the borrowed reference.
+  const wrongCall = copy(ir);
+  const body = at(
+    wrongCall.declarations[decl(wrongCall, "grouped")],
+    "body.use.body",
+  ) as Obj;
+  body.kind = "call";
+  body.callee = copy(body.stream);
+  body.arguments = [copy(body.stream)];
+  assert(codesOf(wrongCall, sources).includes("validation/006"));
+  assert(typeof groupId === "string");
+});
+
+Deno.test("mapGroups validation rejects forged escapes, repeated terminals, and nested captures", () => {
+  const { ir, sources } = lowerText(`type Int = int
+const grouped = (source: Stream<Int>) => mapGroups(source, (n) => n, (key, group) => collectStream(group), { bufferSize: 1 })
+`);
+  const declaration = ir.declarations[decl(ir, "grouped")];
+  const terminal = at(declaration, "body.use.body") as Obj;
+  const reference = terminal.stream as Obj;
+  for (
+    const replacement of [
+      reference,
+      {
+        ...terminal,
+        kind: "block",
+        steps: [{ kind: "evaluate", value: terminal }],
+        result: terminal,
+      },
+      {
+        ...terminal,
+        kind: "defer",
+        job: { ...terminal, kind: "closure", parameters: [], body: terminal },
+      },
+      {
+        ...terminal,
+        kind: "record",
+        fields: [{ name: "stored", value: reference }],
+      },
+    ]
+  ) {
+    const wrong = copy(ir);
+    setAt(
+      wrong.declarations[decl(wrong, "grouped")],
+      "body.use.body",
+      copy(replacement),
+    );
+    assert(
+      codesOf(wrong, sources).includes("validation/006"),
+      JSON.stringify(replacement),
+    );
+  }
+  const result = copy(ir);
+  const runtimeType = {
+    kind: "stream",
+    element: { kind: "primitive", name: "int" },
+    effects: { failures: [], requirements: [] },
+  };
+  setAt(
+    result.declarations[decl(result, "grouped")],
+    "body.use.type.result",
+    runtimeType,
+  );
+  assert(
+    validateModule(result, sources).some((d) =>
+      d.message.includes("data-only")
+    ),
+  );
+});
+
+Deno.test("Sink leftover validation recomputes constructor shape, progress bounds, and channels", () => {
+  const { ir, sources } = lowerText(`
+type Int = int
+type Pairs = Sink<Int, Int[], never, never, Int>
+error Stop = {}
+service Pull { next(): void fails Stop }
+const pairs: Pairs = takeSink(2)
+const batches = (source: Stream<Int, Stop, Pull.next>): Stream<Int[], Stop, Pull.next> => transduceStream(source, pairs)
+const arbitrary = (source: Stream<Int>, sink: Sink<Int, Int, never, never, Int>): Stream<Int> => transduceStream(source, sink)
+`);
+  assertEquals(validateModule(ir, sources), []);
+  for (
+    const [name, path, value, code] of [
+      ["pairs", "value.count", 0, "validation/006"],
+      ["pairs", "value.count", 1.5, "validation/006"],
+      ["pairs", "value.type.leftover", undefined, "validation/002"],
+      [
+        "pairs",
+        "value.type.leftover",
+        { kind: "primitive", name: "string" },
+        "validation/002",
+      ],
+      [
+        "pairs",
+        "value.type.result",
+        { kind: "primitive", name: "int" },
+        "validation/002",
+      ],
+      ["batches", "body.type.effects.failures", [], "validation/002"],
+      ["batches", "body.type.effects.requirements", [], "validation/002"],
+      [
+        "batches",
+        "body.effects.requirements",
+        ["cap:m#Pull.next"],
+        "validation/003",
+      ],
+      ["batches", "body.execution", "effect", "validation/004"],
+    ] as const
+  ) {
+    const wrong = copy(ir);
+    setAt(wrong.declarations[decl(wrong, name)], path, value);
+    assert(
+      codesOf(wrong, sources).includes(code),
+      `${name}.${path}: ${codesOf(wrong, sources)}`,
+    );
+  }
+  const incompatible = copy(ir);
+  const arbitrary = incompatible.declarations[decl(incompatible, "arbitrary")];
+  for (
+    const path of [
+      "parameters[1].type.leftover",
+      "type.parameters[1].leftover",
+      "body.sink.type.leftover",
+    ]
+  ) {
+    setAt(arbitrary, path, { kind: "primitive", name: "string" });
+  }
+  assert(codesOf(incompatible, sources).includes("validation/002"));
+});
+
+Deno.test("aggregateStream validation recomputes replay and deferred channels", () => {
+  const { ir, sources } = lowerText(`
+type Int = int
+type Text = string
+type Item = int | string
+type Pairs = Sink<Int, Int[], never, never, Int>
+error Stop = {}
+service Pull { next(): void fails Stop }
+const pairs: Pairs = takeSink(2)
+const batches = (source: Stream<Int, Stop, Pull.next>): Stream<Int[], Stop, Pull.next> => aggregateStream(source, pairs)
+const broad = (source: Stream<Text>, sink: Sink<Item, Item[], never, never, Item>): Stream<Item[]> => aggregateStream(source, sink)
+`);
+  assertEquals(validateModule(ir, sources), []);
+  for (
+    const [name, path, value, code] of [
+      ["batches", "body.type.effects.failures", [], "validation/002"],
+      ["batches", "body.type.effects.requirements", [], "validation/002"],
+      [
+        "batches",
+        "body.effects.requirements",
+        ["cap:m#Pull.next"],
+        "validation/003",
+      ],
+      ["batches", "body.execution", "effect", "validation/004"],
+    ] as const
+  ) {
+    const wrong = copy(ir);
+    setAt(wrong.declarations[decl(wrong, name)], path, value);
+    assert(codesOf(wrong, sources).includes(code), `${name}.${path}`);
+  }
+  const wrong = copy(ir);
+  const leftover = {
+    kind: "primitive",
+    name: "boolean",
+  };
+  for (
+    const path of [
+      "parameters[1].type.leftover",
+      "type.parameters[1].leftover",
+      "body.sink.type.leftover",
+    ]
+  ) setAt(wrong.declarations[decl(wrong, "broad")], path, leftover);
+  assert(
+    validateModule(wrong, sources).some((d) =>
+      d.message.includes("aggregateStream needs compatible input")
+    ),
+    JSON.stringify(validateModule(wrong, sources)),
+  );
+});
+
+Deno.test("Schedule validation rederives state, deferred channels, and aggregation input", () => {
+  const source = Deno.readTextFileSync(
+    new URL("../fixtures/emit/schedules/main.eff", import.meta.url),
+  );
+  const { ir, sources } = lowerText(source);
+  assertEquals(validateModule(ir, sources), []);
+  for (
+    const [name, path, value, code] of [
+      [
+        "custom",
+        "value.type.output",
+        { kind: "primitive", name: "string" },
+        "validation/002",
+      ],
+      ["custom", "value.type.effects.failures", [], "validation/002"],
+      ["custom", "value.type.effects.requirements", [], "validation/002"],
+      ["custom", "value.execution", "effect", "validation/004"],
+      ["controlled", "body.type.effects.failures", [], "validation/002"],
+    ] as const
+  ) {
+    const wrong = copy(ir);
+    setAt(wrong.declarations[decl(wrong, name)], path, value);
+    assert(codesOf(wrong, sources).includes(code), `${name}.${path}`);
+  }
+  const wrongInput = copy(ir);
+  setAt(wrongInput.declarations[decl(wrongInput, "mapped")], "type.input", {
+    kind: "primitive",
+    name: "string",
+  });
+  assert(
+    validateModule(wrongInput, sources).some((diagnostic) =>
+      diagnostic.message.includes("aggregateWithinStream needs compatible")
+    ),
+    JSON.stringify(validateModule(wrongInput, sources)),
+  );
+});
+
+Deno.test("Schedule composition validation rederives input, output, and channels", () => {
+  const source = Deno.readTextFileSync(
+    new URL("../fixtures/emit/schedules/composition.eff", import.meta.url),
+  );
+  const { ir, sources } = lowerText(source);
+  assertEquals(validateModule(ir, sources), []);
+  for (
+    const [name, path, value, code] of [
+      [
+        "slowest",
+        "value.type.output",
+        { kind: "primitive", name: "int" },
+        "validation/002",
+      ],
+      [
+        "sequential",
+        "value.type.effects.failures",
+        [],
+        "validation/002",
+      ],
+      [
+        "combined",
+        "value.type.effects.requirements",
+        [],
+        "validation/002",
+      ],
+      ["fastest", "value.execution", "effect", "validation/004"],
+      ["assembled", "body.effects.failures", [], "validation/003"],
+      ["assembled", "body.effects.requirements", [], "validation/003"],
+    ] as const
+  ) {
+    const wrong = copy(ir);
+    setAt(wrong.declarations[decl(wrong, name)], path, value);
+    assert(codesOf(wrong, sources).includes(code), `${name}.${path}`);
+  }
+  const incompatible = copy(ir);
+  setAt(incompatible.declarations[decl(incompatible, "right")], "type.input", {
+    kind: "primitive",
+    name: "string",
+  });
+  assert(
+    validateModule(incompatible, sources).some((diagnostic) =>
+      diagnostic.message.includes("schedule composition needs comparable input")
+    ),
+    JSON.stringify(validateModule(incompatible, sources)),
+  );
+});
+
 Deno.test("Effect construction and execution validate independently", () => {
   const lowered = lowerText(`
 error Stop = {}
@@ -1576,6 +1900,97 @@ export const main = (): void => scoped(job)
   assert(main.kind === "function" && main.body.kind === "scoped");
   setAt(main, "body.effects.requirements", ["cap:effect/Scope"]);
   assert(codesOf(leaked, sources).includes("validation/003"));
+});
+
+Deno.test("explicit scope validation recomputes channels, operand types, and effect mode", () => {
+  const { ir, sources } = lowerText(`
+error Stop = {}
+service Audit { release(): void }
+service Jobs { run(): void fails Stop }
+service Factory { owner(): CloseableScope fails Stop; job(): Effect<void, Stop, Jobs.run> }
+const create = (): CloseableScope => makeScope()
+const close = (owner: CloseableScope): void => closeScope(owner)
+const register = (owner: CloseableScope): void uses Audit.release =>
+  addScopeFinalizer(owner, defer(() => Audit.release()))
+const provideJob = (): void fails Stop uses Factory.owner | Factory.job | Jobs.run =>
+  provideScope(Factory.owner(), Factory.job())
+const fork = (owner: CloseableScope): void => provideScope(owner, defer(() => forkScoped(defer(() => {}))))
+const pipeline = (): void => makeScope() |> closeScope
+const pipeProvide = (): void uses Audit.release => makeScope() |> provideScope(defer(() => Audit.release()))
+const pipeRegister = (): void uses Audit.release => makeScope() |> addScopeFinalizer(defer(() => Audit.release()))
+const nonVoid = defer(() => 1)
+`);
+  assertEquals(validateModule(ir, sources), []);
+  for (
+    const [name, path, value, expected] of [
+      [
+        "create",
+        "body.type",
+        { kind: "primitive", name: "unit" },
+        "validation/002",
+      ],
+      ["close", "body.execution", "pure", "validation/004"],
+      ["close", "body.owner", {
+        kind: "record",
+        fields: [],
+        type: { kind: "record", fields: [] },
+        execution: "pure",
+        effects: { failures: [], requirements: [] },
+        span: ir.declarations[0]!.span,
+      }, "validation/006"],
+      ["register", "body.effects.requirements", [], "validation/003"],
+      [
+        "register",
+        "body.job.type.effects.failures",
+        ["error:m#Stop"],
+        "validation/002",
+      ],
+      [
+        "register",
+        "body.job.type.effects.requirements",
+        ["cap:effect/Scope"],
+        "validation/002",
+      ],
+      [
+        "register",
+        "body.job.type.result",
+        { kind: "primitive", name: "int" },
+        "validation/002",
+      ],
+      ["provideJob", "body.effects.failures", [], "validation/003"],
+      ["provideJob", "body.effects.requirements", [
+        "cap:m#Factory.job",
+        "cap:m#Jobs.run",
+      ], "validation/003"],
+      [
+        "fork",
+        "body.effects.requirements",
+        ["cap:effect/Scope"],
+        "validation/003",
+      ],
+    ] as const
+  ) {
+    const mutated = copy(ir);
+    const declaration = mutated.declarations[decl(mutated, name)];
+    setAt(declaration, path, value);
+    assert(
+      codesOf(mutated, sources).includes(expected),
+      `${name}.${path}: ${codesOf(mutated, sources)}`,
+    );
+  }
+  const provider = ir.declarations[decl(ir, "provideJob")];
+  const fork = ir.declarations[decl(ir, "fork")];
+  const nonVoid = ir.declarations[decl(ir, "nonVoid")];
+  assert(
+    provider.kind === "function" && provider.body.kind === "provide-scope",
+  );
+  assert(fork.kind === "function" && fork.body.kind === "provide-scope");
+  assert(nonVoid.kind === "constant");
+  for (const job of [provider.body.job, fork.body.job, nonVoid.value]) {
+    const invalid = copy(ir);
+    setAt(invalid.declarations[decl(invalid, "register")], "body.job", job);
+    assert(codesOf(invalid, sources).includes("validation/006"));
+  }
 });
 
 Deno.test("borrowed host handle validation rejects a lost qualifier", () => {

@@ -72,6 +72,24 @@ export function buildWorld(ir: ModuleIR): World {
       if (imp.module === PRELUDE_MODULE) addFirst(builtins, v.id, v.name);
     }
   }
+  errors.set("error:effect/SchemaError", {
+    kind: "error",
+    id: "error:effect/SchemaError",
+    name: "SchemaError",
+    fields: [{
+      name: "message",
+      type: { kind: "primitive", name: "string" },
+      optional: false,
+    }],
+    span: { source: ir.module, start: 0, end: 0 },
+  });
+  errors.set("error:effect/SchemaIssue", {
+    kind: "error",
+    id: "error:effect/SchemaIssue",
+    name: "SchemaIssue",
+    fields: [],
+    span: { source: ir.module, start: 0, end: 0 },
+  });
   const methods = new Map<string, MethodDecl>();
   for (const s of services.values()) {
     for (const m of s.methods) addFirst(methods, m.id, m);
@@ -146,6 +164,7 @@ export function checkTypeIds(
   const walk = (t: Type, at: string, depth: number): void => {
     if (depth > 200) return;
     switch (t.kind) {
+      case "closeable-scope":
       case "primitive":
       case "literal":
         return;
@@ -178,6 +197,24 @@ export function checkTypeIds(
         walk(t.decoded, `${at}.decoded`, depth + 1);
         walk(t.encoded, `${at}.encoded`, depth + 1);
         return;
+      case "schema":
+        walk(t.decoded, `${at}.decoded`, depth + 1);
+        walk(t.encoded, `${at}.encoded`, depth + 1);
+        if (
+          !recursiveDataOnly(world, t.decoded) ||
+          !recursiveDataOnly(world, t.encoded)
+        ) {
+          fail(at, "Schema decoded and encoded types must be data only");
+        }
+        effects(`${at}.decodeRequirements`, {
+          failures: [],
+          requirements: t.decodeRequirements,
+        });
+        effects(`${at}.encodeRequirements`, {
+          failures: [],
+          requirements: t.encodeRequirements,
+        });
+        return;
       case "fiber":
         walk(t.result, `${at}.result`, depth + 1);
         effects(`${at}.effects`, { failures: t.failures, requirements: [] });
@@ -190,9 +227,17 @@ export function checkTypeIds(
         walk(t.element, `${at}.element`, depth + 1);
         effects(`${at}.effects`, t.effects);
         return;
+      case "schedule":
+        walk(t.output, `${at}.output`, depth + 1);
+        walk(t.input, `${at}.input`, depth + 1);
+        effects(`${at}.effects`, t.effects);
+        return;
       case "sink":
         walk(t.input, `${at}.input`, depth + 1);
         walk(t.result, `${at}.result`, depth + 1);
+        if (t.leftover !== undefined) {
+          walk(t.leftover, `${at}.leftover`, depth + 1);
+        }
         effects(`${at}.effects`, t.effects);
         return;
       case "tuple":
@@ -281,6 +326,10 @@ export function checkRecordFields(
         walk(t.decoded, `${at}.decoded`, depth + 1);
         walk(t.encoded, `${at}.encoded`, depth + 1);
         return;
+      case "schema":
+        walk(t.decoded, `${at}.decoded`, depth + 1);
+        walk(t.encoded, `${at}.encoded`, depth + 1);
+        return;
       case "fiber":
         walk(t.result, `${at}.result`, depth + 1);
         return;
@@ -290,9 +339,16 @@ export function checkRecordFields(
       case "stream":
         walk(t.element, `${at}.element`, depth + 1);
         return;
+      case "schedule":
+        walk(t.output, `${at}.output`, depth + 1);
+        walk(t.input, `${at}.input`, depth + 1);
+        return;
       case "sink":
         walk(t.input, `${at}.input`, depth + 1);
         walk(t.result, `${at}.result`, depth + 1);
+        if (t.leftover !== undefined) {
+          walk(t.leftover, `${at}.leftover`, depth + 1);
+        }
         return;
       case "tuple":
         t.elements.forEach((e, i) =>
@@ -507,7 +563,118 @@ export function checkDeclarationHeaders(ctx: Ctx, ir: ModuleIR): void {
 
 // ------------------------------------------------------------------ recursion
 
-/** Reports a declared type that reaches itself. Version 0 has no recursive types. */
+/** Rechecks finite self recursion without trusting the checker. */
+function guardedRecord(type: Type, id: string): boolean {
+  const containsSelf = (part: Type): boolean => {
+    switch (part.kind) {
+      case "named":
+        return part.id === id;
+      case "array":
+      case "option":
+        return containsSelf(part.element);
+      case "record":
+        return part.fields.some((field) => containsSelf(field.type));
+      case "union":
+        return part.members.some(containsSelf);
+      default:
+        return false;
+    }
+  };
+  const tagged = type.kind === "union" && type.members.length >= 2 &&
+    type.members.every((member) => member.kind === "record") &&
+    type.members.some((member) => !containsSelf(member));
+  const tagNames = tagged && type.kind === "union"
+    ? (type.members[0] as Extract<Type, { kind: "record" }>).fields
+      .filter((field) =>
+        !field.optional && field.type.kind === "literal" &&
+        typeof field.type.value === "string"
+      ).map((field) => field.name)
+    : [];
+  const hasDistinctTag = type.kind === "union" && tagNames.some((name) => {
+    const fields = type.members.map((member) =>
+      member.kind === "record"
+        ? member.fields.find((field) => field.name === name)
+        : undefined
+    );
+    return fields.every((field) =>
+      field !== undefined && !field.optional &&
+      field.type.kind === "literal" && typeof field.type.value === "string"
+    ) && new Set(fields.map((field) =>
+          field?.type.kind === "literal" ? field.type.value : undefined
+        )).size === fields.length;
+  });
+  if (type.kind !== "record" && !(tagged && hasDistinctTag)) return false;
+  let sawSelf = false;
+  const walk = (part: Type, guarded: boolean): boolean => {
+    switch (part.kind) {
+      case "named":
+        if (part.id !== id) return true;
+        sawSelf = true;
+        return guarded;
+      case "array":
+        return walk(part.element, true);
+      case "record":
+        return part.fields.every((field) =>
+          walk(field.type, guarded || field.optional)
+        );
+      case "union":
+        return part === type && tagged && hasDistinctTag &&
+          part.members.every((member) => walk(member, true));
+      case "primitive":
+      case "literal":
+        return true;
+      default:
+        return false;
+    }
+  };
+  return walk(type, false) && sawSelf;
+}
+
+function recursiveDataOnly(
+  world: World,
+  type: Type,
+  seen = new Set<Type>(),
+): boolean {
+  const value = unfold(world.env, type);
+  if (seen.has(value)) return true;
+  seen.add(value);
+  switch (value.kind) {
+    case "primitive":
+      return value.name !== "unknown" && value.name !== "unit";
+    case "literal":
+      return true;
+    case "record":
+      return value.fields.every((field) =>
+        recursiveDataOnly(world, field.type, seen)
+      );
+    case "array":
+    case "option":
+      return recursiveDataOnly(world, value.element, seen);
+    case "tuple":
+      return value.elements.every((element) =>
+        recursiveDataOnly(world, element, seen)
+      );
+    case "union":
+      return value.members.every((member) =>
+        recursiveDataOnly(world, member, seen)
+      );
+    case "named": {
+      if (
+        value.id === "error:effect/SchemaError" ||
+        value.id === "error:effect/SchemaIssue"
+      ) return false;
+      const nested = world.env.brands.get(value.id) ??
+        (world.env.errors.has(value.id)
+          ? { kind: "record" as const, fields: world.env.errors.get(value.id)! }
+          : undefined);
+      return nested !== undefined && recursiveDataOnly(world, nested, seen);
+    }
+    default:
+      return false;
+  }
+}
+
+/** Reports cycles other than a single array-guarded data record. */
 export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
   const { world } = ctx;
   const state = new Map<string, 1 | 2>();
@@ -515,11 +682,20 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
   ir.declarations.forEach((d, i) => {
     if (d.kind === "type" || d.kind === "error") index.set(d.id, i);
   });
+  const guarded = new Set<string>();
+  ir.declarations.forEach((d) => {
+    if (
+      d.kind === "type" && d.definition.kind === "alias" &&
+      guardedRecord(d.definition.type, d.id) &&
+      recursiveDataOnly(world, d.definition.type)
+    ) guarded.add(d.id);
+  });
   const reported = new Set<string>();
   const reaches = (type: Type, from: string, depth: number): void => {
     if (depth > 200) return;
     switch (type.kind) {
       case "named":
+        if (type.id === from && guarded.has(from)) return;
         visit(type.id);
         return;
       case "record":
@@ -537,6 +713,10 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
         reaches(type.decoded, from, depth + 1);
         reaches(type.encoded, from, depth + 1);
         return;
+      case "schema":
+        reaches(type.decoded, from, depth + 1);
+        reaches(type.encoded, from, depth + 1);
+        return;
       case "fiber":
         reaches(type.result, from, depth + 1);
         return;
@@ -546,9 +726,16 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
       case "stream":
         reaches(type.element, from, depth + 1);
         return;
+      case "schedule":
+        reaches(type.output, from, depth + 1);
+        reaches(type.input, from, depth + 1);
+        return;
       case "sink":
         reaches(type.input, from, depth + 1);
         reaches(type.result, from, depth + 1);
+        if (type.leftover !== undefined) {
+          reaches(type.leftover, from, depth + 1);
+        }
         return;
       case "tuple":
         type.elements.forEach((e) => reaches(e, from, depth + 1));

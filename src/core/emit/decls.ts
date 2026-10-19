@@ -65,10 +65,22 @@ function namedIn(type: Type, out: Set<DeclarationId>): void {
       namedIn(type.element, out);
       effectsIn(type.effects.failures, type.effects.requirements, out);
       return;
+    case "schedule":
+      namedIn(type.output, out);
+      namedIn(type.input, out);
+      effectsIn(type.effects.failures, type.effects.requirements, out);
+      return;
     case "sink":
       namedIn(type.input, out);
       namedIn(type.result, out);
+      if (type.leftover !== undefined) namedIn(type.leftover, out);
       effectsIn(type.effects.failures, type.effects.requirements, out);
+      return;
+    case "schema":
+      namedIn(type.decoded, out);
+      namedIn(type.encoded, out);
+      effectsIn([], type.decodeRequirements, out);
+      effectsIn([], type.encodeRequirements, out);
       return;
     case "tuple":
       for (const t of type.elements) namedIn(t, out);
@@ -262,6 +274,29 @@ export class DeclarationEmitter {
 
   private typeDeclaration(d: TypeDecl): Doc {
     const keyword = this.exportKeyword(d.id);
+    if (
+      d.definition.kind === "alias" &&
+      (d.definition.type.kind === "record" ||
+        d.definition.type.kind === "union") &&
+      this.containsNamed(d.definition.type, d.id)
+    ) {
+      const schema = this.scope.effect("Schema");
+      return [
+        keyword,
+        "type ",
+        d.name,
+        " = ",
+        typeDoc(this.scope, d.definition.type),
+        ";",
+        hard,
+        keyword,
+        "const ",
+        d.name,
+        `: ${schema}.Codec<${d.name}> = `,
+        schemaDoc(this.scope, d.definition.type, d.id),
+        ";",
+      ];
+    }
     if (d.definition.kind === "alias" && this.scope.isTypeOnly(d.id)) {
       return [
         keyword,
@@ -302,6 +337,22 @@ export class DeclarationEmitter {
       ]),
       ";",
     ];
+  }
+
+  private containsNamed(type: Type, id: string): boolean {
+    switch (type.kind) {
+      case "named":
+        return type.id === id;
+      case "array":
+      case "option":
+        return this.containsNamed(type.element, id);
+      case "record":
+        return type.fields.some((field) => this.containsNamed(field.type, id));
+      case "union":
+        return type.members.some((member) => this.containsNamed(member, id));
+      default:
+        return false;
+    }
   }
 
   private errorDeclaration(d: ErrorDecl): Doc {

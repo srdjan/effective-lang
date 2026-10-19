@@ -14,6 +14,19 @@ function fresh(): TypeTable {
   return new TypeTable();
 }
 
+Deno.test("CloseableScope is an abstract leaf through aliases and IR conversion", () => {
+  const t = fresh();
+  const owner = t.fromIr({ kind: "closeable-scope" });
+  assertEquals(owner, t.closeableScope);
+  assertEquals(t.show(owner), "CloseableScope");
+  assertEquals(t.toIr(owner), { kind: "closeable-scope" });
+  t.defineAlias(USER, owner);
+  assert(t.isAssignable(t.named(USER), owner));
+  assert(t.isAssignable(owner, t.named(USER)));
+  assert(!t.isAssignable(t.record([]), owner));
+  assert(!t.isAssignable(owner, t.record([])));
+});
+
 function field(name: string, type: TypeRef, optional = false) {
   return { name, type, optional };
 }
@@ -48,6 +61,33 @@ function effectFn(
 }
 
 // ------------------------------------------------------------------ interning
+
+Deno.test("Sink leftovers are covariant and preserve legacy IR defaults", () => {
+  const t = fresh();
+  const legacy: Type = {
+    kind: "sink",
+    input: { kind: "primitive", name: "int" },
+    result: { kind: "primitive", name: "unit" },
+    effects: { failures: [], requirements: [] },
+  };
+  const omitted = t.fromIr(legacy);
+  const explicit = t.fromIr({
+    ...legacy,
+    leftover: { kind: "primitive", name: "never" },
+  });
+  assertEquals(omitted, explicit);
+  assertEquals(t.toIr(explicit), legacy);
+  const narrow = t.sink(t.number, t.unit, [], [], t.int);
+  const broad = t.sink(t.int, t.unit, [], [], t.number);
+  assert(t.isAssignable(narrow, broad));
+  assert(!t.isAssignable(broad, narrow));
+  assert(t.isAssignable(omitted, broad));
+  assert(!t.isAssignable(broad, omitted));
+  assertEquals(t.fromIr(t.toIr(narrow)), narrow);
+  assertEquals(t.show(narrow), "Sink<number, void, never, never, int>");
+  const nested = t.sink(t.int, t.unit, [], [], t.array(t.array(t.int)));
+  assert(t.exceedsDepth(nested, 3, new Map()));
+});
 
 Deno.test("equal structural types share one id", () => {
   const t = fresh();

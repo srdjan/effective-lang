@@ -1,0 +1,31 @@
+type Int = int
+type Text = string
+type Tree = { value: Int, children: Tree[] }
+
+service Read { next(value: Int): Option<Int> }
+service Write { previous(value: Int): Option<Int> }
+
+const integer: Schema<Int> = schema()
+const shifted: Schema<Int, Int, Read.next, Write.previous> = schemaTransform(
+  integer,
+  integer,
+  (value: Int): Option<Int> uses Read.next => Read.next(value),
+  (value: Int): Option<Int> uses Write.previous => Write.previous(value)
+)
+export const tree: Schema<Tree, Tree, Read.next, Write.previous> = schemaRecursive(
+  (self: Schema<Tree, Tree, Read.next, Write.previous>): Schema<Tree, Tree, Read.next, Write.previous> =>
+    schemaStruct({ value: shifted, children: schemaArray(self) })
+)
+
+export const readTree = (input: unknown): Tree fails SchemaError uses Read.next =>
+  schemaDecode(tree, input)
+export const writeTree = (value: Tree): Tree fails SchemaError uses Write.previous =>
+  schemaEncode(tree, value)
+export const readOrDefault = (input: unknown): Tree uses Read.next =>
+  try { schemaDecode(tree, input) } catch {
+    SchemaError(error) => ({ value: 0, children: [] })
+  }
+export const readErrorMessage = (input: unknown): Text uses Read.next =>
+  try { schemaDecode(tree, input); "ok" } catch {
+    SchemaError(error) => error.message
+  }

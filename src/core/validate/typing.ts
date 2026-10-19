@@ -98,6 +98,10 @@ function assignable(
 ): boolean {
   if (depth > MAX_DEPTH) return false;
   if (s.kind === "named" && t.kind === "named" && s.id === t.id) return true;
+  if (
+    s.kind === "named" && t.kind === "named" && s.id !== t.id &&
+    guardedAlias(env, s.id) && guardedAlias(env, t.id)
+  ) return false;
   if (s.kind === "primitive" && s.name === "never") return true;
   if (s.kind === "named") {
     const alias = env.aliases.get(s.id);
@@ -120,6 +124,8 @@ function assignable(
     return false;
   }
   switch (t.kind) {
+    case "closeable-scope":
+      return s.kind === "closeable-scope";
     case "primitive":
       if (s.kind === "primitive") {
         return s.name === t.name || (s.name === "int" && t.name === "number");
@@ -163,6 +169,16 @@ function assignable(
         assignable(env, t.decoded, s.decoded, false, depth + 1) &&
         assignable(env, s.encoded, t.encoded, false, depth + 1) &&
         assignable(env, t.encoded, s.encoded, false, depth + 1);
+    case "schema":
+      return s.kind === "schema" &&
+        s.optionalKey === t.optionalKey &&
+        s.encodedOptionalKey === t.encodedOptionalKey &&
+        assignable(env, s.decoded, t.decoded, false, depth + 1) &&
+        assignable(env, t.decoded, s.decoded, false, depth + 1) &&
+        assignable(env, s.encoded, t.encoded, false, depth + 1) &&
+        assignable(env, t.encoded, s.encoded, false, depth + 1) &&
+        isSubset(s.decodeRequirements, t.decodeRequirements) &&
+        isSubset(s.encodeRequirements, t.encodeRequirements);
     case "fiber":
       return s.kind === "fiber" &&
         assignable(env, s.result, t.result, false, depth + 1) &&
@@ -177,10 +193,27 @@ function assignable(
         assignable(env, s.element, t.element, false, depth + 1) &&
         isSubset(s.effects.failures, t.effects.failures) &&
         isSubset(s.effects.requirements, t.effects.requirements);
+    case "schedule":
+      return s.kind === "schedule" &&
+        assignable(env, s.output, t.output, false, depth + 1) &&
+        (unfold(env, s.input).kind === "primitive" &&
+            (unfold(env, s.input) as Extract<Type, { kind: "primitive" }>)
+                .name ===
+              "unknown" ||
+          assignable(env, t.input, s.input, false, depth + 1)) &&
+        isSubset(s.effects.failures, t.effects.failures) &&
+        isSubset(s.effects.requirements, t.effects.requirements);
     case "sink":
       return s.kind === "sink" &&
         assignable(env, t.input, s.input, false, depth + 1) &&
         assignable(env, s.result, t.result, false, depth + 1) &&
+        assignable(
+          env,
+          s.leftover ?? NEVER,
+          t.leftover ?? NEVER,
+          false,
+          depth + 1,
+        ) &&
         isSubset(s.effects.failures, t.effects.failures) &&
         isSubset(s.effects.requirements, t.effects.requirements);
     case "tuple":
@@ -232,6 +265,28 @@ function assignable(
           t.acquisition.effects.requirements,
         );
   }
+}
+
+function guardedAlias(env: TypeEnv, id: string): boolean {
+  const alias = env.aliases.get(id);
+  if (alias?.kind !== "record" && alias?.kind !== "union") return false;
+  const visit = (type: Type, guarded: boolean): boolean => {
+    switch (type.kind) {
+      case "named":
+        return type.id === id && guarded;
+      case "array":
+        return visit(type.element, true);
+      case "record":
+        return type.fields.some((field) =>
+          visit(field.type, guarded || field.optional)
+        );
+      case "union":
+        return type.members.some((member) => visit(member, true));
+      default:
+        return false;
+    }
+  };
+  return visit(alias, false);
 }
 
 /** A value of type `source` fits a value position of type `target`. The lift applies at the top. */
@@ -344,6 +399,8 @@ export function comparisonClass(
 /** A readable form for messages. */
 export function show(type: Type): string {
   switch (type.kind) {
+    case "closeable-scope":
+      return "CloseableScope";
     case "primitive":
       return type.name === "unit" ? "void" : type.name;
     case "literal":
@@ -376,6 +433,14 @@ export function show(type: Type): string {
       return `RetrySchedule<${show(type.error)}>`;
     case "codec":
       return `Codec<${show(type.decoded)}, ${show(type.encoded)}>`;
+    case "schema":
+      return `${
+        type.optionalKey === true
+          ? "SchemaOptional"
+          : type.encodedOptionalKey === true
+          ? "SchemaEncodedOptional"
+          : "Schema"
+      }<${show(type.decoded)}, ${show(type.encoded)}>`;
     case "fiber":
       return `Fiber<${show(type.result)}, ${
         type.failures.join(" | ") || "never"
@@ -388,10 +453,16 @@ export function show(type: Type): string {
       return `Stream<${show(type.element)}, ${
         type.effects.failures.join(" | ") || "never"
       }, ${type.effects.requirements.join(" | ") || "never"}>`;
+    case "schedule":
+      return `Schedule<${show(type.output)}, ${show(type.input)}, ${
+        type.effects.failures.join(" | ") || "never"
+      }, ${type.effects.requirements.join(" | ") || "never"}>`;
     case "sink":
       return `Sink<${show(type.input)}, ${show(type.result)}, ${
         type.effects.failures.join(" | ") || "never"
-      }, ${type.effects.requirements.join(" | ") || "never"}>`;
+      }, ${type.effects.requirements.join(" | ") || "never"}${
+        type.leftover === undefined ? "" : `, ${show(type.leftover)}`
+      }>`;
     case "function": {
       const fails = type.effects.failures.length === 0
         ? ""

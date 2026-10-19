@@ -1,0 +1,22 @@
+import { Int, Text, Item, Pairs, Foreign, SourceStop, SinkStop, BuildStop, Pull, Add, Factory } from "./contracts.eff"
+export const pairs: Pairs = takeSink(2)
+export const makePairs = (): Pairs => takeSink(2)
+export const batches = (source: Stream<Int>): Stream<Int[]> => transduceStream(source, pairs)
+export const aggregated = (source: Stream<Int>): Stream<Int[]> => aggregateStream(source, pairs)
+export const aggregatedFailing = (source: Stream<Int, SourceStop>): Stream<Int[], SourceStop> => aggregateStream(source, pairs)
+export const aggregatedInline = (source: Stream<Int>): Stream<Int[]> => aggregateStream(source, takeSink(2))
+export const aggregateOne = (source: Stream<Int>): Stream<Int[]> => aggregateStream(source, takeSink(1))
+export const aggregateWithSink = (source: Stream<Int>, sink: Pairs): Stream<Int[]> => aggregateStream(source, sink)
+export const inline = (source: Stream<Int>): Stream<Int[]> => transduceStream(source, takeSink(2))
+export const withSink = (source: Stream<Int>, sink: Pairs): Stream<Int[]> => transduceStream(source, sink)
+export const first = (source: Stream<Int>): Int[] => runStream(source, pairs)
+export const broad = (source: Stream<Text>, sink: Sink<Item, Item[], never, never, Item>): Stream<Item[]> =>
+  transduceStream(source, sink)
+export const aggregatedBroad = (source: Stream<Text>, sink: Sink<Item, Item[], never, never, Item>): Stream<Item[]> =>
+  aggregateStream(source, sink)
+export const discardForeign = (source: Stream<Int>, sink: Sink<Int, Text, never, never, Text>): Text => runStream(source, sink)
+export const discardBranded = (source: Stream<Int>, sink: Foreign): Text => runStream(source, sink)
+export const fromFactory = (): Stream<Int, SourceStop | SinkStop, Pull.next | Add.add>
+  fails BuildStop uses Factory.source | Factory.sink => transduceStream(Factory.source(), Factory.sink())
+export const aggregateFromFactory = (): Stream<Int, SourceStop | SinkStop, Pull.next | Add.add>
+  fails BuildStop uses Factory.source | Factory.sink => aggregateStream(Factory.source(), Factory.sink())

@@ -18,7 +18,7 @@ import {
   makeDiagnostic,
 } from "./diagnostics.ts";
 import { isTypeKind, nameTextOf } from "./index.ts";
-import { SCOPE_CAPABILITY } from "./ir.ts";
+import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID, SCOPE_CAPABILITY } from "./ir.ts";
 import type {
   CapabilityId,
   ErrorId,
@@ -743,6 +743,17 @@ export class BodyChecker {
     id: ErrorId,
     args: readonly Arg[],
   ): NodeInfo {
+    if (id === SCHEMA_ERROR_ID || id === SCHEMA_ISSUE_ID) {
+      const infos = args.map((arg) => this.argInfo(arg));
+      this.report(
+        "type-mismatch/010",
+        `${
+          id === SCHEMA_ERROR_ID ? "SchemaError" : "SchemaIssue"
+        } cannot be constructed directly`,
+        node,
+      );
+      return this.finish(node, this.table.error, combine(infos));
+    }
     this.fact(node, { kind: "error-construction", error: id });
     const record = this.table.errorRecordOf(id);
     if (args.length !== 1) {
@@ -846,6 +857,22 @@ export class BodyChecker {
         return this.retryScheduleCall(node, args, expected);
       case "codec":
         return this.codecCall(node, args);
+      case "schema":
+      case "schemaArray":
+      case "schemaStruct":
+      case "schemaOptionalKey":
+      case "schemaOptionFromOptionalKey":
+      case "schemaDefaultKey":
+      case "schemaOptionalTransform":
+      case "schemaUnion":
+      case "schemaTransform":
+      case "schemaRecursive":
+      case "schemaDecode":
+      case "schemaEncode":
+      case "schemaInvalid":
+      case "schemaAt":
+      case "schemaBoth":
+        return this.schemaCall(node, name, args, expected);
       case "decode":
       case "encode":
         return this.codecOperation(node, name, args);
@@ -864,6 +891,11 @@ export class BodyChecker {
         return this.scopedCall(node, args);
       case "forkScoped":
         return this.forkScopedCall(node, args);
+      case "makeScope":
+      case "provideScope":
+      case "addScopeFinalizer":
+      case "closeScope":
+        return this.scopeCall(node, name, args);
       case "withResource":
         return this.withResourceCall(node, args, expected);
       case "unfold":
@@ -872,6 +904,8 @@ export class BodyChecker {
         return this.mapEffectCall(node, args);
       case "mapStream":
         return this.mapStreamCall(node, args);
+      case "mapGroups":
+        return this.mapGroupsCall(node, args);
       case "scanStream":
         return this.scanStreamCall(node, args);
       case "mapAccumStream":
@@ -938,6 +972,25 @@ export class BodyChecker {
         return this.takeUntilStreamCall(node, args);
       case "sinkForEach":
         return this.sinkForEachCall(node, args);
+      case "takeSink":
+        return this.takeSinkCall(node, args, expected);
+      case "transduceStream":
+        return this.transduceStreamCall(node, args);
+      case "aggregateStream":
+        return this.aggregateStreamCall(node, args);
+      case "aggregateWithinStream":
+        return this.aggregateWithinStreamCall(node, args);
+      case "scheduleFromStep":
+        return this.scheduleFromStepCall(node, args, expected);
+      case "scheduleRecurs":
+      case "scheduleSpaced":
+        return this.simpleScheduleCall(node, args, name);
+      case "scheduleMap":
+        return this.scheduleMapCall(node, args, expected);
+      case "scheduleMax":
+      case "scheduleMin":
+      case "scheduleConcat":
+        return this.scheduleComposeCall(node, args, name);
       case "runStream":
         return this.runStreamCall(node, args);
       case "bufferStream":
@@ -1383,6 +1436,663 @@ export class BodyChecker {
     );
   }
 
+  private schemaCall(
+    node: NodeId,
+    name: string,
+    args: readonly Arg[],
+    expected: TypeRef | undefined,
+  ): NodeInfo {
+    const operations = {
+      schema: "identity",
+      schemaArray: "array",
+      schemaStruct: "struct",
+      schemaOptionalKey: "optional-key",
+      schemaOptionFromOptionalKey: "option-from-optional-key",
+      schemaDefaultKey: "default-key",
+      schemaOptionalTransform: "optional-transform",
+      schemaUnion: "union",
+      schemaTransform: "transform",
+      schemaRecursive: "recursive",
+      schemaDecode: "decode",
+      schemaEncode: "encode",
+      schemaInvalid: "invalid",
+      schemaAt: "at",
+      schemaBoth: "both",
+    } as const;
+    const op = operations[name as keyof typeof operations];
+    this.fact(node, { kind: "schema", op });
+    const count = op === "identity"
+      ? 0
+      : op === "transform" || op === "optional-transform"
+      ? 4
+      : op === "both"
+      ? 3
+      : op === "decode" || op === "encode" || op === "at" ||
+          op === "default-key"
+      ? 2
+      : 1;
+    const actualCount = op === "identity" ? 0 : count;
+    if (!this.arity(node, name, actualCount, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((a) => this.argInfo(a))),
+      );
+    }
+    this.noPipeline(name, args);
+    const asSchema = (info: NodeInfo, at: NodeId) => {
+      const type = this.table.node(this.table.unfold(info.type));
+      if (
+        (type.kind !== "schema" || type.optionalKey === true ||
+          type.encodedOptionalKey === true) &&
+        !this.isError(info.type)
+      ) {
+        this.report(
+          "type-mismatch/010",
+          `\`${name}\` needs a Schema value`,
+          at,
+        );
+      }
+      return type.kind === "schema" && type.optionalKey !== true &&
+          type.encodedOptionalKey !== true
+        ? type
+        : undefined;
+    };
+    const asOptional = (info: NodeInfo, at: NodeId) => {
+      const type = this.table.node(this.table.unfold(info.type));
+      if (type.kind !== "schema" || type.optionalKey !== true) {
+        if (!this.isError(info.type)) {
+          this.report(
+            "type-mismatch/010",
+            `\`${name}\` needs a SchemaOptional field`,
+            at,
+          );
+        }
+        return undefined;
+      }
+      return type;
+    };
+    if (op === "invalid" || op === "at" || op === "both") {
+      const infos = args.map((arg) => this.argInfo(arg));
+      const issue = this.table.named(SCHEMA_ISSUE_ID);
+      if (op === "invalid") {
+        this.fits(
+          args[0].node,
+          infos[0].type,
+          this.table.string,
+          "schema issue message",
+        );
+      } else if (op === "at") {
+        this.fits(
+          args[0].node,
+          infos[0].type,
+          this.table.union([this.table.string, this.table.int]),
+          "schema issue key",
+        );
+        this.fits(args[1].node, infos[1].type, issue, "nested schema issue");
+      } else {
+        asSchema(infos[0], args[0].node);
+        this.fits(args[1].node, infos[1].type, issue, "left schema issue");
+        this.fits(args[2].node, infos[2].type, issue, "right schema issue");
+      }
+      return this.finish(node, issue, combine(infos));
+    }
+    if (op === "identity" || op === "recursive") {
+      const hint = expected === undefined ? undefined : asSchema({
+        type: expected,
+        failures: [],
+        requirements: [],
+        mode: "pure",
+      }, node);
+      if (hint === undefined) {
+        this.report(
+          "type-mismatch/010",
+          `\`${name}\` needs an expected Schema type`,
+          node,
+        );
+        return this.finish(
+          node,
+          this.table.error,
+          op === "identity"
+            ? PURE_EFFECTS
+            : combine(args.map((a) => this.argInfo(a))),
+        );
+      }
+      if (!this.dataOnly(hint.decoded) || !this.dataOnly(hint.encoded)) {
+        this.report(
+          "type-mismatch/010",
+          "Schema data must be compiler-derived",
+          node,
+        );
+      }
+      if (
+        op === "recursive" &&
+        !this.table.isAssignable(hint.decoded, hint.encoded)
+      ) {
+        this.report(
+          "type-mismatch/003",
+          "recursive Schema needs the same decoded and encoded type",
+          node,
+        );
+      }
+      if (op === "identity") {
+        if (
+          hint.decoded !== hint.encoded || hint.decodeRequirements.length ||
+          hint.encodeRequirements.length
+        ) {
+          this.report(
+            "type-mismatch/003",
+            "`schema()` needs an identity Schema with no services",
+            node,
+          );
+        }
+        return this.finish(node, expected!, PURE_EFFECTS);
+      }
+      const callback = this.callback(
+        name,
+        args[0],
+        [expected!],
+        expected!,
+        false,
+      );
+      if (!this.guardedSchemaCallback(args[0].node)) {
+        this.report(
+          "type-mismatch/010",
+          "recursive schema self must occur beneath an array, optional key, or tagged union with a terminal branch",
+          args[0].node,
+        );
+      }
+      if (!this.table.isAssignable(callback.result, expected!)) {
+        this.report(
+          "type-mismatch/003",
+          "recursive schema body does not fit its expected Schema",
+          args[0].node,
+        );
+      }
+      return this.finish(node, expected!, combine([callback.info]));
+    }
+    if (op === "struct") {
+      const input = this.argInfo(args[0]);
+      const record = this.table.node(this.table.unfold(input.type));
+      if (record.kind !== "record" || record.fields.some((f) => f.optional)) {
+        this.report(
+          "type-mismatch/010",
+          "`schemaStruct` needs a record of required Schema fields",
+          args[0].node,
+        );
+        return this.finish(node, this.table.error, combine([input]));
+      }
+      const fields = record.fields.map((field) => ({
+        field,
+        schema: this.table.node(this.table.unfold(field.type)),
+      }));
+      if (fields.some((field) => field.schema.kind !== "schema")) {
+        this.report(
+          "type-mismatch/010",
+          "`schemaStruct` fields must be Schema values or schemaOptionalKey descriptors",
+          args[0].node,
+        );
+        return this.finish(node, this.table.error, combine([input]));
+      }
+      const decoded = this.table.record(
+        fields.map(({ field, schema }) => ({
+          name: field.name,
+          type: schema.kind === "schema" ? schema.decoded : this.table.error,
+          optional: schema.kind === "schema" && schema.optionalKey === true,
+        })),
+      );
+      const encoded = this.table.record(
+        fields.map(({ field, schema }) => ({
+          name: field.name,
+          type: schema.kind === "schema" ? schema.encoded : this.table.error,
+          optional: schema.kind === "schema" &&
+            (schema.optionalKey === true || schema.encodedOptionalKey === true),
+        })),
+      );
+      return this.finish(
+        node,
+        this.table.schema(
+          decoded,
+          encoded,
+          fields.flatMap(({ schema }) =>
+            schema.kind === "schema" ? schema.decodeRequirements : []
+          ),
+          fields.flatMap(({ schema }) =>
+            schema.kind === "schema" ? schema.encodeRequirements : []
+          ),
+        ),
+        combine([input]),
+      );
+    }
+    if (op === "union") {
+      const list = args[0].node;
+      if (kindOf(this.tree, list) !== SyntaxKind.ListExpr) {
+        const input = this.argInfo(args[0]);
+        this.report(
+          "type-mismatch/010",
+          "`schemaUnion` needs an inline list of tagged Schema branches",
+          list,
+        );
+        return this.finish(node, this.table.error, combine([input]));
+      }
+      const elements = this.kids(list);
+      this.fact(list, { kind: "list", shape: "tuple" });
+      const infos = elements.map((element) => this.expr(element));
+      const input = this.finish(
+        list,
+        this.table.tuple(infos.map((info) => info.type)),
+        combine(infos),
+      );
+      const branches = infos.map((info, index) =>
+        asSchema(info, elements[index])
+      );
+      if (
+        branches.length < 2 || branches.some((branch) => branch === undefined)
+      ) {
+        this.report(
+          "type-mismatch/010",
+          "`schemaUnion` needs at least two tagged Schema branches",
+          list,
+        );
+        return this.finish(node, this.table.error, combine([input]));
+      }
+      const schemas = branches.filter((branch) => branch !== undefined);
+      const tags = schemas.map((branch) => {
+        const decoded = this.table.node(this.table.unfold(branch.decoded));
+        const encoded = this.table.node(this.table.unfold(branch.encoded));
+        const candidates = new Map<string, string>();
+        if (decoded.kind !== "record" || encoded.kind !== "record") {
+          return candidates;
+        }
+        for (const field of decoded.fields) {
+          if (field.optional) continue;
+          const other = encoded.fields.find((item) => item.name === field.name);
+          if (other === undefined || other.optional) continue;
+          const left = this.table.node(this.table.unfold(field.type));
+          const right = this.table.node(this.table.unfold(other.type));
+          if (
+            left.kind === "literal" && right.kind === "literal" &&
+            typeof left.value === "string" && left.value === right.value
+          ) candidates.set(field.name, left.value);
+        }
+        return candidates;
+      });
+      const tag = [...tags[0].keys()].find((name) => {
+        const values = tags.map((candidate) => candidate.get(name));
+        return values.every((value) => value !== undefined) &&
+          new Set(values).size === values.length;
+      });
+      if (tag === undefined) {
+        this.report(
+          "type-mismatch/010",
+          "`schemaUnion` branches need one shared required string tag with distinct values in both directions",
+          list,
+        );
+      }
+      return this.finish(
+        node,
+        this.table.schema(
+          this.table.union(schemas.map((branch) => branch.decoded)),
+          this.table.union(schemas.map((branch) => branch.encoded)),
+          schemas.flatMap((branch) => branch.decodeRequirements),
+          schemas.flatMap((branch) => branch.encodeRequirements),
+        ),
+        combine([input]),
+      );
+    }
+    if (op === "optional-transform") {
+      const sourceInfo = this.argInfo(args[0]);
+      const targetInfo = this.argInfo(args[1]);
+      const source = asOptional(sourceInfo, args[0].node);
+      const target = asOptional(targetInfo, args[1].node);
+      if (source === undefined || target === undefined) {
+        return this.finish(
+          node,
+          this.table.error,
+          combine([
+            sourceInfo,
+            targetInfo,
+            ...args.slice(2).map((arg) => this.argInfo(arg)),
+          ]),
+        );
+      }
+      const decode = this.callback(
+        name,
+        args[2],
+        [this.table.option(source.decoded)],
+        this.table.option(target.encoded),
+        true,
+      );
+      const encode = this.callback(
+        name,
+        args[3],
+        [this.table.option(target.encoded)],
+        this.table.option(source.decoded),
+        true,
+      );
+      const decodeFn = this.functionOf(decode.info.type);
+      const encodeFn = this.functionOf(encode.info.type);
+      const validIssueFailure = (failures: readonly string[] | undefined) =>
+        failures !== undefined &&
+        (failures.length === 0 ||
+          (failures.length === 1 && failures[0] === SCHEMA_ISSUE_ID));
+      if (
+        !validIssueFailure(decodeFn?.failures) ||
+        !validIssueFailure(encodeFn?.failures)
+      ) {
+        this.report(
+          "type-mismatch/010",
+          "schemaOptionalTransform callbacks may fail only with SchemaIssue",
+          node,
+        );
+      }
+      if (
+        kindOf(this.tree, args[2].node) !== SyntaxKind.ArrowExpr ||
+        kindOf(this.tree, args[3].node) !== SyntaxKind.ArrowExpr
+      ) {
+        this.report(
+          "type-mismatch/010",
+          "schemaOptionalTransform needs inline callbacks",
+          node,
+        );
+      }
+      if (
+        !this.table.isAssignable(
+          decode.result,
+          this.table.option(target.encoded),
+        ) ||
+        !this.table.isAssignable(
+          encode.result,
+          this.table.option(source.decoded),
+        )
+      ) {
+        this.report(
+          "type-mismatch/003",
+          "schemaOptionalTransform callbacks must return directional Option values",
+          node,
+        );
+      }
+      return this.finish(
+        node,
+        this.table.schema(
+          target.decoded,
+          source.encoded,
+          [
+            ...source.decodeRequirements,
+            ...target.decodeRequirements,
+            ...(decodeFn?.requirements ?? []),
+          ],
+          [
+            ...source.encodeRequirements,
+            ...target.encodeRequirements,
+            ...(encodeFn?.requirements ?? []),
+          ],
+          true,
+        ),
+        combine([sourceInfo, targetInfo, decode.info, encode.info]),
+      );
+    }
+    const first = this.argInfo(args[0]);
+    const schema = asSchema(first, args[0].node);
+    if (op === "optional-key") {
+      return this.finish(
+        node,
+        schema === undefined ? this.table.error : this.table.schema(
+          schema.decoded,
+          schema.encoded,
+          schema.decodeRequirements,
+          schema.encodeRequirements,
+          true,
+        ),
+        combine([first]),
+      );
+    }
+    if (op === "array") {
+      return this.finish(
+        node,
+        schema === undefined ? this.table.error : this.table.schema(
+          this.table.array(schema.decoded),
+          this.table.array(schema.encoded),
+          schema.decodeRequirements,
+          schema.encodeRequirements,
+        ),
+        combine([first]),
+      );
+    }
+    if (op === "option-from-optional-key") {
+      return this.finish(
+        node,
+        schema === undefined ? this.table.error : this.table.schema(
+          this.table.option(schema.decoded),
+          schema.encoded,
+          schema.decodeRequirements,
+          schema.encodeRequirements,
+          false,
+          true,
+        ),
+        combine([first]),
+      );
+    }
+    if (op === "default-key") {
+      const fallback = this.callback(
+        name,
+        args[1],
+        [],
+        schema?.decoded,
+        true,
+      );
+      const fallbackFn = this.functionOf(fallback.info.type);
+      if (
+        fallbackFn !== undefined &&
+        !(fallbackFn.failures.length === 0 ||
+          (fallbackFn.failures.length === 1 &&
+            (fallbackFn.failures[0] === SCHEMA_ISSUE_ID ||
+              fallbackFn.failures[0] === SCHEMA_ERROR_ID)))
+      ) {
+        this.report(
+          "type-mismatch/010",
+          "schemaDefaultKey callback may fail only with SchemaIssue or SchemaError",
+          args[1].node,
+        );
+      }
+      if (kindOf(this.tree, args[1].node) !== SyntaxKind.ArrowExpr) {
+        this.report(
+          "type-mismatch/010",
+          "schemaDefaultKey needs an inline default callback",
+          args[1].node,
+        );
+      }
+      if (
+        schema !== undefined &&
+        !this.table.isAssignable(fallback.result, schema.decoded)
+      ) {
+        this.report(
+          "type-mismatch/003",
+          "schemaDefaultKey callback must return the decoded field type",
+          args[1].node,
+        );
+      }
+      return this.finish(
+        node,
+        schema === undefined ? this.table.error : this.table.schema(
+          schema.decoded,
+          schema.encoded,
+          [...schema.decodeRequirements, ...(fallbackFn?.requirements ?? [])],
+          schema.encodeRequirements,
+          false,
+          true,
+        ),
+        combine([first, fallback.info]),
+      );
+    }
+    if (op === "decode" || op === "encode") {
+      const input = this.argInfo(
+        args[1],
+        op === "encode" ? schema?.decoded : undefined,
+      );
+      if (op === "encode" && schema !== undefined) {
+        this.fits(
+          args[1].node,
+          input.type,
+          schema.decoded,
+          "the schema encode input",
+        );
+      }
+      return this.finish(
+        node,
+        schema === undefined
+          ? this.table.error
+          : op === "decode"
+          ? schema.decoded
+          : schema.encoded,
+        combine([first, input, {
+          failures: [SCHEMA_ERROR_ID],
+          requirements: schema === undefined
+            ? []
+            : op === "decode"
+            ? schema.decodeRequirements
+            : schema.encodeRequirements,
+          mode: "effect",
+        }]),
+      );
+    }
+    const targetInfo = this.argInfo(args[1]);
+    const target = asSchema(targetInfo, args[1].node);
+    if (schema === undefined || target === undefined) {
+      const rest = args.slice(2).map((a) => this.argInfo(a));
+      return this.finish(
+        node,
+        this.table.error,
+        combine([first, targetInfo, ...rest]),
+      );
+    }
+    const decode = this.callback(
+      name,
+      args[2],
+      [schema.decoded],
+      this.table.option(target.encoded),
+      true,
+    );
+    const encode = this.callback(
+      name,
+      args[3],
+      [target.encoded],
+      this.table.option(schema.decoded),
+      true,
+    );
+    const decodeFn = this.functionOf(decode.info.type);
+    const encodeFn = this.functionOf(encode.info.type);
+    if (
+      kindOf(this.tree, args[2].node) !== SyntaxKind.ArrowExpr ||
+      kindOf(this.tree, args[3].node) !== SyntaxKind.ArrowExpr
+    ) {
+      this.report(
+        "type-mismatch/010",
+        "schemaTransform needs inline callbacks",
+        node,
+      );
+    }
+    const validFailure = (failures: readonly string[] | undefined) =>
+      failures !== undefined &&
+      (failures.length === 0 ||
+        (failures.length === 1 && failures[0] === SCHEMA_ISSUE_ID));
+    if (
+      !validFailure(decodeFn?.failures) || !validFailure(encodeFn?.failures)
+    ) {
+      this.report(
+        "type-mismatch/010",
+        "schema transformations may fail only with SchemaIssue",
+        node,
+      );
+    }
+    const decodeExpected = decodeFn?.failures.includes(SCHEMA_ISSUE_ID)
+      ? target.encoded
+      : this.table.option(target.encoded);
+    const encodeExpected = encodeFn?.failures.includes(SCHEMA_ISSUE_ID)
+      ? schema.decoded
+      : this.table.option(schema.decoded);
+    if (
+      !this.table.isAssignable(decode.result, decodeExpected) ||
+      !this.table.isAssignable(encode.result, encodeExpected)
+    ) {
+      this.report(
+        "type-mismatch/003",
+        "schema transformation callbacks must return Option or issue-failing values in their direction",
+        node,
+      );
+    }
+    return this.finish(
+      node,
+      this.table.schema(target.decoded, schema.encoded, [
+        ...schema.decodeRequirements,
+        ...target.decodeRequirements,
+        ...(decodeFn?.requirements ?? []),
+      ], [
+        ...schema.encodeRequirements,
+        ...target.encodeRequirements,
+        ...(encodeFn?.requirements ?? []),
+      ]),
+      combine([first, targetInfo, decode.info, encode.info]),
+    );
+  }
+
+  private guardedSchemaCallback(node: NodeId): boolean {
+    if (kindOf(this.tree, node) !== SyntaxKind.ArrowExpr) return false;
+    const parts = this.kids(node);
+    const params = parts.find((part) =>
+      kindOf(this.tree, part) === SyntaxKind.ParamList
+    );
+    const first = params === undefined
+      ? undefined
+      : this.kidsOfKind(params, SyntaxKind.Param)[0];
+    const name = first === undefined
+      ? undefined
+      : this.kidsOfKind(first, SyntaxKind.Name)[0];
+    const self = name === undefined ? undefined : nameTextOf(this.tree, name);
+    const body = parts.at(-1);
+    if (
+      self === undefined || body === undefined ||
+      kindOf(this.tree, body) !== SyntaxKind.CallExpr ||
+      !["schemaStruct", "schemaUnion"].includes(
+        nodeText(this.tree, this.kids(body)[0]),
+      )
+    ) return false;
+    const containsSelf = (part: NodeId): boolean =>
+      (kindOf(this.tree, part) === SyntaxKind.NameExpr &&
+        nodeText(this.tree, part) === self) ||
+      this.kids(part).some(containsSelf);
+    const union = nodeText(this.tree, this.kids(body)[0]) === "schemaUnion";
+    const findList = (part: NodeId): NodeId | undefined =>
+      kindOf(this.tree, part) === SyntaxKind.ListExpr
+        ? part
+        : this.kids(part).map(findList).find((found) => found !== undefined);
+    const list = union ? findList(body) : undefined;
+    const finiteChoice = list !== undefined &&
+      this.kids(list).length >= 2 &&
+      this.kids(list).some((branch) => !containsSelf(branch));
+    let found = false;
+    const visit = (part: NodeId, guarded: boolean): boolean => {
+      if (
+        kindOf(this.tree, part) === SyntaxKind.NameExpr &&
+        nodeText(this.tree, part) === self
+      ) {
+        found = true;
+        return guarded;
+      }
+      if (kindOf(this.tree, part) === SyntaxKind.CallExpr) {
+        const children = this.kids(part);
+        const guard = ["schemaArray", "schemaOptionalKey"].includes(
+          nodeText(this.tree, children[0]),
+        );
+        return children.every((child, index) =>
+          visit(child, guarded || (guard && index > 0))
+        );
+      }
+      return this.kids(part).every((child) => visit(child, guarded));
+    };
+    return visit(body, finiteChoice) && found;
+  }
+
   private codecOperation(
     node: NodeId,
     name: string,
@@ -1699,6 +2409,85 @@ export class BodyChecker {
       combine([job, {
         failures: [],
         requirements: [...effect.requirements, SCOPE_CAPABILITY],
+        mode: "effect",
+      }]),
+    );
+  }
+
+  private scopeCall(
+    node: NodeId,
+    name: "makeScope" | "provideScope" | "addScopeFinalizer" | "closeScope",
+    args: readonly Arg[],
+  ): NodeInfo {
+    const kind = name === "makeScope"
+      ? "make-scope"
+      : name === "provideScope"
+      ? "provide-scope"
+      : name === "addScopeFinalizer"
+      ? "add-scope-finalizer"
+      : "close-scope";
+    this.fact(node, { kind });
+    const count = name === "makeScope" ? 0 : name === "closeScope" ? 1 : 2;
+    if (!this.arity(node, name, count, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine([...args.map((arg) => this.argInfo(arg)), EFFECT_ONLY]),
+      );
+    }
+    if (name === "makeScope") {
+      return this.finish(node, this.table.closeableScope, EFFECT_ONLY);
+    }
+    const owner = this.argInfo(args[0]);
+    this.fits(
+      args[0].node,
+      owner.type,
+      this.table.closeableScope,
+      "scope owner",
+    );
+    if (name === "closeScope") {
+      return this.finish(node, this.table.unit, combine([owner, EFFECT_ONLY]));
+    }
+    const job = this.argInfo(args[1]);
+    const effect = this.table.node(this.table.unfold(job.type));
+    if (effect.kind !== "effect") {
+      this.report(
+        "type-mismatch/010",
+        `\`${name}\` needs an Effect value`,
+        args[1].node,
+      );
+      return this.finish(
+        node,
+        this.table.error,
+        combine([owner, job, EFFECT_ONLY]),
+      );
+    }
+    if (name === "addScopeFinalizer") {
+      this.fits(
+        args[1].node,
+        effect.result,
+        this.table.unit,
+        "scope finalizer result",
+      );
+      if (
+        effect.failures.length > 0 ||
+        effect.requirements.includes(SCOPE_CAPABILITY)
+      ) {
+        this.report(
+          "type-mismatch/010",
+          "`addScopeFinalizer` needs an Effect without typed failures or the reserved Scope requirement",
+          args[1].node,
+        );
+      }
+    }
+    return this.finish(
+      node,
+      name === "provideScope" ? effect.result : this.table.unit,
+      combine([owner, job, {
+        failures: name === "provideScope" ? effect.failures : [],
+        requirements: name === "provideScope"
+          ? without(effect.requirements, [SCOPE_CAPABILITY])
+          : effect.requirements,
         mode: "effect",
       }]),
     );
@@ -2103,6 +2892,189 @@ export class BodyChecker {
         ...(args[2] === undefined ? [] : [this.argInfo(args[2])]),
       ]),
     );
+  }
+
+  private mapGroupsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    this.fact(node, { kind: "map-groups", bufferSize: undefined });
+    if (!this.arity(node, "mapGroups", 4, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((a) => this.argInfo(a))),
+      );
+    }
+    this.noPipeline("mapGroups", args);
+    this.inlineStreamCallback("mapGroups", args[1]);
+    this.inlineStreamCallback("mapGroups", args[2]);
+    const bufferSize = this.streamBufferCapacity(
+      args[3],
+      "mapGroups",
+      "bufferSize",
+    );
+    this.fact(node, { kind: "map-groups", bufferSize });
+    const stream = this.argInfo(args[0]);
+    const source = this.table.node(this.table.unfold(stream.type));
+    if (source.kind !== "stream" && !this.isError(stream.type)) {
+      this.report(
+        "type-mismatch/010",
+        "`mapGroups` needs a Stream value",
+        args[0].node,
+      );
+    }
+    const element = source.kind === "stream"
+      ? source.element
+      : this.table.error;
+    const key = this.callback("mapGroups key", args[1], [element], undefined);
+    if (
+      this.groupKeyClass(key.result) === undefined && !this.isError(key.result)
+    ) {
+      this.report(
+        "type-mismatch/010",
+        "`mapGroups` keys must share one string, boolean, int, or primitive brand class",
+        args[1].node,
+      );
+    }
+    const group = this.table.stream(element, [], []);
+    const use = this.callback(
+      "mapGroups use",
+      args[2],
+      [key.result, group],
+      undefined,
+      true,
+    );
+    const fn = this.functionOf(use.info.type);
+    // A wider annotated parameter must not erase the special borrowed Stream.
+    if (
+      fn !== undefined && fn.parameters[1] !== undefined &&
+      (!this.table.isAssignable(fn.parameters[1], group) ||
+        !this.table.isAssignable(group, fn.parameters[1]))
+    ) {
+      this.report(
+        "type-mismatch/010",
+        "the group parameter must have exactly the supplied Stream type",
+        args[2].node,
+      );
+    }
+    if (!this.dataOnly(use.result)) {
+      this.report(
+        "type-mismatch/010",
+        "the group use result must be data only",
+        args[2].node,
+      );
+    }
+    const fact = this.body.facts.get(args[2].node);
+    if (fact?.kind === "arrow" && fact.parameters[1]?.id !== undefined) {
+      const body = this.kids(args[2].node).at(-1);
+      if (body !== undefined) this.groupUses(body, fact.parameters[1].id);
+    }
+    return this.finish(
+      node,
+      this.table.stream(use.result, [
+        ...(source.kind === "stream" ? source.failures : []),
+        ...(fn?.failures ?? []),
+      ], [
+        ...(source.kind === "stream" ? source.requirements : []),
+        ...without(fn?.requirements ?? [], [SCOPE_CAPABILITY]),
+      ]),
+      combine([stream, key.info, use.info]),
+    );
+  }
+
+  private groupKeyClass(ref: TypeRef, depth = 0): string | undefined {
+    if (depth > 128) return undefined;
+    let found: string | undefined;
+    for (const member of flattenMembers(this.table, ref)) {
+      const type = this.table.node(member);
+      let current: string | undefined;
+      if (type.kind === "literal") {
+        current = typeof type.value === "number"
+          ? Number.isSafeInteger(type.value) ? "int" : undefined
+          : typeof type.value;
+      } else if (type.kind === "primitive") {
+        if (
+          type.name === "int" || type.name === "string" ||
+          type.name === "boolean"
+        ) current = type.name;
+      } else if (type.kind === "named") {
+        const base = this.table.brandBaseOf(type.id as TypeId);
+        if (
+          base !== undefined &&
+          this.groupKeyClass(base, depth + 1) !== undefined
+        ) current = `brand:${type.id}`;
+      }
+      if (current === undefined || (found !== undefined && found !== current)) {
+        return undefined;
+      }
+      found = current;
+    }
+    return found;
+  }
+
+  private groupUses(body: NodeId, id: LocalId): void {
+    let references = 0;
+    const terminals = new Set([
+      "collectStream",
+      "runStream",
+      "foldStream",
+      "foldEffectStream",
+      "headStream",
+      "lastStream",
+      "drainStream",
+    ]);
+    const visit = (
+      node: NodeId,
+      parent: NodeId | undefined,
+      grandparent: NodeId | undefined,
+      nested: boolean,
+    ): void => {
+      const target = this.targets.get(node);
+      if (
+        (kindOf(this.tree, node) === SyntaxKind.NameExpr ||
+          (kindOf(this.tree, node) === SyntaxKind.Name &&
+            parent !== undefined &&
+            kindOf(this.tree, parent) === SyntaxKind.ShorthandField)) &&
+        target?.kind === "local" && target.id === id
+      ) {
+        references++;
+        const call = parent !== undefined &&
+            kindOf(this.tree, parent) === SyntaxKind.ArgList
+          ? grandparent
+          : parent;
+        const callee =
+          call !== undefined && kindOf(this.tree, call) === SyntaxKind.CallExpr
+            ? this.kids(call)[0]
+            : undefined;
+        const called = callee === undefined
+          ? undefined
+          : this.targets.get(callee);
+        const first = call === undefined
+          ? undefined
+          : this.kids(call).slice(1).flatMap((child) =>
+            kindOf(this.tree, child) === SyntaxKind.ArgList
+              ? this.kids(child)
+              : [child]
+          )[0];
+        if (
+          nested || references > 1 || first !== node ||
+          called?.kind !== "builtin" || !terminals.has(called.name)
+        ) {
+          this.report(
+            "type-mismatch/010",
+            "a borrowed group permits at most one direct terminal use and cannot escape or be captured",
+            node,
+          );
+        }
+      }
+      for (const child of this.kids(node)) {
+        visit(
+          child,
+          node,
+          parent,
+          nested || kindOf(this.tree, node) === SyntaxKind.ArrowExpr,
+        );
+      }
+    };
+    visit(body, undefined, undefined, false);
   }
 
   private mapStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
@@ -3230,6 +4202,429 @@ export class BodyChecker {
     return this.finish(node, type, consume);
   }
 
+  private takeSinkCall(
+    node: NodeId,
+    args: readonly Arg[],
+    expected: TypeRef | undefined,
+  ): NodeInfo {
+    this.fact(node, { kind: "take-sink", count: undefined });
+    if (!this.arity(node, "takeSink", 1, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.noPipeline("takeSink", args);
+    const literal = args[0].pre === undefined &&
+        kindOf(this.tree, args[0].node) === SyntaxKind.LiteralExpr
+      ? literalOf(this.tree, args[0].node)
+      : undefined;
+    const count =
+      typeof literal === "number" && Number.isSafeInteger(literal) &&
+        literal > 0
+        ? literal
+        : undefined;
+    if (count === undefined) {
+      this.argInfo(args[0]);
+      this.report(
+        "type-mismatch/010",
+        "`takeSink` needs a positive safe integer literal count",
+        args[0].node,
+      );
+    } else {
+      this.finish(args[0].node, this.table.int, PURE_EFFECTS);
+    }
+    this.fact(node, { kind: "take-sink", count });
+    const hint = expected === undefined
+      ? undefined
+      : this.table.node(this.table.unfold(expected));
+    if (hint?.kind !== "sink") {
+      this.report(
+        "type-mismatch/010",
+        "`takeSink` needs an expected Sink type to determine its input",
+        node,
+      );
+      return this.finish(node, this.table.error, PURE_EFFECTS);
+    }
+    return this.finish(
+      node,
+      this.table.sink(
+        hint.input,
+        this.table.array(hint.input),
+        [],
+        [],
+        hint.input,
+      ),
+      PURE_EFFECTS,
+    );
+  }
+
+  private transduceStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    return this.sinkTransformStreamCall(node, args, "transduceStream");
+  }
+
+  private aggregateStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+    return this.sinkTransformStreamCall(node, args, "aggregateStream");
+  }
+
+  private simpleScheduleCall(
+    node: NodeId,
+    args: readonly Arg[],
+    name: "scheduleRecurs" | "scheduleSpaced",
+  ): NodeInfo {
+    this.fact(node, {
+      kind: name === "scheduleRecurs" ? "schedule-recurs" : "schedule-spaced",
+    });
+    if (!this.arity(node, name, 1, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((a) => this.argInfo(a))),
+      );
+    }
+    this.noPipeline(name, args);
+    const value = this.argInfo(args[0]);
+    this.fits(
+      args[0].node,
+      value.type,
+      name === "scheduleRecurs" ? this.table.int : this.table.number,
+      "the schedule argument",
+    );
+    return this.finish(
+      node,
+      this.table.schedule(this.table.int, this.table.unknown, [], []),
+      combine([value]),
+    );
+  }
+
+  private scheduleFromStepCall(
+    node: NodeId,
+    args: readonly Arg[],
+    expected: TypeRef | undefined,
+  ): NodeInfo {
+    this.fact(node, { kind: "schedule-from-step" });
+    if (!this.arity(node, "scheduleFromStep", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((a) => this.argInfo(a))),
+      );
+    }
+    this.noPipeline("scheduleFromStep", args);
+    this.inlineStreamCallback("scheduleFromStep", args[0]);
+    this.inlineStreamCallback("scheduleFromStep", args[1]);
+    const initial = this.argInfo(args[0]);
+    const decide = this.argInfo(args[1]);
+    const factory = this.functionOf(initial.type);
+    const step = this.functionOf(decide.type);
+    if (
+      factory === undefined || factory.parameters.length !== 0 ||
+      step === undefined || step.parameters.length !== 2
+    ) {
+      this.report(
+        "type-mismatch/010",
+        "`scheduleFromStep` needs a nullary state factory and a two-parameter decision callback",
+        node,
+      );
+      return this.finish(node, this.table.error, combine([initial, decide]));
+    }
+    const state = factory.result;
+    this.fits(args[1].node, state, step.parameters[0], "the schedule state");
+    const metadata = this.table.node(this.table.unfold(step.parameters[1]));
+    const input = metadata.kind === "record"
+      ? metadata.fields.find((field) => field.name === "input")?.type
+      : undefined;
+    if (
+      input === undefined ||
+      !this.table.isAssignable(
+        this.table.scheduleInput(input),
+        step.parameters[1],
+      )
+    ) {
+      this.report(
+        "type-mismatch/010",
+        "the decision callback needs ScheduleInput<Input>",
+        args[1].node,
+      );
+    }
+    const outputs: TypeRef[] = [];
+    for (const member of flattenMembers(this.table, step.result)) {
+      const variant = this.table.node(this.table.unfold(member));
+      if (variant.kind !== "record") continue;
+      const output = variant.fields.find((field) => field.name === "output");
+      if (output !== undefined) outputs.push(output.type);
+    }
+    const hint = expected === undefined
+      ? undefined
+      : this.table.node(this.table.unfold(expected));
+    const output = hint?.kind === "schedule"
+      ? hint.output
+      : outputs.length > 0
+      ? this.table.union(outputs)
+      : this.table.error;
+    if (
+      outputs.length === 0 ||
+      !this.table.isAssignable(
+        step.result,
+        this.table.scheduleDecision(state, output),
+      )
+    ) {
+      this.report(
+        "type-mismatch/010",
+        "the decision callback must return ScheduleDecision<State, Output>",
+        args[1].node,
+      );
+    }
+    return this.finish(
+      node,
+      this.table.schedule(output, input ?? this.table.error, [
+        ...factory.failures,
+        ...step.failures,
+      ], [...factory.requirements, ...step.requirements]),
+      combine([initial, decide]),
+    );
+  }
+
+  private scheduleMapCall(
+    node: NodeId,
+    args: readonly Arg[],
+    expected: TypeRef | undefined,
+  ): NodeInfo {
+    this.fact(node, { kind: "schedule-map" });
+    if (!this.arity(node, "scheduleMap", 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((a) => this.argInfo(a))),
+      );
+    }
+    this.noPipeline("scheduleMap", args);
+    this.inlineStreamCallback("scheduleMap", args[1]);
+    const schedule = this.argInfo(args[0]);
+    const policy = this.table.node(this.table.unfold(schedule.type));
+    if (policy.kind !== "schedule") {
+      this.report(
+        "type-mismatch/010",
+        "`scheduleMap` needs a Schedule",
+        args[0].node,
+      );
+      return this.finish(
+        node,
+        this.table.error,
+        combine([schedule, this.argInfo(args[1])]),
+      );
+    }
+    const hint = expected === undefined
+      ? undefined
+      : this.table.node(this.table.unfold(expected));
+    const mapped = this.callback(
+      "scheduleMap",
+      args[1],
+      [this.table.scheduleMetadata(policy.output, policy.input)],
+      hint?.kind === "schedule" ? hint.output : undefined,
+      true,
+    );
+    const fn = this.functionOf(mapped.info.type);
+    return this.finish(
+      node,
+      this.table.schedule(mapped.result, policy.input, [
+        ...policy.failures,
+        ...(fn?.failures ?? []),
+      ], [...policy.requirements, ...(fn?.requirements ?? [])]),
+      combine([schedule, mapped.info]),
+    );
+  }
+
+  private scheduleComposeCall(
+    node: NodeId,
+    args: readonly Arg[],
+    name: "scheduleMax" | "scheduleMin" | "scheduleConcat",
+  ): NodeInfo {
+    const kind = name === "scheduleMax"
+      ? "schedule-max"
+      : name === "scheduleMin"
+      ? "schedule-min"
+      : "schedule-concat";
+    this.fact(node, { kind });
+    if (!this.arity(node, name, 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.noPipeline(name, args);
+    const left = this.argInfo(args[0]);
+    const right = this.argInfo(args[1]);
+    const first = this.table.node(this.table.unfold(left.type));
+    const second = this.table.node(this.table.unfold(right.type));
+    if (first.kind !== "schedule" || second.kind !== "schedule") {
+      this.report(
+        "type-mismatch/010",
+        `\`${name}\` needs two Schedule values`,
+        node,
+      );
+      return this.finish(node, this.table.error, combine([left, right]));
+    }
+    const accepts = (input: TypeRef, offered: TypeRef): boolean =>
+      this.table.unfold(input) === this.table.unknown ||
+      this.table.isAssignable(offered, input);
+    const input = accepts(second.input, first.input)
+      ? first.input
+      : accepts(first.input, second.input)
+      ? second.input
+      : undefined;
+    if (input === undefined) {
+      this.report(
+        "type-mismatch/010",
+        `\`${name}\` needs comparable Schedule input types`,
+        node,
+      );
+      return this.finish(node, this.table.error, combine([left, right]));
+    }
+    const output = name === "scheduleConcat"
+      ? this.table.union([first.output, second.output])
+      : this.table.number;
+    return this.finish(
+      node,
+      this.table.schedule(output, input, [
+        ...first.failures,
+        ...second.failures,
+      ], [...first.requirements, ...second.requirements]),
+      combine([left, right]),
+    );
+  }
+
+  private aggregateWithinStreamCall(
+    node: NodeId,
+    args: readonly Arg[],
+  ): NodeInfo {
+    this.fact(node, { kind: "aggregate-within-stream" });
+    if (!this.arity(node, "aggregateWithinStream", 3, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((a) => this.argInfo(a))),
+      );
+    }
+    this.noPipeline("aggregateWithinStream", args);
+    const stream = this.argInfo(args[0]);
+    const producer = this.table.node(this.table.unfold(stream.type));
+    const hint = producer.kind === "stream"
+      ? this.table.sink(
+        producer.element,
+        this.table.array(producer.element),
+        [],
+        [],
+        producer.element,
+      )
+      : undefined;
+    const sink = this.argInfo(args[1], hint);
+    const schedule = this.argInfo(args[2]);
+    const consumer = this.table.node(this.table.unfold(sink.type));
+    const policy = this.table.node(this.table.unfold(schedule.type));
+    if (
+      producer.kind !== "stream" || consumer.kind !== "sink" ||
+      policy.kind !== "schedule"
+    ) {
+      this.report(
+        "type-mismatch/010",
+        "`aggregateWithinStream` needs Stream, Sink, and Schedule values",
+        node,
+      );
+      return this.finish(
+        node,
+        this.table.error,
+        combine([stream, sink, schedule]),
+      );
+    }
+    this.fits(args[0].node, producer.element, consumer.input, "the sink input");
+    this.fits(
+      args[1].node,
+      consumer.leftover,
+      consumer.input,
+      "the replayed sink leftovers",
+    );
+    if (this.table.unfold(policy.input) !== this.table.unknown) {
+      this.fits(
+        args[2].node,
+        this.table.option(consumer.result),
+        policy.input,
+        "the schedule input",
+      );
+    }
+    return this.finish(
+      node,
+      this.table.stream(consumer.result, [
+        ...producer.failures,
+        ...consumer.failures,
+        ...policy.failures,
+      ], [
+        ...producer.requirements,
+        ...consumer.requirements,
+        ...policy.requirements,
+      ]),
+      combine([stream, sink, schedule]),
+    );
+  }
+
+  private sinkTransformStreamCall(
+    node: NodeId,
+    args: readonly Arg[],
+    name: "transduceStream" | "aggregateStream",
+  ): NodeInfo {
+    this.fact(node, {
+      kind: name === "aggregateStream"
+        ? "aggregate-stream"
+        : "transduce-stream",
+    });
+    if (!this.arity(node, name, 2, args)) {
+      return this.finish(
+        node,
+        this.table.error,
+        combine(args.map((arg) => this.argInfo(arg))),
+      );
+    }
+    this.noPipeline(name, args);
+    const stream = this.argInfo(args[0]);
+    const producer = this.table.node(this.table.unfold(stream.type));
+    const hint = producer.kind === "stream"
+      ? this.table.sink(
+        producer.element,
+        this.table.array(producer.element),
+        [],
+        [],
+        producer.element,
+      )
+      : undefined;
+    const sink = this.argInfo(args[1], hint);
+    const consumer = this.table.node(this.table.unfold(sink.type));
+    if (producer.kind !== "stream" || consumer.kind !== "sink") {
+      this.report(
+        "type-mismatch/010",
+        `\`${name}\` needs Stream and Sink values`,
+        node,
+      );
+      return this.finish(node, this.table.error, combine([stream, sink]));
+    }
+    this.fits(args[0].node, producer.element, consumer.input, "the sink input");
+    this.fits(
+      args[1].node,
+      consumer.leftover,
+      consumer.input,
+      "the replayed sink leftovers",
+    );
+    return this.finish(
+      node,
+      this.table.stream(consumer.result, [
+        ...producer.failures,
+        ...consumer.failures,
+      ], [...producer.requirements, ...consumer.requirements]),
+      combine([stream, sink]),
+    );
+  }
+
   private runStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
     this.fact(node, { kind: "run-stream" });
     if (!this.arity(node, "runStream", 2, args)) {
@@ -3301,11 +4696,15 @@ export class BodyChecker {
     return this.finish(node, stream.type, stream);
   }
 
-  private streamBufferCapacity(arg: Arg): number | undefined {
+  private streamBufferCapacity(
+    arg: Arg,
+    operation = "bufferStream",
+    fieldName = "capacity",
+  ): number | undefined {
     const bad = (): undefined => {
       this.report(
         "type-mismatch/010",
-        "`bufferStream` needs `{ capacity: N }` with a positive safe integer literal",
+        `\`${operation}\` needs \`{ ${fieldName}: N }\` with a positive safe integer literal`,
         arg.node,
       );
       return undefined;
@@ -3324,7 +4723,7 @@ export class BodyChecker {
     const valueNode = parts.find((k) => k !== label);
     if (
       label === undefined || valueNode === undefined ||
-      nameTextOf(this.tree, label) !== "capacity" ||
+      nameTextOf(this.tree, label) !== fieldName ||
       kindOf(this.tree, valueNode) !== SyntaxKind.LiteralExpr
     ) return bad();
     const value = literalOf(this.tree, valueNode);
@@ -3335,7 +4734,7 @@ export class BodyChecker {
     this.finish(
       arg.node,
       this.table.record([{
-        name: "capacity",
+        name: fieldName,
         type: this.table.int,
         optional: false,
       }]),

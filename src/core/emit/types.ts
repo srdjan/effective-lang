@@ -34,7 +34,7 @@ export function parameterName(index: number): string {
 }
 
 /** Type arguments: one line when they fit, else one for each line. */
-function typeArguments(args: readonly Doc[]): Doc {
+export function typeArguments(args: readonly Doc[]): Doc {
   return group([
     "<",
     indent([soft, join([",", line], args)]),
@@ -47,7 +47,7 @@ function unionDoc(members: readonly Doc[]): Doc {
   return join(" | ", members);
 }
 
-function failureUnion(
+export function failureUnion(
   scope: Scope,
   failures: readonly ErrorId[],
 ): Doc | undefined {
@@ -55,7 +55,7 @@ function failureUnion(
   return unionDoc(failures.map((id) => scope.nameOf(id)));
 }
 
-function requirementUnion(
+export function requirementUnion(
   scope: Scope,
   capabilities: readonly CapabilityId[],
 ): Doc | undefined {
@@ -193,6 +193,70 @@ export function typeDoc(scope: Scope, type: Type): Doc {
         "> }",
       ];
     }
+    case "schema":
+      if (type.encodedOptionalKey === true) {
+        const schema = scope.effect("Schema");
+        return [
+          `${schema}.decodeTo<${schema}.Codec<`,
+          typeDoc(scope, type.decoded),
+          ", ",
+          typeDoc(scope, type.decoded),
+          ", ",
+          requirementUnion(scope, type.decodeRequirements) ?? "never",
+          ", ",
+          requirementUnion(scope, type.encodeRequirements) ?? "never",
+          `>, ${schema}.optionalKey<${schema}.Codec<unknown, `,
+          typeDoc(scope, type.encoded),
+          ", ",
+          requirementUnion(scope, type.decodeRequirements) ?? "never",
+          ", ",
+          requirementUnion(scope, type.encodeRequirements) ?? "never",
+          ">>>",
+        ];
+      }
+      if (type.optionalKey === true) {
+        const schema = scope.effect("Schema");
+        const decoded = typeDoc(scope, type.decoded);
+        const encoded = typeDoc(scope, type.encoded);
+        const rd = requirementUnion(scope, type.decodeRequirements) ?? "never";
+        const re = requirementUnion(scope, type.encodeRequirements) ?? "never";
+        return [
+          "(",
+          `${schema}.optionalKey<${schema}.Codec<`,
+          decoded,
+          ", ",
+          encoded,
+          ", ",
+          rd,
+          ", ",
+          re,
+          ">> | ",
+          `${schema}.decodeTo<${schema}.optionalKey<${schema}.Codec<`,
+          decoded,
+          ", unknown, ",
+          rd,
+          ", ",
+          re,
+          `>>, ${schema}.optionalKey<${schema}.Codec<unknown, `,
+          encoded,
+          ", ",
+          rd,
+          ", ",
+          re,
+          ">>>)",
+        ];
+      }
+      return [
+        `${scope.effect("Schema")}.Codec`,
+        typeArguments([
+          typeDoc(scope, type.decoded),
+          typeDoc(scope, type.encoded),
+          requirementUnion(scope, type.decodeRequirements) ?? "never",
+          requirementUnion(scope, type.encodeRequirements) ?? "never",
+        ]),
+      ];
+    case "closeable-scope":
+      return scope.scopeRuntime().type;
     case "fiber":
       return [
         `${scope.effect("Fiber")}.Fiber<`,
@@ -233,13 +297,23 @@ export function typeDoc(scope: Scope, type: Type): Doc {
         `${scope.effect("Stream")}.Stream`,
         deferredArguments(scope, [typeDoc(scope, type.element)], type.effects),
       ];
+    case "schedule":
+      return [
+        `${scope.effect("Schedule")}.Schedule`,
+        typeArguments([
+          typeDoc(scope, type.output),
+          typeDoc(scope, type.input),
+          failureUnion(scope, type.effects.failures) ?? "never",
+          requirementUnion(scope, type.effects.requirements) ?? "never",
+        ]),
+      ];
     case "sink":
       return [
         `${scope.effect("Sink")}.Sink`,
         typeArguments([
           typeDoc(scope, type.result),
           typeDoc(scope, type.input),
-          "never",
+          type.leftover === undefined ? "never" : typeDoc(scope, type.leftover),
           failureUnion(scope, type.effects.failures) ?? "never",
           requirementUnion(scope, type.effects.requirements) ?? "never",
         ]),
@@ -267,7 +341,7 @@ function schemaOfLiterals(
 }
 
 /** The Effect Schema value of a type. The type has no function or provider in it. */
-export function schemaDoc(scope: Scope, type: Type): Doc {
+export function schemaDoc(scope: Scope, type: Type, recursiveId?: string): Doc {
   const schema = scope.effect("Schema");
   switch (type.kind) {
     case "primitive":
@@ -291,25 +365,41 @@ export function schemaDoc(scope: Scope, type: Type): Doc {
     case "literal":
       return schemaOfLiterals(scope, [type.value]);
     case "named":
-      return scope.nameOf(type.id);
+      return type.id === recursiveId
+        ? [
+          `${schema}.suspend((): ${schema}.Codec<`,
+          scope.nameOf(type.id),
+          "> => ",
+          scope.nameOf(type.id),
+          ")",
+        ]
+        : scope.nameOf(type.id);
     case "array":
-      return [`${schema}.Array(`, schemaDoc(scope, type.element), ")"];
+      return [
+        `${schema}.Array(`,
+        schemaDoc(scope, type.element, recursiveId),
+        ")",
+      ];
     case "tuple":
       return [
         `${schema}.Tuple(`,
         bracketed(
           "[",
           "]",
-          type.elements.map((t) => schemaDoc(scope, t)),
+          type.elements.map((t) => schemaDoc(scope, t, recursiveId)),
           false,
         ),
         ")",
       ];
     case "option":
-      return [`${schema}.Option(`, schemaDoc(scope, type.element), ")"];
+      return [
+        `${schema}.Option(`,
+        schemaDoc(scope, type.element, recursiveId),
+        ")",
+      ];
     case "record": {
       const fields = type.fields.map((f) => {
-        const inner = schemaDoc(scope, f.type);
+        const inner = schemaDoc(scope, f.type, recursiveId);
         return [
           f.name,
           ": ",
@@ -330,7 +420,7 @@ export function schemaDoc(scope: Scope, type: Type): Doc {
         bracketed(
           "[",
           "]",
-          type.members.map((m) => schemaDoc(scope, m)),
+          type.members.map((m) => schemaDoc(scope, m, recursiveId)),
           false,
         ),
         ")",
@@ -340,10 +430,13 @@ export function schemaDoc(scope: Scope, type: Type): Doc {
     case "effect":
     case "stream":
     case "sink":
+    case "schedule":
     case "provider":
     case "ref":
     case "retry-schedule":
     case "codec":
+    case "schema":
+    case "closeable-scope":
     case "fiber":
       throw unsupported("a deferred or function type has no schema");
   }

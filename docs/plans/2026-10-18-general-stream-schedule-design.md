@@ -1,13 +1,27 @@
 # General Stream and Schedule audit
 
 Date: 2026-10-18. Target: `effect@4.0.5`, Deno 2.9.7.
-Status: representative investigation complete. New source forms and type
-changes below are proposed prerequisites, not implemented language rules.
+Status: representative investigation complete. Sink leftovers and keyed
+grouping are implemented in design drafts 0.35 and 0.36. Untimed async
+aggregation is implemented in draft 0.37. The selected general Schedule slice
+and timed aggregation are implemented in draft 0.38. Binary Schedule
+composition with comparable inputs follows in draft 0.39.
+
+The follow-up [Sink leftover contract](2026-10-18-sink-leftover-contract.md)
+implements an appended fifth type argument, positive-count `takeSink`, and
+synchronous `transduceStream`. Nine additional target tests and four compiled
+source tests verify replay, completion, channels, and resource lifetime.
+The [async aggregation contract](2026-10-18-async-aggregation-contract.md)
+implements a fused untimed `aggregateStream` source rule after target demand,
+completion, and cancellation probes. Timed aggregation follows the implemented
+[general Schedule contract](2026-10-18-general-schedule-contract.md).
 
 ## Decision and acceptance measure
 
-Keep keyed live grouping, arbitrary Sink composition, and general Schedule
-values classified as uncovered native contracts. The selected external-stop
+The original investigation classified keyed live grouping, async aggregation,
+custom sink-building callbacks, and general Schedule values as uncovered.
+Grouping and synchronous transduction with typed leftovers now have native
+support; untimed aggregation is also implemented. The selected external-stop
 behavior and a fixed combined retry policy have existing source compositions.
 Their existence is not sufficient reason to add same-named builtins.
 
@@ -19,8 +33,10 @@ array alone does not establish equivalence for a live or reusable API.
 
 The [target probes](stream-schedule-probes/target.ts) have six passing tests.
 The [compiler/runtime probes](stream-schedule-probes/source_slow_test.ts) have
-two passing tests covering five source diagnostics, emitted-source execution,
-and two expected strict target rejections. The probes use handshakes rather
+two passing tests covering three illustrative source diagnostics, accepted Sink
+leftover and aggregation construction, emitted-source execution,
+the inline tuple regression, and one expected strict target rejection for Sink
+leftovers. The probes use handshakes rather
 than elapsed-time assertions; schedule delays are inspected without sleeping.
 All claims here are bounded by those experiments, not an inventory of every
 Stream, Sink, or Schedule export.
@@ -64,20 +80,19 @@ operator is selected from these witnesses; a stronger demand or scheduling
 counterexample would reopen the decision. `haltWhen`, which lets a current
 pull finish, is a distinct contract and was not established by these tests.
 
-### Existing compiler defect exposed by the composition
+### Contextual tuple emission regression
 
 [inline-marker.eff](stream-schedule-probes/inline-marker.eff) returns
 `Some([{ kind: "End", value: 0 }, true])` from an annotated `unfold` callback
-branch. It passes source checking and independent IR validation. Strict target
-checking rejects the emission with `TS2375`: the returned tuple widened to an
-array, and the target requires two tuple elements.
+branch. The initial emission widened the tuple to an array and failed strict
+target checking with `TS2375` despite passing source and IR validation.
 
-An explicitly typed binding, `const endStep: [Event, Bool] = ...`, preserves
-the tuple in the working composition. The compiler probe retains and asserts
-the failing inline case separately. This is an emission defect under the
-existing contextual tuple rule, not evidence that stopping a stream needs a
-new language feature. Repair it without changing that source rule, then turn
-the reproducer into a passing compiler regression.
+The emitter now supplies the checked payload type to `Option.some`. The original
+program passes strict target checking and emits the expected marker on repeated
+consumption. The working composition uses inline markers, and the
+[compiler fixture](../../fixtures/emit/contextual-options.eff) covers nested
+Options, tuples, arrays, literal fields, and effectful payloads. The existing
+source rule is unchanged.
 
 ## Keyed grouping: live routing is the boundary
 
@@ -120,6 +135,13 @@ Before adding a grouping form, specify:
 - Cleanup on consumer failure and downstream interruption. Idle eviction and
   unconsumed-group policy need additional witnesses before inclusion.
 
+The follow-up [live keyed grouping contract](2026-10-18-keyed-group-contract.md)
+settles those rules for one fused `mapGroups` form. Its nine target probes
+establish a runtime lowering with callback-owned group pulls, concurrent
+consumers, unordered data results, explicit queue capacity, and awaited cleanup.
+Draft 0.36 implements its conservative source borrow checks, independent IR
+validation, typed emission, and compiled-source runtime witnesses.
+
 ## Arbitrary Sinks: preserve the leftover channel
 
 The target witness is `Stream.transduce(source, Sink.take(2))`. A single source
@@ -135,7 +157,7 @@ stops the sink after three calls. The target operators have different execution
 contracts: transduction restarts a sink over a pull, while aggregation runs
 upstream and downstream in separate fibers. This audit does not equate them.
 
-Current source `Sink<I,O,E,R>` emits:
+The four-argument source `Sink<I,O,E,R>` still emits:
 
 ```text
 Effect Sink<O, I, never, E, R>
@@ -145,9 +167,9 @@ Effect Sink<O, I, never, E, R>
 This is a concrete typed adapter boundary. The emitted alias
 `PairSink = Sink<Int, Int[]>` cannot accept target `Sink.take<number>(2)`:
 strict target checking reports `TS2375`, `number` is not assignable to `never`.
-Attempting a fifth source Sink argument fails parsing with `syntax/008`,
-`expected >, found comma`. Illustrative `takeSink` and `transduceStream` names
-also fail resolution.
+Draft 0.35 accepts a fifth source Sink argument for explicit leftovers.
+`takeSink` and `transduceStream` now compile and pass source/runtime acceptance.
+Their original parse/resolution failures established the pre-extension boundary.
 
 A specialized batching state machine can reproduce a fixed list of pairs.
 That does not represent an arbitrary reusable Sink value with leftovers.
@@ -155,14 +177,17 @@ Terminal `runStream` discards the producer continuation and cannot by itself
 restart that same sink over unconsumed input. An adapter can instead own the
 complete transformation and return a Stream.
 
-Before accepting a native aggregation form, choose whether to extend Sink
-types with a leftover parameter or introduce a narrower transducer type whose
-leftovers match its input. Preserve existing four-argument Sink interpretation;
-do not silently reinterpret its failure or requirement arguments. Specify
-leftover replay before new pulls, fresh sink state per run, final partial and
-empty output, zero-progress sinks, and source/sink channel unions. Async
-aggregation additionally needs a bound and cancellation rule. Timed flushing
-and arbitrary leftover types remain outside these witnesses.
+The [follow-up contract](2026-10-18-sink-leftover-contract.md) appends the
+leftover parameter without changing existing argument positions. Transduction
+checks that source elements and replayed leftovers fit sink input; terminal
+execution can discard arbitrary leftover types. The implementation preserves
+leftover replay before new pulls, fresh state, partial/empty results, deferred
+channel unions, and whole-consumption finalizer lifetime. Zero-progress host
+sinks remain permitted; bounded downstream consumption is the caller's concern.
+The [async aggregation contract](2026-10-18-async-aggregation-contract.md)
+now implements its capacity-zero handoff, demand, completion, and cancellation
+rules. Timed flushing depends on the
+general Schedule value from draft 0.38.
 
 ## Schedules: fixed retry arithmetic versus a general policy value
 
@@ -195,33 +220,34 @@ Inputs `a,b` produce `a:0,b:0`; a later input `stop` fails with `policy-stop`.
 Mapping is also invoked on normal schedule completion, where it can fail.
 Re-execution resets the schedule state. Construction calls no service.
 
-Source has no `Schedule` type (`unknown-name/001`). `RetrySchedule<E>` instead
+At the time of this investigation, source had no `Schedule` type
+(`unknown-name/001`). `RetrySchedule<E>` instead
 accepts a pure `(nominal error, attempt) -> Option<Int>` callback. Asking that
 callback to consult a service yields `execution-mode/001`, `the retry schedule
 callback must be pure`. The type has no independent output, input, policy
 failure, or service channels. Matching one delay sequence does not supply
 that general policy contract.
 
-A general source rule must distinguish schedule completion from typed step
-failure and defect, allocate state per execution, and retain metadata and
-deferred channels through composition. Input compatibility must accept values
-usable by every combined policy (the target uses an input intersection), not
-blindly union input types. `max`, `min`, and `concat` need their own termination,
-delay, output, and failure equations. An implementation also needs a declared
-consumer boundary, such as repeat/retry or stream scheduling. Neither that
-consumer nor a new `Schedule` syntax is selected here. Existing RetrySchedule
-behavior should remain intact.
+The [general Schedule contract](2026-10-18-general-schedule-contract.md) now
+selects a four-channel source value, a per-execution state and decision rule,
+and timed aggregation as its first consumer. It distinguishes normal
+completion from typed step failure and defect, and retains metadata and
+deferred channels. The follow-up
+[composition contract](2026-10-18-schedule-composition-contract.md) implements
+binary `max`, `min`, and `concat` when one source input type fits the other.
+Incomparable inputs still need a source intersection rule. Existing
+`RetrySchedule` behavior remains intact.
 
 ## Options, next steps, and review
 
 | Option | Benefit and cost | Disposition |
 | --- | --- | --- |
 | Add names for all target operations | Familiar surface, but leaves lifetime, leftovers, and policy channels unspecified. | Rejected as an implementation plan. |
-| Keep supported compositions and specify the uncovered contracts first | Immediately useful stop/retry forms; no compiler surface growth. Requires explicit designs for the broader contracts. | Selected current disposition. |
-| Add one narrow grouping, transducer, or policy slice | Could address one witnessed contract with limited scope. Effort unmeasured. | Revisit after its lifetime/type/consumer decision and source rule are accepted. |
+| Keep supported compositions and specify the uncovered contracts first | Immediately useful stop/retry forms; no compiler surface growth. Requires explicit designs for the broader contracts. | Selected for remaining contracts. |
+| Add one narrow grouping, transducer, or policy slice | Could address one witnessed contract with limited scope. Effort unmeasured. | Sink leftovers, transduction, grouping, and untimed aggregation are implemented; other slices require their own decisions. |
 
-The next audit item is Schema and ecosystem adapters. Separately, repair the
-inline tuple emission defect under the existing rule. Reopen these dispositions
+The [Schema/ecosystem investigation](2026-10-18-schema-ecosystem-design.md)
+is complete, and the inline tuple emission defect is repaired. Reopen these dispositions
 when a stronger source counterexample or a proposed type/lifetime design is
 available. Supersede a native-gap classification only with checked and
 independently validated source, strict target checks, and runtime behavior
