@@ -314,6 +314,89 @@ export const TARGET_NAMES: ReadonlySet<string> = new Set([
   "symbol",
 ]);
 
+/**
+ * Prelude names that a module constant, a parameter, or a local may shadow.
+ * Existing programs may use these names as values. Bindings shadow these
+ * prelude operations; lookupValue already checks bindings first.
+ */
+export const SHADOWABLE_PRELUDE_NAMES: ReadonlySet<string> = new Set([
+  "run",
+  "all",
+  "partitionAll",
+  "validateAll",
+  "allResults",
+  "takeSink",
+  "transduceStream",
+  "aggregateStream",
+  "aggregateWithinStream",
+  "scheduleFromStep",
+  "scheduleRecurs",
+  "scheduleSpaced",
+  "scheduleMap",
+  "scheduleMax",
+  "scheduleMin",
+  "scheduleConcat",
+  "schema",
+  "schemaArray",
+  "schemaStruct",
+  "schemaTransform",
+  "schemaOptionalKey",
+  "schemaNullToMissingKey",
+  "schemaUnion",
+  "schemaOptionFromOptionalKey",
+  "schemaDefaultKey",
+  "schemaConstructorDefault",
+  "schemaDefaultNullKey",
+  "schemaDefaultEncodedKey",
+  "schemaOptionalTransform",
+  "schemaOptionalFromRequired",
+  "schemaRecursive",
+  "schemaDecode",
+  "schemaEncode",
+  "schemaMake",
+  "schemaInvalid",
+  "schemaAt",
+  "schemaBoth",
+  "makeScope",
+  "provideScope",
+  "addScopeFinalizer",
+  "closeScope",
+  "scoped",
+  "forkScoped",
+  "zipStreams",
+  "concatStreams",
+  "flatMapStreams",
+  "switchMapStreams",
+  "catchStream",
+  "retryStream",
+  "debounceStream",
+  "throttleStream",
+  "takeStream",
+  "dropStream",
+  "dropWhileStream",
+  "filterStream",
+  "filterEffectStream",
+  "takeWhileEffectStream",
+  "takeUntilEffectStream",
+  "dropWhileEffectStream",
+  "mapGroups",
+  "mapStream",
+  "scanStream",
+  "mapAccumStream",
+  "foldStream",
+  "foldEffectStream",
+  "collectStream",
+  "headStream",
+  "lastStream",
+  "drainStream",
+  "takeWhileStream",
+  "takeUntilStream",
+]);
+
+function isReservedPreludeName(name: string): boolean {
+  return PRELUDE_NAMES.has(name) && !SHADOWABLE_PRELUDE_NAMES.has(name);
+}
+
 function asPrelude(name: string): PreludeName | undefined {
   return PRELUDE_NAMES.has(name) ? name as PreludeName : undefined;
 }
@@ -509,55 +592,8 @@ class Resolver {
     binding: Binding,
     nameNode: NodeId,
   ): void {
-    // Existing programs may use these names as values. Bindings shadow
-    // these prelude operations; lookupValue already checks bindings first.
     if (
-      (PRELUDE_NAMES.has(name) && name !== "run" && name !== "all" &&
-        name !== "partitionAll" &&
-        name !== "validateAll" &&
-        name !== "allResults" &&
-        name !== "takeSink" && name !== "transduceStream" &&
-        name !== "aggregateStream" &&
-        name !== "aggregateWithinStream" &&
-        name !== "scheduleFromStep" && name !== "scheduleRecurs" &&
-        name !== "scheduleSpaced" && name !== "scheduleMap" &&
-        name !== "scheduleMax" && name !== "scheduleMin" &&
-        name !== "scheduleConcat" &&
-        name !== "schema" && name !== "schemaArray" &&
-        name !== "schemaStruct" && name !== "schemaTransform" &&
-        name !== "schemaOptionalKey" && name !== "schemaNullToMissingKey" &&
-        name !== "schemaUnion" &&
-        name !== "schemaOptionFromOptionalKey" &&
-        name !== "schemaDefaultKey" && name !== "schemaConstructorDefault" &&
-        name !== "schemaDefaultNullKey" &&
-        name !== "schemaDefaultEncodedKey" &&
-        name !== "schemaOptionalTransform" &&
-        name !== "schemaOptionalFromRequired" &&
-        name !== "schemaRecursive" && name !== "schemaDecode" &&
-        name !== "schemaEncode" && name !== "schemaMake" &&
-        name !== "schemaInvalid" &&
-        name !== "schemaAt" && name !== "schemaBoth" &&
-        name !== "makeScope" && name !== "provideScope" &&
-        name !== "addScopeFinalizer" && name !== "closeScope" &&
-        name !== "scoped" && name !== "forkScoped" && name !== "zipStreams" &&
-        name !== "concatStreams" && name !== "flatMapStreams" &&
-        name !== "switchMapStreams" &&
-        name !== "catchStream" &&
-        name !== "retryStream" &&
-        name !== "debounceStream" && name !== "throttleStream" &&
-        name !== "takeStream" && name !== "dropStream" &&
-        name !== "dropWhileStream" && name !== "filterStream" &&
-        name !== "filterEffectStream" &&
-        name !== "takeWhileEffectStream" &&
-        name !== "takeUntilEffectStream" &&
-        name !== "dropWhileEffectStream" &&
-        name !== "mapGroups" && name !== "mapStream" && name !== "scanStream" &&
-        name !== "mapAccumStream" && name !== "foldStream" &&
-        name !== "foldEffectStream" && name !== "collectStream" &&
-        name !== "headStream" && name !== "lastStream" &&
-        name !== "drainStream" &&
-        name !== "takeWhileStream" &&
-        name !== "takeUntilStream") ||
+      isReservedPreludeName(name) ||
       BUILTIN_TYPE_NAMES.has(name)
     ) {
       this.report(
@@ -704,52 +740,7 @@ class Resolver {
     if (name === undefined) return undefined;
     const span = this.span(nameNode);
     if (
-      PRELUDE_NAMES.has(name) && name !== "run" && name !== "all" &&
-      name !== "partitionAll" &&
-      name !== "validateAll" &&
-      name !== "allResults" &&
-      name !== "takeSink" && name !== "transduceStream" &&
-      name !== "aggregateStream" &&
-      name !== "aggregateWithinStream" &&
-      name !== "scheduleFromStep" && name !== "scheduleRecurs" &&
-      name !== "scheduleSpaced" && name !== "scheduleMap" &&
-      name !== "scheduleMax" && name !== "scheduleMin" &&
-      name !== "scheduleConcat" &&
-      name !== "schema" && name !== "schemaArray" &&
-      name !== "schemaStruct" && name !== "schemaTransform" &&
-      name !== "schemaOptionalKey" && name !== "schemaNullToMissingKey" &&
-      name !== "schemaUnion" &&
-      name !== "schemaOptionFromOptionalKey" &&
-      name !== "schemaDefaultKey" && name !== "schemaConstructorDefault" &&
-      name !== "schemaDefaultNullKey" &&
-      name !== "schemaDefaultEncodedKey" &&
-      name !== "schemaOptionalTransform" &&
-      name !== "schemaOptionalFromRequired" &&
-      name !== "schemaRecursive" && name !== "schemaDecode" &&
-      name !== "schemaEncode" && name !== "schemaMake" &&
-      name !== "schemaInvalid" &&
-      name !== "schemaAt" && name !== "schemaBoth" &&
-      name !== "makeScope" && name !== "provideScope" &&
-      name !== "addScopeFinalizer" && name !== "closeScope" &&
-      name !== "scoped" && name !== "forkScoped" && name !== "zipStreams" &&
-      name !== "concatStreams" && name !== "flatMapStreams" &&
-      name !== "switchMapStreams" &&
-      name !== "catchStream" &&
-      name !== "retryStream" &&
-      name !== "debounceStream" && name !== "throttleStream" &&
-      name !== "takeStream" && name !== "dropStream" &&
-      name !== "dropWhileStream" && name !== "filterStream" &&
-      name !== "filterEffectStream" &&
-      name !== "takeWhileEffectStream" &&
-      name !== "takeUntilEffectStream" &&
-      name !== "dropWhileEffectStream" &&
-      name !== "mapGroups" && name !== "mapStream" && name !== "scanStream" &&
-      name !== "mapAccumStream" && name !== "foldStream" &&
-      name !== "foldEffectStream" && name !== "collectStream" &&
-      name !== "headStream" && name !== "lastStream" &&
-      name !== "drainStream" &&
-      name !== "takeWhileStream" &&
-      name !== "takeUntilStream"
+      isReservedPreludeName(name)
     ) {
       this.report(
         "declaration/002",
