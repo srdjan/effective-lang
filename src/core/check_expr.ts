@@ -1507,9 +1507,10 @@ export class BodyChecker {
     const asSchema = (info: NodeInfo, at: NodeId) => {
       const type = this.table.node(this.table.unfold(info.type));
       if (
-        (type.kind !== "schema" || type.optionalKey === true ||
-          type.encodedOptionalKey === true ||
-          type.decodedOptionalKey === true ||
+        (type.kind !== "schema" ||
+          (op !== "constructor-default" && (type.optionalKey === true ||
+            type.encodedOptionalKey === true ||
+            type.decodedOptionalKey === true)) ||
           type.constructorDefault === true) &&
         !this.isError(info.type)
       ) {
@@ -1548,16 +1549,19 @@ export class BodyChecker {
           at,
         );
       }
-      return type.kind === "schema" && type.optionalKey !== true &&
-          type.encodedOptionalKey !== true &&
-          type.decodedOptionalKey !== true && type.constructorDefault !== true
+      return type.kind === "schema" &&
+          (op === "constructor-default" || (type.optionalKey !== true &&
+            type.encodedOptionalKey !== true &&
+            type.decodedOptionalKey !== true)) &&
+          type.constructorDefault !== true
         ? type
         : undefined;
     };
     const asOptional = (info: NodeInfo, at: NodeId) => {
       const type = this.table.node(this.table.unfold(info.type));
       if (
-        type.kind !== "schema" || type.optionalKey !== true
+        type.kind !== "schema" || type.optionalKey !== true ||
+        type.constructorDefault === true
       ) {
         if (!this.isError(info.type)) {
           this.report(
@@ -2003,9 +2007,9 @@ export class BodyChecker {
           schema.encoded,
           schema.decodeRequirements,
           schema.encodeRequirements,
-          false,
-          false,
-          false,
+          schema.optionalKey === true,
+          schema.encodedOptionalKey === true,
+          schema.decodedOptionalKey === true,
           schema.makeInput ?? schema.decoded,
           true,
         ),

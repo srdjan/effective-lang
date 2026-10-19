@@ -110,5 +110,7 @@ selected composition forms. The optional-adapter and
 [recursive extensions](2026-10-19-schema-constructor-recursive-contract.md) now
 propagate M through those forms. The
 [wire extension](2026-10-19-schema-recursive-wire-contract.md) also permits distinct
-recursive D/E. Constructor defaults on field descriptors remain open. Broader package interoperability, item 9, stays deferred
+recursive D/E. The [field-default extension](2026-10-19-schema-constructor-fields-contract.md)
+now attaches constructor defaults to field descriptors. Applying adapters after
+constructor defaults remains open. Broader package interoperability, item 9, stays deferred
 by user instruction.

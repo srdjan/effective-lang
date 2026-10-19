@@ -61,7 +61,9 @@ Ordinary fields remain required in M even if their nested M contains defaults.
 Wrapping the whole nested Schema with schemaConstructorDefault makes the outer
 field optional too. Decoded and encoded field presence are unchanged. A default
 descriptor cannot be run, used as a union/array member, wrapped twice, or
-combined directly with another field descriptor.
+wrapped in another field adapter. The
+[field-default extension](2026-10-19-schema-constructor-fields-contract.md) now
+permits attaching a constructor default after a field adapter.
 
 The callback is deferred when the descriptor is built. The Schema argument is
 evaluated once at construction; each default use runs the deferred callback.
@@ -101,9 +103,9 @@ now carries a separate M through guarded recursive Schemas; the
 The [optional adapter extension](2026-10-19-schema-constructor-optional-contract.md)
 now specifies propagation through nullable, decoding-default, and optional
 transformation fields. The Option adapter explicitly requires complete Option<D>
-constructor input. Constructor defaults attached directly to optional
-descriptors, constructor options, and
-arbitrary Schema AST access remain outside this slice.
+constructor input. The [field-default extension](2026-10-19-schema-constructor-fields-contract.md)
+now attaches constructor defaults to all three descriptor forms. Applying adapters
+after defaults, constructor options, and arbitrary AST access remain outside this slice.
 
 Four target tests cover nested M, arrays, unions, optional fields,
 transformation targets, restoring erased codec views, and nested errors. The
@@ -115,5 +117,5 @@ defaults, invalid callbacks, services, descriptor runners, and unsupported
 metadata derivation.
 
 Constructor metadata through optional adapters and guarded recursion is implemented.
-Constructor defaults on field descriptors are next. Broader package interoperability, item 9, stays deferred
+Applying field adapters after constructor defaults is next. Broader package interoperability, item 9, stays deferred
 by user instruction.

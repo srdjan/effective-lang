@@ -48,7 +48,6 @@ Deno.test("optional constructor inputs keep required keys, complete Options and 
       "const bad = schemaDefaultKey(child, (): M => ({}))",
       "const bad = schemaDefaultNullKey(child, (): M => ({}))",
       "const bad = schemaDefaultEncodedKey(child, (): M => ({}))",
-      "const bad = schemaConstructorDefault(decodedField, (): M => ({}))",
     ]
   ) {
     assert(

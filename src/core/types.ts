@@ -134,6 +134,7 @@ export type TypeNode =
     readonly encodedOptionalKey?: true;
     readonly decodedOptionalKey?: true;
     readonly makeInput?: TypeRef;
+    /** Independent of the mutually exclusive field-presence flags. */
     readonly constructorDefault?: true;
   }
   | {
@@ -1374,16 +1375,16 @@ export class TypeTable {
         return `Codec<${this.show(node.decoded)}, ${this.show(node.encoded)}>`;
       case "schema":
         return `${
-          node.constructorDefault === true
-            ? "SchemaConstructorDefault"
-            : node.optionalKey === true
+          node.optionalKey === true
             ? "SchemaOptional"
             : node.encodedOptionalKey === true
             ? "SchemaEncodedOptional"
             : node.decodedOptionalKey === true
             ? "SchemaDecodedOptional"
             : "Schema"
-        }<${this.show(node.decoded)}, ${this.show(node.encoded)}, ${
+        }${node.constructorDefault === true ? "ConstructorDefault" : ""}<${
+          this.show(node.decoded)
+        }, ${this.show(node.encoded)}, ${
           node.decodeRequirements.map(idName).join(" | ") || "never"
         }, ${node.encodeRequirements.map(idName).join(" | ") || "never"}${
           node.makeInput === undefined ? "" : `, ${this.show(node.makeInput)}`

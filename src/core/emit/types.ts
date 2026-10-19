@@ -194,16 +194,24 @@ export function typeDoc(scope: Scope, type: Type): Doc {
       ];
     }
     case "schema":
-      if (type.makeInput !== undefined || type.constructorDefault === true) {
-        const { makeInput, constructorDefault, ...base } = type;
+      if (type.constructorDefault === true) {
+        const { constructorDefault: _constructorDefault, ...base } = type;
+        const schema = scope.effect("Schema");
+        return [
+          `${schema}.withConstructorDefault<(`,
+          typeDoc(scope, base),
+          ' & { readonly "~type.make.in": ',
+          typeDoc(scope, type.makeInput ?? type.decoded),
+          ` } & ${schema}.WithoutConstructorDefault)>`,
+        ];
+      }
+      if (type.makeInput !== undefined) {
+        const { makeInput, ...base } = type;
         return [
           "(",
           typeDoc(scope, base),
           ' & { readonly "~type.make.in": ',
           typeDoc(scope, makeInput ?? type.decoded),
-          ...(constructorDefault === true
-            ? ['; readonly "~type.constructor.default": "with-default"']
-            : []),
           " })",
         ];
       }

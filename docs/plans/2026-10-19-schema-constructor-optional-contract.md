@@ -64,7 +64,8 @@ strategies and confirms Option's complete-data constructor behavior.
 The [recursive extension](2026-10-19-schema-constructor-recursive-contract.md)
 now adds guarded make-input propagation; the
 [wire extension](2026-10-19-schema-recursive-wire-contract.md) permits distinct
-recursive D/E. Constructor defaults on field descriptors are next. Attaching a constructor default
-directly to an optional descriptor, constructor options, and arbitrary Schema AST
-access remain outside this slice. Broader package interoperability, item 9,
+recursive D/E. The [field-default extension](2026-10-19-schema-constructor-fields-contract.md)
+now decorates existing field descriptors. Applying adapters after constructor
+defaults is next; constructor options and arbitrary Schema AST access remain
+outside this slice. Broader package interoperability, item 9,
 stays deferred by user instruction.

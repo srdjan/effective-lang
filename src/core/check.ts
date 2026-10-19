@@ -728,16 +728,15 @@ export class TypeLowerer {
       : this.lower(typeNodes[0]);
     if (kindOf(this.tree, node) === SyntaxKind.SchemaType) {
       const optionalKey = nodeText(this.tree, node).startsWith(
-        "SchemaOptional<",
+        "SchemaOptional",
       );
       const encodedOptionalKey = nodeText(this.tree, node).startsWith(
-        "SchemaEncodedOptional<",
+        "SchemaEncodedOptional",
       );
-      const constructorDefault = nodeText(this.tree, node).startsWith(
-        "SchemaConstructorDefault",
-      );
+      const constructorDefault = nodeText(this.tree, node).split("<", 1)[0]
+        .trim().endsWith("ConstructorDefault");
       const decodedOptionalKey = nodeText(this.tree, node).startsWith(
-        "SchemaDecodedOptional<",
+        "SchemaDecodedOptional",
       );
       const encoded = typeNodes[1] === undefined
         ? first

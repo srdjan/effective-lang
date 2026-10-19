@@ -55,6 +55,7 @@ export type Type =
   | { readonly kind: "closeable-scope" }
   | { readonly kind: "retry-schedule"; readonly error: Type }
   | { readonly kind: "codec"; readonly decoded: Type; readonly encoded: Type }
+  // Constructor defaults may coexist with one field-presence flag.
   | { readonly kind: "schema"; readonly decoded: Type; readonly encoded: Type; readonly decodeRequirements: readonly CapabilityId[]; readonly encodeRequirements: readonly CapabilityId[]; readonly optionalKey?: true; readonly encodedOptionalKey?: true; readonly decodedOptionalKey?: true; readonly makeInput?: Type; readonly constructorDefault?: true }
   | { readonly kind: "fiber"; readonly result: Type; readonly failures: readonly ErrorId[] }
   | { readonly kind: "effect"; readonly result: Type; readonly effects: Effects }

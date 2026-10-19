@@ -52,7 +52,6 @@ Deno.test("constructor metadata rejects erasure, duplicate defaults, services an
       "const erased: Schema<D> = child",
       "const forged: Schema<D, D, never, never, M> = schema()",
       "const bad = schemaConstructorDefault(schemaConstructorDefault(integer, (): Int => 4), (): Int => 5)",
-      "const bad = schemaConstructorDefault(schemaOptionalKey(integer), (): Int => 4)",
       "const bad = schemaMake(schemaConstructorDefault(integer, (): Int => 4), 4)",
       "const bad = schemaConstructorDefault(integer, (): M => ({}))",
       "const make = (): Int => 4\nconst bad = schemaConstructorDefault(integer, make)",

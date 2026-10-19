@@ -1000,6 +1000,15 @@ class Parser {
             this.isWordAt(this.pos, "SchemaEncodedOptional") ||
             this.isWordAt(this.pos, "SchemaDecodedOptional") ||
             this.isWordAt(this.pos, "SchemaConstructorDefault") ||
+            this.isWordAt(this.pos, "SchemaOptionalConstructorDefault") ||
+            this.isWordAt(
+              this.pos,
+              "SchemaEncodedOptionalConstructorDefault",
+            ) ||
+            this.isWordAt(
+              this.pos,
+              "SchemaDecodedOptionalConstructorDefault",
+            ) ||
             this.isWordAt(this.pos, "Layer")) &&
           this.kinds[this.pos + 1] === TokenKind.Lt
         ) {
@@ -1026,7 +1035,10 @@ class Parser {
             (name === "Schema" || name === "SchemaOptional" ||
               name === "SchemaEncodedOptional" ||
               name === "SchemaDecodedOptional" ||
-              name === "SchemaConstructorDefault") &&
+              name === "SchemaConstructorDefault" ||
+              name === "SchemaOptionalConstructorDefault" ||
+              name === "SchemaEncodedOptionalConstructorDefault" ||
+              name === "SchemaDecodedOptionalConstructorDefault") &&
             this.kind() === TokenKind.Comma
           ) {
             this.tok();
@@ -1036,7 +1048,10 @@ class Parser {
             (name === "Schema" || name === "SchemaOptional" ||
               name === "SchemaEncodedOptional" ||
               name === "SchemaDecodedOptional" ||
-              name === "SchemaConstructorDefault") &&
+              name === "SchemaConstructorDefault" ||
+              name === "SchemaOptionalConstructorDefault" ||
+              name === "SchemaEncodedOptionalConstructorDefault" ||
+              name === "SchemaDecodedOptionalConstructorDefault") &&
             this.kind() === TokenKind.Comma
           ) {
             this.tok();
@@ -1058,6 +1073,9 @@ class Parser {
             name !== "SchemaEncodedOptional" &&
             name !== "SchemaDecodedOptional" &&
             name !== "SchemaConstructorDefault" &&
+            name !== "SchemaOptionalConstructorDefault" &&
+            name !== "SchemaEncodedOptionalConstructorDefault" &&
+            name !== "SchemaDecodedOptionalConstructorDefault" &&
             this.kind() === TokenKind.Comma
           ) {
             this.tok();
@@ -1086,7 +1104,10 @@ class Parser {
               : name === "Schema" || name === "SchemaOptional" ||
                   name === "SchemaEncodedOptional" ||
                   name === "SchemaDecodedOptional" ||
-                  name === "SchemaConstructorDefault"
+                  name === "SchemaConstructorDefault" ||
+                  name === "SchemaOptionalConstructorDefault" ||
+                  name === "SchemaEncodedOptionalConstructorDefault" ||
+                  name === "SchemaDecodedOptionalConstructorDefault"
               ? SyntaxKind.SchemaType
               : name === "Layer"
               ? SyntaxKind.LayerType

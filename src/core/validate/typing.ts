@@ -452,16 +452,16 @@ export function show(type: Type): string {
       return `Codec<${show(type.decoded)}, ${show(type.encoded)}>`;
     case "schema":
       return `${
-        type.constructorDefault === true
-          ? "SchemaConstructorDefault"
-          : type.optionalKey === true
+        type.optionalKey === true
           ? "SchemaOptional"
           : type.encodedOptionalKey === true
           ? "SchemaEncodedOptional"
           : type.decodedOptionalKey === true
           ? "SchemaDecodedOptional"
           : "Schema"
-      }<${show(type.decoded)}, ${show(type.encoded)}>`;
+      }${type.constructorDefault === true ? "ConstructorDefault" : ""}<${
+        show(type.decoded)
+      }, ${show(type.encoded)}>`;
     case "fiber":
       return `Fiber<${show(type.result)}, ${
         type.failures.join(" | ") || "never"

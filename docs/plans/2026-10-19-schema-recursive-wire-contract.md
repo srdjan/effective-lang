@@ -70,8 +70,9 @@ directions. Boundaries reject erased or forged encoded types, incorrect self
 signatures, wrong nested wire or make data, forged service directions, and
 attempts to use identity derivation for distinct D/E.
 
-Constructor-default composition with field descriptors is the next
-investigation. Mutual recursion, transformed recursive discriminators,
+The [field-default extension](2026-10-19-schema-constructor-fields-contract.md)
+now decorates existing descriptors. Applying field adapters after constructor
+defaults is the next investigation. Mutual recursion, transformed recursive discriminators,
 arbitrary self-bearing adapters, constructor options, and arbitrary AST access
 remain outside this slice. Broader package interoperability, item 9, stays
 deferred by user instruction.

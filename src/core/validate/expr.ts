@@ -1706,9 +1706,10 @@ export class BodyValidator {
     );
     const schemaOf = (type: Type) => {
       const found = unfold(this.env, type);
-      return found.kind === "schema" && found.optionalKey !== true &&
-          found.encodedOptionalKey !== true &&
-          found.decodedOptionalKey !== true &&
+      return found.kind === "schema" &&
+          (e.op === "constructor-default" || (found.optionalKey !== true &&
+            found.encodedOptionalKey !== true &&
+            found.decodedOptionalKey !== true)) &&
           found.constructorDefault !== true &&
           (found.makeInput === undefined ||
             same(this.env, found.makeInput, found.decoded) ||
