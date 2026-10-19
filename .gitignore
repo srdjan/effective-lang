@@ -10,3 +10,4 @@ fixtures/**/*.ts.map
 editors/vscode/node_modules/
 playground/dist/
 .playwright-mcp/
+docs/plans/
