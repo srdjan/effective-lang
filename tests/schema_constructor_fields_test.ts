@@ -6,6 +6,13 @@ import {
   validateProject,
 } from "../src/core/mod.ts";
 import { validateModule } from "../src/core/validate/index.ts";
+import {
+  assertRejected,
+  assertValidation,
+  type Case,
+  declarationPath,
+  PURE_CONSTANT,
+} from "./schema_diagnostics.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-constructor-fields.eff", import.meta.url),
@@ -34,27 +41,110 @@ Deno.test("constructor field descriptors preserve presence, defaults and make in
 });
 
 Deno.test("constructor field defaults reject erased flags, duplicate defaults and further adapters", () => {
-  for (
-    const declaration of [
+  const callback =
+    "schemaConstructorDefault needs an inline make-input callback with no services and only SchemaIssue failure";
+  const cases: readonly Case[] = [
+    [
       "const bad: SchemaOptional<D, E, Read.parse, Write.print, M> = optionalField",
+      [
+        "type-mismatch/003",
+        "has type SchemaOptionalConstructorDefault<",
+        "optionalField",
+      ],
+    ],
+    [
       "const bad: SchemaConstructorDefault<D, E, Read.parse, Write.print, M> = optionalField",
+      [
+        "type-mismatch/003",
+        "has type SchemaOptionalConstructorDefault<",
+        "optionalField",
+      ],
+    ],
+    [
       "const bad: SchemaEncodedOptionalConstructorDefault<D, E, Read.parse, Write.print, M> = optionalField",
+      [
+        "type-mismatch/003",
+        "has type SchemaOptionalConstructorDefault<",
+        "optionalField",
+      ],
+    ],
+    [
       "const bad = schemaConstructorDefault(optionalField, (): M => ({}))",
+      [
+        "type-mismatch/010",
+        "`schemaConstructorDefault` needs a Schema value",
+        "optionalField",
+      ],
+    ],
+    [
       "const bad = schemaArray(optionalField)",
+      [
+        "type-mismatch/010",
+        "`schemaArray` needs a Schema value",
+        "optionalField",
+      ],
+    ],
+    [
       "const bad = schemaMake(optionalField, {})",
+      ["execution-mode/002", PURE_CONSTANT, "schemaMake(optionalField, {})"],
+      [
+        "type-mismatch/010",
+        "`schemaMake` needs a Schema value",
+        "optionalField",
+      ],
+    ],
+    [
       "const bad = schemaDecode(optionalField, {})",
+      ["execution-mode/002", PURE_CONSTANT, "schemaDecode(optionalField, {})"],
+      [
+        "type-mismatch/010",
+        "`schemaDecode` needs a Schema value",
+        "optionalField",
+      ],
+    ],
+    [
       "const bad = schemaEncode(optionalField, { score: 4 })",
+      [
+        "execution-mode/002",
+        PURE_CONSTANT,
+        "schemaEncode(optionalField, { score: 4 })",
+      ],
+      [
+        "type-mismatch/010",
+        "`schemaEncode` needs a Schema value",
+        "optionalField",
+      ],
+    ],
+    [
       "const bad = schemaOptionalKey(decodedField)",
+      [
+        "type-mismatch/010",
+        "`schemaOptionalKey` needs a Schema value",
+        "decodedField",
+      ],
+    ],
+    [
       "const bad = schemaDefaultKey(optionalField, (): D => ({ score: 4 }))",
+      [
+        "type-mismatch/010",
+        "`schemaDefaultKey` needs a Schema value",
+        "optionalField",
+      ],
+    ],
+    [
       "const bad = schemaConstructorDefault(schemaOptionFromOptionalKey(child), (): Option<M> => Some({}))",
+      ["type-mismatch/010", callback, "(): Option<M> => Some({})"],
+    ],
+    [
       "service Extra { next(): M }\nconst bad = schemaConstructorDefault(schemaOptionalKey(child), (): M uses Extra.next => Extra.next())",
-    ]
-  ) {
-    assert(
-      checked(fixture + "\n" + declaration).diagnostics.length > 0,
-      declaration,
-    );
-  }
+      ["type-mismatch/010", callback, "(): M uses Extra.next => Extra.next()"],
+    ],
+  ];
+  assertRejected(
+    cases,
+    (declaration) => fixture + "\n" + declaration,
+    (source) => checked(source).diagnostics,
+  );
 });
 
 Deno.test("independent validation accepts one presence flag plus a default and rejects forged combinations", () => {
@@ -63,7 +153,28 @@ Deno.test("independent validation accepts one presence flag plus a default and r
   const result = [...lowerProject(project).values()][0];
   assert(result.ok);
   for (
-    const mutation of ["default", "presence", "multiple-presence", "make-input"]
+    const [mutation, code, fragment] of [
+      [
+        "default",
+        "validation/002",
+        "expected SchemaOptionalConstructorDefault<",
+      ],
+      [
+        "presence",
+        "validation/002",
+        "expected SchemaOptionalConstructorDefault<",
+      ],
+      [
+        "multiple-presence",
+        "validation/001",
+        "optionality flags are mutually exclusive",
+      ],
+      [
+        "make-input",
+        "validation/002",
+        "expected SchemaOptionalConstructorDefault<",
+      ],
+    ] as const
   ) {
     const forged = structuredClone(result.value);
     const field = forged.declarations.find((d) =>
@@ -82,8 +193,11 @@ Deno.test("independent validation accepts one presence flag plus a default and r
     } else {Object.assign(field.value.type, {
         makeInput: field.value.type.decoded,
       });}
-    assert(
-      validateModule(forged, new Map([["main.eff", fixture]])).length > 0,
+    assertValidation(
+      validateModule(forged, new Map([["main.eff", fixture]])),
+      code,
+      `${declarationPath(forged, "optionalField")}.value.type`,
+      fragment,
       mutation,
     );
   }

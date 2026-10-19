@@ -6,6 +6,13 @@ import {
   validateProject,
 } from "../src/core/mod.ts";
 import { validateModule } from "../src/core/validate/index.ts";
+import {
+  assertRejected,
+  assertValidation,
+  type Case,
+  declarationPath,
+  PURE_CONSTANT,
+} from "./schema_diagnostics.ts";
 
 const prefix = `type Int = int
 type D = { score: Int }
@@ -47,19 +54,81 @@ const shadow = (): Int => { const schemaConstructorDefault = (): Int => 4; schem
 });
 
 Deno.test("constructor metadata rejects erasure, duplicate defaults, services and unsupported adapters", () => {
-  for (
-    const declaration of [
+  const callback =
+    "schemaConstructorDefault needs an inline make-input callback with no services and only SchemaIssue failure";
+  const cases: readonly Case[] = [
+    [
       "const erased: Schema<D> = child",
+      [
+        "type-mismatch/003",
+        "has type Schema<D, D, never, never, M>, but Schema<D, D, never, never> is expected",
+        "child",
+      ],
+    ],
+    [
       "const forged: Schema<D, D, never, never, M> = schema()",
+      [
+        "type-mismatch/010",
+        "schema does not yet preserve constructor make-input metadata",
+        "schema()",
+      ],
+    ],
+    [
       "const bad = schemaConstructorDefault(schemaConstructorDefault(integer, (): Int => 4), (): Int => 5)",
+      [
+        "type-mismatch/010",
+        "`schemaConstructorDefault` needs a Schema value",
+        "schemaConstructorDefault(integer, (): Int => 4)",
+      ],
+    ],
+    [
       "const bad = schemaMake(schemaConstructorDefault(integer, (): Int => 4), 4)",
+      [
+        "execution-mode/002",
+        PURE_CONSTANT,
+        "schemaMake(schemaConstructorDefault(integer, (): Int => 4), 4)",
+      ],
+      [
+        "type-mismatch/010",
+        "`schemaMake` needs a Schema value",
+        "schemaConstructorDefault(integer, (): Int => 4)",
+      ],
+    ],
+    [
       "const bad = schemaConstructorDefault(integer, (): M => ({}))",
+      ["type-mismatch/010", callback, "(): M => ({})"],
+    ],
+    [
       "const make = (): Int => 4\nconst bad = schemaConstructorDefault(integer, make)",
+      ["type-mismatch/010", callback, "make"],
+    ],
+    [
       "service Default { next(): Int }\nconst bad = schemaConstructorDefault(integer, (): Int uses Default.next => Default.next())",
+      [
+        "type-mismatch/010",
+        callback,
+        "(): Int uses Default.next => Default.next()",
+      ],
+    ],
+    [
       "const bad = schemaConstructorDefault(integer, (): Int fails SchemaError => schemaDecode(integer, 4))",
+      [
+        "type-mismatch/010",
+        callback,
+        "(): Int fails SchemaError => schemaDecode(integer, 4)",
+      ],
+    ],
+    [
       "const bad = schemaEncode(child, {})",
-    ]
-  ) assert(checked(prefix + declaration).diagnostics.length > 0, declaration);
+      ["execution-mode/002", PURE_CONSTANT, "schemaEncode(child, {})"],
+      ["type-mismatch/005", "the record is missing the field `score`", "{}"],
+    ],
+  ];
+  assertRejected(
+    cases,
+    (declaration) => prefix + declaration,
+    (source) => checked(source).diagnostics,
+  );
 });
 
 Deno.test("independent validator rejects erased make input and forged constructor flags", () => {
@@ -68,7 +137,16 @@ Deno.test("independent validator rejects erased make input and forged constructo
   assertEquals(project.diagnostics, []);
   const result = [...lowerProject(project).values()][0];
   assert(result.ok);
-  for (const mutation of ["make-input", "flag"]) {
+  for (
+    const [mutation, path, fragment] of [
+      ["make-input", ".value.type", "expected Schema<"],
+      [
+        "flag",
+        ".value.arguments[0].fields[0].value.type",
+        "expected SchemaConstructorDefault<",
+      ],
+    ] as const
+  ) {
     const module = structuredClone(result.value);
     const child = module.declarations.find((d) =>
       d.kind === "constant" && d.name === "child"
@@ -86,8 +164,11 @@ Deno.test("independent validator rejects erased make input and forged constructo
       );
       Object.assign(fields.fields[0].value.type, { constructorDefault: false });
     }
-    assert(
-      validateModule(module, new Map([["main.eff", source]])).length > 0,
+    assertValidation(
+      validateModule(module, new Map([["main.eff", source]])),
+      "validation/002",
+      `${declarationPath(module, "child")}${path}`,
+      fragment,
       mutation,
     );
   }

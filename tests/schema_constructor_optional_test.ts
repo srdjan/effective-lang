@@ -6,6 +6,13 @@ import {
   validateProject,
 } from "../src/core/mod.ts";
 import { validateModule } from "../src/core/validate/index.ts";
+import {
+  assertRejected,
+  assertValidation,
+  type Case,
+  declarationPath,
+  PURE_CONSTANT,
+} from "./schema_diagnostics.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-constructor-optional.eff", import.meta.url),
@@ -35,26 +42,92 @@ Deno.test("optional adapters retain target make inputs and invariant field types
 });
 
 Deno.test("optional constructor inputs keep required keys, complete Options and decoded defaults", () => {
-  for (
-    const declaration of [
+  const cases: readonly Case[] = [
+    [
       "const bad: SchemaEncodedOptional<D, E, Read.parse | Defaults.next, Write.print> = decodedField",
+      ["type-mismatch/003", "has type SchemaEncodedOptional<", "decodedField"],
+    ],
+    [
       "const bad = schemaMake(decoded, {})",
+      ["execution-mode/002", PURE_CONSTANT, "schemaMake(decoded, {})"],
+      ["type-mismatch/005", "the record is missing the field `settings`", "{}"],
+    ],
+    [
       "const bad = schemaMake(encoded, {})",
+      ["execution-mode/002", PURE_CONSTANT, "schemaMake(encoded, {})"],
+      ["type-mismatch/005", "the record is missing the field `settings`", "{}"],
+    ],
+    [
       "const bad = schemaMake(nullDefault, {})",
+      ["execution-mode/002", PURE_CONSTANT, "schemaMake(nullDefault, {})"],
+      ["type-mismatch/005", "the record is missing the field `settings`", "{}"],
+    ],
+    [
       "const bad = schemaMake(nullMissing, { settings: null })",
+      [
+        "execution-mode/002",
+        PURE_CONSTANT,
+        "schemaMake(nullMissing, { settings: null })",
+      ],
+      [
+        "type-mismatch/003",
+        "the field `settings` has type null, but M is expected",
+        "null",
+      ],
+    ],
+    [
       'const bad = schemaMake(transformed, { settings: { label: "source" } })',
+      [
+        "execution-mode/002",
+        PURE_CONSTANT,
+        'schemaMake(transformed, { settings: { label: "source" } })',
+      ],
+      ["type-mismatch/005", "the record type M has no field `label`", "label"],
+    ],
+    [
       "const bad = schemaMake(optionRecord, { settings: Some({}) })",
+      [
+        "execution-mode/002",
+        PURE_CONSTANT,
+        "schemaMake(optionRecord, { settings: Some({}) })",
+      ],
+      ["type-mismatch/005", "the record is missing the field `score`", "{}"],
+    ],
+    [
       "const bad = schemaMake(optionRecord, {})",
+      ["execution-mode/002", PURE_CONSTANT, "schemaMake(optionRecord, {})"],
+      ["type-mismatch/005", "the record is missing the field `settings`", "{}"],
+    ],
+    [
       "const bad = schemaDefaultKey(child, (): M => ({}))",
+      [
+        "type-mismatch/003",
+        "schemaDefaultKey callback must return the decoded field type",
+        "(): M => ({})",
+      ],
+    ],
+    [
       "const bad = schemaDefaultNullKey(child, (): M => ({}))",
+      [
+        "type-mismatch/003",
+        "schemaDefaultNullKey callback must return the decoded field type",
+        "(): M => ({})",
+      ],
+    ],
+    [
       "const bad = schemaDefaultEncodedKey(child, (): M => ({}))",
-    ]
-  ) {
-    assert(
-      checked(fixture + "\n" + declaration).diagnostics.length > 0,
-      declaration,
-    );
-  }
+      [
+        "type-mismatch/003",
+        "schemaDefaultEncodedKey callback must return the encoded field type",
+        "(): M => ({})",
+      ],
+    ],
+  ];
+  assertRejected(
+    cases,
+    (declaration) => fixture + "\n" + declaration,
+    (source) => checked(source).diagnostics,
+  );
 });
 
 Deno.test("independent validation recomputes optional adapter make inputs", () => {
@@ -85,8 +158,11 @@ Deno.test("independent validation recomputes optional adapter make inputs", () =
         ? { kind: "option", element: { kind: "record", fields: [] } }
         : field.value.type.decoded,
     });
-    assert(
-      validateModule(forged, new Map([["main.eff", fixture]])).length > 0,
+    assertValidation(
+      validateModule(forged, new Map([["main.eff", fixture]])),
+      "validation/002",
+      `${declarationPath(forged, name)}.value.type`,
+      "expected ",
       name,
     );
   }

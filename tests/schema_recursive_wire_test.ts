@@ -6,6 +6,13 @@ import {
   validateProject,
 } from "../src/core/mod.ts";
 import { validateModule } from "../src/core/validate/index.ts";
+import {
+  assertDiagnostics,
+  assertValidation,
+  declarationPath,
+  type Expected,
+  PURE_CONSTANT,
+} from "./schema_diagnostics.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-recursive-wire.eff", import.meta.url),
@@ -34,28 +41,108 @@ Deno.test("recursive Schemas preserve independent D, E, M and wire services", ()
 });
 
 Deno.test("recursive wire types reject erased encoded axes and wrong nested data", () => {
-  for (
-    const source of [
+  const cases: readonly (readonly [string, readonly Expected[]])[] = [
+    [
       fixture +
       "\nconst bad: Schema<Tree, Tree, Read.parse, Write.print, TreeInput> = tree",
+      [[
+        "type-mismatch/003",
+        "has type Schema<Tree, WireTree, Read.parse, Write.print, TreeInput>, but Schema<Tree, Tree,",
+        "tree",
+      ]],
+    ],
+    [
       fixture.replace(
         "(self: Schema<Tree, WireTree, Read.parse, Write.print, TreeInput>)",
         "(self: Schema<Tree, Tree, Read.parse, Write.print, TreeInput>)",
       ),
+      [
+        [
+          "type-mismatch/003",
+          "parameter 1 of the callback has type Schema<Tree, Tree, Read.parse, Write.print, TreeInput>",
+        ],
+        [
+          "type-mismatch/003",
+          "the function body has type Schema<{ children: Tree[], score: Int }",
+        ],
+      ],
+    ],
+    [
       fixture.replace(
         "children: schemaConstructorDefault(schemaArray(self), (): TreeInput[] => [])",
         "children: schemaArray(schemaStruct({ score: text, children: schemaArray(self) }))",
       ),
+      [[
+        "type-mismatch/003",
+        "the function body has type Schema<{ children: { children: Tree[], score: Text }[], score: Int }",
+      ]],
+    ],
+    [
       fixture +
       '\nconst bad = schemaEncode(tree, { score: "4", children: [] })',
+      [
+        [
+          "execution-mode/002",
+          PURE_CONSTANT,
+          'schemaEncode(tree, { score: "4", children: [] })',
+        ],
+        [
+          "type-mismatch/003",
+          "the field `score` has type string, but Int is expected",
+          '"4"',
+        ],
+      ],
+    ],
+    [
       fixture +
       '\nconst bad = schemaMake(tree, { children: [{ score: "4" }] })',
+      [
+        [
+          "execution-mode/002",
+          PURE_CONSTANT,
+          'schemaMake(tree, { children: [{ score: "4" }] })',
+        ],
+        [
+          "type-mismatch/003",
+          "the field `score` has type string, but Int is expected",
+          '"4"',
+        ],
+      ],
+    ],
+    [
       fixture +
       '\nconst bad: WireTree = { score: "1", children: [{ score: 2, children: [] }] }',
+      [[
+        "type-mismatch/003",
+        "the field `score` has type int, but Text is expected",
+        "2",
+      ]],
+    ],
+    [
       fixture + "\nconst bad: Schema<Tree, WireTree> = schema()",
+      [[
+        "type-mismatch/003",
+        "`schema()` needs an identity Schema with no services",
+        "schema()",
+      ]],
+    ],
+    [
       fixture + "\ntype InvalidWire = { next: InvalidWire }",
-    ]
-  ) assert(checked(source).diagnostics.length > 0, source);
+      [[
+        "declaration/007",
+        "the type `InvalidWire` is defined in terms of itself",
+        "InvalidWire",
+      ]],
+    ],
+  ];
+  for (const [source, expected] of cases) {
+    assertDiagnostics(
+      source,
+      checked(source).diagnostics,
+      expected,
+      source.slice(-80),
+    );
+  }
 });
 
 Deno.test("independent validation rejects forged recursive wire signatures and channels", () => {
@@ -63,7 +150,14 @@ Deno.test("independent validation rejects forged recursive wire signatures and c
   assertEquals(project.diagnostics, []);
   const result = [...lowerProject(project).values()][0];
   assert(result.ok);
-  for (const mutation of ["encoded", "self", "services", "identity"]) {
+  for (
+    const [mutation, path, fragment] of [
+      ["encoded", ".value", "schemaRecursive needs a pure body"],
+      ["self", ".value.arguments[0].type.parameters[0]", "expected Schema<"],
+      ["services", ".value", "schemaRecursive needs a pure body"],
+      ["identity", ".value", "schema() needs an identity data Schema"],
+    ] as const
+  ) {
     const forged = structuredClone(result.value);
     const tree = forged.declarations.find((d) =>
       d.kind === "constant" && d.name === "tree"
@@ -99,8 +193,11 @@ Deno.test("independent validation rejects forged recursive wire signatures and c
         encoded: callback.parameters[0].type.decoded,
       });
     }
-    assert(
-      validateModule(forged, new Map([["main.eff", fixture]])).length > 0,
+    assertValidation(
+      validateModule(forged, new Map([["main.eff", fixture]])),
+      "validation/002",
+      `${declarationPath(forged, "tree")}${path}`,
+      fragment,
       mutation,
     );
   }

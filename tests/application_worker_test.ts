@@ -5,6 +5,7 @@ import {
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
+import { assertDiagnostics, type Expected } from "./schema_diagnostics.ts";
 
 const base = new URL(
   "../fixtures/applications/scheduled-worker/",
@@ -39,22 +40,47 @@ Deno.test("scheduled worker composes retry, repetition and resource lifetimes in
 });
 
 Deno.test("scheduled worker contracts reject lost channels and preserve the general Schedule boundary", () => {
-  for (
-    const source of [
+  const cases: readonly (readonly [string, readonly Expected[]])[] = [
+    [
       files["worker.eff"].replace(
         "fails SchemaError | InvalidPolicy | JobFailure",
         "fails SchemaError | InvalidPolicy",
       ),
+      [[
+        "failure-contract/001",
+        "the body can fail with JobFailure, which the `fails` clause does not list",
+      ]],
+    ],
+    [
       files["worker.eff"].replace(
         "uses Jobs.open | Jobs.execute | Jobs.close | Clock.wait => {",
         "uses Jobs.open | Jobs.execute | Jobs.close => {",
       ),
+      [[
+        "requirement-contract/001",
+        "the body requires Clock.wait, which the `uses` clause does not list",
+      ]],
+    ],
+    [
       files["worker.eff"].replace(
         "(input: unknown): Report",
         "(input: unknown): Int",
       ),
-    ]
-  ) assert(checked(source).diagnostics.length > 0, source);
+      [[
+        "type-mismatch/003",
+        "the branch has type Report, but Int is expected",
+        "{ cycle(policy, 0, None) }",
+      ]],
+    ],
+  ];
+  for (const [source, expected] of cases) {
+    assertDiagnostics(
+      source,
+      checked(source).diagnostics,
+      expected,
+      source.slice(0, 40),
+    );
+  }
   const probe = checked(
     files["worker.eff"] + `
 const opaque: Schedule<Int, JobFailure> = scheduleRecurs(2)

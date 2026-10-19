@@ -29,9 +29,16 @@ const bad: Schema<Node,OtherWire,Read.parse,Write.print,NodeInput> = node`,
     ["imported.eff"],
   );
   assert(incompatible.ok);
+  // The imported recursive alias keeps its identity: the other wire type fails.
+  const [mismatch, ...others] = incompatible.value.diagnostics;
+  assertEquals(others, []);
+  assertEquals(mismatch?.code, "type-mismatch/003");
+  assertEquals(mismatch?.span.source, "imported.eff");
   assert(
-    incompatible.value.diagnostics.length > 0,
-    "imported recursive aliases lost their identity",
+    mismatch?.message.includes(
+      "but Schema<Node, OtherWire, Read.parse, Write.print, NodeInput> is expected",
+    ),
+    mismatch?.message,
   );
   const project = checkProject(
     memoryHost({

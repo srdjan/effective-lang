@@ -6,6 +6,13 @@ import {
   validateProject,
 } from "../src/core/mod.ts";
 import { validateModule } from "../src/core/validate/index.ts";
+import {
+  assertRejected,
+  assertValidation,
+  type Case,
+  declarationPath,
+  PURE_CONSTANT,
+} from "./schema_diagnostics.ts";
 
 const prefix = `type Text = string
 type Int = int
@@ -49,20 +56,101 @@ const shadow = (): Text => { const schemaDefaultEncodedKey = (): Text => "local"
 });
 
 Deno.test("encoded defaults reject decoded callbacks and invalid construction boundaries", () => {
-  for (
-    const declaration of [
+  const cases: readonly Case[] = [
+    [
       "const bad = schemaDefaultEncodedKey(converted, (): Int => 1)",
+      [
+        "type-mismatch/003",
+        "schemaDefaultEncodedKey callback must return the encoded field type",
+        "(): Int => 1",
+      ],
+    ],
+    [
       'const bad = schemaDefaultEncodedKey(schemaOptionalKey(text), (): Text => "1")',
+      [
+        "type-mismatch/010",
+        "`schemaDefaultEncodedKey` needs a Schema value",
+        "schemaOptionalKey(text)",
+      ],
+    ],
+    [
       'const make = (): Text => "1"\nconst bad = schemaDefaultEncodedKey(converted, make)',
+      [
+        "type-mismatch/010",
+        "schemaDefaultEncodedKey needs an inline default callback",
+        "make",
+      ],
+    ],
+    [
       "const bad = schemaDefaultEncodedKey(converted, (value: Text): Text => value)",
+      [
+        "type-mismatch/004",
+        "the callback of `schemaDefaultEncodedKey` takes 0 parameters, but the function takes 1",
+        "(value: Text): Text => value",
+      ],
+    ],
+    [
       'const bad = schemaDefaultEncodedKey(converted, (): Text => "1", { encodingStrategy: "other" })',
+      [
+        "type-mismatch/010",
+        'schemaDefaultEncodedKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record',
+        '{ encodingStrategy: "other" }',
+      ],
+      [
+        "type-mismatch/003",
+        "the field `encodingStrategy` has type string",
+        '"other"',
+      ],
+    ],
+    [
       'const policy = { encodingStrategy: "omit" }\nconst bad = schemaDefaultEncodedKey(converted, (): Text => "1", policy)',
+      [
+        "type-mismatch/010",
+        'schemaDefaultEncodedKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record',
+        "policy",
+      ],
+    ],
+    [
       'const bad = schemaDefaultEncodedKey(converted, (): Text => "1", { encodingStrategy: "omit", extra: true })',
+      [
+        "type-mismatch/010",
+        'schemaDefaultEncodedKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record',
+        '{ encodingStrategy: "omit", extra: true }',
+      ],
+      ["type-mismatch/005", "has no field `extra`", "extra"],
+    ],
+    [
       "const bad = schemaDefaultEncodedKey",
+      [
+        "unknown-name/004",
+        "can only be called or used as a pipeline stage",
+        "schemaDefaultEncodedKey",
+      ],
+    ],
+    [
       'const bad = schemaDecode(schemaDefaultEncodedKey(converted, (): Text => "1"), {})',
+      [
+        "execution-mode/002",
+        PURE_CONSTANT,
+        'schemaDecode(schemaDefaultEncodedKey(converted, (): Text => "1"), {})',
+      ],
+      [
+        "type-mismatch/010",
+        "`schemaDecode` needs a Schema value",
+        'schemaDefaultEncodedKey(converted, (): Text => "1")',
+      ],
+    ],
+    [
       'const s: Schema<Decoded, Encoded> = schemaStruct({ score: schemaDefaultEncodedKey(converted, (): Text => "1") })\nconst bad = schemaEncode(s, {})',
-    ]
-  ) assert(checked(prefix + declaration).diagnostics.length > 0, declaration);
+      ["execution-mode/002", PURE_CONSTANT, "schemaEncode(s, {})"],
+      ["type-mismatch/005", "the record is missing the field `score`", "{}"],
+    ],
+  ];
+  assertRejected(
+    cases,
+    (declaration) => prefix + declaration,
+    (source) => checked(source).diagnostics,
+  );
 });
 
 Deno.test("encoded default callbacks may fail only with SchemaIssue or SchemaError", () => {
@@ -110,7 +198,17 @@ Deno.test("validator distinguishes encoded defaults from decoded defaults and ch
   assertEquals(project.diagnostics, []);
   const result = [...lowerProject(project).values()][0];
   assert(result.ok);
-  for (const mutation of ["operation", "options", "optional"]) {
+  for (
+    const [mutation, path, fragment] of [
+      [
+        "operation",
+        ".value",
+        "schemaDefaultKey needs a callback returning the decoded field type",
+      ],
+      ["options", ".value", "schemaDefaultEncodedKey options need one literal"],
+      ["optional", ".value.type", "expected SchemaEncodedOptional<"],
+    ] as const
+  ) {
     const module = structuredClone(result.value);
     const field = module.declarations.find((d) =>
       d.kind === "constant" && d.name === "field"
@@ -128,8 +226,11 @@ Deno.test("validator distinguishes encoded defaults from decoded defaults and ch
         type: { kind: "literal", value: "other" },
       });
     }
-    assert(
-      validateModule(module, new Map([["main.eff", source]])).length > 0,
+    assertValidation(
+      validateModule(module, new Map([["main.eff", source]])),
+      "validation/002",
+      `${declarationPath(module, "field")}${path}`,
+      fragment,
       mutation,
     );
   }

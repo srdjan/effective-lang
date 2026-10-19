@@ -6,6 +6,12 @@ import {
   validateProject,
 } from "../src/core/mod.ts";
 import { validateModule } from "../src/core/validate/index.ts";
+import {
+  assertRejected,
+  assertValidation,
+  type Case,
+  declarationPath,
+} from "./schema_diagnostics.ts";
 
 const prefix = `type Text = string
 type Int = int
@@ -50,19 +56,83 @@ const shadow = (): Int => { const schemaMake = (): Int => 4; schemaMake() }
 });
 
 Deno.test("type-side construction rejects encoded or partial inputs, descriptors and wrong failures", () => {
-  for (
-    const declaration of [
+  const missingIssue =
+    "the body can fail with error:effect/SchemaIssue, which the `fails` clause does not list";
+  const cases: readonly Case[] = [
+    [
       'const bad = (): D fails SchemaIssue => schemaMake(record, { score: "4" })',
+      [
+        "type-mismatch/003",
+        "the field `score` has type string, but Int is expected",
+        '"4"',
+      ],
+    ],
+    [
       "const bad = (): D fails SchemaIssue => schemaMake(record, {})",
+      ["type-mismatch/005", "the record is missing the field `score`", "{}"],
+    ],
+    [
       "const bad = (): D fails SchemaError => schemaMake(record, { score: 4 })",
+      [
+        "failure-contract/001",
+        missingIssue,
+        "schemaMake(record, { score: 4 })",
+      ],
+    ],
+    [
       "const bad = (): D => schemaMake(record, { score: 4 })",
+      [
+        "failure-contract/001",
+        missingIssue,
+        "schemaMake(record, { score: 4 })",
+      ],
+    ],
+    [
       "const bad = (input: unknown): D fails SchemaIssue => schemaMake(record, input)",
+      [
+        "type-mismatch/003",
+        "the schema make input has type unknown, but D is expected",
+        "input",
+      ],
+    ],
+    [
       "const bad = (): Int fails SchemaIssue => schemaMake(schemaOptionalKey(integer), 4)",
+      [
+        "type-mismatch/010",
+        "`schemaMake` needs a Schema value",
+        "schemaOptionalKey(integer)",
+      ],
+    ],
+    [
       "const bad = (): Int fails SchemaIssue => schemaMake(schemaDefaultKey(integer, (): Int => 4), 4)",
+      [
+        "type-mismatch/010",
+        "`schemaMake` needs a Schema value",
+        "schemaDefaultKey(integer, (): Int => 4)",
+      ],
+    ],
+    [
       "const bad = schemaMake",
+      [
+        "unknown-name/004",
+        "can only be called or used as a pipeline stage",
+        "schemaMake",
+      ],
+    ],
+    [
       "const bad = (): D fails SchemaIssue => schemaMake(record)",
-    ]
-  ) assert(checked(prefix + declaration).diagnostics.length > 0, declaration);
+      [
+        "type-mismatch/004",
+        "`schemaMake` takes 2 arguments, but 1 is given",
+        "schemaMake(record)",
+      ],
+    ],
+  ];
+  assertRejected(
+    cases,
+    (declaration) => prefix + declaration,
+    (source) => checked(source).diagnostics,
+  );
 });
 
 Deno.test("independent validation recomputes constructor input and failure channels", () => {
@@ -72,7 +142,21 @@ Deno.test("independent validation recomputes constructor input and failure chann
   assertEquals(project.diagnostics, []);
   const result = [...lowerProject(project).values()][0];
   assert(result.ok);
-  for (const mutation of ["runner", "input", "failure"]) {
+  for (
+    const [mutation, path, fragment] of [
+      [
+        "runner",
+        ".body.effects.failures",
+        "expected [error:effect/SchemaError]",
+      ],
+      ["input", ".body.input", "schemaMake input does not fit decoded type"],
+      [
+        "failure",
+        ".body.effects.failures",
+        "expected [error:effect/SchemaIssue], recorded []",
+      ],
+    ] as const
+  ) {
     const module = structuredClone(result.value);
     const declaration = module.declarations.find((d) =>
       d.kind === "function" && d.name === "make"
@@ -93,8 +177,11 @@ Deno.test("independent validation recomputes constructor input and failure chann
         },
       });
     } else Object.assign(declaration.body.effects, { failures: [] });
-    assert(
-      validateModule(module, new Map([["main.eff", source]])).length > 0,
+    assertValidation(
+      validateModule(module, new Map([["main.eff", source]])),
+      mutation === "input" ? "validation/002" : "validation/003",
+      `${declarationPath(module, "make")}${path}`,
+      fragment,
       mutation,
     );
   }

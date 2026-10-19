@@ -5,6 +5,13 @@ import {
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
+import {
+  assertRejected,
+  assertValidation,
+  type Case,
+  declarationPath,
+  PURE_CONSTANT,
+} from "./schema_diagnostics.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-constructor-order.eff", import.meta.url),
@@ -40,25 +47,84 @@ Deno.test("field adapter order preserves unary defaults, selects target defaults
 });
 
 Deno.test("adapter order rejects false flags, duplicate defaults and incompatible input presence", () => {
-  for (
-    const declaration of [
+  const cases: readonly Case[] = [
+    [
       "const bad: SchemaOptional<D,E,Read.parse,Write.print,M> = optionalAfter",
+      [
+        "type-mismatch/003",
+        "has type SchemaOptionalConstructorDefault<",
+        "optionalAfter",
+      ],
+    ],
+    [
       "const bad: SchemaOptionalConstructorDefault<D,Text,Read.parse,Write.print,M> = sourceBridge",
+      ["type-mismatch/003", "has type SchemaOptional<", "sourceBridge"],
+    ],
+    [
       "const bad: SchemaEncodedOptionalConstructorDefault<Option<D>,E,Read.parse,Write.print> = optionAfter",
+      ["type-mismatch/003", "has type SchemaEncodedOptional<", "optionAfter"],
+    ],
+    [
       "const bad = schemaConstructorDefault(optionalAfter, (): M => ({}))",
+      [
+        "type-mismatch/010",
+        "`schemaConstructorDefault` needs a Schema value",
+        "optionalAfter",
+      ],
+    ],
+    [
       "const bad = schemaOptionalKey(decodedAfter)",
+      [
+        "type-mismatch/010",
+        "`schemaOptionalKey` needs a Schema value",
+        "decodedAfter",
+      ],
+    ],
+    [
       "const bad = schemaDefaultKey(optionalAfter, (): D => ({ score: 4 }))",
+      [
+        "type-mismatch/010",
+        "`schemaDefaultKey` needs a Schema value",
+        "optionalAfter",
+      ],
+    ],
+    [
       "const bad = schemaArray(sourceDefault)",
+      [
+        "type-mismatch/010",
+        "`schemaArray` needs a Schema value",
+        "sourceDefault",
+      ],
+    ],
+    [
       "const bad = schemaMake(sourceDefault, {})",
+      ["execution-mode/002", PURE_CONSTANT, "schemaMake(sourceDefault, {})"],
+      [
+        "type-mismatch/010",
+        "`schemaMake` needs a Schema value",
+        "sourceDefault",
+      ],
+    ],
+    [
       "const bad = schemaMake(optionRecord, {})",
+      ["execution-mode/002", PURE_CONSTANT, "schemaMake(optionRecord, {})"],
+      ["type-mismatch/005", "the record is missing the field `settings`", "{}"],
+    ],
+    [
       "const bad = schemaMake(optionRecord, { settings: Some({}) })",
-    ]
-  ) {
-    assert(
-      checked(fixture + "\n" + declaration).diagnostics.length > 0,
-      declaration,
-    );
-  }
+      [
+        "execution-mode/002",
+        PURE_CONSTANT,
+        "schemaMake(optionRecord, { settings: Some({}) })",
+      ],
+      ["type-mismatch/005", "the record is missing the field `score`", "{}"],
+    ],
+  ];
+  assertRejected(
+    cases,
+    (declaration) => fixture + "\n" + declaration,
+    (source) => checked(source).diagnostics,
+  );
 });
 
 Deno.test("independent validation recomputes retained, target and reset constructor flags", () => {
@@ -95,9 +161,11 @@ Deno.test("independent validation recomputes retained, target and reset construc
     });
     const changed = new Map(lowered);
     changed.set("main", { ok: true, value: forged });
-    assert(
-      [...validateProject(project.analysis.project, changed).values()].flat()
-        .length > 0,
+    assertValidation(
+      [...validateProject(project.analysis.project, changed).values()].flat(),
+      "validation/002",
+      `${declarationPath(forged, name)}.value.type`,
+      "expected ",
       name,
     );
   }

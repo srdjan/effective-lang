@@ -6,6 +6,11 @@ import {
   validateProject,
 } from "../src/core/mod.ts";
 import { validateModule } from "../src/core/validate/index.ts";
+import {
+  assertDiagnostics,
+  type Expected,
+  PURE_CONSTANT,
+} from "./schema_diagnostics.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-recursive-adapters.eff", import.meta.url),
@@ -37,52 +42,124 @@ Deno.test("recursive field adapters retain structural guards and independent D/E
 });
 
 Deno.test("recursive adapters reject callback captures and unsupported self paths", () => {
-  for (
-    const source of [
+  const selfGuard =
+    "recursive schema self must occur beneath an array, optional key, or tagged union with a terminal branch";
+  const guard: readonly Expected[] = [["type-mismatch/010", selfGuard]];
+  const cases: readonly (readonly [string, readonly Expected[]])[] = [
+    [
       fixture.replace(
         "=> Defaults.children()",
         "=> { const captured = self; Defaults.children() }",
       ),
+      guard,
+    ],
+    [
       fixture.replace(
         "=> run(pending)",
         "=> { const captured = self; run(pending) }",
       ),
+      guard,
+    ],
+    [
       fixture.replace(
         "(): WireTree[] => []",
         "(): WireTree[] => { const captured = self; [] }",
       ),
+      guard,
+    ],
+    [
       fixture.replace(
         "Option<OptionalTree[]> => value",
         "Option<OptionalTree[]> => { const captured = self; value }",
       ),
+      guard,
+    ],
+    [
       fixture.replace(
         "Option<RequiredTree[]> => Some([])",
         "Option<RequiredTree[]> => { const captured = self; Some([]) }",
       ),
+      guard,
+    ],
+    [
       fixture.replace(
         "OptionalTree[] => [])",
         "OptionalTree[] => { const captured = self; [] })",
       ),
+      guard,
+    ],
+    [
       fixture.replace(
         "schemaNullToMissingKey(self)",
         "schemaOptionalKey(schemaTransform(self, self, (value: Node): Option<WireNode> => None, (value: WireNode): Option<Node> => None))",
       ),
+      [
+        ["type-mismatch/010", selfGuard],
+        [
+          "type-mismatch/003",
+          "the function body has type Schema<{ next?: Node, score: Int }",
+        ],
+      ],
+    ],
+    [
       fixture + "\ntype Invalid = { next: Invalid | null }",
+      [[
+        "declaration/007",
+        "the type `Invalid` is defined in terms of itself",
+        "Invalid",
+      ]],
+    ],
+    [
       fixture + "\ntype Invalid = { next: Option<Invalid> }",
+      [[
+        "declaration/007",
+        "the type `Invalid` is defined in terms of itself",
+        "Invalid",
+      ]],
+    ],
+    [
       fixture +
       '\nconst bad = schemaMake(tree, { children: [{ score: "4" }] })',
+      [
+        [
+          "execution-mode/002",
+          PURE_CONSTANT,
+          'schemaMake(tree, { children: [{ score: "4" }] })',
+        ],
+        [
+          "type-mismatch/003",
+          "the field `score` has type string, but Int is expected",
+          '"4"',
+        ],
+      ],
+    ],
+    [
       fixture +
       "\nconst bad: Schema<Tree,Tree,Read.parse | Defaults.children,Write.print,Input> = tree",
-    ]
-  ) assert(checked(source).diagnostics.length > 0, source);
+      [[
+        "type-mismatch/003",
+        "has type Schema<Tree, WireTree, Defaults.children | Read.parse, Write.print, Input>",
+        "tree",
+      ]],
+    ],
+  ];
+  for (const [source, expected] of cases) {
+    assertDiagnostics(
+      source,
+      checked(source).diagnostics,
+      expected,
+      source.slice(-80),
+    );
+  }
   const shadowed = `type Node = { next?: Node }
 const schemaOptionalKey = (value: Schema<Node>): SchemaOptional<Node> => schemaOptionalKey(value)
 const bad: Schema<Node> = schemaRecursive((self: Schema<Node>): Schema<Node> =>
   schemaStruct({ next: schemaOptionalKey(self) }))`;
-  assert(
-    checked(shadowed).diagnostics.some((d) =>
-      d.message.includes("recursive schema self")
-    ),
+  assertDiagnostics(
+    shadowed,
+    checked(shadowed).diagnostics,
+    guard,
+    "shadowed schemaOptionalKey",
   );
 });
 

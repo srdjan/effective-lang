@@ -6,6 +6,13 @@ import {
   validateProject,
 } from "../src/core/mod.ts";
 import { validateModule } from "../src/core/validate/index.ts";
+import {
+  assertDiagnostics,
+  assertValidation,
+  declarationPath,
+  type Expected,
+  PURE_CONSTANT,
+} from "./schema_diagnostics.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-constructor-recursive.eff", import.meta.url),
@@ -43,31 +50,123 @@ const leafTransform: Schema<Tree, Tree, never, never, LeafInput> = schemaRecursi
 });
 
 Deno.test("recursive make input rejects erasure, wrong self types and callback captures", () => {
-  for (
-    const source of [
+  const callback =
+    "schemaConstructorDefault needs an inline make-input callback with no services and only SchemaIssue failure";
+  const selfGuard =
+    "recursive schema self must occur beneath an array, optional key, or tagged union with a terminal branch";
+  const cases: readonly (readonly [string, readonly Expected[]])[] = [
+    [
       fixture +
       "\nconst erased: Schema<Tree, Tree, Read.next, Write.previous> = tree",
+      [[
+        "type-mismatch/003",
+        "has type Schema<Tree, Tree, Read.next, Write.previous, TreeInput>",
+        "tree",
+      ]],
+    ],
+    [
       fixture +
       "\nconst bad: Schema<Tree, Tree, never, never, TreeInput> = schema()",
+      [[
+        "type-mismatch/010",
+        "schema does not yet preserve constructor make-input metadata",
+        "schema()",
+      ]],
+    ],
+    [
       fixture.replace(
         "(self: Schema<Tree, Tree, Read.next, Write.previous, TreeInput>)",
         "(self: Schema<Tree, Tree, Read.next, Write.previous>)",
       ),
+      [
+        [
+          "type-mismatch/003",
+          "parameter 1 of the callback has type Schema<Tree, Tree, Read.next, Write.previous>",
+        ],
+        [
+          "type-mismatch/003",
+          "the function body has type Schema<{ children: Tree[], score: Int }",
+        ],
+        ["type-mismatch/010", callback, "(): TreeInput[] => []"],
+      ],
+    ],
+    [
       fixture.replace("(): TreeInput[] => []", "(): Tree[] => []"),
+      [["type-mismatch/010", callback, "(): Tree[] => []"]],
+    ],
+    [
       fixture.replace(
         "schemaConstructorDefault(schemaArray(self), (): TreeInput[] => [])",
         "schemaConstructorDefault(self, (): TreeInput => ({}))",
       ),
+      [
+        ["type-mismatch/010", selfGuard],
+        [
+          "type-mismatch/003",
+          "the function body has type Schema<{ children: Tree, score: Int }",
+        ],
+      ],
+    ],
+    [
       fixture.replace(
         '(): ChoiceInput => ({ kind: "end" })',
         '(): ChoiceInput => { const captured = self; { kind: "end" } }',
       ),
+      [["type-mismatch/010", selfGuard]],
+    ],
+    [
       fixture + "\ntype LoopInput = { next: LoopInput }",
+      [[
+        "declaration/007",
+        "the type `LoopInput` is defined in terms of itself",
+        "LoopInput",
+      ]],
+    ],
+    [
       fixture +
       '\nconst bad = schemaMake(tree, { children: [{ score: "bad" }] })',
+      [
+        [
+          "execution-mode/002",
+          PURE_CONSTANT,
+          'schemaMake(tree, { children: [{ score: "bad" }] })',
+        ],
+        [
+          "type-mismatch/003",
+          "the field `score` has type string, but Int is expected",
+          '"bad"',
+        ],
+      ],
+    ],
+    [
       fixture + "\nconst bad = schemaEncode(tree, { children: [{}] })",
-    ]
-  ) assert(checked(source).diagnostics.length > 0, source);
+      [
+        [
+          "execution-mode/002",
+          PURE_CONSTANT,
+          "schemaEncode(tree, { children: [{}] })",
+        ],
+        [
+          "type-mismatch/005",
+          "the record is missing the field `score`",
+          "{ children: [{}] }",
+        ],
+        [
+          "type-mismatch/005",
+          "the record is missing the fields `children`, `score`",
+          "{}",
+        ],
+      ],
+    ],
+  ];
+  for (const [source, expected] of cases) {
+    assertDiagnostics(
+      source,
+      checked(source).diagnostics,
+      expected,
+      source.slice(-80),
+    );
+  }
 });
 
 Deno.test("independent validation rejects erased recursive M and default callback self capture", () => {
@@ -81,7 +180,13 @@ Deno.test("independent validation rejects erased recursive M and default callbac
   );
   assert(tree?.kind === "constant" && tree.value.type.kind === "schema");
   Object.assign(tree.value.type, { makeInput: tree.value.type.decoded });
-  assert(validateModule(erased, new Map([["main.eff", fixture]])).length > 0);
+  assertValidation(
+    validateModule(erased, new Map([["main.eff", fixture]])),
+    "validation/002",
+    `${declarationPath(erased, "tree")}.value`,
+    "schemaRecursive needs a pure body",
+    "erased recursive M",
+  );
 
   const captured = structuredClone(result.value);
   const choice = captured.declarations.find((d) =>

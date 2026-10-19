@@ -16,6 +16,27 @@ export type Expected = readonly [
   text?: string,
 ];
 
+/** One negative case: a declaration and the diagnostics it must produce. */
+export type Case = readonly [declaration: string, ...expected: Expected[]];
+
+/** The message of the module-constant rule that fires beside many Schema errors. */
+export const PURE_CONSTANT = "a module constant must have a pure initializer";
+
+/**
+ * Checks each case. `build` makes the full source from the declaration, and
+ * `diagnosticsOf` runs the checker on it.
+ */
+export function assertRejected(
+  cases: readonly Case[],
+  build: (declaration: string) => string,
+  diagnosticsOf: (source: string) => readonly Diagnostic[],
+): void {
+  for (const [declaration, ...expected] of cases) {
+    const source = build(declaration);
+    assertDiagnostics(source, diagnosticsOf(source), expected, declaration);
+  }
+}
+
 /** Requires exactly the expected diagnostics, in order. */
 export function assertDiagnostics(
   source: string,
