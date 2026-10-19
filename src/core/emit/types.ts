@@ -148,6 +148,18 @@ function needsParentheses(type: Type): boolean {
   return type.kind === "function" || type.kind === "union";
 }
 
+/**
+ * True when a Schema carries make-input or optionality metadata. The printed type
+ * then needs the metadata intersection, and an emitted value needs `Schema.make`.
+ */
+export function hasSchemaMetadata(
+  type: Extract<Type, { readonly kind: "schema" }>,
+): boolean {
+  return type.makeInput !== undefined || type.constructorDefault === true ||
+    type.optionalKey === true || type.encodedOptionalKey === true ||
+    type.decodedOptionalKey === true;
+}
+
 export function typeDoc(scope: Scope, type: Type): Doc {
   switch (type.kind) {
     case "primitive":
@@ -203,11 +215,7 @@ export function typeDoc(scope: Scope, type: Type): Doc {
           requirementUnion(scope, type.encodeRequirements) ?? "never",
         ]),
       ];
-      if (
-        type.makeInput === undefined && type.constructorDefault !== true &&
-        type.optionalKey !== true && type.encodedOptionalKey !== true &&
-        type.decodedOptionalKey !== true
-      ) return codec;
+      if (!hasSchemaMetadata(type)) return codec;
       return [
         "(",
         codec,

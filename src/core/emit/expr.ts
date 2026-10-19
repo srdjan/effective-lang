@@ -49,6 +49,7 @@ import {
 } from "./scope.ts";
 import {
   failureUnion,
+  hasSchemaMetadata,
   requirementUnion,
   schemaDoc,
   typeArguments,
@@ -1387,11 +1388,7 @@ export class ExprEmitter {
         const args = e.arguments;
         const resultType = this.scope.resolve(e.type);
         const withSchemaView = (value: Emitted): Emitted =>
-          resultType.kind === "schema" && (resultType.makeInput !== undefined ||
-              resultType.constructorDefault === true ||
-              resultType.optionalKey === true ||
-              resultType.encodedOptionalKey === true ||
-              resultType.decodedOptionalKey === true)
+          resultType.kind === "schema" && hasSchemaMetadata(resultType)
             ? emitted([
               `${schema}.make<`,
               typeDoc(this.scope, resultType),
