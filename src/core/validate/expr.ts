@@ -584,6 +584,7 @@ export class BodyValidator {
         return this.codec(e, path);
       case "schema":
         return this.schema(e, path);
+      case "schema-make":
       case "schema-decode":
       case "schema-encode":
         return this.schemaOperation(e, path);
@@ -2284,33 +2285,52 @@ export class BodyValidator {
   }
 
   private schemaOperation(
-    e: Extract<Expr, { kind: "schema-decode" | "schema-encode" }>,
+    e: Extract<
+      Expr,
+      { kind: "schema-decode" | "schema-encode" | "schema-make" }
+    >,
     path: string,
   ): Comp {
     const schema = this.check(e.schema, `${path}.schema`);
     const input = this.check(e.input, `${path}.input`);
     const type = unfold(this.env, schema.type);
-    if (type.kind !== "schema") {
-      this.add(AREA.types, path, "schema runner needs a Schema value", e.span);
+    if (
+      type.kind !== "schema" ||
+      (e.kind === "schema-make" &&
+        (type.optionalKey === true || type.encodedOptionalKey === true ||
+          type.decodedOptionalKey === true))
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "schema runner needs an ordinary Schema value",
+        e.span,
+      );
       return this.poison();
     }
     if (
-      e.kind === "schema-encode" && !fits(this.env, input.type, type.decoded)
+      e.kind !== "schema-decode" && !fits(this.env, input.type, type.decoded)
     ) {
       this.add(
         AREA.types,
         `${path}.input`,
-        "schemaEncode input does not fit decoded type",
+        `${
+          e.kind === "schema-make" ? "schemaMake" : "schemaEncode"
+        } input does not fit decoded type`,
         e.input.span,
       );
     }
     return {
-      type: e.kind === "schema-decode" ? type.decoded : type.encoded,
+      type: e.kind === "schema-encode" ? type.encoded : type.decoded,
       match: "exact",
       active: combine([schema, input, {
         execution: "effect",
-        failures: [SCHEMA_ERROR_ID],
-        requirements: e.kind === "schema-decode"
+        failures: [
+          e.kind === "schema-make" ? SCHEMA_ISSUE_ID : SCHEMA_ERROR_ID,
+        ],
+        requirements: e.kind === "schema-make"
+          ? []
+          : e.kind === "schema-decode"
           ? type.decodeRequirements
           : type.encodeRequirements,
       }]),
@@ -3049,6 +3069,7 @@ export class BodyValidator {
             return [e.decode, e.encode];
           case "schema":
             return [...e.arguments];
+          case "schema-make":
           case "schema-decode":
           case "schema-encode":
             return [e.schema, e.input];

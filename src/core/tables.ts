@@ -220,6 +220,7 @@ export type NodeFact =
       | "recursive"
       | "decode"
       | "encode"
+      | "make"
       | "invalid"
       | "at"
       | "both";

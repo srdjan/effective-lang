@@ -1730,6 +1730,7 @@ export class ExprEmitter {
         return this.binary(e, kid);
       case "perform":
       case "fail":
+      case "schema-make":
       case "schema-decode":
       case "schema-encode":
       case "catch":
@@ -2328,6 +2329,12 @@ export class ExprEmitter {
           pattern.value === null ? "null" : this.literal(pattern.value),
         );
       case "error":
+        if (pattern.error === "error:effect/SchemaIssue") {
+          return armEquality(
+            `${this.scope.effect("SchemaIssue")}.isIssue(${selector})`,
+            "true",
+          );
+        }
         return armEquality(
           `${selector}._tag`,
           JSON.stringify(
@@ -2376,6 +2383,7 @@ export class ExprEmitter {
     switch (e.kind) {
       case "call":
         return this.isEffectfulFunction(e.callee.type);
+      case "schema-make":
       case "schema-decode":
       case "schema-encode":
         return true;
@@ -2426,6 +2434,7 @@ export class ExprEmitter {
           : [e.callee, ...e.arguments];
       case "perform":
         return [...e.arguments];
+      case "schema-make":
       case "schema-decode":
       case "schema-encode":
         return [e.schema, e.input];
@@ -2625,8 +2634,16 @@ export class ExprEmitter {
       }
       case "fail":
         return emitted([`${effect}.fail`, callArguments([children[0]])]);
+      case "schema-make":
       case "schema-decode":
       case "schema-encode": {
+        if (e.kind === "schema-make") {
+          return emitted([
+            at(children[0], PREC.member),
+            ".makeEffect",
+            callArguments([children[1]]),
+          ]);
+        }
         const schema = this.scope.effect("Schema");
         return emitted([
           `${schema}.${
@@ -2887,7 +2904,13 @@ export class ExprEmitter {
 
   private catchEffect(e: Extract<Expr, { kind: "catch" }>): Emitted {
     const effect = this.scope.effect("Effect");
-    const handlers = e.handlers.map((h: Handler) =>
+    const issueHandler = e.handlers.find((h) =>
+      h.error === "error:effect/SchemaIssue"
+    );
+    const tagged = e.handlers.filter((h) =>
+      h.error !== "error:effect/SchemaIssue"
+    );
+    const handlers = tagged.map((h: Handler) =>
       this.handlerEntry(
         JSON.stringify(
           h.error === "error:effect/SchemaError"
@@ -2905,10 +2928,37 @@ export class ExprEmitter {
       `${effect}.catchTags`,
       callArguments([table]),
     ]);
+    const rest = issueHandler === undefined || tagged.length === 0
+      ? ""
+      : this.scope.temp();
+    const predicate = issueHandler === undefined ? "" : this.scope.temp();
+    const recovery = issueHandler === undefined ? catchTags : emitted([
+      `${effect}.catchIf`,
+      callArguments([
+        emitted(
+          `(${predicate}): ${predicate} is typeof ${predicate} & ${
+            this.scope.effect("SchemaIssue")
+          }.Issue => ${this.scope.effect("SchemaIssue")}.isIssue(${predicate})`,
+        ),
+        this.arrowEmitted(`(${issueHandler.binding.name})`, {
+          kind: "expr",
+          body: this.asEffect(issueHandler.body),
+        }),
+        ...(tagged.length === 0 ? [] : [
+          this.arrowEmitted(`(${rest})`, {
+            kind: "expr",
+            body: emitted([
+              `${effect}.fail(${rest}).pipe`,
+              callArguments([catchTags]),
+            ]),
+          }),
+        ]),
+      ]),
+    ]);
     return emitted([
       at(this.asEffect(e.body), PREC.member),
       ".pipe",
-      callArguments([catchTags]),
+      callArguments([recovery]),
     ]);
   }
 }

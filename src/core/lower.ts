@@ -570,9 +570,14 @@ class BodyLowerer {
       case "codec":
         return { kind: "codec", decode: arg(0), encode: arg(1), ...annotation };
       case "schema":
-        return fact.op === "decode" || fact.op === "encode"
+        return fact.op === "decode" || fact.op === "encode" ||
+            fact.op === "make"
           ? {
-            kind: fact.op === "decode" ? "schema-decode" : "schema-encode",
+            kind: fact.op === "decode"
+              ? "schema-decode"
+              : fact.op === "encode"
+              ? "schema-encode"
+              : "schema-make",
             schema: arg(0),
             input: arg(1),
             ...annotation,

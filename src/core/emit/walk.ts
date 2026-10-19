@@ -40,6 +40,7 @@ export function childrenOf(expr: Expr): Expr[] {
       return [expr.body];
     case "schema":
       return [...expr.arguments];
+    case "schema-make":
     case "schema-decode":
     case "schema-encode":
       return [expr.schema, expr.input];

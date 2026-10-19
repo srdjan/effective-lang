@@ -126,6 +126,7 @@ export type PreludeName =
   | "schemaRecursive"
   | "schemaDecode"
   | "schemaEncode"
+  | "schemaMake"
   | "schemaInvalid"
   | "schemaAt"
   | "schemaBoth"
@@ -229,6 +230,7 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "schemaRecursive",
   "schemaDecode",
   "schemaEncode",
+  "schemaMake",
   "schemaInvalid",
   "schemaAt",
   "schemaBoth",
@@ -529,7 +531,8 @@ class Resolver {
         name !== "schemaOptionalTransform" &&
         name !== "schemaOptionalFromRequired" &&
         name !== "schemaRecursive" && name !== "schemaDecode" &&
-        name !== "schemaEncode" && name !== "schemaInvalid" &&
+        name !== "schemaEncode" && name !== "schemaMake" &&
+        name !== "schemaInvalid" &&
         name !== "schemaAt" && name !== "schemaBoth" &&
         name !== "makeScope" && name !== "provideScope" &&
         name !== "addScopeFinalizer" && name !== "closeScope" &&
@@ -719,7 +722,8 @@ class Resolver {
       name !== "schemaOptionalTransform" &&
       name !== "schemaOptionalFromRequired" &&
       name !== "schemaRecursive" && name !== "schemaDecode" &&
-      name !== "schemaEncode" && name !== "schemaInvalid" &&
+      name !== "schemaEncode" && name !== "schemaMake" &&
+      name !== "schemaInvalid" &&
       name !== "schemaAt" && name !== "schemaBoth" &&
       name !== "makeScope" && name !== "provideScope" &&
       name !== "addScopeFinalizer" && name !== "closeScope" &&

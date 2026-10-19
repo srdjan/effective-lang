@@ -99,6 +99,8 @@ source runners, the same omit distinction, and all three cleanup stages.
 Independent mutations reject swapped decoded/encoded operations, forged field
 presence, and invalid policies.
 
-Schema construction defaults are the next bounded investigation. Equality-based
+The [type-side construction slice](2026-10-19-schema-constructor-contract.md)
+now adds schemaMake and explicit source factories for selected construction
+defaults. General constructor metadata and make-input propagation remain open. Equality-based
 omission and arbitrary Schema AST construction remain separate work. Broader
 package interoperability, item 9, remains deferred by user instruction.

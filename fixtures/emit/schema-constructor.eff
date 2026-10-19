@@ -1,0 +1,54 @@
+type Text = string
+type Int = int
+type Bool = boolean
+type Decoded = { score: Int }
+type Encoded = { score: Text }
+type MakeInput = { score?: Int }
+type Nested = { settings: Decoded }
+type NestedInput = { settings?: MakeInput }
+export error Other = {}
+
+service Read { parse(value: Text): Int }
+service Write { print(value: Int): Text }
+service Values { next(): Int }
+
+const text: Schema<Text> = schema()
+const integer: Schema<Int> = schema()
+const field: Schema<Int, Text, Read.parse, Write.print> = schemaTransform(
+  text, integer,
+  (value: Text): Option<Int> uses Read.parse => Some(Read.parse(value)),
+  (value: Int): Option<Text> uses Write.print => Some(Write.print(value))
+)
+export const record: Schema<Decoded, Encoded, Read.parse, Write.print> = schemaStruct({ score: field })
+export const nested: Schema<Nested, { settings: Encoded }, Read.parse, Write.print> = schemaStruct({ settings: record })
+
+export const makeRecord = (input: MakeInput): Decoded fails SchemaIssue => {
+  const score = match input.score { Some(value) => value, None => 4 }
+  schemaMake(record, { score: score })
+}
+export const makeNested = (input: NestedInput): Nested fails SchemaIssue => {
+  const settings: MakeInput = match input.settings { Some(value) => value, None => ({}) }
+  const built = try { makeRecord(settings) } catch {
+    SchemaIssue(issue) => fail(schemaAt("settings", issue))
+  }
+  schemaMake(nested, { settings: built })
+}
+export const makeDirect = (input: Decoded): Decoded fails SchemaIssue => schemaMake(record, input)
+
+const choose = (): Schema<Decoded, Encoded, Read.parse, Write.print> uses Values.next =>
+  if (Values.next() > 0) { record } else { record }
+export const makeObserved = (): Decoded fails SchemaIssue uses Values.next =>
+  schemaMake(choose(), { score: Values.next() })
+
+export const classify = (issue: SchemaIssue | Other): Int => match issue {
+  SchemaIssue(value) => 1,
+  Other(value) => 2
+}
+export const catchMixed = (issue: Bool): Int fails Other =>
+  try { if (issue) { fail(schemaInvalid("blocked")) } else { fail(Other({})) } } catch {
+    SchemaIssue(value) => fail(Other({})),
+    Other(value) => 2
+  }
+
+export const readWire = (input: unknown): Decoded fails SchemaError uses Read.parse => schemaDecode(record, input)
+export const writeWire = (input: Decoded): Encoded fails SchemaError uses Write.print => schemaEncode(record, input)

@@ -875,6 +875,7 @@ export class BodyChecker {
       case "schemaRecursive":
       case "schemaDecode":
       case "schemaEncode":
+      case "schemaMake":
       case "schemaInvalid":
       case "schemaAt":
       case "schemaBoth":
@@ -1465,6 +1466,7 @@ export class BodyChecker {
       schemaRecursive: "recursive",
       schemaDecode: "decode",
       schemaEncode: "encode",
+      schemaMake: "make",
       schemaInvalid: "invalid",
       schemaAt: "at",
       schemaBoth: "both",
@@ -1478,7 +1480,7 @@ export class BodyChecker {
       ? 4
       : op === "both"
       ? 3
-      : op === "decode" || op === "encode" || op === "at" ||
+      : op === "decode" || op === "encode" || op === "make" || op === "at" ||
           op === "default-key" || op === "default-null-key" ||
           op === "default-encoded-key"
       ? 2
@@ -2090,29 +2092,29 @@ export class BodyChecker {
         ]),
       );
     }
-    if (op === "decode" || op === "encode") {
+    if (op === "decode" || op === "encode" || op === "make") {
       const input = this.argInfo(
         args[1],
-        op === "encode" ? schema?.decoded : undefined,
+        op === "decode" ? undefined : schema?.decoded,
       );
-      if (op === "encode" && schema !== undefined) {
+      if (op !== "decode" && schema !== undefined) {
         this.fits(
           args[1].node,
           input.type,
           schema.decoded,
-          "the schema encode input",
+          `the schema ${op} input`,
         );
       }
       return this.finish(
         node,
         schema === undefined
           ? this.table.error
-          : op === "decode"
-          ? schema.decoded
-          : schema.encoded,
+          : op === "encode"
+          ? schema.encoded
+          : schema.decoded,
         combine([first, input, {
-          failures: [SCHEMA_ERROR_ID],
-          requirements: schema === undefined
+          failures: [op === "make" ? SCHEMA_ISSUE_ID : SCHEMA_ERROR_ID],
+          requirements: schema === undefined || op === "make"
             ? []
             : op === "decode"
             ? schema.decodeRequirements
