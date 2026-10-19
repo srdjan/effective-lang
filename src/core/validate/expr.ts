@@ -2355,20 +2355,41 @@ export class BodyValidator {
       if (value.kind === "record") {
         return value.fields.every((field) => visit(field.value, guarded));
       }
-      if (value.kind === "schema" && value.op === "constructor-default") {
-        return value.arguments.length === 2 &&
-          !containsSelf(value.arguments[1]) &&
+      if (
+        value.kind === "schema" &&
+        (value.op === "constructor-default" || value.op === "default-key" ||
+          value.op === "default-null-key" || value.op === "default-encoded-key")
+      ) {
+        return value.arguments.length >= 2 &&
+          value.arguments.slice(1).every((argument) =>
+            !containsSelf(argument)
+          ) &&
           visit(value.arguments[0], guarded);
       }
       if (
         value.kind === "schema" &&
+        (value.op === "optional-transform" ||
+          value.op === "optional-from-required")
+      ) {
+        return value.arguments.length === 4 &&
+          value.arguments.slice(2).every((argument) =>
+            !containsSelf(argument)
+          ) &&
+          value.arguments.slice(0, 2).every((argument) =>
+            visit(argument, guarded)
+          );
+      }
+      if (
+        value.kind === "schema" &&
         (value.op === "array" || value.op === "struct" ||
-          value.op === "optional-key" || value.op === "union")
+          value.op === "optional-key" || value.op === "null-to-missing-key" ||
+          value.op === "union")
       ) {
         return value.arguments.every((argument) =>
           visit(
             argument,
-            guarded || value.op === "array" || value.op === "optional-key",
+            guarded || value.op === "array" || value.op === "optional-key" ||
+              value.op === "null-to-missing-key",
           )
         );
       }

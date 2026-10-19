@@ -87,6 +87,7 @@ awaited cleanup. Boundaries reject false flags, lost retained defaults, duplicat
 defaults, incompatible input presence, descriptor runners and incomplete Option
 contents.
 
-Guarded recursive self use through field adapters is next. Further descriptor
+The [recursive field-adapter extension](2026-10-19-schema-recursive-adapters-contract.md)
+now admits the selected guarded self paths. Further descriptor
 presence rewrites, constructor options and arbitrary AST access remain outside
 this slice. Broader package interoperability, item 9, stays deferred.

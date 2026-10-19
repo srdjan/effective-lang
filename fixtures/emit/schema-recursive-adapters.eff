@@ -1,0 +1,68 @@
+export type Int = int
+export type Text = string
+export type Tree = { score: Int, children: Tree[] }
+export type WireTree = { score: Text, children?: WireTree[] }
+export type NullableTree = { score: Text, children?: NullableTree[] | null }
+export type Input = { score?: Int, children?: Input[] }
+export type Node = { score: Int, next?: Node }
+export type WireNode = { score: Text, next?: WireNode | null }
+export type NodeInput = { score?: Int, next?: NodeInput }
+export type OptionalTree = { children?: OptionalTree[] }
+export type RequiredTree = { children: RequiredTree[] }
+export type BridgeInput = { children?: BridgeInput[] }
+export service Read { parse(value: Text): Int fails SchemaIssue }
+export service Write { print(value: Int): Text fails SchemaIssue }
+export service Defaults { children(): Tree[] fails SchemaIssue }
+
+const integer: Schema<Int> = schema()
+const text: Schema<Text> = schema()
+const score: Schema<Int,Text,Read.parse,Write.print> = schemaTransform(text, integer,
+  (value: Text): Int fails SchemaIssue uses Read.parse => Read.parse(value),
+  (value: Int): Text fails SchemaIssue uses Write.print => Write.print(value))
+export const tree: Schema<Tree,WireTree,Read.parse | Defaults.children,Write.print,Input> = schemaRecursive(
+  (self: Schema<Tree,WireTree,Read.parse | Defaults.children,Write.print,Input>): Schema<Tree,WireTree,Read.parse | Defaults.children,Write.print,Input> =>
+    schemaStruct({
+      score: schemaConstructorDefault(score, (): Int => 4),
+      children: schemaDefaultKey(schemaConstructorDefault(schemaArray(self), (): Input[] => []),
+        (): Tree[] fails SchemaIssue uses Defaults.children => Defaults.children())
+    })
+)
+export const nullTree = (pending: Effect<Tree[],SchemaIssue>): Schema<Tree,NullableTree,Read.parse,Write.print,Input> => schemaRecursive(
+  (self: Schema<Tree,NullableTree,Read.parse,Write.print,Input>): Schema<Tree,NullableTree,Read.parse,Write.print,Input> =>
+    schemaStruct({
+      score: schemaConstructorDefault(score, (): Int => 4),
+      children: schemaDefaultNullKey(schemaConstructorDefault(schemaArray(self), (): Input[] => []),
+        (): Tree[] fails SchemaIssue => run(pending))
+    })
+)
+export const encoded: Schema<Tree,WireTree,Read.parse,Write.print,Input> = schemaRecursive(
+  (self: Schema<Tree,WireTree,Read.parse,Write.print,Input>): Schema<Tree,WireTree,Read.parse,Write.print,Input> =>
+    schemaStruct({
+      score: schemaConstructorDefault(score, (): Int => 4),
+      children: schemaDefaultEncodedKey(schemaConstructorDefault(schemaArray(self), (): Input[] => []),
+        (): WireTree[] => [], { encodingStrategy: "omit" })
+    })
+)
+export const node: Schema<Node,WireNode,Read.parse,Write.print,NodeInput> = schemaRecursive(
+  (self: Schema<Node,WireNode,Read.parse,Write.print,NodeInput>): Schema<Node,WireNode,Read.parse,Write.print,NodeInput> =>
+    schemaStruct({ score: schemaConstructorDefault(score, (): Int => 4), next: schemaNullToMissingKey(self) })
+)
+export const bridge: Schema<OptionalTree,OptionalTree,never,never,BridgeInput> = schemaRecursive(
+  (self: Schema<OptionalTree,OptionalTree,never,never,BridgeInput>): Schema<OptionalTree,OptionalTree,never,never,BridgeInput> =>
+    schemaStruct({ children: schemaOptionalTransform(
+      schemaOptionalKey(schemaArray(self)),
+      schemaOptionalKey(schemaConstructorDefault(schemaArray(self), (): BridgeInput[] => [])),
+      (value: Option<OptionalTree[]>): Option<OptionalTree[]> => value,
+      (value: Option<OptionalTree[]>): Option<OptionalTree[]> => value) })
+)
+export const requiredBridge: Schema<OptionalTree,RequiredTree,never,never,BridgeInput> = schemaRecursive(
+  (self: Schema<OptionalTree,RequiredTree,never,never,BridgeInput>): Schema<OptionalTree,RequiredTree,never,never,BridgeInput> =>
+    schemaStruct({ children: schemaOptionalFromRequired(
+      schemaArray(self),
+      schemaOptionalKey(schemaConstructorDefault(schemaArray(self), (): BridgeInput[] => [])),
+      (value: OptionalTree[]): Option<RequiredTree[]> => Some([]),
+      (value: Option<RequiredTree[]>): OptionalTree[] => []) })
+)
+export const makeTree = (input: Input): Tree fails SchemaIssue => schemaMake(tree, input)
+export const readTree = (input: unknown): Tree fails SchemaError uses Read.parse | Defaults.children => schemaDecode(tree, input)
+export const writeTree = (input: Tree): WireTree fails SchemaError uses Write.print => schemaEncode(tree, input)

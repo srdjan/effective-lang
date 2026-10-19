@@ -99,6 +99,11 @@ function assignable(
 ): boolean {
   if (depth > MAX_DEPTH) return false;
   if (s.kind === "named" && t.kind === "named" && s.id === t.id) return true;
+  // Preserve a recursive alias's identity before unfolding it into a union arm.
+  if (
+    s.kind === "named" && t.kind === "union" &&
+    t.members.some((member) => member.kind === "named" && member.id === s.id)
+  ) return true;
   if (
     s.kind === "named" && t.kind === "named" && s.id !== t.id &&
     guardedAlias(env, s.id) && guardedAlias(env, t.id)

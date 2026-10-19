@@ -91,7 +91,7 @@ function importedGuardedRecord(type: Type, id: TypeId): boolean {
           visit(field.type, guarded || field.optional)
         );
       case "union":
-        return part === type && tagged && hasDistinctTag &&
+        return (guarded || (part === type && tagged && hasDistinctTag)) &&
           part.members.every((member) => visit(member, true));
       case "primitive":
       case "literal":

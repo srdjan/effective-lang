@@ -2357,12 +2357,18 @@ export class BodyChecker {
       : this.kidsOfKind(first, SyntaxKind.Name)[0];
     const self = name === undefined ? undefined : this.targets.get(name);
     const body = parts.at(-1);
+    const builtin = (part: NodeId): string | undefined => {
+      if (kindOf(this.tree, part) !== SyntaxKind.CallExpr) return undefined;
+      const callee = this.kids(part)[0];
+      const target = callee === undefined
+        ? undefined
+        : this.targets.get(callee);
+      return target?.kind === "builtin" ? target.name : undefined;
+    };
     if (
       self?.kind !== "local" || body === undefined ||
       kindOf(this.tree, body) !== SyntaxKind.CallExpr ||
-      !["schemaStruct", "schemaUnion"].includes(
-        nodeText(this.tree, this.kids(body)[0]),
-      )
+      !["schemaStruct", "schemaUnion"].includes(builtin(body) ?? "")
     ) return false;
     const isSelf = (part: NodeId): boolean => {
       const target = this.targets.get(part);
@@ -2371,7 +2377,7 @@ export class BodyChecker {
     };
     const containsSelf = (part: NodeId): boolean =>
       isSelf(part) || this.kids(part).some(containsSelf);
-    const union = nodeText(this.tree, this.kids(body)[0]) === "schemaUnion";
+    const union = builtin(body) === "schemaUnion";
     const findList = (part: NodeId): NodeId | undefined =>
       kindOf(this.tree, part) === SyntaxKind.ListExpr
         ? part
@@ -2421,26 +2427,34 @@ export class BodyChecker {
         return guarded;
       }
       if (kindOf(this.tree, part) === SyntaxKind.CallExpr) {
-        const children = this.kids(part);
-        if (nodeText(this.tree, children[0]) === "schemaConstructorDefault") {
-          const args = children.find((child) =>
-            kindOf(this.tree, child) === SyntaxKind.ArgList
-          );
-          const values = args === undefined ? [] : this.kids(args);
-          return values.length === 2 && !containsSelf(values[1]) &&
+        const called = builtin(part);
+        const args = this.kids(part).find((child) =>
+          kindOf(this.tree, child) === SyntaxKind.ArgList
+        );
+        const values = args === undefined ? [] : this.kids(args);
+        if (
+          called === "schemaConstructorDefault" ||
+          called === "schemaDefaultKey" || called === "schemaDefaultNullKey" ||
+          called === "schemaDefaultEncodedKey"
+        ) {
+          return values.length >= 2 &&
+            values.slice(1).every((value) => !containsSelf(value)) &&
             visit(values[0], guarded);
         }
-        const guard = ["schemaArray", "schemaOptionalKey"].includes(
-          nodeText(this.tree, children[0]),
-        );
         if (
-          !guard && !["schemaStruct", "schemaUnion"].includes(
-            nodeText(this.tree, children[0]),
-          )
+          called === "schemaOptionalTransform" ||
+          called === "schemaOptionalFromRequired"
+        ) {
+          return values.length === 4 &&
+            values.slice(2).every((value) => !containsSelf(value)) &&
+            values.slice(0, 2).every((value) => visit(value, guarded));
+        }
+        const guard = called === "schemaArray" ||
+          called === "schemaOptionalKey" || called === "schemaNullToMissingKey";
+        if (
+          !guard && called !== "schemaStruct" && called !== "schemaUnion"
         ) return false;
-        return children.every((child, index) =>
-          visit(child, guarded || (guard && index > 0))
-        );
+        return values.every((value) => visit(value, guarded || guard));
       }
       return this.kids(part).every((child) => visit(child, guarded));
     };

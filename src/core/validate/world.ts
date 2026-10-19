@@ -630,7 +630,7 @@ function guardedRecord(type: Type, id: string): boolean {
           walk(field.type, guarded || field.optional)
         );
       case "union":
-        return part === type && tagged && hasDistinctTag &&
+        return (guarded || (part === type && tagged && hasDistinctTag)) &&
           part.members.every((member) => walk(member, true));
       case "primitive":
       case "literal":
