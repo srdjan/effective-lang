@@ -6,6 +6,7 @@ import {
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
+import { runStrictTarget } from "./target_helpers.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-general-union.eff", import.meta.url),
@@ -35,30 +36,9 @@ Deno.test("general Schema unions compile and preserve branch order and fallback"
     assertEquals(diagnostics, []);
   }
 
-  const dir = Deno.makeTempDirSync({ prefix: "effective-schema-union-" });
-  try {
-    Deno.writeTextFileSync(
-      `${dir}/deno.json`,
-      JSON.stringify({
-        imports: { effect: "npm:effect@4.0.5" },
-        compilerOptions: {
-          strict: true,
-          exactOptionalPropertyTypes: true,
-          noUncheckedIndexedAccess: true,
-        },
-      }),
-    );
-    for (
-      const result of emitProject(lowered, {
-        config: project.analysis.project.config,
-      }).values()
-    ) {
-      assert(result.ok, JSON.stringify(result));
-      Deno.writeTextFileSync(`${dir}/${result.value.path}`, result.value.text);
-    }
-    Deno.writeTextFileSync(
-      `${dir}/run.ts`,
-      `import { Cause, Effect, Exit, Fiber, Layer, Option, Schema, SchemaIssue } from "effect";
+  await runStrictTarget(
+    emitProject(lowered, { config: project.analysis.project.config }),
+    `import { Cause, Effect, Exit, Fiber, Layer, Option, Schema, SchemaIssue } from "effect";
 import { Check, Write, converted, fallback, longFirst, readFallback, readScalar, scalar, shortFirst } from "./main.ts";
 
 if (await Effect.runPromise(readScalar("Ada")) !== "Ada") throw new Error("string branch");
@@ -108,22 +88,6 @@ await Effect.runPromise(Fiber.interrupt(fiber));
 const interrupted = await Effect.runPromise(Fiber.await(fiber));
 if (!Exit.isFailure(interrupted) || !Cause.hasInterrupts(interrupted.cause)) throw new Error("interruption backtracked or changed channel");
 `,
-    );
-    for (const command of ["check", "run"]) {
-      const result = await new Deno.Command(Deno.execPath(), {
-        args: [command, "--no-lock", "run.ts"],
-        cwd: dir,
-        stdout: "piped",
-        stderr: "piped",
-      }).output();
-      assertEquals(
-        result.code,
-        0,
-        new TextDecoder().decode(result.stderr) +
-          new TextDecoder().decode(result.stdout),
-      );
-    }
-  } finally {
-    Deno.removeSync(dir, { recursive: true });
-  }
+    "effective-schema-union-",
+  );
 });

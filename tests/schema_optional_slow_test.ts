@@ -6,6 +6,7 @@ import {
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
+import { runStrictTarget } from "./target_helpers.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-optional-union.eff", import.meta.url),
@@ -32,30 +33,9 @@ Deno.test("optional fields, tagged union, authored issues, and finite recursion 
     const diagnostics of validateProject(project.analysis.project, lowered)
       .values()
   ) assertEquals(diagnostics, []);
-  const dir = Deno.makeTempDirSync({ prefix: "effective-schema-optional-" });
-  try {
-    Deno.writeTextFileSync(
-      `${dir}/deno.json`,
-      JSON.stringify({
-        imports: { effect: "npm:effect@4.0.5" },
-        compilerOptions: {
-          strict: true,
-          exactOptionalPropertyTypes: true,
-          noUncheckedIndexedAccess: true,
-        },
-      }),
-    );
-    for (
-      const result of emitProject(lowered, {
-        config: project.analysis.project.config,
-      }).values()
-    ) {
-      assert(result.ok, JSON.stringify(result));
-      Deno.writeTextFileSync(`${dir}/${result.value.path}`, result.value.text);
-    }
-    Deno.writeTextFileSync(
-      `${dir}/run.ts`,
-      `import { Cause, Effect, Exit, Fiber, Layer, Option, Schema } from "effect";
+  await runStrictTarget(
+    emitProject(lowered, { config: project.analysis.project.config }),
+    `import { Cause, Effect, Exit, Fiber, Layer, Option, Schema } from "effect";
 import { Read, Write, choice, optional, optionalNode, taggedNode, readChoice, readOptional, readPositive, writeChoice, writeOptional, writePositive } from "./main.ts";
 
 const events: string[] = [];
@@ -105,22 +85,6 @@ await Effect.runPromise(Fiber.interrupt(fiber));
 const interrupted = await Effect.runPromise(Fiber.await(fiber));
 if (!Exit.isFailure(interrupted) || !Cause.hasInterrupts(interrupted.cause)) throw new Error("interruption translated");
 `,
-    );
-    for (const command of ["check", "run"]) {
-      const result = await new Deno.Command(Deno.execPath(), {
-        args: [command, "--no-lock", "run.ts"],
-        cwd: dir,
-        stdout: "piped",
-        stderr: "piped",
-      }).output();
-      assertEquals(
-        result.code,
-        0,
-        new TextDecoder().decode(result.stderr) +
-          new TextDecoder().decode(result.stdout),
-      );
-    }
-  } finally {
-    Deno.removeSync(dir, { recursive: true });
-  }
+    "effective-schema-optional-",
+  );
 });

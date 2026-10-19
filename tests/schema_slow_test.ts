@@ -6,6 +6,7 @@ import {
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
+import { runStrictTarget } from "./target_helpers.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-composition.eff", import.meta.url),
@@ -36,48 +37,13 @@ async function compileAndRun(source: string, run: string): Promise<unknown> {
     const diagnostics of validateProject(project.analysis.project, lowered)
       .values()
   ) assertEquals(diagnostics, []);
-  const dir = Deno.makeTempDirSync({ prefix: "effective-schema-identity-" });
-  try {
-    Deno.writeTextFileSync(
-      `${dir}/deno.json`,
-      JSON.stringify({
-        imports: { effect: "npm:effect@4.0.5" },
-        compilerOptions: {
-          strict: true,
-          exactOptionalPropertyTypes: true,
-          noUncheckedIndexedAccess: true,
-        },
-      }),
-    );
-    for (
-      const result of emitProject(lowered, {
-        config: project.analysis.project.config,
-      }).values()
-    ) {
-      assert(result.ok, JSON.stringify(result));
-      Deno.writeTextFileSync(`${dir}/${result.value.path}`, result.value.text);
-    }
-    Deno.writeTextFileSync(`${dir}/run.ts`, run);
-    const decoder = new TextDecoder();
-    let stdout = "";
-    for (const command of ["check", "run"]) {
-      const result = await new Deno.Command(Deno.execPath(), {
-        args: [command, "--no-lock", "run.ts"],
-        cwd: dir,
-        stdout: "piped",
-        stderr: "piped",
-      }).output();
-      assertEquals(
-        result.code,
-        0,
-        decoder.decode(result.stderr) + decoder.decode(result.stdout),
-      );
-      stdout = decoder.decode(result.stdout);
-    }
-    return JSON.parse(stdout);
-  } finally {
-    Deno.removeSync(dir, { recursive: true });
-  }
+  return JSON.parse(
+    await runStrictTarget(
+      emitProject(lowered, { config: project.analysis.project.config }),
+      run,
+      "effective-schema-identity-",
+    ),
+  );
 }
 
 Deno.test("schema composition and guarded recursion compile and run with separate services", async () => {
@@ -91,30 +57,9 @@ Deno.test("schema composition and guarded recursion compile and run with separat
     const diagnostics of validateProject(project.analysis.project, lowered)
       .values()
   ) assertEquals(diagnostics, []);
-  const dir = Deno.makeTempDirSync({ prefix: "effective-schema-source-" });
-  try {
-    Deno.writeTextFileSync(
-      `${dir}/deno.json`,
-      JSON.stringify({
-        imports: { effect: "npm:effect@4.0.5" },
-        compilerOptions: {
-          strict: true,
-          exactOptionalPropertyTypes: true,
-          noUncheckedIndexedAccess: true,
-        },
-      }),
-    );
-    for (
-      const result of emitProject(lowered, {
-        config: project.analysis.project.config,
-      }).values()
-    ) {
-      assert(result.ok, JSON.stringify(result));
-      Deno.writeTextFileSync(`${dir}/${result.value.path}`, result.value.text);
-    }
-    Deno.writeTextFileSync(
-      `${dir}/run.ts`,
-      `import { Cause, Effect, Exit, Fiber, Layer, Option, Schema } from "effect";
+  await runStrictTarget(
+    emitProject(lowered, { config: project.analysis.project.config }),
+    `import { Cause, Effect, Exit, Fiber, Layer, Option, Schema } from "effect";
 import { Read, Write, readErrorMessage, readOrDefault, readTree, tree, writeTree } from "./main.ts";
 
 const events: string[] = [];
@@ -156,30 +101,8 @@ await Effect.runPromise(Fiber.interrupt(fiber));
 const interrupted = await Effect.runPromise(Fiber.await(fiber));
 if (!Exit.isFailure(interrupted) || !Cause.hasInterrupts(interrupted.cause)) throw new Error("interruption translated");
 `,
-    );
-    for (
-      const args of [["check", "--no-lock", "run.ts"], [
-        "run",
-        "--no-lock",
-        "run.ts",
-      ]]
-    ) {
-      const result = await new Deno.Command(Deno.execPath(), {
-        args,
-        cwd: dir,
-        stdout: "piped",
-        stderr: "piped",
-      }).output();
-      assertEquals(
-        result.code,
-        0,
-        new TextDecoder().decode(result.stderr) +
-          new TextDecoder().decode(result.stdout),
-      );
-    }
-  } finally {
-    Deno.removeSync(dir, { recursive: true });
-  }
+    "effective-schema-source-",
+  );
 });
 
 const identitySource = `type Int = int

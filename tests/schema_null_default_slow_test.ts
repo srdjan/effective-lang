@@ -6,6 +6,7 @@ import {
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
+import { runStrictTarget } from "./target_helpers.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-null-default.eff", import.meta.url),
@@ -32,32 +33,9 @@ Deno.test("missing-or-null defaults compile with directional services, failures 
     const diagnostics of validateProject(project.analysis.project, lowered)
       .values()
   ) assertEquals(diagnostics, []);
-  const dir = Deno.makeTempDirSync({
-    prefix: "effective-schema-null-default-",
-  });
-  try {
-    Deno.writeTextFileSync(
-      `${dir}/deno.json`,
-      JSON.stringify({
-        imports: { effect: "npm:effect@4.0.5" },
-        compilerOptions: {
-          strict: true,
-          exactOptionalPropertyTypes: true,
-          noUncheckedIndexedAccess: true,
-        },
-      }),
-    );
-    for (
-      const result of emitProject(lowered, {
-        config: project.analysis.project.config,
-      }).values()
-    ) {
-      assert(result.ok, JSON.stringify(result));
-      Deno.writeTextFileSync(`${dir}/${result.value.path}`, result.value.text);
-    }
-    Deno.writeTextFileSync(
-      `${dir}/run.ts`,
-      `import { Cause, Deferred, Effect, Exit, Fiber, Layer, Option, Schema, SchemaIssue } from "effect";
+  await runStrictTarget(
+    emitProject(lowered, { config: project.analysis.project.config }),
+    `import { Cause, Deferred, Effect, Exit, Fiber, Layer, Option, Schema, SchemaIssue } from "effect";
 import { Defaults, Errors, Read, Write, defaulted, omitted, passed, errorDefault, pureDefault, readDefault, writeDefault } from "./main.ts";
 const expect = (actual: unknown, expected: unknown) => {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(JSON.stringify({ actual, expected }));
@@ -147,22 +125,6 @@ await Effect.runPromise(Effect.gen(function*() {
   if (!released) throw new Error("default finalizer outlived interruption");
 }));
 `,
-    );
-    for (const command of ["check", "run"]) {
-      const result = await new Deno.Command(Deno.execPath(), {
-        args: [command, "--no-lock", "run.ts"],
-        cwd: dir,
-        stdout: "piped",
-        stderr: "piped",
-      }).output();
-      assertEquals(
-        result.code,
-        0,
-        new TextDecoder().decode(result.stderr) +
-          new TextDecoder().decode(result.stdout),
-      );
-    }
-  } finally {
-    Deno.removeSync(dir, { recursive: true });
-  }
+    "effective-schema-null-default-",
+  );
 });

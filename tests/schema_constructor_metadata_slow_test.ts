@@ -6,6 +6,7 @@ import {
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
+import { runStrictTarget } from "./target_helpers.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-constructor-metadata.eff", import.meta.url),
@@ -44,32 +45,9 @@ Deno.test("constructor metadata composes make inputs without changing wire contr
     const diagnostics of validateProject(project.analysis.project, lowered)
       .values()
   ) assertEquals(diagnostics, []);
-  const dir = Deno.makeTempDirSync({
-    prefix: "effective-schema-constructor-metadata-",
-  });
-  try {
-    Deno.writeTextFileSync(
-      `${dir}/deno.json`,
-      JSON.stringify({
-        imports: { effect: "npm:effect@4.0.5" },
-        compilerOptions: {
-          strict: true,
-          exactOptionalPropertyTypes: true,
-          noUncheckedIndexedAccess: true,
-        },
-      }),
-    );
-    for (
-      const result of emitProject(lowered, {
-        config: project.analysis.project.config,
-      }).values()
-    ) {
-      assert(result.ok, JSON.stringify(result));
-      Deno.writeTextFileSync(`${dir}/${result.value.path}`, result.value.text);
-    }
-    Deno.writeTextFileSync(
-      `${dir}/run.ts`,
-      `import { Cause, Deferred, Effect, Exit, Fiber, Layer, Option, Schema, SchemaIssue } from "effect";
+  await runStrictTarget(
+    emitProject(lowered, { config: project.analysis.project.config }),
+    `import { Cause, Deferred, Effect, Exit, Fiber, Layer, Option, Schema, SchemaIssue } from "effect";
 import { Read, Write, child, nested, array, optional, union, transformed, failingNested, makeChild, makeNested, makeArray, makeOptional, makeUnion, readWire, writeWire, freshSchema, waiting } from "./main.ts";
 import { outer } from "./imported.ts";
 const expect = (actual: unknown, expected: unknown) => {
@@ -136,22 +114,6 @@ const wrongM: typeof child["~type.make.in"] = { score: "8" };
 void invalidD; void invalidE; void wrongM; void array; void optional; void union;
 
 `,
-    );
-    for (const command of ["check", "run"]) {
-      const result = await new Deno.Command(Deno.execPath(), {
-        args: [command, "--no-lock", "run.ts"],
-        cwd: dir,
-        stdout: "piped",
-        stderr: "piped",
-      }).output();
-      assertEquals(
-        result.code,
-        0,
-        new TextDecoder().decode(result.stderr) +
-          new TextDecoder().decode(result.stdout),
-      );
-    }
-  } finally {
-    Deno.removeSync(dir, { recursive: true });
-  }
+    "effective-schema-constructor-metadata-",
+  );
 });

@@ -6,6 +6,7 @@ import {
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
+import { runStrictTarget } from "./target_helpers.ts";
 
 /**
  * Compiles one Effective module with the validator, writes the emitted
@@ -30,48 +31,13 @@ async function compileAndRun(source: string, run: string): Promise<unknown> {
       lowered,
     ).values()
   ) assertEquals(diagnostics, []);
-  const dir = Deno.makeTempDirSync({ prefix: "effective-schedule-emit-" });
-  try {
-    Deno.writeTextFileSync(
-      `${dir}/deno.json`,
-      JSON.stringify({
-        imports: { effect: "npm:effect@4.0.5" },
-        compilerOptions: {
-          strict: true,
-          exactOptionalPropertyTypes: true,
-          noUncheckedIndexedAccess: true,
-        },
-      }),
-    );
-    for (
-      const result of emitProject(lowered, {
-        config: project.value.analysis.project.config,
-      }).values()
-    ) {
-      assert(result.ok, JSON.stringify(result));
-      Deno.writeTextFileSync(`${dir}/${result.value.path}`, result.value.text);
-    }
-    Deno.writeTextFileSync(`${dir}/run.ts`, run);
-    const decoder = new TextDecoder();
-    let stdout = "";
-    for (const command of ["check", "run"]) {
-      const result = await new Deno.Command(Deno.execPath(), {
-        args: [command, "--no-lock", "run.ts"],
-        cwd: dir,
-        stdout: "piped",
-        stderr: "piped",
-      }).output();
-      assertEquals(
-        result.code,
-        0,
-        decoder.decode(result.stderr) + decoder.decode(result.stdout),
-      );
-      stdout = decoder.decode(result.stdout);
-    }
-    return JSON.parse(stdout);
-  } finally {
-    Deno.removeSync(dir, { recursive: true });
-  }
+  return JSON.parse(
+    await runStrictTarget(
+      emitProject(lowered, { config: project.value.analysis.project.config }),
+      run,
+      "effective-schedule-emit-",
+    ),
+  );
 }
 
 Deno.test("scheduleFromStep runs its initial state per execution, not at module load", async () => {

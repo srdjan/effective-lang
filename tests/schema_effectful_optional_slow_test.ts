@@ -6,6 +6,7 @@ import {
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
+import { runStrictTarget } from "./target_helpers.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-effectful-optional.eff", import.meta.url),
@@ -35,30 +36,9 @@ Deno.test("effectful optional Schema getters and defaults compile and run", asyn
     assertEquals(diagnostics, []);
   }
 
-  const dir = Deno.makeTempDirSync({ prefix: "effective-schema-effectful-" });
-  try {
-    Deno.writeTextFileSync(
-      `${dir}/deno.json`,
-      JSON.stringify({
-        imports: { effect: "npm:effect@4.0.5" },
-        compilerOptions: {
-          strict: true,
-          exactOptionalPropertyTypes: true,
-          noUncheckedIndexedAccess: true,
-        },
-      }),
-    );
-    for (
-      const result of emitProject(lowered, {
-        config: project.analysis.project.config,
-      }).values()
-    ) {
-      assert(result.ok, JSON.stringify(result));
-      Deno.writeTextFileSync(`${dir}/${result.value.path}`, result.value.text);
-    }
-    Deno.writeTextFileSync(
-      `${dir}/run.ts`,
-      `import { Cause, Effect, Exit, Layer, Option, Schema } from "effect";
+  await runStrictTarget(
+    emitProject(lowered, { config: project.analysis.project.config }),
+    `import { Cause, Effect, Exit, Layer, Option, Schema } from "effect";
 import { Read, Write, Default, readOptional, writeOptional, readDefault, writeDefault, readExistingError } from "./main.ts";
 
 const events: string[] = [];
@@ -95,22 +75,6 @@ const defectiveRead = Layer.succeed(Read)({ next: () => Effect.die("boom") });
 const died = await Effect.runPromiseExit(readOptional({}).pipe(Effect.provide(defectiveRead)));
 if (!Exit.isFailure(died) || !Cause.hasDies(died.cause)) throw new Error("defect became a typed failure");
 `,
-    );
-    for (const command of ["check", "run"]) {
-      const result = await new Deno.Command(Deno.execPath(), {
-        args: [command, "--no-lock", "run.ts"],
-        cwd: dir,
-        stdout: "piped",
-        stderr: "piped",
-      }).output();
-      assertEquals(
-        result.code,
-        0,
-        new TextDecoder().decode(result.stderr) +
-          new TextDecoder().decode(result.stdout),
-      );
-    }
-  } finally {
-    Deno.removeSync(dir, { recursive: true });
-  }
+    "effective-schema-effectful-",
+  );
 });

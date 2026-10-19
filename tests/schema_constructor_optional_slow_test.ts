@@ -6,6 +6,7 @@ import {
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
+import { runStrictTarget } from "./target_helpers.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-constructor-optional.eff", import.meta.url),
@@ -39,32 +40,9 @@ export const defaulted: Schema<{ settings: D }, { settings?: E }, Read.parse | D
       lowered,
     ).values()
   ) assertEquals(diagnostics, []);
-  const dir = Deno.makeTempDirSync({
-    prefix: "effective-constructor-optional-",
-  });
-  try {
-    Deno.writeTextFileSync(
-      `${dir}/deno.json`,
-      JSON.stringify({
-        imports: { effect: "npm:effect@4.0.5" },
-        compilerOptions: {
-          strict: true,
-          exactOptionalPropertyTypes: true,
-          noUncheckedIndexedAccess: true,
-        },
-      }),
-    );
-    for (
-      const result of emitProject(lowered, {
-        config: project.value.analysis.project.config,
-      }).values()
-    ) {
-      assert(result.ok, JSON.stringify(result));
-      Deno.writeTextFileSync(`${dir}/${result.value.path}`, result.value.text);
-    }
-    Deno.writeTextFileSync(
-      `${dir}/run.ts`,
-      `import { Cause, Effect, Exit, Layer, Option, Schema, SchemaIssue } from "effect";
+  await runStrictTarget(
+    emitProject(lowered, { config: project.value.analysis.project.config }),
+    `import { Cause, Effect, Exit, Layer, Option, Schema, SchemaIssue } from "effect";
 import { Read, Write, Defaults, Convert, decoded, encoded, nullDefault, nullMissing, transformed, required, optionRecord, makeDecoded, makeOptional, makeOption, readDefault, readNull, readEncoded, readMissing, readTransformed, writeEncoded } from "./main.ts";
 import { optional, defaulted } from "./imported.ts";
 const expect = (actual: unknown, expected: unknown) => {
@@ -125,22 +103,6 @@ const invalidD: typeof decoded.Type = { settings: {} };
 const invalidE: typeof decoded.Encoded = { settings: {} };
 void invalidD; void invalidE;
 `,
-    );
-    for (const command of ["check", "run"]) {
-      const result = await new Deno.Command(Deno.execPath(), {
-        args: [command, "--no-lock", "run.ts"],
-        cwd: dir,
-        stdout: "piped",
-        stderr: "piped",
-      }).output();
-      assertEquals(
-        result.code,
-        0,
-        new TextDecoder().decode(result.stderr) +
-          new TextDecoder().decode(result.stdout),
-      );
-    }
-  } finally {
-    Deno.removeSync(dir, { recursive: true });
-  }
+    "effective-constructor-optional-",
+  );
 });
