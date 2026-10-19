@@ -1384,65 +1384,200 @@ export class ExprEmitter {
           "; } } }",
         ]);
       }
-      case "schema": {
-        const schema = this.scope.effect("Schema");
-        const args = e.arguments;
-        const resultType = this.scope.resolve(e.type);
-        const withSchemaView = (value: Emitted): Emitted =>
-          resultType.kind === "schema" && hasSchemaMetadata(resultType)
-            ? emitted([
-              `${schema}.make<`,
-              typeDoc(this.scope, resultType),
-              ">(",
-              at(value, PREC.member),
-              ".ast)",
-            ])
-            : value;
-        if (e.op === "constructor-default") {
-          const sourceType = this.scope.resolve(args[0].type);
-          if (sourceType.kind !== "schema") {
-            throw internal("constructor default needs a Schema");
-          }
-          const effect = this.scope.effect("Effect");
-          const callback = this.pure(args[1]);
-          const effectful = isEffectfulCallback(args[1].type);
-          return withSchemaView(emitted([
-            `${schema}.make<(`,
-            typeDoc(this.scope, sourceType),
-            ' & { readonly "~type.make.in": ',
-            typeDoc(this.scope, sourceType.makeInput ?? sourceType.decoded),
-            ` } & ${schema}.WithoutConstructorDefault)>(`,
-            at(kid(args[0]), PREC.member),
-            ".ast).pipe(",
-            `${schema}.withConstructorDefault(${effect}.${
-              effectful ? "suspend" : "sync"
-            }(() => `,
-            at(callback, PREC.member),
-            "())))",
-          ]));
+      case "schema":
+        return this.schemaExpr(e, kid);
+      case "decode":
+      case "encode":
+        return emitted([
+          at(kid(e.codec), PREC.member),
+          ".",
+          e.kind,
+          callArguments([kid(e.input)]),
+        ]);
+      case "call":
+        return this.nonLeafCall(e, kid);
+      case "block":
+        return this.nestedBlock(e, mode);
+      case "if":
+        return this.conditional(e, kid);
+      case "match":
+        return this.match(e);
+      case "binary":
+        return this.binary(e, kid);
+      case "perform":
+      case "fail":
+      case "schema-make":
+      case "schema-decode":
+      case "schema-encode":
+      case "catch":
+      case "retry":
+      case "retry-with-schedule":
+      case "with-fiber":
+      case "join-fiber":
+      case "interrupt-fiber":
+      case "provide":
+      case "run":
+      case "partition-all":
+      case "validate-all":
+      case "all-results":
+      case "scoped":
+      case "fork-scoped":
+      case "make-scope":
+      case "provide-scope":
+      case "add-scope-finalizer":
+      case "close-scope":
+      case "with-resource":
+      case "run-stream":
+      case "fold-stream":
+      case "fold-effect-stream":
+      case "collect-stream":
+      case "head-stream":
+      case "last-stream":
+      case "drain-stream":
+      case "make-ref":
+      case "get-ref":
+      case "set-ref":
+      case "update-ref":
+        throw internal(`${e.kind} node in a structural position`);
+    }
+  }
+
+  /** Emit a Schema operation. The switch is exhaustive: a new operation needs a case. */
+  private schemaExpr(
+    e: Extract<Expr, { kind: "schema" }>,
+    kid: Kid,
+  ): Emitted {
+    const schema = this.scope.effect("Schema");
+    const args = e.arguments;
+    const resultType = this.scope.resolve(e.type);
+    const withSchemaView = (value: Emitted): Emitted =>
+      resultType.kind === "schema" && hasSchemaMetadata(resultType)
+        ? emitted([
+          `${schema}.make<`,
+          typeDoc(this.scope, resultType),
+          ">(",
+          at(value, PREC.member),
+          ".ast)",
+        ])
+        : value;
+    switch (e.op) {
+      case "constructor-default": {
+        const sourceType = this.scope.resolve(args[0].type);
+        if (sourceType.kind !== "schema") {
+          throw internal("constructor default needs a Schema");
         }
-        if (e.op === "identity") {
-          const type = this.scope.resolve(e.type);
-          if (type.kind !== "schema") {
-            throw internal("schema identity has wrong type");
-          }
-          return emitted([
-            `${schema}.toType(`,
-            schemaDoc(this.scope, type.decoded),
-            ")",
-          ]);
+        const effect = this.scope.effect("Effect");
+        const callback = this.pure(args[1]);
+        const effectful = isEffectfulCallback(args[1].type);
+        return withSchemaView(emitted([
+          `${schema}.make<(`,
+          typeDoc(this.scope, sourceType),
+          ' & { readonly "~type.make.in": ',
+          typeDoc(this.scope, sourceType.makeInput ?? sourceType.decoded),
+          ` } & ${schema}.WithoutConstructorDefault)>(`,
+          at(kid(args[0]), PREC.member),
+          ".ast).pipe(",
+          `${schema}.withConstructorDefault(${effect}.${
+            effectful ? "suspend" : "sync"
+          }(() => `,
+          at(callback, PREC.member),
+          "())))",
+        ]));
+      }
+      case "identity": {
+        const type = this.scope.resolve(e.type);
+        if (type.kind !== "schema") {
+          throw internal("schema identity has wrong type");
         }
-        if (e.op === "array" || e.op === "struct") {
-          return withSchemaView(emitted([
-            `${schema}.${e.op === "array" ? "Array" : "Struct"}`,
-            callArguments([kid(args[0])]),
-          ]));
-        }
-        if (e.op === "null-to-missing-key") {
+        return emitted([
+          `${schema}.toType(`,
+          schemaDoc(this.scope, type.decoded),
+          ")",
+        ]);
+      }
+      case "array":
+      case "struct": {
+        return withSchemaView(emitted([
+          `${schema}.${e.op === "array" ? "Array" : "Struct"}`,
+          callArguments([kid(args[0])]),
+        ]));
+      }
+      case "null-to-missing-key": {
+        const getter = this.scope.effect("SchemaGetter");
+        const option = this.scope.effect("Option");
+        const source = this.scope.temp();
+        const value = this.scope.temp();
+        return withSchemaView(emitted([
+          "((",
+          source,
+          ": ",
+          typeDoc(this.scope, args[0].type),
+          ") => ",
+          `${schema}.optionalKey(${schema}.NullOr(${source})).pipe(`,
+          `${schema}.decodeTo(${schema}.optionalKey(${schema}.toType(${source})), { `,
+          `decode: ${getter}.transformOptional(${option}.filter((${value}) => ${value} !== null)), `,
+          `encode: ${getter}.transformOptional((${value}) => ${value})`,
+          " })))(",
+          free(kid(args[0])),
+          ")",
+        ]));
+      }
+      case "optional-key": {
+        return withSchemaView(emitted([
+          `${schema}.optionalKey`,
+          callArguments([kid(args[0])]),
+        ]));
+      }
+      case "option-from-optional-key": {
+        return withSchemaView(emitted([
+          `${schema}.OptionFromOptionalKey`,
+          callArguments([kid(args[0])]),
+        ]));
+      }
+      case "default-key":
+      case "default-null-key":
+      case "default-encoded-key": {
+        const effect = this.scope.effect("Effect");
+        const fallback = this.pure(args[1]);
+        const callback = args[1].type;
+        const effectful = isEffectfulCallback(callback);
+        const issueFailure = callback.kind === "function" &&
+          callback.effects.failures.includes("error:effect/SchemaIssue");
+        const deferred: Doc = [
+          `${effect}.${effectful ? "suspend" : "sync"}(() => `,
+          at(fallback, PREC.member),
+          "())",
+        ];
+        const issue = this.scope.temp();
+        const defaultValue: Doc = issueFailure
+          ? [
+            `${effect}.mapError(`,
+            deferred,
+            ", (",
+            issue,
+            ") => new ",
+            `${schema}.SchemaError(`,
+            issue,
+            "))",
+          ]
+          : deferred;
+        if (e.op === "default-null-key") {
           const getter = this.scope.effect("SchemaGetter");
           const option = this.scope.effect("Option");
           const source = this.scope.temp();
           const value = this.scope.temp();
+          const issueDefault: Doc = callback.kind === "function" &&
+              callback.effects.failures.includes("error:effect/SchemaError")
+            ? [
+              `${effect}.mapError(`,
+              deferred,
+              `, (${issue}) => ${issue}.issue)`,
+            ]
+            : deferred;
+          const options = args[2];
+          const omit = options?.kind === "record" &&
+            options.fields[0].value.kind === "literal" &&
+            options.fields[0].value.value === "omit";
           return withSchemaView(emitted([
             "((",
             source,
@@ -1450,236 +1585,165 @@ export class ExprEmitter {
             typeDoc(this.scope, args[0].type),
             ") => ",
             `${schema}.optionalKey(${schema}.NullOr(${source})).pipe(`,
-            `${schema}.decodeTo(${schema}.optionalKey(${schema}.toType(${source})), { `,
-            `decode: ${getter}.transformOptional(${option}.filter((${value}) => ${value} !== null)), `,
-            `encode: ${getter}.transformOptional((${value}) => ${value})`,
-            " })))(",
+            `${schema}.decodeTo(${schema}.toType(${source}), { `,
+            `decode: ${getter}.transformOptionalEffect((${value}) => { `,
+            `const ${issue} = ${option}.filter(${value}, (${value}) => ${value} !== null); `,
+            `return ${option}.isSome(${issue}) ? ${effect}.succeed(${issue}) : ${effect}.map(`,
+            issueDefault,
+            `, ${option}.some); }), `,
+            `encode: ${getter}.${omit ? "omit" : "passthrough"}() })))`,
+            "(",
             free(kid(args[0])),
             ")",
           ]));
         }
-        if (e.op === "optional-key") {
-          return withSchemaView(emitted([
-            `${schema}.optionalKey`,
-            callArguments([kid(args[0])]),
-          ]));
-        }
-        if (e.op === "option-from-optional-key") {
-          return withSchemaView(emitted([
-            `${schema}.OptionFromOptionalKey`,
-            callArguments([kid(args[0])]),
-          ]));
-        }
-        if (
-          e.op === "default-key" || e.op === "default-null-key" ||
-          e.op === "default-encoded-key"
-        ) {
-          const effect = this.scope.effect("Effect");
-          const fallback = this.pure(args[1]);
-          const callback = args[1].type;
-          const effectful = isEffectfulCallback(callback);
-          const issueFailure = callback.kind === "function" &&
-            callback.effects.failures.includes("error:effect/SchemaIssue");
-          const deferred: Doc = [
-            `${effect}.${effectful ? "suspend" : "sync"}(() => `,
-            at(fallback, PREC.member),
-            "())",
-          ];
-          const issue = this.scope.temp();
-          const defaultValue: Doc = issueFailure
-            ? [
-              `${effect}.mapError(`,
-              deferred,
-              ", (",
-              issue,
-              ") => new ",
-              `${schema}.SchemaError(`,
-              issue,
-              "))",
-            ]
-            : deferred;
-          if (e.op === "default-null-key") {
-            const getter = this.scope.effect("SchemaGetter");
-            const option = this.scope.effect("Option");
-            const source = this.scope.temp();
-            const value = this.scope.temp();
-            const issueDefault: Doc = callback.kind === "function" &&
-                callback.effects.failures.includes("error:effect/SchemaError")
-              ? [
-                `${effect}.mapError(`,
-                deferred,
-                `, (${issue}) => ${issue}.issue)`,
-              ]
-              : deferred;
-            const options = args[2];
-            const omit = options?.kind === "record" &&
-              options.fields[0].value.kind === "literal" &&
-              options.fields[0].value.value === "omit";
-            return withSchemaView(emitted([
-              "((",
-              source,
-              ": ",
-              typeDoc(this.scope, args[0].type),
-              ") => ",
-              `${schema}.optionalKey(${schema}.NullOr(${source})).pipe(`,
-              `${schema}.decodeTo(${schema}.toType(${source}), { `,
-              `decode: ${getter}.transformOptionalEffect((${value}) => { `,
-              `const ${issue} = ${option}.filter(${value}, (${value}) => ${value} !== null); `,
-              `return ${option}.isSome(${issue}) ? ${effect}.succeed(${issue}) : ${effect}.map(`,
-              issueDefault,
-              `, ${option}.some); }), `,
-              `encode: ${getter}.${omit ? "omit" : "passthrough"}() })))`,
-              "(",
-              free(kid(args[0])),
-              ")",
-            ]));
-          }
-          return withSchemaView(emitted([
-            at(kid(args[0]), PREC.member),
-            ".pipe(",
-            `${schema}.${
-              e.op === "default-encoded-key"
-                ? "withDecodingDefaultKey"
-                : "withDecodingDefaultTypeKey"
-            }(`,
-            defaultValue,
-            ...(args[2] === undefined ? [] : [", ", free(kid(args[2]))]),
+        return withSchemaView(emitted([
+          at(kid(args[0]), PREC.member),
+          ".pipe(",
+          `${schema}.${
+            e.op === "default-encoded-key"
+              ? "withDecodingDefaultKey"
+              : "withDecodingDefaultTypeKey"
+          }(`,
+          defaultValue,
+          ...(args[2] === undefined ? [] : [", ", free(kid(args[2]))]),
+          "))",
+        ]));
+      }
+      case "optional-transform": {
+        const getter = this.scope.effect("SchemaGetter");
+        const decode = this.pure(args[2]);
+        const encode = this.pure(args[3]);
+        const getterName = (index: number) =>
+          isEffectfulCallback(args[index].type)
+            ? "transformOptionalEffect"
+            : "transformOptional";
+        return withSchemaView(emitted([
+          at(kid(args[0]), PREC.member),
+          ".pipe(",
+          `${schema}.decodeTo(`,
+          free(kid(args[1])),
+          ", { decode: ",
+          `${getter}.${getterName(2)}(`,
+          free(decode),
+          "), encode: ",
+          `${getter}.${getterName(3)}(`,
+          free(encode),
+          ") }))",
+        ]));
+      }
+      case "optional-from-required": {
+        const getter = this.scope.effect("SchemaGetter");
+        const effect = this.scope.effect("Effect");
+        const option = this.scope.effect("Option");
+        const issue = this.scope.effect("SchemaIssue");
+        const decode = this.pure(args[2]);
+        const encode = this.pure(args[3]);
+        const decodeEffectful = isEffectfulCallback(args[2].type);
+        const encodeEffectful = isEffectfulCallback(args[3].type);
+        const decodeValue = this.scope.temp();
+        const encodeValue = this.scope.temp();
+        const encodeResult: Doc = encodeEffectful
+          ? [
+            `${effect}.map(${effect}.suspend(() => `,
+            at(encode, PREC.member),
+            "(",
+            encodeValue,
+            `)), ${option}.some)`,
+          ]
+          : [
+            `${option}.some(`,
+            at(encode, PREC.member),
+            "(",
+            encodeValue,
             "))",
-          ]));
-        }
-        if (e.op === "optional-transform") {
-          const getter = this.scope.effect("SchemaGetter");
-          const decode = this.pure(args[2]);
-          const encode = this.pure(args[3]);
-          const getterName = (index: number) =>
-            isEffectfulCallback(args[index].type)
-              ? "transformOptionalEffect"
-              : "transformOptional";
-          return withSchemaView(emitted([
-            at(kid(args[0]), PREC.member),
-            ".pipe(",
-            `${schema}.decodeTo(`,
-            free(kid(args[1])),
-            ", { decode: ",
-            `${getter}.${getterName(2)}(`,
-            free(decode),
-            "), encode: ",
-            `${getter}.${getterName(3)}(`,
-            free(encode),
-            ") }))",
-          ]));
-        }
-        if (e.op === "optional-from-required") {
-          const getter = this.scope.effect("SchemaGetter");
-          const effect = this.scope.effect("Effect");
-          const option = this.scope.effect("Option");
-          const issue = this.scope.effect("SchemaIssue");
-          const decode = this.pure(args[2]);
-          const encode = this.pure(args[3]);
-          const decodeEffectful = isEffectfulCallback(args[2].type);
-          const encodeEffectful = isEffectfulCallback(args[3].type);
-          const decodeValue = this.scope.temp();
-          const encodeValue = this.scope.temp();
-          const encodeResult: Doc = encodeEffectful
-            ? [
-              `${effect}.map(${effect}.suspend(() => `,
-              at(encode, PREC.member),
-              "(",
-              encodeValue,
-              `)), ${option}.some)`,
-            ]
-            : [
-              `${option}.some(`,
-              at(encode, PREC.member),
-              "(",
-              encodeValue,
-              "))",
-            ];
-          return withSchemaView(emitted([
-            at(kid(args[0]), PREC.member),
-            ".pipe(",
-            `${schema}.decodeTo(`,
-            free(kid(args[1])),
-            ", { decode: ",
-            `${getter}.transformOptionalEffect((${decodeValue}) => `,
-            `${option}.isSome(${decodeValue}) ? `,
-            `${effect}.${decodeEffectful ? "suspend" : "sync"}(() => `,
-            at(decode, PREC.member),
-            "(",
-            decodeValue,
-            `.value)) : ${effect}.fail(new ${issue}.InvalidValue({ message: `,
-            '"required encoded key is missing"',
-            " })))",
-            ", encode: ",
-            `${getter}.${
-              encodeEffectful ? "transformOptionalEffect" : "transformOptional"
-            }((${encodeValue}) => `,
-            encodeResult,
-            ") }))",
-          ]));
-        }
-        if (e.op === "union") {
-          return withSchemaView(
-            emitted([`${schema}.Union`, callArguments([kid(args[0])])]),
-          );
-        }
-        if (e.op === "invalid") {
-          const issue = this.scope.effect("SchemaIssue");
-          return emitted([
-            `new ${issue}.InvalidValue({ message: `,
-            free(kid(args[0])),
-            " })",
-          ]);
-        }
-        if (e.op === "at") {
-          const issue = this.scope.effect("SchemaIssue");
-          return emitted([
-            `new ${issue}.Pointer([`,
-            free(kid(args[0])),
-            "], ",
-            free(kid(args[1])),
-            ")",
-          ]);
-        }
-        if (e.op === "both") {
-          const issue = this.scope.effect("SchemaIssue");
-          return emitted([
-            `new ${issue}.Composite(`,
-            at(kid(args[0]), PREC.member),
-            ".ast, [",
-            free(kid(args[1])),
-            ", ",
-            free(kid(args[2])),
-            "])",
-          ]);
-        }
-        if (e.op === "recursive") {
-          const body = this.scope.temp();
-          const self = this.scope.temp();
-          const callback = this.pure(args[0]);
-          const type = typeDoc(this.scope, e.type);
-          return emitted([
-            "(() => { let ",
-            body,
-            ": ",
-            type,
-            "; const ",
-            self,
-            ": ",
-            type,
-            ` = ${schema}.suspend(() => `,
-            body,
-            "); ",
-            body,
-            " = ",
-            at(callback, PREC.member),
-            "(",
-            self,
-            "); return ",
-            self,
-            "; })()",
-          ]);
-        }
+          ];
+        return withSchemaView(emitted([
+          at(kid(args[0]), PREC.member),
+          ".pipe(",
+          `${schema}.decodeTo(`,
+          free(kid(args[1])),
+          ", { decode: ",
+          `${getter}.transformOptionalEffect((${decodeValue}) => `,
+          `${option}.isSome(${decodeValue}) ? `,
+          `${effect}.${decodeEffectful ? "suspend" : "sync"}(() => `,
+          at(decode, PREC.member),
+          "(",
+          decodeValue,
+          `.value)) : ${effect}.fail(new ${issue}.InvalidValue({ message: `,
+          '"required encoded key is missing"',
+          " })))",
+          ", encode: ",
+          `${getter}.${
+            encodeEffectful ? "transformOptionalEffect" : "transformOptional"
+          }((${encodeValue}) => `,
+          encodeResult,
+          ") }))",
+        ]));
+      }
+      case "union": {
+        return withSchemaView(
+          emitted([`${schema}.Union`, callArguments([kid(args[0])])]),
+        );
+      }
+      case "invalid": {
+        const issue = this.scope.effect("SchemaIssue");
+        return emitted([
+          `new ${issue}.InvalidValue({ message: `,
+          free(kid(args[0])),
+          " })",
+        ]);
+      }
+      case "at": {
+        const issue = this.scope.effect("SchemaIssue");
+        return emitted([
+          `new ${issue}.Pointer([`,
+          free(kid(args[0])),
+          "], ",
+          free(kid(args[1])),
+          ")",
+        ]);
+      }
+      case "both": {
+        const issue = this.scope.effect("SchemaIssue");
+        return emitted([
+          `new ${issue}.Composite(`,
+          at(kid(args[0]), PREC.member),
+          ".ast, [",
+          free(kid(args[1])),
+          ", ",
+          free(kid(args[2])),
+          "])",
+        ]);
+      }
+      case "recursive": {
+        const body = this.scope.temp();
+        const self = this.scope.temp();
+        const callback = this.pure(args[0]);
+        const type = typeDoc(this.scope, e.type);
+        return emitted([
+          "(() => { let ",
+          body,
+          ": ",
+          type,
+          "; const ",
+          self,
+          ": ",
+          type,
+          ` = ${schema}.suspend(() => `,
+          body,
+          "); ",
+          body,
+          " = ",
+          at(callback, PREC.member),
+          "(",
+          self,
+          "); return ",
+          self,
+          "; })()",
+        ]);
+      }
+      case "transform": {
         const source = kid(args[0]);
         const target = kid(args[1]);
         const decode = this.pure(args[2]);
@@ -1747,59 +1811,10 @@ export class ExprEmitter {
           " })))",
         ]));
       }
-      case "decode":
-      case "encode":
-        return emitted([
-          at(kid(e.codec), PREC.member),
-          ".",
-          e.kind,
-          callArguments([kid(e.input)]),
-        ]);
-      case "call":
-        return this.nonLeafCall(e, kid);
-      case "block":
-        return this.nestedBlock(e, mode);
-      case "if":
-        return this.conditional(e, kid);
-      case "match":
-        return this.match(e);
-      case "binary":
-        return this.binary(e, kid);
-      case "perform":
-      case "fail":
-      case "schema-make":
-      case "schema-decode":
-      case "schema-encode":
-      case "catch":
-      case "retry":
-      case "retry-with-schedule":
-      case "with-fiber":
-      case "join-fiber":
-      case "interrupt-fiber":
-      case "provide":
-      case "run":
-      case "partition-all":
-      case "validate-all":
-      case "all-results":
-      case "scoped":
-      case "fork-scoped":
-      case "make-scope":
-      case "provide-scope":
-      case "add-scope-finalizer":
-      case "close-scope":
-      case "with-resource":
-      case "run-stream":
-      case "fold-stream":
-      case "fold-effect-stream":
-      case "collect-stream":
-      case "head-stream":
-      case "last-stream":
-      case "drain-stream":
-      case "make-ref":
-      case "get-ref":
-      case "set-ref":
-      case "update-ref":
-        throw internal(`${e.kind} node in a structural position`);
+      default: {
+        const missing: never = e.op;
+        throw internal(`unhandled Schema operation ${missing}`);
+      }
     }
   }
 
