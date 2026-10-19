@@ -62,6 +62,11 @@ the field's optional flag and separate direction requirements.
 
 ## Tagged union builder
 
+This section records the initial tagged-only rule. The later
+[general-union extension](2026-10-19-schema-general-union-contract.md)
+supersedes the shared-tag restriction and admits untagged and overlapping
+branches while retaining the tagged behavior below.
+
 Add `schemaUnion([branch1, branch2, ...])`, with at least two branches. Each
 branch is a `Schema<D_i,E_i,RD_i,RE_i>` whose decoded and encoded types are
 records with the same required discriminant key, such as `kind`. The value at

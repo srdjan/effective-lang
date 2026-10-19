@@ -78,7 +78,10 @@ export function without<T extends string>(
 /** What a pattern node means, for lowering. */
 export type PatternFact =
   | { readonly kind: "wildcard" }
-  | { readonly kind: "literal"; readonly value: string | number | boolean }
+  | {
+    readonly kind: "literal";
+    readonly value: string | number | boolean | null;
+  }
   | { readonly kind: "none" }
   | { readonly kind: "some"; readonly binding: LocalId | undefined }
   | {
@@ -205,9 +208,11 @@ export type NodeFact =
       | "array"
       | "struct"
       | "optional-key"
+      | "null-to-missing-key"
       | "option-from-optional-key"
       | "default-key"
       | "optional-transform"
+      | "optional-from-required"
       | "union"
       | "transform"
       | "recursive"

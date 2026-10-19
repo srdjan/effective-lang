@@ -332,7 +332,9 @@ class BodyLowerer {
         if (value === undefined) {
           throw internal(`a literal has no value at ${this.describe(node)}`);
         }
-        return { kind: "literal", value, ...this.annotation(node) };
+        return value === null
+          ? { kind: "null", ...this.annotation(node) }
+          : { kind: "literal", value, ...this.annotation(node) };
       }
       case SyntaxKind.NameExpr:
         return this.name(node);

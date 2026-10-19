@@ -384,11 +384,12 @@ export class TypeLowerer {
       if (kindOf(this.tree, child) !== SyntaxKind.Token) continue;
       const kind = this.tree.lexed.kinds[this.tree.tokens[child]] as TokenKind;
       const text = nodeText(this.tree, child);
-      let value: string | number | boolean | undefined;
+      let value: string | number | boolean | null | undefined;
       if (kind === TokenKind.String) value = decodeString(text);
       else if (kind === TokenKind.Number) value = Number(text);
       else if (kind === TokenKind.KwTrue) value = true;
       else if (kind === TokenKind.KwFalse) value = false;
+      else if (kind === TokenKind.KwNull) value = null;
       if (value === undefined) return this.errorLowered();
       if (typeof value === "number" && !Number.isFinite(value)) {
         return this.errorLowered();
@@ -732,6 +733,9 @@ export class TypeLowerer {
       const encodedOptionalKey = nodeText(this.tree, node).startsWith(
         "SchemaEncodedOptional<",
       );
+      const decodedOptionalKey = nodeText(this.tree, node).startsWith(
+        "SchemaDecodedOptional<",
+      );
       const encoded = typeNodes[1] === undefined
         ? first
         : this.lower(typeNodes[1]);
@@ -755,6 +759,7 @@ export class TypeLowerer {
           encodeRequirements,
           optionalKey,
           encodedOptionalKey,
+          decodedOptionalKey,
         ),
         ir: {
           kind: "schema",
@@ -764,6 +769,7 @@ export class TypeLowerer {
           encodeRequirements,
           ...(optionalKey ? { optionalKey: true as const } : {}),
           ...(encodedOptionalKey ? { encodedOptionalKey: true as const } : {}),
+          ...(decodedOptionalKey ? { decodedOptionalKey: true as const } : {}),
         },
       };
     }

@@ -114,9 +114,11 @@ export type PreludeName =
   | "schemaArray"
   | "schemaStruct"
   | "schemaOptionalKey"
+  | "schemaNullToMissingKey"
   | "schemaOptionFromOptionalKey"
   | "schemaDefaultKey"
   | "schemaOptionalTransform"
+  | "schemaOptionalFromRequired"
   | "schemaUnion"
   | "schemaTransform"
   | "schemaRecursive"
@@ -213,9 +215,11 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
   "schemaArray",
   "schemaStruct",
   "schemaOptionalKey",
+  "schemaNullToMissingKey",
   "schemaOptionFromOptionalKey",
   "schemaDefaultKey",
   "schemaOptionalTransform",
+  "schemaOptionalFromRequired",
   "schemaUnion",
   "schemaTransform",
   "schemaRecursive",
@@ -513,10 +517,12 @@ class Resolver {
         name !== "scheduleConcat" &&
         name !== "schema" && name !== "schemaArray" &&
         name !== "schemaStruct" && name !== "schemaTransform" &&
-        name !== "schemaOptionalKey" && name !== "schemaUnion" &&
+        name !== "schemaOptionalKey" && name !== "schemaNullToMissingKey" &&
+        name !== "schemaUnion" &&
         name !== "schemaOptionFromOptionalKey" &&
         name !== "schemaDefaultKey" &&
         name !== "schemaOptionalTransform" &&
+        name !== "schemaOptionalFromRequired" &&
         name !== "schemaRecursive" && name !== "schemaDecode" &&
         name !== "schemaEncode" && name !== "schemaInvalid" &&
         name !== "schemaAt" && name !== "schemaBoth" &&
@@ -700,10 +706,12 @@ class Resolver {
       name !== "scheduleConcat" &&
       name !== "schema" && name !== "schemaArray" &&
       name !== "schemaStruct" && name !== "schemaTransform" &&
-      name !== "schemaOptionalKey" && name !== "schemaUnion" &&
+      name !== "schemaOptionalKey" && name !== "schemaNullToMissingKey" &&
+      name !== "schemaUnion" &&
       name !== "schemaOptionFromOptionalKey" &&
       name !== "schemaDefaultKey" &&
       name !== "schemaOptionalTransform" &&
+      name !== "schemaOptionalFromRequired" &&
       name !== "schemaRecursive" && name !== "schemaDecode" &&
       name !== "schemaEncode" && name !== "schemaInvalid" &&
       name !== "schemaAt" && name !== "schemaBoth" &&

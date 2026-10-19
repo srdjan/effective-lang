@@ -201,6 +201,11 @@ export function checkTypeIds(
         walk(t.decoded, `${at}.decoded`, depth + 1);
         walk(t.encoded, `${at}.encoded`, depth + 1);
         if (
+          Number(t.optionalKey === true) +
+              Number(t.encodedOptionalKey === true) +
+              Number(t.decodedOptionalKey === true) > 1
+        ) fail(at, "Schema field optionality flags are mutually exclusive");
+        if (
           !recursiveDataOnly(world, t.decoded) ||
           !recursiveDataOnly(world, t.encoded)
         ) {

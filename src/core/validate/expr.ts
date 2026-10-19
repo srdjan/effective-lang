@@ -95,8 +95,8 @@ function invocationOf(fn: {
 function literalValues(
   ctx: Ctx,
   type: Type,
-): (string | number | boolean)[] | undefined {
-  const values: (string | number | boolean)[] = [];
+): (string | number | boolean | null)[] | undefined {
+  const values: (string | number | boolean | null)[] = [];
   for (const member of members(ctx.world.env, type)) {
     if (member.kind === "literal") values.push(member.value);
     else if (member.kind === "primitive" && member.name === "boolean") {
@@ -407,6 +407,12 @@ export class BodyValidator {
 
   private compute(e: Expr, path: string, callee: boolean): Comp {
     switch (e.kind) {
+      case "null":
+        return {
+          type: { kind: "literal", value: null },
+          match: "exact",
+          active: QUIET,
+        };
       case "literal":
         return {
           type: e.value === null ? UNIT : { kind: "literal", value: e.value },
@@ -1700,14 +1706,16 @@ export class BodyValidator {
     const schemaOf = (type: Type) => {
       const found = unfold(this.env, type);
       return found.kind === "schema" && found.optionalKey !== true &&
-          found.encodedOptionalKey !== true
+          found.encodedOptionalKey !== true &&
+          found.decodedOptionalKey !== true
         ? found
         : undefined;
     };
     const optionalOf = (type: Type) => {
       const found = unfold(this.env, type);
       return found.kind === "schema" && found.optionalKey === true &&
-          found.encodedOptionalKey !== true
+          found.encodedOptionalKey !== true &&
+          found.decodedOptionalKey !== true
         ? found
         : undefined;
     };
@@ -1772,6 +1780,27 @@ export class BodyValidator {
         active: combine(args),
       };
     }
+    if (e.op === "null-to-missing-key") {
+      const input = args[0] === undefined ? undefined : schemaOf(args[0].type);
+      const nil: Type = { kind: "literal", value: null };
+      if (
+        args.length !== 1 || input === undefined ||
+        fits(this.env, nil, input.decoded) || fits(this.env, nil, input.encoded)
+      ) {
+        return bad(
+          "schemaNullToMissingKey needs one ordinary Schema with nonnullable decoded and encoded types",
+        );
+      }
+      return {
+        type: {
+          ...input,
+          encoded: { kind: "union", members: [input.encoded, nil] },
+          optionalKey: true,
+        },
+        match: "exact",
+        active: combine(args),
+      };
+    }
     if (e.op === "optional-key") {
       const input = args[0] === undefined ? undefined : schemaOf(args[0].type);
       if (args.length !== 1 || input === undefined) {
@@ -1808,8 +1837,18 @@ export class BodyValidator {
           (fallback.effects.failures.length === 1 &&
             (fallback.effects.failures[0] === SCHEMA_ISSUE_ID ||
               fallback.effects.failures[0] === SCHEMA_ERROR_ID)));
+      const options = e.arguments[2];
+      if (options !== undefined) {
+        const field = options.kind === "record" && options.fields.length === 1
+          ? options.fields[0]
+          : undefined;
+        if (
+          field?.name !== "encodingStrategy" || field.value.kind !== "literal" ||
+          (field.value.value !== "omit" && field.value.value !== "passthrough")
+        ) return bad('schemaDefaultKey options need one literal "omit" or "passthrough" encodingStrategy');
+      }
       if (
-        args.length !== 2 || input === undefined || fallback === undefined ||
+        (args.length !== 2 && args.length !== 3) || input === undefined || fallback === undefined ||
         e.arguments[1]?.kind !== "closure" ||
         fallback.parameters.length !== 0 ||
         !validFailure ||
@@ -1857,7 +1896,9 @@ export class BodyValidator {
             kind: "record",
             fields: fields.map(({ field, schema }) => ({
               name: field.name,
-              optional: schema.kind === "schema" && schema.optionalKey === true,
+              optional: schema.kind === "schema" &&
+                (schema.optionalKey === true ||
+                  schema.decodedOptionalKey === true),
               type: schema.kind === "schema" ? schema.decoded : field.type,
             })),
           },
@@ -1900,36 +1941,6 @@ export class BodyValidator {
         return bad("schemaUnion branches must be ordinary Schema values");
       }
       const schemas = branches.filter((branch) => branch !== undefined);
-      const tagMaps = schemas.map((branch) => {
-        const decoded = unfold(this.env, branch.decoded);
-        const encoded = unfold(this.env, branch.encoded);
-        const candidates = new Map<string, string>();
-        if (decoded.kind !== "record" || encoded.kind !== "record") {
-          return candidates;
-        }
-        for (const field of decoded.fields) {
-          if (field.optional) continue;
-          const other = encoded.fields.find((item) => item.name === field.name);
-          if (other === undefined || other.optional) continue;
-          const left = unfold(this.env, field.type);
-          const right = unfold(this.env, other.type);
-          if (
-            left.kind === "literal" && right.kind === "literal" &&
-            typeof left.value === "string" && left.value === right.value
-          ) candidates.set(field.name, left.value);
-        }
-        return candidates;
-      });
-      const sharedTag = [...tagMaps[0].keys()].find((name) => {
-        const values = tagMaps.map((candidate) => candidate.get(name));
-        return values.every((value) => value !== undefined) &&
-          new Set(values).size === values.length;
-      });
-      if (sharedTag === undefined) {
-        return bad(
-          "schemaUnion needs distinct shared literal tags in both directions",
-        );
-      }
       return {
         type: {
           kind: "schema",
@@ -1941,6 +1952,68 @@ export class BodyValidator {
           encodeRequirements: sortedUnique(
             schemas.flatMap((s) => s.encodeRequirements),
           ),
+        },
+        match: "exact",
+        active: combine(args),
+      };
+    }
+    if (e.op === "optional-from-required") {
+      const source = args[0] === undefined ? undefined : schemaOf(args[0].type);
+      const target = args[1] === undefined
+        ? undefined
+        : optionalOf(args[1].type);
+      const decode = args[2] === undefined
+        ? undefined
+        : asFunction(this.env, args[2].type);
+      const encode = args[3] === undefined
+        ? undefined
+        : asFunction(this.env, args[3].type);
+      const validCallback = (fn: typeof decode) =>
+        fn !== undefined &&
+        (fn.effects.failures.length === 0 ||
+          (fn.effects.failures.length === 1 &&
+            fn.effects.failures[0] === SCHEMA_ISSUE_ID)) &&
+        (fn.execution !== "pure" ||
+          (fn.effects.failures.length === 0 &&
+            fn.effects.requirements.length === 0));
+      if (
+        args.length !== 4 || source === undefined || target === undefined ||
+        !validCallback(decode) || !validCallback(encode) ||
+        decode?.parameters.length !== 1 || encode?.parameters.length !== 1 ||
+        !fits(this.env, source.decoded, decode.parameters[0]) ||
+        !fits(
+          this.env,
+          { kind: "option", element: target.encoded },
+          encode.parameters[0],
+        ) ||
+        !fits(this.env, decode.result, {
+          kind: "option",
+          element: target.encoded,
+        }) ||
+        !fits(this.env, encode.result, source.decoded) ||
+        e.arguments[2]?.kind !== "closure" ||
+        e.arguments[3]?.kind !== "closure"
+      ) {
+        return bad(
+          "schemaOptionalFromRequired needs required-to-optional callbacks with only SchemaIssue failure",
+        );
+      }
+      return {
+        type: {
+          kind: "schema",
+          decoded: target.decoded,
+          encoded: source.encoded,
+          decodeRequirements: sortedUnique([
+            ...source.decodeRequirements,
+            ...target.decodeRequirements,
+            ...decode.effects.requirements,
+          ]),
+          encodeRequirements: sortedUnique([
+            ...source.encodeRequirements,
+            ...target.encodeRequirements,
+            ...encode.effects.requirements,
+          ]),
+          decodedOptionalKey: true,
         },
         match: "exact",
         active: combine(args),
@@ -2121,7 +2194,38 @@ export class BodyValidator {
         callback.body.arguments[0]?.kind === "tuple"
       ? callback.body.arguments[0].elements
       : undefined;
-    const finiteChoice = branches !== undefined && branches.length >= 2 &&
+    const tagMaps = (branches ?? []).map((branch) => {
+      const schema = unfold(this.env, branch.type);
+      const decoded = schema.kind === "schema"
+        ? unfold(this.env, schema.decoded)
+        : undefined;
+      const encoded = schema.kind === "schema"
+        ? unfold(this.env, schema.encoded)
+        : undefined;
+      const candidates = new Map<string, string>();
+      if (decoded?.kind !== "record" || encoded?.kind !== "record") {
+        return candidates;
+      }
+      for (const field of decoded.fields) {
+        if (field.optional) continue;
+        const other = encoded.fields.find((item) => item.name === field.name);
+        if (other === undefined || other.optional) continue;
+        const left = unfold(this.env, field.type);
+        const right = unfold(this.env, other.type);
+        if (
+          left.kind === "literal" && right.kind === "literal" &&
+          typeof left.value === "string" && left.value === right.value
+        ) candidates.set(field.name, left.value);
+      }
+      return candidates;
+    });
+    const tagged = tagMaps.length >= 2 &&
+      [...tagMaps[0].keys()].some((name) => {
+        const values = tagMaps.map((candidate) => candidate.get(name));
+        return values.every((value) => value !== undefined) &&
+          new Set(values).size === values.length;
+      });
+    const finiteChoice = branches !== undefined && tagged &&
       branches.some((branch) => !containsSelf(branch));
     let found = false;
     const visit = (value: Expr, guarded: boolean): boolean => {
@@ -2791,6 +2895,7 @@ export class BodyValidator {
         switch (e.kind) {
           case "take-sink":
           case "make-scope":
+          case "null":
           case "literal":
           case "reference":
           case "none":
@@ -3112,7 +3217,7 @@ export class BodyValidator {
 
   private streamState(type: Type): Type {
     const value = unfold(this.env, type);
-    if (value.kind !== "literal") return type;
+    if (value.kind !== "literal" || value.value === null) return type;
     return typeof value.value === "string"
       ? STRING
       : typeof value.value === "boolean"
@@ -4320,6 +4425,7 @@ export class BodyValidator {
     for (const member of members(this.env, type)) {
       let current: string | undefined;
       if (member.kind === "literal") {
+        if (member.value === null) return undefined;
         current = typeof member.value === "number"
           ? Number.isSafeInteger(member.value) ? "int" : undefined
           : typeof member.value;
@@ -5223,7 +5329,14 @@ export class BodyValidator {
       case "!==": {
         const l = comparisonClass(env, left.type);
         const r = comparisonClass(env, right.type);
-        return l !== undefined && l === r
+        const isNull = (type: Type) => {
+          const value = unfold(env, type);
+          return value.kind === "literal" && value.value === null;
+        };
+        const nullable =
+          (isNull(left.type) && fits(env, left.type, right.type)) ||
+          (isNull(right.type) && fits(env, right.type, left.type));
+        return nullable || l !== undefined && l === r
           ? { type: BOOLEAN, match: "exact", active }
           : mismatch();
       }

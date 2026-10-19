@@ -86,7 +86,7 @@ const DECL_WORDS: ReadonlySet<string> = new Set([
 ]);
 
 function isKeywordKind(k: TokenKind): boolean {
-  return k >= TokenKind.KwImport && k <= TokenKind.KwFalse;
+  return k >= TokenKind.KwImport && k <= TokenKind.KwNull;
 }
 
 function binaryPrecedence(k: TokenKind): number {
@@ -998,6 +998,7 @@ class Parser {
             this.isWordAt(this.pos, "Schema") ||
             this.isWordAt(this.pos, "SchemaOptional") ||
             this.isWordAt(this.pos, "SchemaEncodedOptional") ||
+            this.isWordAt(this.pos, "SchemaDecodedOptional") ||
             this.isWordAt(this.pos, "Layer")) &&
           this.kinds[this.pos + 1] === TokenKind.Lt
         ) {
@@ -1022,7 +1023,8 @@ class Parser {
             this.parseType();
           } else if (
             (name === "Schema" || name === "SchemaOptional" ||
-              name === "SchemaEncodedOptional") &&
+              name === "SchemaEncodedOptional" ||
+              name === "SchemaDecodedOptional") &&
             this.kind() === TokenKind.Comma
           ) {
             this.tok();
@@ -1030,7 +1032,8 @@ class Parser {
           }
           if (
             (name === "Schema" || name === "SchemaOptional" ||
-              name === "SchemaEncodedOptional") &&
+              name === "SchemaEncodedOptional" ||
+              name === "SchemaDecodedOptional") &&
             this.kind() === TokenKind.Comma
           ) {
             this.tok();
@@ -1046,6 +1049,7 @@ class Parser {
           } else if (
             name !== "Schema" && name !== "SchemaOptional" &&
             name !== "SchemaEncodedOptional" &&
+            name !== "SchemaDecodedOptional" &&
             this.kind() === TokenKind.Comma
           ) {
             this.tok();
@@ -1072,7 +1076,8 @@ class Parser {
               : name === "Schedule"
               ? SyntaxKind.ScheduleType
               : name === "Schema" || name === "SchemaOptional" ||
-                  name === "SchemaEncodedOptional"
+                  name === "SchemaEncodedOptional" ||
+                  name === "SchemaDecodedOptional"
               ? SyntaxKind.SchemaType
               : name === "Layer"
               ? SyntaxKind.LayerType
@@ -1096,6 +1101,7 @@ class Parser {
       case TokenKind.Number:
       case TokenKind.KwTrue:
       case TokenKind.KwFalse:
+      case TokenKind.KwNull:
         this.begin();
         this.tok();
         this.end(SyntaxKind.LiteralType);
@@ -1252,6 +1258,7 @@ class Parser {
       case TokenKind.String:
       case TokenKind.KwTrue:
       case TokenKind.KwFalse:
+      case TokenKind.KwNull:
         this.begin();
         this.tok();
         this.end(SyntaxKind.LiteralExpr);
@@ -1515,7 +1522,7 @@ class Parser {
   private isLiteralKind(k: TokenKind): boolean {
     return k === TokenKind.String || k === TokenKind.Number ||
       k === TokenKind.KwTrue ||
-      k === TokenKind.KwFalse;
+      k === TokenKind.KwFalse || k === TokenKind.KwNull;
   }
 
   private invalidPattern(message: string): void {

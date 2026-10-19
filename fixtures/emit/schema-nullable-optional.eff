@@ -1,0 +1,51 @@
+type Text = string
+type Nil = null
+type Bool = boolean
+type Flag = "present" | null
+type Nullable = Text | null
+type Optional = { name?: Nullable }
+type PlainOptional = { name?: Text }
+type Required = { name: Nullable }
+type OptionRecord = { name: Option<Nullable> }
+
+service Read { normalize(value: Text): Text }
+service Write { restore(value: Text): Text }
+service Defaults { make(): Nullable }
+
+const text: Schema<Text> = schema()
+const nil: Schema<Nil> = schema()
+const shifted: Schema<Text, Text, Read.normalize, Write.restore> = schemaTransform(
+  text,
+  text,
+  (value: Text): Option<Text> uses Read.normalize => Some(Read.normalize(value)),
+  (value: Text): Option<Text> uses Write.restore => Some(Write.restore(value))
+)
+const nullable: Schema<Nullable, Nullable, Read.normalize, Write.restore> =
+  schemaUnion([shifted, nil])
+export const exact: Schema<Optional, Optional, Read.normalize, Write.restore> =
+  schemaStruct({ name: schemaOptionalKey(nullable) })
+export const collapsedField: SchemaOptional<Text, Nullable, Read.normalize, Write.restore> =
+  schemaNullToMissingKey(shifted)
+export const collapsed: Schema<PlainOptional, Optional, Read.normalize, Write.restore> =
+  schemaStruct({ name: collapsedField })
+export const option: Schema<OptionRecord, Optional, Read.normalize, Write.restore> =
+  schemaStruct({ name: schemaOptionFromOptionalKey(nullable) })
+export const defaulted: Schema<Required, Optional, Read.normalize | Defaults.make, Write.restore> =
+  schemaStruct({ name: schemaDefaultKey(nullable, (): Nullable uses Defaults.make => Defaults.make()) })
+export const identity: Schema<Nullable> = schema()
+
+const inferred = null
+export const nullValue: Nil = inferred
+export const presentNull = (): Optional => ({ name: null })
+export const absent = (): Optional => ({})
+export const isNull = (value: Nullable): Bool => value === null
+export const isPresent = (value: Nullable): Bool => null !== value
+export const finite = (value: Flag): Bool => match value {
+  null => true,
+  "present" => false
+}
+export const unit = (): void => {}
+export const nullRef = (): Nil => {
+  const ref = makeRef(null)
+  getRef(ref)
+}

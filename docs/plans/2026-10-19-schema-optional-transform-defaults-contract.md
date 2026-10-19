@@ -13,6 +13,9 @@ This contract pins the pure baseline. The
 [effectful callback extension](2026-10-19-schema-effectful-optional-contract.md)
 adds directional callback services and bounded authored failures to the same
 source constructors.
+The [required-to-optional extension](2026-10-19-schema-required-optional-contract.md)
+adds a guarded decoded-only optional field descriptor with a required encoded
+key.
 
 ## Decision
 

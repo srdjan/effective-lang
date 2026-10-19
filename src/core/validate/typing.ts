@@ -70,9 +70,10 @@ export function members(env: TypeEnv, type: Type, depth = 0): Type[] {
 }
 
 function literalFits(
-  value: string | number | boolean,
+  value: string | number | boolean | null,
   name: string,
 ): boolean {
+  if (value === null) return false;
   switch (typeof value) {
     case "string":
       return name === "string";
@@ -173,6 +174,7 @@ function assignable(
       return s.kind === "schema" &&
         s.optionalKey === t.optionalKey &&
         s.encodedOptionalKey === t.encodedOptionalKey &&
+        s.decodedOptionalKey === t.decodedOptionalKey &&
         assignable(env, s.decoded, t.decoded, false, depth + 1) &&
         assignable(env, t.decoded, s.decoded, false, depth + 1) &&
         assignable(env, s.encoded, t.encoded, false, depth + 1) &&
@@ -374,7 +376,7 @@ export function comparisonClass(
   for (const member of members(env, type)) {
     let current: string | undefined;
     if (member.kind === "literal") {
-      current = typeof member.value;
+      current = member.value === null ? "null" : typeof member.value;
     } else if (member.kind === "primitive") {
       if (member.name === "int" || member.name === "number") current = "number";
       else if (member.name === "string" || member.name === "boolean") {
@@ -439,6 +441,8 @@ export function show(type: Type): string {
           ? "SchemaOptional"
           : type.encodedOptionalKey === true
           ? "SchemaEncodedOptional"
+          : type.decodedOptionalKey === true
+          ? "SchemaDecodedOptional"
           : "Schema"
       }<${show(type.decoded)}, ${show(type.encoded)}>`;
     case "fiber":

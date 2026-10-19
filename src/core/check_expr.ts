@@ -207,6 +207,7 @@ export function literalOf(
     }
     if (kind === TokenKind.KwTrue) return true;
     if (kind === TokenKind.KwFalse) return false;
+    if (kind === TokenKind.KwNull) return null;
   }
   return undefined;
 }
@@ -334,6 +335,7 @@ export class BodyChecker {
   }
 
   private primitiveOf(value: LiteralValue): TypeRef {
+    if (value === null) return this.table.literal(null);
     if (typeof value === "string") return this.table.string;
     if (typeof value === "boolean") return this.table.boolean;
     return Number.isSafeInteger(value) ? this.table.int : this.table.number;
@@ -861,9 +863,11 @@ export class BodyChecker {
       case "schemaArray":
       case "schemaStruct":
       case "schemaOptionalKey":
+      case "schemaNullToMissingKey":
       case "schemaOptionFromOptionalKey":
       case "schemaDefaultKey":
       case "schemaOptionalTransform":
+      case "schemaOptionalFromRequired":
       case "schemaUnion":
       case "schemaTransform":
       case "schemaRecursive":
@@ -1447,9 +1451,11 @@ export class BodyChecker {
       schemaArray: "array",
       schemaStruct: "struct",
       schemaOptionalKey: "optional-key",
+      schemaNullToMissingKey: "null-to-missing-key",
       schemaOptionFromOptionalKey: "option-from-optional-key",
       schemaDefaultKey: "default-key",
       schemaOptionalTransform: "optional-transform",
+      schemaOptionalFromRequired: "optional-from-required",
       schemaUnion: "union",
       schemaTransform: "transform",
       schemaRecursive: "recursive",
@@ -1463,7 +1469,8 @@ export class BodyChecker {
     this.fact(node, { kind: "schema", op });
     const count = op === "identity"
       ? 0
-      : op === "transform" || op === "optional-transform"
+      : op === "transform" || op === "optional-transform" ||
+          op === "optional-from-required"
       ? 4
       : op === "both"
       ? 3
@@ -1471,7 +1478,7 @@ export class BodyChecker {
           op === "default-key"
       ? 2
       : 1;
-    const actualCount = op === "identity" ? 0 : count;
+    const actualCount = op === "default-key" && args.length === 3 ? 3 : count;
     if (!this.arity(node, name, actualCount, args)) {
       return this.finish(
         node,
@@ -1484,7 +1491,8 @@ export class BodyChecker {
       const type = this.table.node(this.table.unfold(info.type));
       if (
         (type.kind !== "schema" || type.optionalKey === true ||
-          type.encodedOptionalKey === true) &&
+          type.encodedOptionalKey === true ||
+          type.decodedOptionalKey === true) &&
         !this.isError(info.type)
       ) {
         this.report(
@@ -1494,7 +1502,8 @@ export class BodyChecker {
         );
       }
       return type.kind === "schema" && type.optionalKey !== true &&
-          type.encodedOptionalKey !== true
+          type.encodedOptionalKey !== true &&
+          type.decodedOptionalKey !== true
         ? type
         : undefined;
     };
@@ -1638,7 +1647,9 @@ export class BodyChecker {
         fields.map(({ field, schema }) => ({
           name: field.name,
           type: schema.kind === "schema" ? schema.decoded : this.table.error,
-          optional: schema.kind === "schema" && schema.optionalKey === true,
+          optional: schema.kind === "schema" &&
+            (schema.optionalKey === true ||
+              schema.decodedOptionalKey === true),
         })),
       );
       const encoded = this.table.record(
@@ -1670,7 +1681,7 @@ export class BodyChecker {
         const input = this.argInfo(args[0]);
         this.report(
           "type-mismatch/010",
-          "`schemaUnion` needs an inline list of tagged Schema branches",
+          "`schemaUnion` needs an inline list of Schema branches",
           list,
         );
         return this.finish(node, this.table.error, combine([input]));
@@ -1691,44 +1702,12 @@ export class BodyChecker {
       ) {
         this.report(
           "type-mismatch/010",
-          "`schemaUnion` needs at least two tagged Schema branches",
+          "`schemaUnion` needs at least two ordinary Schema branches",
           list,
         );
         return this.finish(node, this.table.error, combine([input]));
       }
       const schemas = branches.filter((branch) => branch !== undefined);
-      const tags = schemas.map((branch) => {
-        const decoded = this.table.node(this.table.unfold(branch.decoded));
-        const encoded = this.table.node(this.table.unfold(branch.encoded));
-        const candidates = new Map<string, string>();
-        if (decoded.kind !== "record" || encoded.kind !== "record") {
-          return candidates;
-        }
-        for (const field of decoded.fields) {
-          if (field.optional) continue;
-          const other = encoded.fields.find((item) => item.name === field.name);
-          if (other === undefined || other.optional) continue;
-          const left = this.table.node(this.table.unfold(field.type));
-          const right = this.table.node(this.table.unfold(other.type));
-          if (
-            left.kind === "literal" && right.kind === "literal" &&
-            typeof left.value === "string" && left.value === right.value
-          ) candidates.set(field.name, left.value);
-        }
-        return candidates;
-      });
-      const tag = [...tags[0].keys()].find((name) => {
-        const values = tags.map((candidate) => candidate.get(name));
-        return values.every((value) => value !== undefined) &&
-          new Set(values).size === values.length;
-      });
-      if (tag === undefined) {
-        this.report(
-          "type-mismatch/010",
-          "`schemaUnion` branches need one shared required string tag with distinct values in both directions",
-          list,
-        );
-      }
       return this.finish(
         node,
         this.table.schema(
@@ -1832,8 +1811,124 @@ export class BodyChecker {
         combine([sourceInfo, targetInfo, decode.info, encode.info]),
       );
     }
+    if (op === "optional-from-required") {
+      const sourceInfo = this.argInfo(args[0]);
+      const targetInfo = this.argInfo(args[1]);
+      const source = asSchema(sourceInfo, args[0].node);
+      const target = asOptional(targetInfo, args[1].node);
+      if (source === undefined || target === undefined) {
+        return this.finish(
+          node,
+          this.table.error,
+          combine([
+            sourceInfo,
+            targetInfo,
+            ...args.slice(2).map((arg) => this.argInfo(arg)),
+          ]),
+        );
+      }
+      const decode = this.callback(
+        name,
+        args[2],
+        [source.decoded],
+        this.table.option(target.encoded),
+        true,
+      );
+      const encode = this.callback(
+        name,
+        args[3],
+        [this.table.option(target.encoded)],
+        source.decoded,
+        true,
+      );
+      const decodeFn = this.functionOf(decode.info.type);
+      const encodeFn = this.functionOf(encode.info.type);
+      const validIssueFailure = (failures: readonly string[] | undefined) =>
+        failures !== undefined &&
+        (failures.length === 0 ||
+          (failures.length === 1 && failures[0] === SCHEMA_ISSUE_ID));
+      if (
+        !validIssueFailure(decodeFn?.failures) ||
+        !validIssueFailure(encodeFn?.failures)
+      ) {
+        this.report(
+          "type-mismatch/010",
+          "schemaOptionalFromRequired callbacks may fail only with SchemaIssue",
+          node,
+        );
+      }
+      if (
+        kindOf(this.tree, args[2].node) !== SyntaxKind.ArrowExpr ||
+        kindOf(this.tree, args[3].node) !== SyntaxKind.ArrowExpr
+      ) {
+        this.report(
+          "type-mismatch/010",
+          "schemaOptionalFromRequired needs inline callbacks",
+          node,
+        );
+      }
+      if (
+        !this.table.isAssignable(
+          decode.result,
+          this.table.option(target.encoded),
+        ) ||
+        !this.table.isAssignable(encode.result, source.decoded)
+      ) {
+        this.report(
+          "type-mismatch/003",
+          "schemaOptionalFromRequired decode must return optional target-encoded values and encode must return a required source-decoded value",
+          node,
+        );
+      }
+      return this.finish(
+        node,
+        this.table.schema(
+          target.decoded,
+          source.encoded,
+          [
+            ...source.decodeRequirements,
+            ...target.decodeRequirements,
+            ...(decodeFn?.requirements ?? []),
+          ],
+          [
+            ...source.encodeRequirements,
+            ...target.encodeRequirements,
+            ...(encodeFn?.requirements ?? []),
+          ],
+          false,
+          false,
+          true,
+        ),
+        combine([sourceInfo, targetInfo, decode.info, encode.info]),
+      );
+    }
     const first = this.argInfo(args[0]);
     const schema = asSchema(first, args[0].node);
+    if (op === "null-to-missing-key") {
+      const nil = this.table.literal(null);
+      if (
+        schema !== undefined &&
+        (this.table.isAssignable(nil, schema.decoded) ||
+          this.table.isAssignable(nil, schema.encoded))
+      ) {
+        this.report(
+          "type-mismatch/010",
+          "schemaNullToMissingKey needs nonnullable decoded and encoded field types",
+          args[0].node,
+        );
+      }
+      return this.finish(
+        node,
+        schema === undefined ? this.table.error : this.table.schema(
+          schema.decoded,
+          this.table.union([schema.encoded, nil]),
+          schema.decodeRequirements,
+          schema.encodeRequirements,
+          true,
+        ),
+        combine([first]),
+      );
+    }
     if (op === "optional-key") {
       return this.finish(
         node,
@@ -1912,6 +2007,37 @@ export class BodyChecker {
           args[1].node,
         );
       }
+      const options = args[2] === undefined ? undefined : this.argInfo(
+        args[2],
+        this.table.record([{
+          name: "encodingStrategy",
+          type: this.table.union([
+            this.table.literal("omit"),
+            this.table.literal("passthrough"),
+          ]),
+          optional: false,
+        }]),
+      );
+      if (options !== undefined) {
+        const fields = this.kids(args[2].node);
+        const value = fields.length === 1 ? this.kids(fields[0]).at(-1) : undefined;
+        const record = this.table.node(this.table.unfold(options.type));
+        if (
+          kindOf(this.tree, args[2].node) !== SyntaxKind.RecordExpr ||
+          fields.length !== 1 ||
+          kindOf(this.tree, fields[0]) !== SyntaxKind.RecordField ||
+          record.kind !== "record" || record.fields.length !== 1 ||
+          record.fields[0].name !== "encodingStrategy" ||
+          value === undefined || kindOf(this.tree, value) !== SyntaxKind.LiteralExpr ||
+          !["omit", "passthrough"].includes(String(literalOf(this.tree, value)))
+        ) {
+          this.report(
+            "type-mismatch/010",
+            'schemaDefaultKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record with a literal strategy',
+            args[2].node,
+          );
+        }
+      }
       return this.finish(
         node,
         schema === undefined ? this.table.error : this.table.schema(
@@ -1922,7 +2048,7 @@ export class BodyChecker {
           false,
           true,
         ),
-        combine([first, fallback.info]),
+        combine([first, fallback.info, ...(options === undefined ? [] : [options])]),
       );
     }
     if (op === "decode" || op === "encode") {
@@ -2067,8 +2193,41 @@ export class BodyChecker {
         ? part
         : this.kids(part).map(findList).find((found) => found !== undefined);
     const list = union ? findList(body) : undefined;
+    const tags = list === undefined ? [] : this.kids(list).map((branch) => {
+      const info = this.body.info.get(branch);
+      const schema = info === undefined
+        ? undefined
+        : this.table.node(this.table.unfold(info.type));
+      const decoded = schema?.kind === "schema"
+        ? this.table.node(this.table.unfold(schema.decoded))
+        : undefined;
+      const encoded = schema?.kind === "schema"
+        ? this.table.node(this.table.unfold(schema.encoded))
+        : undefined;
+      const candidates = new Map<string, string>();
+      if (decoded?.kind !== "record" || encoded?.kind !== "record") {
+        return candidates;
+      }
+      for (const field of decoded.fields) {
+        if (field.optional) continue;
+        const other = encoded.fields.find((item) => item.name === field.name);
+        if (other === undefined || other.optional) continue;
+        const left = this.table.node(this.table.unfold(field.type));
+        const right = this.table.node(this.table.unfold(other.type));
+        if (
+          left.kind === "literal" && right.kind === "literal" &&
+          typeof left.value === "string" && left.value === right.value
+        ) candidates.set(field.name, left.value);
+      }
+      return candidates;
+    });
+    const tagged = tags.length >= 2 && [...tags[0].keys()].some((name) => {
+      const values = tags.map((candidate) => candidate.get(name));
+      return values.every((value) => value !== undefined) &&
+        new Set(values).size === values.length;
+    });
     const finiteChoice = list !== undefined &&
-      this.kids(list).length >= 2 &&
+      tagged &&
       this.kids(list).some((branch) => !containsSelf(branch));
     let found = false;
     const visit = (part: NodeId, guarded: boolean): boolean => {
@@ -2987,6 +3146,7 @@ export class BodyChecker {
       const type = this.table.node(member);
       let current: string | undefined;
       if (type.kind === "literal") {
+        if (type.value === null) return undefined;
         current = typeof type.value === "number"
           ? Number.isSafeInteger(type.value) ? "int" : undefined
           : typeof type.value;
@@ -6176,7 +6336,7 @@ export class BodyChecker {
       const node = this.table.node(member);
       let current: string | undefined;
       if (node.kind === "literal") {
-        current = typeof node.value === "number" ? "number" : typeof node.value;
+        current = node.value === null ? "null" : typeof node.value;
       } else if (node.kind === "primitive") {
         if (node.name === "int" || node.name === "number") current = "number";
         else if (node.name === "string" || node.name === "boolean") {
@@ -6238,7 +6398,16 @@ export class BodyChecker {
         if (!either) {
           const l = this.comparisonClass(left.type);
           const r = this.comparisonClass(right.type);
-          if (l === undefined || r === undefined || l !== r) mismatch();
+          const isNull = (ref: TypeRef) => {
+            const type = table.node(table.unfold(ref));
+            return type.kind === "literal" && type.value === null;
+          };
+          const nullable =
+            (isNull(left.type) && table.isAssignable(left.type, right.type)) ||
+            (isNull(right.type) && table.isAssignable(right.type, left.type));
+          if (!nullable && (l === undefined || r === undefined || l !== r)) {
+            mismatch();
+          }
         }
         return this.finish(node, table.boolean, eff);
       }

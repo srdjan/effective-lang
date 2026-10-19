@@ -24,7 +24,7 @@ import {
 } from "./doc.ts";
 import { internal, type Scope, servicesOf, unsupported } from "./scope.ts";
 
-function literalText(value: string | number | boolean): string {
+function literalText(value: string | number | boolean | null): string {
   return typeof value === "string" ? JSON.stringify(value) : String(value);
 }
 
@@ -194,6 +194,26 @@ export function typeDoc(scope: Scope, type: Type): Doc {
       ];
     }
     case "schema":
+      if (type.decodedOptionalKey === true) {
+        const schema = scope.effect("Schema");
+        const rd = requirementUnion(scope, type.decodeRequirements) ?? "never";
+        const re = requirementUnion(scope, type.encodeRequirements) ?? "never";
+        return [
+          `${schema}.decodeTo<${schema}.optionalKey<${schema}.Codec<`,
+          typeDoc(scope, type.decoded),
+          ", unknown, ",
+          rd,
+          ", ",
+          re,
+          `>>, ${schema}.Codec<unknown, `,
+          typeDoc(scope, type.encoded),
+          ", ",
+          rd,
+          ", ",
+          re,
+          ">>",
+        ];
+      }
       if (type.encodedOptionalKey === true) {
         const schema = scope.effect("Schema");
         return [
@@ -327,9 +347,17 @@ export function typeDoc(scope: Scope, type: Type): Doc {
 
 function schemaOfLiterals(
   scope: Scope,
-  values: readonly (string | number | boolean)[],
+  values: readonly (string | number | boolean | null)[],
 ): Doc {
   const schema = scope.effect("Schema");
+  if (values.includes(null)) {
+    const nonNull = values.filter((value) => value !== null);
+    return nonNull.length === 0 ? `${schema}.Null` : [
+      `${schema}.Union([`,
+      schemaOfLiterals(scope, nonNull),
+      `, ${schema}.Null])`,
+    ];
+  }
   if (values.length === 1) {
     return callWith(`${schema}.Literal`, literalText(values[0]));
   }

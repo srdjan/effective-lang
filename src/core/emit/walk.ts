@@ -15,6 +15,7 @@ export function childrenOf(expr: Expr): Expr[] {
   switch (expr.kind) {
     case "take-sink":
     case "make-scope":
+    case "null":
     case "literal":
     case "reference":
     case "none":

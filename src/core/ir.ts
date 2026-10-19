@@ -44,7 +44,7 @@ export interface FunctionType {
 
 export type Type =
   | { readonly kind: "primitive"; readonly name: "string" | "boolean" | "int" | "number" | "unit" | "never" | "unknown" }
-  | { readonly kind: "literal"; readonly value: string | number | boolean }
+  | { readonly kind: "literal"; readonly value: string | number | boolean | null }
   | { readonly kind: "named"; readonly id: TypeId | ErrorId }
   | { readonly kind: "record"; readonly fields: readonly Field[] }
   | { readonly kind: "array"; readonly element: Type }
@@ -55,7 +55,7 @@ export type Type =
   | { readonly kind: "closeable-scope" }
   | { readonly kind: "retry-schedule"; readonly error: Type }
   | { readonly kind: "codec"; readonly decoded: Type; readonly encoded: Type }
-  | { readonly kind: "schema"; readonly decoded: Type; readonly encoded: Type; readonly decodeRequirements: readonly CapabilityId[]; readonly encodeRequirements: readonly CapabilityId[]; readonly optionalKey?: true; readonly encodedOptionalKey?: true }
+  | { readonly kind: "schema"; readonly decoded: Type; readonly encoded: Type; readonly decodeRequirements: readonly CapabilityId[]; readonly encodeRequirements: readonly CapabilityId[]; readonly optionalKey?: true; readonly encodedOptionalKey?: true; readonly decodedOptionalKey?: true }
   | { readonly kind: "fiber"; readonly result: Type; readonly failures: readonly ErrorId[] }
   | { readonly kind: "effect"; readonly result: Type; readonly effects: Effects }
   | { readonly kind: "stream"; readonly element: Type; readonly effects: Effects }
@@ -92,7 +92,7 @@ type Node<T> = Readonly<T> & Annotation;
 
 export type Pattern =
   | { readonly kind: "wildcard"; readonly span: Span }
-  | { readonly kind: "literal"; readonly value: string | number | boolean; readonly span: Span }
+  | { readonly kind: "literal"; readonly value: string | number | boolean | null; readonly span: Span }
   | { readonly kind: "none"; readonly span: Span }
   | { readonly kind: "some"; readonly binding: Parameter; readonly span: Span }
   | { readonly kind: "error"; readonly error: ErrorId; readonly binding: Parameter; readonly span: Span }
@@ -116,7 +116,10 @@ export type Step =
 
 /** Calls and capability operations remain distinct after resolution. */
 export type Expr =
+  // A null value in the original literal node represents unit, emitted as undefined.
   | Node<{ kind: "literal"; value: string | number | boolean | null }>
+  // Source null data is distinct from the existing unit marker.
+  | Node<{ kind: "null" }>
   | Node<{ kind: "reference"; target: LocalId | ValueId }>
   | Node<{ kind: "record"; fields: readonly { readonly name: string; readonly value: Expr }[] }>
   | Node<{ kind: "array"; elements: readonly Expr[] }>
@@ -195,7 +198,7 @@ export type Expr =
   | Node<{ kind: "retry-schedule"; step: Expr }>
   | Node<{ kind: "retry-with-schedule"; job: Expr; options: Expr }>
   | Node<{ kind: "codec"; decode: Expr; encode: Expr }>
-  | Node<{ kind: "schema"; op: "identity" | "array" | "struct" | "optional-key" | "option-from-optional-key" | "default-key" | "optional-transform" | "union" | "transform" | "recursive" | "invalid" | "at" | "both"; arguments: readonly Expr[] }>
+  | Node<{ kind: "schema"; op: "identity" | "array" | "struct" | "optional-key" | "null-to-missing-key" | "option-from-optional-key" | "default-key" | "optional-transform" | "optional-from-required" | "union" | "transform" | "recursive" | "invalid" | "at" | "both"; arguments: readonly Expr[] }>
   | Node<{ kind: "schema-decode" | "schema-encode"; schema: Expr; input: Expr }>
   | Node<{ kind: "decode"; codec: Expr; input: Expr }>
   | Node<{ kind: "encode"; codec: Expr; input: Expr }>

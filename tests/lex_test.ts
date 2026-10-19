@@ -86,7 +86,7 @@ Deno.test("== and != are reported, with a hint, as unknown tokens", () => {
 
 Deno.test("hard keywords are tokens; contextual keywords stay identifiers", () => {
   assertEquals(
-    kindsOf("import export const match try catch if else true false"),
+    kindsOf("import export const match try catch if else true false null"),
     [
       TokenKind.KwImport,
       TokenKind.KwExport,
@@ -98,6 +98,7 @@ Deno.test("hard keywords are tokens; contextual keywords stay identifiers", () =
       TokenKind.KwElse,
       TokenKind.KwTrue,
       TokenKind.KwFalse,
+      TokenKind.KwNull,
       TokenKind.Eof,
     ],
   );

@@ -1,0 +1,42 @@
+type Text = string
+type Int = int
+type Scalar = Text | Int
+type Short = { name: Text }
+type Long = { name: Text, score: Int }
+type Shape = Short | Long
+
+service Check { accept(value: Text): Text fails SchemaIssue }
+service Write { accept(value: Text): Text fails SchemaIssue }
+
+const text: Schema<Text> = schema()
+const integer: Schema<Int> = schema()
+const short: Schema<Short> = schema()
+const long: Schema<Long> = schema()
+
+export const scalar: Schema<Scalar> = schemaUnion([text, integer])
+export const shortFirst: Schema<Shape> = schemaUnion([short, long])
+export const longFirst: Schema<Shape> = schemaUnion([long, short])
+
+const one: Schema<Int, Text> = schemaTransform(
+  text,
+  integer,
+  (value: Text): Option<Int> => if (value === "one") { Some(1) } else { None },
+  (value: Int): Option<Text> => if (value === 1) { Some("one") } else { None }
+)
+export const converted: Schema<Scalar, Text> = schemaUnion([one, text])
+
+const checked: Schema<Text, Text, Check.accept, Write.accept> =
+  schemaTransform(
+    text,
+    text,
+    (value: Text): Text fails SchemaIssue uses Check.accept => Check.accept(value),
+    (value: Text): Text fails SchemaIssue uses Write.accept => Write.accept(value)
+  )
+
+export const fallback: Schema<Text, Text, Check.accept, Write.accept> =
+  schemaUnion([checked, text])
+
+export const readScalar = (input: unknown): Scalar fails SchemaError =>
+  schemaDecode(scalar, input)
+export const readFallback = (input: unknown): Text fails SchemaError uses Check.accept =>
+  schemaDecode(fallback, input)

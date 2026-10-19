@@ -741,6 +741,8 @@ export class ExprEmitter {
   private structural(e: Expr, mode: Mode): Emitted {
     const kid = this.kid(mode);
     switch (e.kind) {
+      case "null":
+        return emitted("null");
       case "literal":
         return emitted(this.literal(e.value));
       case "reference":
@@ -1396,6 +1398,26 @@ export class ExprEmitter {
             callArguments([kid(args[0])]),
           ]);
         }
+        if (e.op === "null-to-missing-key") {
+          const getter = this.scope.effect("SchemaGetter");
+          const option = this.scope.effect("Option");
+          const source = this.scope.temp();
+          const value = this.scope.temp();
+          return emitted([
+            "((",
+            source,
+            ": ",
+            typeDoc(this.scope, args[0].type),
+            ") => ",
+            `${schema}.optionalKey(${schema}.NullOr(${source})).pipe(`,
+            `${schema}.decodeTo(${schema}.optionalKey(${schema}.toType(${source})), { `,
+            `decode: ${getter}.transformOptional(${option}.filter((${value}) => ${value} !== null)), `,
+            `encode: ${getter}.transformOptional((${value}) => ${value})`,
+            " })))(",
+            free(kid(args[0])),
+            ")",
+          ]);
+        }
         if (e.op === "optional-key") {
           return emitted([
             `${schema}.optionalKey`,
@@ -1439,6 +1461,7 @@ export class ExprEmitter {
             ".pipe(",
             `${schema}.withDecodingDefaultTypeKey(`,
             defaultValue,
+            ...(args[2] === undefined ? [] : [", ", free(kid(args[2]))]),
             "))",
           ]);
         }
@@ -1462,6 +1485,57 @@ export class ExprEmitter {
             "), encode: ",
             `${getter}.${getterName(3)}(`,
             free(encode),
+            ") }))",
+          ]);
+        }
+        if (e.op === "optional-from-required") {
+          const getter = this.scope.effect("SchemaGetter");
+          const effect = this.scope.effect("Effect");
+          const option = this.scope.effect("Option");
+          const issue = this.scope.effect("SchemaIssue");
+          const decode = this.pure(args[2]);
+          const encode = this.pure(args[3]);
+          const decodeEffectful = args[2].type.kind === "function" &&
+            args[2].type.execution === "effect";
+          const encodeEffectful = args[3].type.kind === "function" &&
+            args[3].type.execution === "effect";
+          const decodeValue = this.scope.temp();
+          const encodeValue = this.scope.temp();
+          const encodeResult: Doc = encodeEffectful
+            ? [
+              `${effect}.map(${effect}.suspend(() => `,
+              at(encode, PREC.member),
+              "(",
+              encodeValue,
+              `)), ${option}.some)`,
+            ]
+            : [
+              `${option}.some(`,
+              at(encode, PREC.member),
+              "(",
+              encodeValue,
+              "))",
+            ];
+          return emitted([
+            at(kid(args[0]), PREC.member),
+            ".pipe(",
+            `${schema}.decodeTo(`,
+            free(kid(args[1])),
+            ", { decode: ",
+            `${getter}.transformOptionalEffect((${decodeValue}) => `,
+            `${option}.isSome(${decodeValue}) ? `,
+            `${effect}.${decodeEffectful ? "suspend" : "sync"}(() => `,
+            at(decode, PREC.member),
+            "(",
+            decodeValue,
+            `.value)) : ${effect}.fail(new ${issue}.InvalidValue({ message: `,
+            '"required encoded key is missing"',
+            " })))",
+            ", encode: ",
+            `${getter}.${
+              encodeEffectful ? "transformOptionalEffect" : "transformOptional"
+            }((${encodeValue}) => `,
+            encodeResult,
             ") }))",
           ]);
         }
@@ -2206,7 +2280,10 @@ export class ExprEmitter {
       case "wildcard":
         return undefined;
       case "literal":
-        return armEquality(selector, this.literal(pattern.value));
+        return armEquality(
+          selector,
+          pattern.value === null ? "null" : this.literal(pattern.value),
+        );
       case "error":
         return armEquality(
           `${selector}._tag`,
@@ -2385,6 +2462,7 @@ export class ExprEmitter {
   /** True when evaluating `e` cannot throw and has no effect. */
   private isTrivial(e: Expr): boolean {
     switch (e.kind) {
+      case "null":
       case "literal":
       case "reference":
       case "none":

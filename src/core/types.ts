@@ -108,7 +108,7 @@ export type TypeNode =
   | { readonly kind: "primitive"; readonly name: PrimitiveName }
   | {
     readonly kind: "literal";
-    readonly value: string | number | boolean;
+    readonly value: string | number | boolean | null;
   }
   | { readonly kind: "named"; readonly id: TypeId | ErrorId }
   | { readonly kind: "record"; readonly fields: readonly RecordField[] }
@@ -132,6 +132,7 @@ export type TypeNode =
     readonly encodeRequirements: readonly CapabilityId[];
     readonly optionalKey?: true;
     readonly encodedOptionalKey?: true;
+    readonly decodedOptionalKey?: true;
   }
   | {
     readonly kind: "fiber";
@@ -358,6 +359,7 @@ export class TypeTable {
             node.encodeRequirements,
             node.optionalKey === true,
             node.encodedOptionalKey === true,
+            node.decodedOptionalKey === true,
           ])
         }`;
       case "fiber":
@@ -429,7 +431,7 @@ export class TypeTable {
     return this.intern({ kind: "primitive", name });
   }
 
-  literal(value: string | number | boolean): TypeRef {
+  literal(value: string | number | boolean | null): TypeRef {
     return this.intern({ kind: "literal", value });
   }
 
@@ -481,6 +483,7 @@ export class TypeTable {
     encodeRequirements: readonly CapabilityId[],
     optionalKey = false,
     encodedOptionalKey = false,
+    decodedOptionalKey = false,
   ): TypeRef {
     return this.intern({
       kind: "schema",
@@ -490,6 +493,7 @@ export class TypeTable {
       encodeRequirements: sortedUnique(encodeRequirements),
       ...(optionalKey ? { optionalKey: true as const } : {}),
       ...(encodedOptionalKey ? { encodedOptionalKey: true as const } : {}),
+      ...(decodedOptionalKey ? { decodedOptionalKey: true as const } : {}),
     });
   }
 
@@ -907,6 +911,7 @@ export class TypeTable {
           type.encodeRequirements,
           type.optionalKey === true,
           type.encodedOptionalKey === true,
+          type.decodedOptionalKey === true,
         );
       case "fiber":
         return this.fiber(this.fromIr(type.result), type.failures);
@@ -1022,6 +1027,9 @@ export class TypeTable {
           ...(node.optionalKey === true ? { optionalKey: true as const } : {}),
           ...(node.encodedOptionalKey === true
             ? { encodedOptionalKey: true as const }
+            : {}),
+          ...(node.decodedOptionalKey === true
+            ? { decodedOptionalKey: true as const }
             : {}),
         };
       case "fiber":
@@ -1204,6 +1212,7 @@ export class TypeTable {
         return sn.kind === "schema" &&
           sn.optionalKey === tn.optionalKey &&
           sn.encodedOptionalKey === tn.encodedOptionalKey &&
+          sn.decodedOptionalKey === tn.decodedOptionalKey &&
           this.assignable(sn.decoded, tn.decoded, depth + 1) &&
           this.assignable(tn.decoded, sn.decoded, depth + 1) &&
           this.assignable(sn.encoded, tn.encoded, depth + 1) &&
@@ -1327,6 +1336,8 @@ export class TypeTable {
             ? "SchemaOptional"
             : node.encodedOptionalKey === true
             ? "SchemaEncodedOptional"
+            : node.decodedOptionalKey === true
+            ? "SchemaDecodedOptional"
             : "Schema"
         }<${this.show(node.decoded)}, ${this.show(node.encoded)}, ${
           node.decodeRequirements.map(idName).join(" | ") || "never"
@@ -1377,9 +1388,10 @@ function idName(id: string): string {
 }
 
 function literalFitsPrimitive(
-  value: string | number | boolean,
+  value: string | number | boolean | null,
   name: PrimitiveName,
 ): boolean {
+  if (value === null) return false;
   switch (typeof value) {
     case "string":
       return name === "string";

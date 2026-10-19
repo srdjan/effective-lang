@@ -1,0 +1,39 @@
+type Text = string
+type Optional = { name?: Text }
+type Required = { name: Text }
+
+service Read { normalize(value: Text): Option<Text> }
+service Write { restore(value: Option<Text>): Text }
+
+const text: Schema<Text> = schema()
+const exact: SchemaOptional<Text> = schemaOptionalKey(text)
+
+export const guardedField: SchemaDecodedOptional<Text, Text, Read.normalize, Write.restore> =
+  schemaOptionalFromRequired(
+    text,
+    exact,
+    (value: Text): Option<Text> fails SchemaIssue uses Read.normalize =>
+      if (value === "blocked") {
+        fail(schemaAt("name", schemaInvalid("blocked name")))
+      } else {
+        Read.normalize(value)
+      },
+    (value: Option<Text>): Text uses Write.restore => Write.restore(value)
+  )
+
+export const guarded: Schema<Optional, Required, Read.normalize, Write.restore> =
+  schemaStruct({ name: guardedField })
+
+export const readRequired = (input: unknown): Optional fails SchemaError uses Read.normalize =>
+  schemaDecode(guarded, input)
+export const writeRequired = (input: Optional): Required fails SchemaError uses Write.restore =>
+  schemaEncode(guarded, input)
+
+const pureField: SchemaDecodedOptional<Text> =
+  schemaOptionalFromRequired(
+    text,
+    exact,
+    (value: Text): Option<Text> => if (value === "") { None } else { Some(value) },
+    (value: Option<Text>): Text => match value { Some(name) => name, None => "" }
+  )
+export const pure: Schema<Optional, Required> = schemaStruct({ name: pureField })

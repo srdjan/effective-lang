@@ -6,7 +6,7 @@
 import type { ErrorId } from "./ir.ts";
 import type { TypeRef, TypeTable } from "./types.ts";
 
-export type LiteralValue = string | number | boolean;
+export type LiteralValue = string | number | boolean | null;
 
 /** One record member of a tagged union, with the literal values of each literal field. */
 export interface TaggedMember {

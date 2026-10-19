@@ -18,6 +18,7 @@ export enum TokenKind {
   KwElse,
   KwTrue,
   KwFalse,
+  KwNull,
   String,
   Number,
   LParen,
@@ -94,6 +95,7 @@ export const KEYWORDS: ReadonlyMap<string, TokenKind> = new Map([
   ["else", TokenKind.KwElse],
   ["true", TokenKind.KwTrue],
   ["false", TokenKind.KwFalse],
+  ["null", TokenKind.KwNull],
 ]);
 
 /**
@@ -194,6 +196,7 @@ const TOKEN_NAMES: Readonly<Record<number, string>> = {
   [TokenKind.KwElse]: "`else`",
   [TokenKind.KwTrue]: "`true`",
   [TokenKind.KwFalse]: "`false`",
+  [TokenKind.KwNull]: "`null`",
 };
 
 /** A short name for messages. */

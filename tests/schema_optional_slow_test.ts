@@ -126,7 +126,7 @@ if (!Exit.isFailure(interrupted) || !Cause.hasInterrupts(interrupted.cause)) thr
   }
 });
 
-Deno.test("independent validator rejects duplicate tags, forged optionality, and unguarded self use", () => {
+Deno.test("independent validator rejects malformed union arity, forged optionality, and unguarded self use", () => {
   const project = checked(fixture);
   assertEquals(project.diagnostics, []);
   const lowered = lowerProject(project);
@@ -134,8 +134,8 @@ Deno.test("independent validator rejects duplicate tags, forged optionality, and
   assert(result.ok, JSON.stringify(result));
   const sources = new Map([["main.eff", fixture]]);
 
-  const duplicate = structuredClone(result.value);
-  const choice = duplicate.declarations.find((declaration) =>
+  const oneBranch = structuredClone(result.value);
+  const choice = oneBranch.declarations.find((declaration) =>
     declaration.kind === "constant" && declaration.name === "choice"
   );
   assert(choice?.kind === "constant" && choice.value.kind === "schema");
@@ -143,14 +143,14 @@ Deno.test("independent validator rejects duplicate tags, forged optionality, and
   assert(list?.kind === "tuple");
   assert(list.type.kind === "tuple");
   Object.assign(list, {
-    elements: [list.elements[0], list.elements[0]],
+    elements: [list.elements[0]],
     type: {
       kind: "tuple",
-      elements: [list.type.elements[0], list.type.elements[0]],
+      elements: [list.type.elements[0]],
     },
   });
   assert(
-    validateModule(duplicate, sources).some((diagnostic) =>
+    validateModule(oneBranch, sources).some((diagnostic) =>
       diagnostic.message.includes("schemaUnion")
     ),
   );
@@ -189,6 +189,31 @@ Deno.test("independent validator rejects duplicate tags, forged optionality, and
       effects: { failures: [], requirements: [] },
       span: next.value.span,
     },
+  });
+  assert(
+    validateModule(immediate, sources).some((diagnostic) =>
+      diagnostic.message.includes("schemaRecursive needs")
+    ),
+  );
+  const terminal = {
+    ...callback.body,
+    op: "identity",
+    arguments: [],
+    type: callback.parameters[0].type,
+  };
+  Object.assign(callback.body, {
+    op: "union",
+    arguments: [{
+      kind: "tuple",
+      elements: [next.value, terminal],
+      type: {
+        kind: "tuple",
+        elements: [next.value.type, terminal.type],
+      },
+      execution: "pure",
+      effects: { failures: [], requirements: [] },
+      span: callback.body.span,
+    }],
   });
   assert(
     validateModule(immediate, sources).some((diagnostic) =>
