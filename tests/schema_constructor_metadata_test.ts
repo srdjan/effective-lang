@@ -162,7 +162,7 @@ Deno.test("independent validator rejects erased make input and forged constructo
       assert(
         fields.kind === "record" && fields.fields[0].value.kind === "schema",
       );
-      Object.assign(fields.fields[0].value.type, { constructorDefault: false });
+      Reflect.deleteProperty(fields.fields[0].value.type, "constructorDefault");
     }
     assertValidation(
       validateModule(module, new Map([["main.eff", source]])),

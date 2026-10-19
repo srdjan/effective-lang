@@ -217,7 +217,7 @@ Deno.test("validator distinguishes encoded defaults from decoded defaults and ch
     if (mutation === "operation") {
       Object.assign(field.value, { op: "default-key" });
     } else if (mutation === "optional") {
-      Object.assign(field.value.type, { encodedOptionalKey: false });
+      Reflect.deleteProperty(field.value.type, "encodedOptionalKey");
     } else {
       const options = field.value.arguments[2];
       assert(options.kind === "record");
