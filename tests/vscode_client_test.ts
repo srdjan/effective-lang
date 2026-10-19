@@ -138,6 +138,24 @@ Deno.test("the grammar names the scope and every lexer keyword", () => {
   }
 });
 
+Deno.test("the builtin-types rule matches every builtin type name exactly", () => {
+  const rule = field(
+    field(readJson("syntaxes/effective.tmLanguage.json"), "repository"),
+    "builtin-types",
+  );
+  assertEquals(field(rule, "name"), "support.type.builtin.effective");
+  const match = field(rule, "match");
+  assert(typeof match === "string", "the rule must hold a match expression");
+  const matcher = new RegExp(match);
+  for (const name of BUILTIN_TYPE_NAMES) {
+    assertEquals(
+      matcher.exec(name)?.[0],
+      name,
+      `the builtin-types rule must match the whole name "${name}"`,
+    );
+  }
+});
+
 Deno.test("extension.js uses the method names and scheme of the server", () => {
   const source = Deno.readTextFileSync(new URL("extension.js", CLIENT));
   for (
