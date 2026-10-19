@@ -122,20 +122,21 @@ The project needs Deno 2.9.7. The first test run downloads `@std/assert` from js
 
 Run every command from the repository root.
 
-| Command                      | What it does                                                                                      |
-| ---------------------------- | ------------------------------------------------------------------------------------------------- |
-| `deno task check`            | Runs the format check, the lint, the type check, the fast tests, and the slow tests.              |
-| `deno task test`             | Runs the fast tests. It skips files named `*_slow_test.ts`.                                       |
-| `deno task test:slow`        | Runs only files named `*_slow_test.ts`. They run `deno check`, `deno fmt`, and `deno run`.        |
-| `deno task golden:update`    | Writes `fixtures/golden/<module>.ts` again from `fixtures/examples` and `fixtures/emit/traverse`. |
-| `deno task validate:update`  | Writes the mutation fixtures in `fixtures/validate/` again from the current lowering.             |
-| `deno task effective`        | Runs the command-line tool. See "Using the command line".                                         |
-| `deno task lsp`              | Runs the language server over standard input and output. See "Language server".                   |
-| `deno task bench`            | Runs the measurement harnesses. See "Measurements".                                               |
-| `deno task playground:build` | Writes the playground page to `playground/dist/`. See "Playground".                               |
-| `deno task playground:serve` | Builds the playground page, then serves it on `http://127.0.0.1:8790/`.                           |
-| `deno task fmt`              | Formats the source files.                                                                         |
-| `deno task lint`             | Runs the linter.                                                                                  |
+| Command                      | What it does                                                                                          |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `deno task check`            | Runs the format check, the lint, the type check, the fast tests, and the slow tests.                  |
+| `deno task test`             | Runs the fast tests. It skips files named `*_slow_test.ts`.                                           |
+| `deno task test:slow`        | Runs only files named `*_slow_test.ts`. They run `deno check`, `deno fmt`, and `deno run`.            |
+| `deno task golden:update`    | Writes `fixtures/golden/<module>.ts` again from `fixtures/examples` and `fixtures/emit/traverse`.     |
+| `deno task validate:update`  | Writes the mutation fixtures in `fixtures/validate/` again from the current lowering.                 |
+| `deno task behavior:capture` | Compares the check, emit, and validate results of two revisions over all tests. Use it for refactors. |
+| `deno task effective`        | Runs the command-line tool. See "Using the command line".                                             |
+| `deno task lsp`              | Runs the language server over standard input and output. See "Language server".                       |
+| `deno task bench`            | Runs the measurement harnesses. See "Measurements".                                                   |
+| `deno task playground:build` | Writes the playground page to `playground/dist/`. See "Playground".                                   |
+| `deno task playground:serve` | Builds the playground page, then serves it on `http://127.0.0.1:8790/`.                               |
+| `deno task fmt`              | Formats the source files.                                                                             |
+| `deno task lint`             | Runs the linter.                                                                                      |
 
 ## Layout
 
