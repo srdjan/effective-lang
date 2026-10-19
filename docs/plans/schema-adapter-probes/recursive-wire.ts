@@ -76,13 +76,13 @@ Deno.test("recursive decoded, encoded and make shapes stay independent", async (
       await Effect.runPromiseExit(Schema.decodeUnknownEffect(schema)({})),
     ),
   );
-  // @ts-expect-error Wire representation is required at nested nodes too.
   const wrongWire: typeof schema.Encoded = {
     score: "1",
+    // @ts-expect-error Wire representation is required at nested nodes too.
     children: [{ score: 2, children: [] }],
   };
-  // @ts-expect-error Make takes decoded numeric input, not wire strings.
   const wrongMake: typeof schema["~type.make.in"] = {
+    // @ts-expect-error Make takes decoded numeric input, not wire strings.
     children: [{ score: "2" }],
   };
   void wrongWire;

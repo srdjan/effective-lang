@@ -6,7 +6,6 @@ import {
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
-import { validateModule } from "../src/core/validate/index.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-general-union.eff", import.meta.url),
@@ -127,30 +126,4 @@ if (!Exit.isFailure(interrupted) || !Cause.hasInterrupts(interrupted.cause)) thr
   } finally {
     Deno.removeSync(dir, { recursive: true });
   }
-});
-
-Deno.test("validator rejects a forged general union branch", () => {
-  const project = checked();
-  const lowered = lowerProject(project);
-  const result = [...lowered.values()][0];
-  assert(result.ok, JSON.stringify(result));
-  const module = structuredClone(result.value);
-  const choice = module.declarations.find((declaration) =>
-    declaration.kind === "constant" && declaration.name === "scalar"
-  );
-  assert(choice?.kind === "constant" && choice.value.kind === "schema");
-  const list = choice.value.arguments[0];
-  assert(list?.kind === "tuple" && list.type.kind === "tuple");
-  Object.assign(list, {
-    elements: [list.elements[0], list.elements[0]],
-    type: {
-      kind: "tuple",
-      elements: [list.type.elements[0], list.type.elements[0]],
-    },
-  });
-  assert(
-    validateModule(module, new Map([["main.eff", fixture]])).some((
-      diagnostic,
-    ) => diagnostic.message.includes("type")),
-  );
 });

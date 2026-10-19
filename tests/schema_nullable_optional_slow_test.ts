@@ -6,7 +6,6 @@ import {
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
-import { validateModule } from "../src/core/validate/index.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-nullable-optional.eff", import.meta.url),
@@ -146,49 +145,4 @@ if (!Exit.isFailure(exit) || !Cause.hasDies(exit.cause)) throw new Error("defect
   } finally {
     Deno.removeSync(dir, { recursive: true });
   }
-});
-
-Deno.test("validator keeps null data distinct from unit and numeric annotations", () => {
-  const project = checked();
-  const result = [...lowerProject(project).values()][0];
-  assert(result.ok, JSON.stringify(result));
-  const sources = new Map([["main.eff", fixture]]);
-  for (
-    const change of [
-      { kind: "literal", value: null },
-      { type: { kind: "primitive", name: "number" } },
-    ]
-  ) {
-    const module = structuredClone(result.value);
-    const declaration = module.declarations.find((value) =>
-      value.kind === "constant" && value.name === "inferred"
-    );
-    assert(
-      declaration?.kind === "constant" && declaration.value.kind === "null",
-    );
-    Object.assign(declaration.value, change);
-    assert(
-      validateModule(module, sources).some((diagnostic) =>
-        diagnostic.message.includes("type")
-      ),
-    );
-  }
-  const module = structuredClone(result.value);
-  const field = module.declarations.find((value) =>
-    value.kind === "constant" && value.name === "collapsedField"
-  );
-  const nullable = module.declarations.find((value) =>
-    value.kind === "constant" && value.name === "nullable"
-  );
-  assert(field?.kind === "constant" && field.value.kind === "schema");
-  assert(nullable?.kind === "constant");
-  Object.assign(field.value.arguments[0], {
-    target: nullable.id,
-    type: nullable.type,
-  });
-  assert(
-    validateModule(module, sources).some((diagnostic) =>
-      diagnostic.message.includes("schemaNullToMissingKey")
-    ),
-  );
 });

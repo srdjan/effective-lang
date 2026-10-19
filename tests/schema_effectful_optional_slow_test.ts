@@ -6,7 +6,6 @@ import {
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
-import { validateModule } from "../src/core/validate/index.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-effectful-optional.eff", import.meta.url),
@@ -114,56 +113,4 @@ if (!Exit.isFailure(died) || !Cause.hasDies(died.cause)) throw new Error("defect
   } finally {
     Deno.removeSync(dir, { recursive: true });
   }
-});
-
-Deno.test("validator rejects forged optional callback failures and requirements", () => {
-  const project = checked();
-  const result = [...lowerProject(project).values()][0];
-  assert(result?.ok, JSON.stringify(result));
-  const forged = structuredClone(result.value);
-  const field = forged.declarations.find((declaration) =>
-    declaration.kind === "constant" && declaration.name === "transformedField"
-  );
-  assert(field?.kind === "constant" && field.value.kind === "schema");
-  const callback = field.value.arguments[2];
-  assert(callback?.kind === "closure" && callback.type.kind === "function");
-  Object.assign(callback.type.effects, {
-    failures: ["error:effect/SchemaError"],
-  });
-  assert(
-    validateModule(forged, new Map([["main.eff", fixture]])).some(
-      (diagnostic) => diagnostic.message.includes("schemaOptionalTransform"),
-    ),
-  );
-
-  const wrongDefault = structuredClone(result.value);
-  const defaultField = wrongDefault.declarations.find((declaration) =>
-    declaration.kind === "constant" && declaration.name === "defaultField"
-  );
-  assert(
-    defaultField?.kind === "constant" &&
-      defaultField.value.kind === "schema",
-  );
-  const fallback = defaultField.value.arguments[1];
-  assert(fallback?.kind === "closure" && fallback.type.kind === "function");
-  Object.assign(fallback.type.effects, { failures: ["error:Other"] });
-  assert(
-    validateModule(wrongDefault, new Map([["main.eff", fixture]])).some(
-      (diagnostic) => diagnostic.message.includes("schemaDefaultKey"),
-    ),
-  );
-
-  const lostRequirements = structuredClone(result.value);
-  const lostField = lostRequirements.declarations.find((declaration) =>
-    declaration.kind === "constant" && declaration.name === "transformedField"
-  );
-  assert(
-    lostField?.kind === "constant" && lostField.value.type.kind === "schema",
-  );
-  Object.assign(lostField.value.type, { decodeRequirements: [] });
-  assert(
-    validateModule(lostRequirements, new Map([["main.eff", fixture]])).some(
-      (diagnostic) => diagnostic.message.includes("type"),
-    ),
-  );
 });

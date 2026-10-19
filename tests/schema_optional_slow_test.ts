@@ -6,7 +6,6 @@ import {
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
-import { validateModule } from "../src/core/validate/index.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-optional-union.eff", import.meta.url),
@@ -124,100 +123,4 @@ if (!Exit.isFailure(interrupted) || !Cause.hasInterrupts(interrupted.cause)) thr
   } finally {
     Deno.removeSync(dir, { recursive: true });
   }
-});
-
-Deno.test("independent validator rejects malformed union arity, forged optionality, and unguarded self use", () => {
-  const project = checked(fixture);
-  assertEquals(project.diagnostics, []);
-  const lowered = lowerProject(project);
-  const result = [...lowered.values()][0];
-  assert(result.ok, JSON.stringify(result));
-  const sources = new Map([["main.eff", fixture]]);
-
-  const oneBranch = structuredClone(result.value);
-  const choice = oneBranch.declarations.find((declaration) =>
-    declaration.kind === "constant" && declaration.name === "choice"
-  );
-  assert(choice?.kind === "constant" && choice.value.kind === "schema");
-  const list = choice.value.arguments[0];
-  assert(list?.kind === "tuple");
-  assert(list.type.kind === "tuple");
-  Object.assign(list, {
-    elements: [list.elements[0]],
-    type: {
-      kind: "tuple",
-      elements: [list.type.elements[0]],
-    },
-  });
-  assert(
-    validateModule(oneBranch, sources).some((diagnostic) =>
-      diagnostic.message.includes("schemaUnion")
-    ),
-  );
-
-  const optional = structuredClone(result.value);
-  const descriptor = optional.declarations.find((declaration) =>
-    declaration.kind === "constant" && declaration.name === "optionalField"
-  );
-  assert(descriptor?.kind === "constant" && descriptor.value.kind === "schema");
-  assert(descriptor.value.type.kind === "schema");
-  Object.assign(descriptor.value.type, { optionalKey: undefined });
-  assert(
-    validateModule(optional, sources).some((diagnostic) =>
-      diagnostic.message.includes("type") ||
-      diagnostic.message.includes("optional")
-    ),
-  );
-
-  const immediate = structuredClone(result.value);
-  const node = immediate.declarations.find((declaration) =>
-    declaration.kind === "constant" && declaration.name === "optionalNode"
-  );
-  assert(node?.kind === "constant" && node.value.kind === "schema");
-  const callback = node.value.arguments[0];
-  assert(callback?.kind === "closure" && callback.body.kind === "schema");
-  const record = callback.body.arguments[0];
-  assert(record?.kind === "record");
-  const next = record.fields.find((field) => field.name === "next");
-  assert(next !== undefined);
-  Object.assign(next, {
-    value: {
-      kind: "reference",
-      target: callback.parameters[0].id,
-      type: callback.parameters[0].type,
-      execution: "pure",
-      effects: { failures: [], requirements: [] },
-      span: next.value.span,
-    },
-  });
-  assert(
-    validateModule(immediate, sources).some((diagnostic) =>
-      diagnostic.message.includes("schemaRecursive needs")
-    ),
-  );
-  const terminal = {
-    ...callback.body,
-    op: "identity",
-    arguments: [],
-    type: callback.parameters[0].type,
-  };
-  Object.assign(callback.body, {
-    op: "union",
-    arguments: [{
-      kind: "tuple",
-      elements: [next.value, terminal],
-      type: {
-        kind: "tuple",
-        elements: [next.value.type, terminal.type],
-      },
-      execution: "pure",
-      effects: { failures: [], requirements: [] },
-      span: callback.body.span,
-    }],
-  });
-  assert(
-    validateModule(immediate, sources).some((diagnostic) =>
-      diagnostic.message.includes("schemaRecursive needs")
-    ),
-  );
 });

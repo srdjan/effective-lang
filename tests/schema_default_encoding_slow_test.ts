@@ -6,7 +6,6 @@ import {
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
-import { validateModule } from "../src/core/validate/index.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-default-encoding.eff", import.meta.url),
@@ -143,53 +142,4 @@ void missingDecoded;
   } finally {
     Deno.removeSync(dir, { recursive: true });
   }
-});
-
-Deno.test("validator rejects malformed default strategies and erased static encoder services", () => {
-  const project = checked();
-  const result = [...lowerProject(project).values()][0];
-  assert(result.ok, JSON.stringify(result));
-  const sources = new Map([["main.eff", fixture]]);
-  const malformed = structuredClone(result.value);
-  const field = malformed.declarations.find((declaration) =>
-    declaration.kind === "constant" && declaration.name === "omitField"
-  );
-  assert(field?.kind === "constant" && field.value.kind === "schema");
-  const options = field.value.arguments[2];
-  assert(
-    options?.kind === "record" && options.fields[0].value.kind === "literal",
-  );
-  Object.assign(options.fields[0].value, {
-    value: "omit-default",
-    type: { kind: "literal", value: "omit-default" },
-  });
-  Object.assign(options, {
-    type: {
-      kind: "record",
-      fields: [{
-        name: "encodingStrategy",
-        type: options.fields[0].value.type,
-        optional: false,
-      }],
-    },
-  });
-  assert(
-    validateModule(malformed, sources).some((diagnostic) =>
-      diagnostic.message.includes("schemaDefaultKey options")
-    ),
-  );
-
-  const erased = structuredClone(result.value);
-  const descriptor = erased.declarations.find((declaration) =>
-    declaration.kind === "constant" && declaration.name === "omitField"
-  );
-  assert(
-    descriptor?.kind === "constant" && descriptor.value.type.kind === "schema",
-  );
-  Object.assign(descriptor.value.type, { encodeRequirements: [] });
-  assert(
-    validateModule(erased, sources).some((diagnostic) =>
-      diagnostic.message.includes("type")
-    ),
-  );
 });

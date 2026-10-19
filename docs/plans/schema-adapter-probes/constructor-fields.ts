@@ -150,8 +150,8 @@ Deno.test("Option constructor defaults require complete contents and None omits 
     ),
     {},
   );
-  // @ts-expect-error The Option adapter's make input is Option<D>, not Option<M>.
   Schema.OptionFromOptionalKey(child).pipe(
+    // @ts-expect-error The Option adapter's make input is Option<D>, not Option<M>.
     Schema.withConstructorDefault(Effect.succeed(Option.some({}))),
   );
 });

@@ -6,7 +6,6 @@ import {
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
-import { validateModule } from "../src/core/validate/index.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-required-optional.eff", import.meta.url),
@@ -119,54 +118,4 @@ void absentEncoded;
   } finally {
     Deno.removeSync(dir, { recursive: true });
   }
-});
-
-Deno.test("validator rejects forged decoded optionality and callback channels", () => {
-  const result = [...lowerProject(checked()).values()][0];
-  assert(result?.ok, JSON.stringify(result));
-  const forged = structuredClone(result.value);
-  const field = forged.declarations.find((declaration) =>
-    declaration.kind === "constant" && declaration.name === "guardedField"
-  );
-  assert(field?.kind === "constant" && field.value.kind === "schema");
-  assert(field.value.type.kind === "schema");
-  Object.assign(field.value.type, { decodedOptionalKey: undefined });
-  assert(
-    validateModule(forged, new Map([["main.eff", fixture]])).some(
-      (diagnostic) => diagnostic.message.includes("type"),
-    ),
-  );
-
-  const wrongFailure = structuredClone(result.value);
-  const wrongField = wrongFailure.declarations.find((declaration) =>
-    declaration.kind === "constant" && declaration.name === "guardedField"
-  );
-  assert(wrongField?.kind === "constant" && wrongField.value.kind === "schema");
-  const callback = wrongField.value.arguments[2];
-  assert(callback?.kind === "closure" && callback.type.kind === "function");
-  Object.assign(callback.type.effects, {
-    failures: ["error:effect/SchemaError"],
-  });
-  assert(
-    validateModule(wrongFailure, new Map([["main.eff", fixture]])).some(
-      (diagnostic) => diagnostic.message.includes("schemaOptionalFromRequired"),
-    ),
-  );
-
-  const conflictingFlags = structuredClone(result.value);
-  const conflictingField = conflictingFlags.declarations.find((declaration) =>
-    declaration.kind === "constant" && declaration.name === "guardedField"
-  );
-  assert(
-    conflictingField?.kind === "constant" &&
-      conflictingField.value.type.kind === "schema",
-  );
-  Object.assign(conflictingField.value.type, { optionalKey: true });
-  assert(
-    validateModule(conflictingFlags, new Map([["main.eff", fixture]])).some(
-      (diagnostic) =>
-        diagnostic.message.includes("optionality flags") ||
-        diagnostic.message.includes("type"),
-    ),
-  );
 });

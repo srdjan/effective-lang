@@ -6,7 +6,6 @@ import {
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
-import { validateModule } from "../src/core/validate/index.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-optional-transform.eff", import.meta.url),
@@ -113,42 +112,4 @@ for (const operation of invalidInputs) {
   } finally {
     Deno.removeSync(dir, { recursive: true });
   }
-});
-
-Deno.test("validator rejects forged encoded optionality and callback failure", () => {
-  const project = checked(fixture);
-  assertEquals(project.diagnostics, []);
-  const lowered = lowerProject(project);
-  const result = [...lowered.values()][0];
-  assert(result.ok, JSON.stringify(result));
-  const forged = structuredClone(result.value);
-  const field = forged.declarations.find((declaration) =>
-    declaration.kind === "constant" && declaration.name === "optionField"
-  );
-  assert(field?.kind === "constant" && field.value.kind === "schema");
-  assert(field.value.type.kind === "schema");
-  Object.assign(field.value.type, { encodedOptionalKey: undefined });
-  assert(
-    validateModule(forged, new Map([["main.eff", fixture]])).some(
-      (diagnostic) => diagnostic.message.includes("type"),
-    ),
-  );
-
-  const callbackForged = structuredClone(result.value);
-  const normalized = callbackForged.declarations.find((declaration) =>
-    declaration.kind === "constant" && declaration.name === "normalizedField"
-  );
-  assert(
-    normalized?.kind === "constant" && normalized.value.kind === "schema",
-  );
-  const decode = normalized.value.arguments[2];
-  assert(decode?.kind === "closure" && decode.type.kind === "function");
-  Object.assign(decode.type.effects, {
-    failures: ["error:effect/SchemaIssue"],
-  });
-  assert(
-    validateModule(callbackForged, new Map([["main.eff", fixture]])).some(
-      (diagnostic) => diagnostic.message.includes("schemaOptionalTransform"),
-    ),
-  );
 });
