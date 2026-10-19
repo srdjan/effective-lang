@@ -150,8 +150,7 @@ Deno.test("blocked output stops upstream progress and resumed demand drains the 
       const paused = [...driver.pulls];
       yield* TestClock.adjust(0);
       yield* Effect.sync(() => {
-        console.log("paused pulls", paused);
-        assert(paused.length >= 2 && paused.length < 100);
+        assertEquals(paused, [0, 1, 2, 3, 4, 5, 6]);
         assertEquals(driver.pulls, paused);
         assertEquals(driver.batches, []);
       }).pipe(Effect.ensuring(Deferred.succeed(resume, undefined)));
