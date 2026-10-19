@@ -1,0 +1,60 @@
+type Int = int
+type Text = string
+export type D = { score: Int }
+export type E = { score: Text }
+export type M = { score?: Int }
+type NestedD = { settings: D }
+type NestedE = { settings: E }
+type NestedM = { settings?: M }
+type OptionalD = { settings?: D }
+type OptionalE = { settings?: E }
+type OptionalM = { settings?: M }
+type UnionD = D | Text
+type UnionE = E | Text
+type UnionM = M | Text
+
+export service Read { parse(value: Text): Int }
+export service Write { print(value: Int): Text }
+const integer: Schema<Int> = schema()
+const text: Schema<Text> = schema()
+const field: Schema<Int, Text, Read.parse, Write.print> = schemaTransform(text, integer,
+  (value: Text): Option<Int> uses Read.parse => Some(Read.parse(value)),
+  (value: Int): Option<Text> uses Write.print => Some(Write.print(value)))
+export const defaultField: SchemaConstructorDefault<Int, Text, Read.parse, Write.print> =
+  schemaConstructorDefault(field, (): Int => 4)
+export const child: Schema<D, E, Read.parse, Write.print, M> = schemaStruct({ score: defaultField })
+export const nested: Schema<NestedD, NestedE, Read.parse, Write.print, NestedM> = schemaStruct({
+  settings: schemaConstructorDefault(child, (): M => ({}))
+})
+export const array: Schema<D[], E[], Read.parse, Write.print, M[]> = schemaArray(child)
+export const optional: Schema<OptionalD, OptionalE, Read.parse, Write.print, OptionalM> =
+  schemaStruct({ settings: schemaOptionalKey(child) })
+export const union: Schema<UnionD, UnionE, Read.parse, Write.print, UnionM> = schemaUnion([child, text])
+export const transformed: Schema<D, Text, Read.parse, Write.print, M> = schemaTransform(text, child,
+  (value: Text): Option<E> => Some({ score: value }),
+  (value: E): Option<Text> => Some(value.score))
+const failing: Schema<D, E, Read.parse, Write.print, M> = schemaStruct({
+  score: schemaConstructorDefault(field, (): Int fails SchemaIssue => fail(schemaInvalid("default blocked")))
+})
+export const failingNested: Schema<NestedD, NestedE, Read.parse, Write.print, NestedM> = schemaStruct({
+  settings: schemaConstructorDefault(failing, (): M => ({}))
+})
+export const makeChild = (input: M): D fails SchemaIssue => schemaMake(child, input)
+export const makeNested = (input: NestedM): NestedD fails SchemaIssue => schemaMake(nested, input)
+export const makeArray = (input: M[]): D[] fails SchemaIssue => schemaMake(array, input)
+export const makeOptional = (input: OptionalM): OptionalD fails SchemaIssue => schemaMake(optional, input)
+export const makeUnion = (input: UnionM): UnionD fails SchemaIssue => schemaMake(union, input)
+export const readWire = (input: unknown): D fails SchemaError uses Read.parse => schemaDecode(child, input)
+export const writeWire = (input: D): E fails SchemaError uses Write.print => schemaEncode(child, input)
+export const freshSchema = (): Schema<D, D, never, never, M> => {
+  const state: Ref<Int> = makeRef(0)
+  schemaStruct({ score: schemaConstructorDefault(integer, (): Int => {
+    const value = getRef(state) + 1
+    setRef(state, value)
+    value
+  }) })
+}
+
+export const waiting = (job: Effect<Int, SchemaIssue>): Schema<D, D, never, never, M> =>
+  schemaStruct({ score: schemaConstructorDefault(integer,
+    (): Int fails SchemaIssue => run(job)) })

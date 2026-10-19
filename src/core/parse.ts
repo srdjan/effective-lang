@@ -999,6 +999,7 @@ class Parser {
             this.isWordAt(this.pos, "SchemaOptional") ||
             this.isWordAt(this.pos, "SchemaEncodedOptional") ||
             this.isWordAt(this.pos, "SchemaDecodedOptional") ||
+            this.isWordAt(this.pos, "SchemaConstructorDefault") ||
             this.isWordAt(this.pos, "Layer")) &&
           this.kinds[this.pos + 1] === TokenKind.Lt
         ) {
@@ -1024,7 +1025,8 @@ class Parser {
           } else if (
             (name === "Schema" || name === "SchemaOptional" ||
               name === "SchemaEncodedOptional" ||
-              name === "SchemaDecodedOptional") &&
+              name === "SchemaDecodedOptional" ||
+              name === "SchemaConstructorDefault") &&
             this.kind() === TokenKind.Comma
           ) {
             this.tok();
@@ -1033,7 +1035,8 @@ class Parser {
           if (
             (name === "Schema" || name === "SchemaOptional" ||
               name === "SchemaEncodedOptional" ||
-              name === "SchemaDecodedOptional") &&
+              name === "SchemaDecodedOptional" ||
+              name === "SchemaConstructorDefault") &&
             this.kind() === TokenKind.Comma
           ) {
             this.tok();
@@ -1045,11 +1048,16 @@ class Parser {
               this.begin();
               this.parseNameSet(true);
               this.end(SyntaxKind.UsesClause);
+              if (this.kind() === TokenKind.Comma) {
+                this.tok();
+                this.parseType();
+              }
             }
           } else if (
             name !== "Schema" && name !== "SchemaOptional" &&
             name !== "SchemaEncodedOptional" &&
             name !== "SchemaDecodedOptional" &&
+            name !== "SchemaConstructorDefault" &&
             this.kind() === TokenKind.Comma
           ) {
             this.tok();
@@ -1077,7 +1085,8 @@ class Parser {
               ? SyntaxKind.ScheduleType
               : name === "Schema" || name === "SchemaOptional" ||
                   name === "SchemaEncodedOptional" ||
-                  name === "SchemaDecodedOptional"
+                  name === "SchemaDecodedOptional" ||
+                  name === "SchemaConstructorDefault"
               ? SyntaxKind.SchemaType
               : name === "Layer"
               ? SyntaxKind.LayerType

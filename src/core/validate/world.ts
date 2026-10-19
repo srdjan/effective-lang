@@ -200,14 +200,19 @@ export function checkTypeIds(
       case "schema":
         walk(t.decoded, `${at}.decoded`, depth + 1);
         walk(t.encoded, `${at}.encoded`, depth + 1);
+        if (t.makeInput !== undefined) {
+          walk(t.makeInput, `${at}.makeInput`, depth + 1);
+        }
         if (
           Number(t.optionalKey === true) +
               Number(t.encodedOptionalKey === true) +
-              Number(t.decodedOptionalKey === true) > 1
+              Number(t.decodedOptionalKey === true) +
+              Number(t.constructorDefault === true) > 1
         ) fail(at, "Schema field optionality flags are mutually exclusive");
         if (
           !recursiveDataOnly(world, t.decoded) ||
-          !recursiveDataOnly(world, t.encoded)
+          !recursiveDataOnly(world, t.encoded) ||
+          !recursiveDataOnly(world, t.makeInput ?? t.decoded)
         ) {
           fail(at, "Schema decoded and encoded types must be data only");
         }
@@ -334,6 +339,9 @@ export function checkRecordFields(
       case "schema":
         walk(t.decoded, `${at}.decoded`, depth + 1);
         walk(t.encoded, `${at}.encoded`, depth + 1);
+        if (t.makeInput !== undefined) {
+          walk(t.makeInput, `${at}.makeInput`, depth + 1);
+        }
         return;
       case "fiber":
         walk(t.result, `${at}.result`, depth + 1);
@@ -721,6 +729,9 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
       case "schema":
         reaches(type.decoded, from, depth + 1);
         reaches(type.encoded, from, depth + 1);
+        if (type.makeInput !== undefined) {
+          reaches(type.makeInput, from, depth + 1);
+        }
         return;
       case "fiber":
         reaches(type.result, from, depth + 1);

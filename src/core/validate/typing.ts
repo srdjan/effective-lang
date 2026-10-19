@@ -175,6 +175,21 @@ function assignable(
         s.optionalKey === t.optionalKey &&
         s.encodedOptionalKey === t.encodedOptionalKey &&
         s.decodedOptionalKey === t.decodedOptionalKey &&
+        s.constructorDefault === t.constructorDefault &&
+        assignable(
+          env,
+          s.makeInput ?? s.decoded,
+          t.makeInput ?? t.decoded,
+          false,
+          depth + 1,
+        ) &&
+        assignable(
+          env,
+          t.makeInput ?? t.decoded,
+          s.makeInput ?? s.decoded,
+          false,
+          depth + 1,
+        ) &&
         assignable(env, s.decoded, t.decoded, false, depth + 1) &&
         assignable(env, t.decoded, s.decoded, false, depth + 1) &&
         assignable(env, s.encoded, t.encoded, false, depth + 1) &&
@@ -437,7 +452,9 @@ export function show(type: Type): string {
       return `Codec<${show(type.decoded)}, ${show(type.encoded)}>`;
     case "schema":
       return `${
-        type.optionalKey === true
+        type.constructorDefault === true
+          ? "SchemaConstructorDefault"
+          : type.optionalKey === true
           ? "SchemaOptional"
           : type.encodedOptionalKey === true
           ? "SchemaEncodedOptional"

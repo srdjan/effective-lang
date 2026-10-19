@@ -194,6 +194,19 @@ export function typeDoc(scope: Scope, type: Type): Doc {
       ];
     }
     case "schema":
+      if (type.makeInput !== undefined || type.constructorDefault === true) {
+        const { makeInput, constructorDefault, ...base } = type;
+        return [
+          "(",
+          typeDoc(scope, base),
+          ' & { readonly "~type.make.in": ',
+          typeDoc(scope, makeInput ?? type.decoded),
+          ...(constructorDefault === true
+            ? ['; readonly "~type.constructor.default": "with-default"']
+            : []),
+          " })",
+        ];
+      }
       if (type.decodedOptionalKey === true) {
         const schema = scope.effect("Schema");
         const rd = requirementUnion(scope, type.decodeRequirements) ?? "never";

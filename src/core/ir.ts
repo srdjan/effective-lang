@@ -55,7 +55,7 @@ export type Type =
   | { readonly kind: "closeable-scope" }
   | { readonly kind: "retry-schedule"; readonly error: Type }
   | { readonly kind: "codec"; readonly decoded: Type; readonly encoded: Type }
-  | { readonly kind: "schema"; readonly decoded: Type; readonly encoded: Type; readonly decodeRequirements: readonly CapabilityId[]; readonly encodeRequirements: readonly CapabilityId[]; readonly optionalKey?: true; readonly encodedOptionalKey?: true; readonly decodedOptionalKey?: true }
+  | { readonly kind: "schema"; readonly decoded: Type; readonly encoded: Type; readonly decodeRequirements: readonly CapabilityId[]; readonly encodeRequirements: readonly CapabilityId[]; readonly optionalKey?: true; readonly encodedOptionalKey?: true; readonly decodedOptionalKey?: true; readonly makeInput?: Type; readonly constructorDefault?: true }
   | { readonly kind: "fiber"; readonly result: Type; readonly failures: readonly ErrorId[] }
   | { readonly kind: "effect"; readonly result: Type; readonly effects: Effects }
   | { readonly kind: "stream"; readonly element: Type; readonly effects: Effects }
@@ -198,7 +198,7 @@ export type Expr =
   | Node<{ kind: "retry-schedule"; step: Expr }>
   | Node<{ kind: "retry-with-schedule"; job: Expr; options: Expr }>
   | Node<{ kind: "codec"; decode: Expr; encode: Expr }>
-  | Node<{ kind: "schema"; op: "identity" | "array" | "struct" | "optional-key" | "null-to-missing-key" | "option-from-optional-key" | "default-key" | "default-null-key" | "default-encoded-key" | "optional-transform" | "optional-from-required" | "union" | "transform" | "recursive" | "invalid" | "at" | "both"; arguments: readonly Expr[] }>
+  | Node<{ kind: "schema"; op: "identity" | "array" | "struct" | "optional-key" | "null-to-missing-key" | "option-from-optional-key" | "default-key" | "constructor-default" | "default-null-key" | "default-encoded-key" | "optional-transform" | "optional-from-required" | "union" | "transform" | "recursive" | "invalid" | "at" | "both"; arguments: readonly Expr[] }>
   | Node<{ kind: "schema-decode" | "schema-encode" | "schema-make"; schema: Expr; input: Expr }>
   | Node<{ kind: "decode"; codec: Expr; input: Expr }>
   | Node<{ kind: "encode"; codec: Expr; input: Expr }>

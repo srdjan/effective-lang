@@ -133,6 +133,8 @@ export type TypeNode =
     readonly optionalKey?: true;
     readonly encodedOptionalKey?: true;
     readonly decodedOptionalKey?: true;
+    readonly makeInput?: TypeRef;
+    readonly constructorDefault?: true;
   }
   | {
     readonly kind: "fiber";
@@ -360,6 +362,8 @@ export class TypeTable {
             node.optionalKey === true,
             node.encodedOptionalKey === true,
             node.decodedOptionalKey === true,
+            node.makeInput ?? node.decoded,
+            node.constructorDefault === true,
           ])
         }`;
       case "fiber":
@@ -484,6 +488,8 @@ export class TypeTable {
     optionalKey = false,
     encodedOptionalKey = false,
     decodedOptionalKey = false,
+    makeInput: TypeRef = decoded,
+    constructorDefault = false,
   ): TypeRef {
     return this.intern({
       kind: "schema",
@@ -494,6 +500,12 @@ export class TypeTable {
       ...(optionalKey ? { optionalKey: true as const } : {}),
       ...(encodedOptionalKey ? { encodedOptionalKey: true as const } : {}),
       ...(decodedOptionalKey ? { decodedOptionalKey: true as const } : {}),
+      ...(makeInput === decoded ||
+          (this.isAssignable(makeInput, decoded) &&
+            this.isAssignable(decoded, makeInput))
+        ? {}
+        : { makeInput }),
+      ...(constructorDefault ? { constructorDefault: true as const } : {}),
     });
   }
 
@@ -820,8 +832,19 @@ export class TypeTable {
         tallest = this.heightWithin(node.error, budget - 1, memo);
         if (tallest === Infinity) return Infinity;
         break;
-      case "codec":
       case "schema":
+        tallest = node.makeInput === undefined
+          ? 0
+          : this.heightWithin(node.makeInput, budget - 1, memo);
+        if (tallest === Infinity) return Infinity;
+        tallest = Math.max(
+          tallest,
+          this.heightWithin(node.decoded, budget - 1, memo),
+          this.heightWithin(node.encoded, budget - 1, memo),
+        );
+        if (tallest === Infinity) return Infinity;
+        break;
+      case "codec":
         tallest = Math.max(
           this.heightWithin(node.decoded, budget - 1, memo),
           this.heightWithin(node.encoded, budget - 1, memo),
@@ -912,6 +935,8 @@ export class TypeTable {
           type.optionalKey === true,
           type.encodedOptionalKey === true,
           type.decodedOptionalKey === true,
+          this.fromIr(type.makeInput ?? type.decoded),
+          type.constructorDefault === true,
         );
       case "fiber":
         return this.fiber(this.fromIr(type.result), type.failures);
@@ -1030,6 +1055,12 @@ export class TypeTable {
             : {}),
           ...(node.decodedOptionalKey === true
             ? { decodedOptionalKey: true as const }
+            : {}),
+          ...(node.makeInput === undefined
+            ? {}
+            : { makeInput: this.toIr(node.makeInput) }),
+          ...(node.constructorDefault === true
+            ? { constructorDefault: true as const }
             : {}),
         };
       case "fiber":
@@ -1213,6 +1244,17 @@ export class TypeTable {
           sn.optionalKey === tn.optionalKey &&
           sn.encodedOptionalKey === tn.encodedOptionalKey &&
           sn.decodedOptionalKey === tn.decodedOptionalKey &&
+          sn.constructorDefault === tn.constructorDefault &&
+          this.assignable(
+            sn.makeInput ?? sn.decoded,
+            tn.makeInput ?? tn.decoded,
+            depth + 1,
+          ) &&
+          this.assignable(
+            tn.makeInput ?? tn.decoded,
+            sn.makeInput ?? sn.decoded,
+            depth + 1,
+          ) &&
           this.assignable(sn.decoded, tn.decoded, depth + 1) &&
           this.assignable(tn.decoded, sn.decoded, depth + 1) &&
           this.assignable(sn.encoded, tn.encoded, depth + 1) &&
@@ -1332,7 +1374,9 @@ export class TypeTable {
         return `Codec<${this.show(node.decoded)}, ${this.show(node.encoded)}>`;
       case "schema":
         return `${
-          node.optionalKey === true
+          node.constructorDefault === true
+            ? "SchemaConstructorDefault"
+            : node.optionalKey === true
             ? "SchemaOptional"
             : node.encodedOptionalKey === true
             ? "SchemaEncodedOptional"
@@ -1341,7 +1385,9 @@ export class TypeTable {
             : "Schema"
         }<${this.show(node.decoded)}, ${this.show(node.encoded)}, ${
           node.decodeRequirements.map(idName).join(" | ") || "never"
-        }, ${node.encodeRequirements.map(idName).join(" | ") || "never"}>`;
+        }, ${node.encodeRequirements.map(idName).join(" | ") || "never"}${
+          node.makeInput === undefined ? "" : `, ${this.show(node.makeInput)}`
+        }>`;
       case "fiber":
         return `Fiber<${this.show(node.result)}, ${
           node.failures.map(idName).join(" | ") || "never"

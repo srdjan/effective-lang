@@ -866,6 +866,7 @@ export class BodyChecker {
       case "schemaNullToMissingKey":
       case "schemaOptionFromOptionalKey":
       case "schemaDefaultKey":
+      case "schemaConstructorDefault":
       case "schemaDefaultNullKey":
       case "schemaDefaultEncodedKey":
       case "schemaOptionalTransform":
@@ -1457,6 +1458,7 @@ export class BodyChecker {
       schemaNullToMissingKey: "null-to-missing-key",
       schemaOptionFromOptionalKey: "option-from-optional-key",
       schemaDefaultKey: "default-key",
+      schemaConstructorDefault: "constructor-default",
       schemaDefaultNullKey: "default-null-key",
       schemaDefaultEncodedKey: "default-encoded-key",
       schemaOptionalTransform: "optional-transform",
@@ -1481,7 +1483,8 @@ export class BodyChecker {
       : op === "both"
       ? 3
       : op === "decode" || op === "encode" || op === "make" || op === "at" ||
-          op === "default-key" || op === "default-null-key" ||
+          op === "constructor-default" || op === "default-key" ||
+          op === "default-null-key" ||
           op === "default-encoded-key"
       ? 2
       : 1;
@@ -1497,12 +1500,17 @@ export class BodyChecker {
       );
     }
     this.noPipeline(name, args);
+    const changedMakeInput = (type: Extract<TypeNode, { kind: "schema" }>) =>
+      type.makeInput !== undefined &&
+      !(this.table.isAssignable(type.makeInput, type.decoded) &&
+        this.table.isAssignable(type.decoded, type.makeInput));
     const asSchema = (info: NodeInfo, at: NodeId) => {
       const type = this.table.node(this.table.unfold(info.type));
       if (
         (type.kind !== "schema" || type.optionalKey === true ||
           type.encodedOptionalKey === true ||
-          type.decodedOptionalKey === true) &&
+          type.decodedOptionalKey === true ||
+          type.constructorDefault === true) &&
         !this.isError(info.type)
       ) {
         this.report(
@@ -1511,15 +1519,39 @@ export class BodyChecker {
           at,
         );
       }
+      if (
+        type.kind === "schema" && changedMakeInput(type) &&
+        ![
+          "struct",
+          "array",
+          "union",
+          "optional-key",
+          "transform",
+          "constructor-default",
+          "make",
+          "decode",
+          "encode",
+          "both",
+        ].includes(op)
+      ) {
+        this.report(
+          "type-mismatch/010",
+          `${name} does not yet preserve constructor make-input metadata`,
+          at,
+        );
+      }
       return type.kind === "schema" && type.optionalKey !== true &&
           type.encodedOptionalKey !== true &&
-          type.decodedOptionalKey !== true
+          type.decodedOptionalKey !== true && type.constructorDefault !== true
         ? type
         : undefined;
     };
     const asOptional = (info: NodeInfo, at: NodeId) => {
       const type = this.table.node(this.table.unfold(info.type));
-      if (type.kind !== "schema" || type.optionalKey !== true) {
+      if (
+        type.kind !== "schema" || type.optionalKey !== true ||
+        changedMakeInput(type)
+      ) {
         if (!this.isError(info.type)) {
           this.report(
             "type-mismatch/010",
@@ -1681,6 +1713,19 @@ export class BodyChecker {
           fields.flatMap(({ schema }) =>
             schema.kind === "schema" ? schema.encodeRequirements : []
           ),
+          false,
+          false,
+          false,
+          this.table.record(fields.map(({ field, schema }) => ({
+            name: field.name,
+            type: schema.kind === "schema"
+              ? schema.makeInput ?? schema.decoded
+              : this.table.error,
+            optional: schema.kind === "schema" &&
+              (schema.optionalKey === true ||
+                schema.decodedOptionalKey === true ||
+                schema.constructorDefault === true),
+          }))),
         ),
         combine([input]),
       );
@@ -1725,6 +1770,12 @@ export class BodyChecker {
           this.table.union(schemas.map((branch) => branch.encoded)),
           schemas.flatMap((branch) => branch.decodeRequirements),
           schemas.flatMap((branch) => branch.encodeRequirements),
+          false,
+          false,
+          false,
+          this.table.union(
+            schemas.map((branch) => branch.makeInput ?? branch.decoded),
+          ),
         ),
         combine([input]),
       );
@@ -1914,6 +1965,49 @@ export class BodyChecker {
     }
     const first = this.argInfo(args[0]);
     const schema = asSchema(first, args[0].node);
+    if (op === "constructor-default") {
+      const callback = this.callback(
+        name,
+        args[1],
+        [],
+        schema?.makeInput ?? schema?.decoded,
+        true,
+      );
+      const fn = this.functionOf(callback.info.type);
+      if (
+        kindOf(this.tree, args[1].node) !== SyntaxKind.ArrowExpr ||
+        fn === undefined ||
+        fn.requirements.length !== 0 ||
+        !(fn.failures.length === 0 ||
+          (fn.failures.length === 1 && fn.failures[0] === SCHEMA_ISSUE_ID)) ||
+        (schema !== undefined &&
+          !this.table.isAssignable(
+            callback.result,
+            schema.makeInput ?? schema.decoded,
+          ))
+      ) {
+        this.report(
+          "type-mismatch/010",
+          "schemaConstructorDefault needs an inline make-input callback with no services and only SchemaIssue failure",
+          args[1].node,
+        );
+      }
+      return this.finish(
+        node,
+        schema === undefined ? this.table.error : this.table.schema(
+          schema.decoded,
+          schema.encoded,
+          schema.decodeRequirements,
+          schema.encodeRequirements,
+          false,
+          false,
+          false,
+          schema.makeInput ?? schema.decoded,
+          true,
+        ),
+        combine([first, callback.info]),
+      );
+    }
     if (op === "null-to-missing-key") {
       const nil = this.table.literal(null);
       if (
@@ -1948,6 +2042,9 @@ export class BodyChecker {
           schema.decodeRequirements,
           schema.encodeRequirements,
           true,
+          false,
+          false,
+          schema.makeInput ?? schema.decoded,
         ),
         combine([first]),
       );
@@ -1960,6 +2057,10 @@ export class BodyChecker {
           this.table.array(schema.encoded),
           schema.decodeRequirements,
           schema.encodeRequirements,
+          false,
+          false,
+          false,
+          this.table.array(schema.makeInput ?? schema.decoded),
         ),
         combine([first]),
       );
@@ -2095,13 +2196,17 @@ export class BodyChecker {
     if (op === "decode" || op === "encode" || op === "make") {
       const input = this.argInfo(
         args[1],
-        op === "decode" ? undefined : schema?.decoded,
+        op === "decode"
+          ? undefined
+          : op === "make"
+          ? schema?.makeInput ?? schema?.decoded
+          : schema?.decoded,
       );
       if (op !== "decode" && schema !== undefined) {
         this.fits(
           args[1].node,
           input.type,
-          schema.decoded,
+          op === "make" ? schema.makeInput ?? schema.decoded : schema.decoded,
           `the schema ${op} input`,
         );
       }
@@ -2190,15 +2295,24 @@ export class BodyChecker {
     }
     return this.finish(
       node,
-      this.table.schema(target.decoded, schema.encoded, [
-        ...schema.decodeRequirements,
-        ...target.decodeRequirements,
-        ...(decodeFn?.requirements ?? []),
-      ], [
-        ...schema.encodeRequirements,
-        ...target.encodeRequirements,
-        ...(encodeFn?.requirements ?? []),
-      ]),
+      this.table.schema(
+        target.decoded,
+        schema.encoded,
+        [
+          ...schema.decodeRequirements,
+          ...target.decodeRequirements,
+          ...(decodeFn?.requirements ?? []),
+        ],
+        [
+          ...schema.encodeRequirements,
+          ...target.encodeRequirements,
+          ...(encodeFn?.requirements ?? []),
+        ],
+        false,
+        false,
+        false,
+        target.makeInput ?? target.decoded,
+      ),
       combine([first, targetInfo, decode.info, encode.info]),
     );
   }

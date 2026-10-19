@@ -733,13 +733,22 @@ export class TypeLowerer {
       const encodedOptionalKey = nodeText(this.tree, node).startsWith(
         "SchemaEncodedOptional<",
       );
+      const constructorDefault = nodeText(this.tree, node).startsWith(
+        "SchemaConstructorDefault",
+      );
       const decodedOptionalKey = nodeText(this.tree, node).startsWith(
         "SchemaDecodedOptional<",
       );
       const encoded = typeNodes[1] === undefined
         ? first
         : this.lower(typeNodes[1]);
-      if (!this.schemaData(first.ref) || !this.schemaData(encoded.ref)) {
+      const makeInput = typeNodes[2] === undefined
+        ? first
+        : this.lower(typeNodes[2]);
+      if (
+        !this.schemaData(first.ref) || !this.schemaData(encoded.ref) ||
+        !this.schemaData(makeInput.ref)
+      ) {
         this.report(
           "type-mismatch/010",
           "Schema decoded and encoded types must be data only",
@@ -760,6 +769,8 @@ export class TypeLowerer {
           optionalKey,
           encodedOptionalKey,
           decodedOptionalKey,
+          makeInput.ref,
+          constructorDefault,
         ),
         ir: {
           kind: "schema",
@@ -770,6 +781,8 @@ export class TypeLowerer {
           ...(optionalKey ? { optionalKey: true as const } : {}),
           ...(encodedOptionalKey ? { encodedOptionalKey: true as const } : {}),
           ...(decodedOptionalKey ? { decodedOptionalKey: true as const } : {}),
+          ...(makeInput.ref === first.ref ? {} : { makeInput: makeInput.ir }),
+          ...(constructorDefault ? { constructorDefault: true as const } : {}),
         },
       };
     }
@@ -1025,6 +1038,7 @@ export function referencedIds(type: Type, ids: Set<string>): void {
     case "schema":
       referencedIds(type.decoded, ids);
       referencedIds(type.encoded, ids);
+      if (type.makeInput !== undefined) referencedIds(type.makeInput, ids);
       effectIds([], type.decodeRequirements, ids);
       effectIds([], type.encodeRequirements, ids);
       return;

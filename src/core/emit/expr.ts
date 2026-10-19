@@ -1385,6 +1385,41 @@ export class ExprEmitter {
       case "schema": {
         const schema = this.scope.effect("Schema");
         const args = e.arguments;
+        const resultType = this.scope.resolve(e.type);
+        const withMakeInput = (value: Emitted): Emitted =>
+          resultType.kind === "schema" && resultType.makeInput !== undefined
+            ? emitted([
+              `${schema}.make<`,
+              typeDoc(this.scope, resultType),
+              ">(",
+              at(value, PREC.member),
+              ".ast)",
+            ])
+            : value;
+        if (e.op === "constructor-default") {
+          const sourceType = this.scope.resolve(args[0].type);
+          if (sourceType.kind !== "schema") {
+            throw internal("constructor default needs a Schema");
+          }
+          const effect = this.scope.effect("Effect");
+          const callback = this.pure(args[1]);
+          const effectful = args[1].type.kind === "function" &&
+            args[1].type.execution === "effect";
+          return emitted([
+            `${schema}.make<(`,
+            typeDoc(this.scope, sourceType),
+            ' & { readonly "~type.make.in": ',
+            typeDoc(this.scope, sourceType.makeInput ?? sourceType.decoded),
+            ` } & ${schema}.WithoutConstructorDefault)>(`,
+            at(kid(args[0]), PREC.member),
+            ".ast).pipe(",
+            `${schema}.withConstructorDefault(${effect}.${
+              effectful ? "suspend" : "sync"
+            }(() => `,
+            at(callback, PREC.member),
+            "())))",
+          ]);
+        }
         if (e.op === "identity") {
           const type = this.scope.resolve(e.type);
           if (type.kind !== "schema") {
@@ -1393,10 +1428,10 @@ export class ExprEmitter {
           return emitted(schemaDoc(this.scope, type.decoded));
         }
         if (e.op === "array" || e.op === "struct") {
-          return emitted([
+          return withMakeInput(emitted([
             `${schema}.${e.op === "array" ? "Array" : "Struct"}`,
             callArguments([kid(args[0])]),
-          ]);
+          ]));
         }
         if (e.op === "null-to-missing-key") {
           const getter = this.scope.effect("SchemaGetter");
@@ -1583,7 +1618,9 @@ export class ExprEmitter {
           ]);
         }
         if (e.op === "union") {
-          return emitted([`${schema}.Union`, callArguments([kid(args[0])])]);
+          return withMakeInput(
+            emitted([`${schema}.Union`, callArguments([kid(args[0])])]),
+          );
         }
         if (e.op === "invalid") {
           const issue = this.scope.effect("SchemaIssue");
@@ -1697,7 +1734,7 @@ export class ExprEmitter {
         const effectful = (index: number) =>
           args[index].type.kind === "function" &&
           args[index].type.execution === "effect";
-        return emitted([
+        return withMakeInput(emitted([
           at(source, PREC.member),
           ".pipe(",
           `${schema}.decodeTo(`,
@@ -1708,7 +1745,7 @@ export class ExprEmitter {
           ", encode: ",
           conversion(encode, issueMode(3), effectful(3)),
           " })))",
-        ]);
+        ]));
       }
       case "decode":
       case "encode":

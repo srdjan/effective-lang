@@ -1708,7 +1708,19 @@ export class BodyValidator {
       const found = unfold(this.env, type);
       return found.kind === "schema" && found.optionalKey !== true &&
           found.encodedOptionalKey !== true &&
-          found.decodedOptionalKey !== true
+          found.decodedOptionalKey !== true &&
+          found.constructorDefault !== true &&
+          (found.makeInput === undefined ||
+            same(this.env, found.makeInput, found.decoded) ||
+            [
+              "array",
+              "struct",
+              "union",
+              "optional-key",
+              "transform",
+              "constructor-default",
+              "both",
+            ].includes(e.op))
         ? found
         : undefined;
     };
@@ -1716,7 +1728,10 @@ export class BodyValidator {
       const found = unfold(this.env, type);
       return found.kind === "schema" && found.optionalKey === true &&
           found.encodedOptionalKey !== true &&
-          found.decodedOptionalKey !== true
+          found.decodedOptionalKey !== true &&
+          found.constructorDefault !== true &&
+          (found.makeInput === undefined ||
+            same(this.env, found.makeInput, found.decoded))
         ? found
         : undefined;
     };
@@ -1764,6 +1779,31 @@ export class BodyValidator {
       }
       return { type: hint, match: "exact", active: QUIET };
     }
+    if (e.op === "constructor-default") {
+      const source = args[0] === undefined ? undefined : schemaOf(args[0].type);
+      const fn = args[1] === undefined
+        ? undefined
+        : asFunction(this.env, args[1].type);
+      if (
+        args.length !== 2 || source === undefined || fn === undefined ||
+        e.arguments[1].kind !== "closure" ||
+        fn.parameters.length !== 0 || fn.effects.requirements.length !== 0 ||
+        !(fn.effects.failures.length === 0 ||
+          (fn.effects.failures.length === 1 &&
+            fn.effects.failures[0] === SCHEMA_ISSUE_ID)) ||
+        (fn.execution === "pure" && fn.effects.failures.length !== 0) ||
+        !fits(this.env, fn.result, source.makeInput ?? source.decoded)
+      ) {
+        return bad(
+          "schemaConstructorDefault needs an inline make-input callback with no services and only SchemaIssue failure",
+        );
+      }
+      return {
+        type: { ...source, constructorDefault: true },
+        match: "exact",
+        active: combine(args),
+      };
+    }
     if (e.op === "array") {
       const input = args[0] === undefined ? undefined : schemaOf(args[0].type);
       if (args.length !== 1 || input === undefined) {
@@ -1774,6 +1814,10 @@ export class BodyValidator {
           kind: "schema",
           decoded: { kind: "array", element: input.decoded },
           encoded: { kind: "array", element: input.encoded },
+          makeInput: {
+            kind: "array",
+            element: input.makeInput ?? input.decoded,
+          },
           decodeRequirements: input.decodeRequirements,
           encodeRequirements: input.encodeRequirements,
         },
@@ -1939,6 +1983,19 @@ export class BodyValidator {
               type: schema.kind === "schema" ? schema.encoded : field.type,
             })),
           },
+          makeInput: {
+            kind: "record",
+            fields: fields.map(({ field, schema }) => ({
+              name: field.name,
+              type: schema.kind === "schema"
+                ? schema.makeInput ?? schema.decoded
+                : field.type,
+              optional: schema.kind === "schema" &&
+                (schema.optionalKey === true ||
+                  schema.decodedOptionalKey === true ||
+                  schema.constructorDefault === true),
+            })),
+          },
           decodeRequirements: sortedUnique(
             fields.flatMap(({ schema }) =>
               schema.kind === "schema" ? schema.decodeRequirements : []
@@ -1973,6 +2030,10 @@ export class BodyValidator {
           kind: "schema",
           decoded: { kind: "union", members: schemas.map((s) => s.decoded) },
           encoded: { kind: "union", members: schemas.map((s) => s.encoded) },
+          makeInput: {
+            kind: "union",
+            members: schemas.map((s) => s.makeInput ?? s.decoded),
+          },
           decodeRequirements: sortedUnique(
             schemas.flatMap((s) => s.decodeRequirements),
           ),
@@ -2178,6 +2239,9 @@ export class BodyValidator {
         type: {
           kind: "schema",
           decoded: target.decoded,
+          ...(target.makeInput === undefined
+            ? {}
+            : { makeInput: target.makeInput }),
           encoded: source.encoded,
           decodeRequirements: sortedUnique([
             ...source.decodeRequirements,
@@ -2295,10 +2359,10 @@ export class BodyValidator {
     const input = this.check(e.input, `${path}.input`);
     const type = unfold(this.env, schema.type);
     if (
-      type.kind !== "schema" ||
+      type.kind !== "schema" || type.constructorDefault === true ||
       (e.kind === "schema-make" &&
         (type.optionalKey === true || type.encodedOptionalKey === true ||
-          type.decodedOptionalKey === true))
+          type.decodedOptionalKey === true || type.constructorDefault === true))
     ) {
       this.add(
         AREA.types,
@@ -2309,7 +2373,14 @@ export class BodyValidator {
       return this.poison();
     }
     if (
-      e.kind !== "schema-decode" && !fits(this.env, input.type, type.decoded)
+      e.kind !== "schema-decode" &&
+      !fits(
+        this.env,
+        input.type,
+        e.kind === "schema-make"
+          ? type.makeInput ?? type.decoded
+          : type.decoded,
+      )
     ) {
       this.add(
         AREA.types,

@@ -1,7 +1,7 @@
 # Type-side Schema construction and explicit defaults
 
 Date: 2026-10-19. Target: `effect@4.0.5`, Deno 2.9.7. Status: bounded runner
-implemented; general constructor metadata remains open. The
+implemented; the [nonrecursive constructor metadata extension](2026-10-19-schema-constructor-metadata-contract.md) now adds separate make-input types. The
 [target probe](schema-adapter-probes/constructor-default.ts) has six passing
 tests. The [source fixture](../../fixtures/emit/schema-constructor.eff),
 [compiled runtime witness](../../tests/schema_constructor_slow_test.ts), and
@@ -87,8 +87,10 @@ distinct from both decoded D and encoded E, including defaults that return
 nested make input rather than fully constructed D. A future rule must specify M
 propagation through structs, arrays, unions, optional fields, recursive Schemas,
 and host boundaries; whether a field already has a default; and replay identity.
-The current four-channel source Schema cannot preserve that metadata. This
-addition does not expose withConstructorDefault, make options, skipped
+The original four-parameter source Schema did not preserve that metadata. The
+[metadata extension](2026-10-19-schema-constructor-metadata-contract.md) now
+covers nonrecursive composition. This baseline addition does not expose native
+constructor metadata, make options, skipped
 validation, or the synchronous throwing and Option constructor methods.
 
 ## Verification
@@ -102,6 +104,8 @@ constructor values and issue paths, verifies that construction needs no wire
 services, preserves argument services and order, distinguishes SchemaIssue from
 SchemaError, and exercises predicate-based mixed error matching and catches.
 
-General constructor metadata and make-input propagation are the next Schema
-design investigation. Broader package interoperability, item 9, stays deferred
+The [metadata extension](2026-10-19-schema-constructor-metadata-contract.md)
+now supplies nonrecursive constructor-default fields and propagates M through
+selected composition forms. Optional adapters and recursive make-input
+propagation remain the next investigations. Broader package interoperability, item 9, stays deferred
 by user instruction.

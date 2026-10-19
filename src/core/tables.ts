@@ -211,6 +211,7 @@ export type NodeFact =
       | "null-to-missing-key"
       | "option-from-optional-key"
       | "default-key"
+      | "constructor-default"
       | "default-null-key"
       | "default-encoded-key"
       | "optional-transform"
