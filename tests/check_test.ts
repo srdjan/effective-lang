@@ -16,7 +16,7 @@ import {
   type ModuleInterface,
   type ProjectCheck,
 } from "../src/core/interface.ts";
-import { checkAnalysis } from "../src/core/check_project.ts";
+import { checkAnalysis, checkProject } from "../src/core/check_project.ts";
 import { memoryHost } from "../src/core/source.ts";
 import { stripSpans } from "../src/core/interface.ts";
 import { TypeTable } from "../src/core/types.ts";
@@ -839,4 +839,39 @@ export const first = (t: T): T => t
   checkModuleDeclarations(analysis, "b", fresh, new Map([["a", reordered]]));
   // The table walks a guarded alias once, and it walks an unguarded cycle forever.
   assert(!fresh.exceedsDepth(fresh.named("type:a#T"), 128, new Map()));
+});
+
+Deno.test("a comment between a Schema type word and `<` does not change its flags", () => {
+  const words = [
+    "Schema",
+    "SchemaOptional",
+    "SchemaEncodedOptional",
+    "SchemaDecodedOptional",
+    "SchemaConstructorDefault",
+    "SchemaOptionalConstructorDefault",
+    "SchemaEncodedOptionalConstructorDefault",
+    "SchemaDecodedOptionalConstructorDefault",
+  ];
+  const messagesOf = (word: string, gap: string): string[] => {
+    const source = `type Int = int
+const integer: Schema<Int> = schema()
+const bad: ${word}${gap}<Int> = integer
+`;
+    const result = checkProject(
+      memoryHost({ "effective.json": "{}", "m.eff": source }),
+      "",
+      ["m.eff"],
+    );
+    assert(result.ok, JSON.stringify(result));
+    return result.value.diagnostics.map((d) => `${d.code} ${d.message}`);
+  };
+  for (const word of words) {
+    const plain = messagesOf(word, "");
+    // The mismatch message prints the declared type, so it names the word.
+    // Plain `Schema` matches its initializer and reports nothing.
+    if (word === "Schema") assertEquals(plain, []);
+    else assert(plain.some((m) => m.includes(`but ${word}<Int`)), word);
+    assertEquals(messagesOf(word, " /* note */ "), plain, word);
+    assertEquals(messagesOf(word, "/* note */"), plain, word);
+  }
 });

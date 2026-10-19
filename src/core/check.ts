@@ -733,16 +733,13 @@ export class TypeLowerer {
       ? this.errorLowered()
       : this.lower(typeNodes[0]);
     if (kindOf(this.tree, node) === SyntaxKind.SchemaType) {
-      // The word is the leading identifier. A comment between the word and `<`
-      // still drops constructorDefault: that gate is removed in the next commit.
-      const head = nodeText(this.tree, node).split("<", 1)[0];
-      const word = /^[\w$]*/.exec(head)?.[0] ?? "";
-      const flags = TYPE_WORDS.get(word)?.schema;
+      // The first child is the token of the type word.
+      const wordToken = childrenOf(this.tree, node)[0];
+      const flags = TYPE_WORDS.get(nodeText(this.tree, wordToken))?.schema;
       const optionalKey = flags?.optionalKey === true;
       const encodedOptionalKey = flags?.encodedOptionalKey === true;
       const decodedOptionalKey = flags?.decodedOptionalKey === true;
-      const constructorDefault = flags?.constructorDefault === true &&
-        head.trim() === word;
+      const constructorDefault = flags?.constructorDefault === true;
       const encoded = typeNodes[1] === undefined
         ? first
         : this.lower(typeNodes[1]);
