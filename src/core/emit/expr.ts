@@ -1386,8 +1386,12 @@ export class ExprEmitter {
         const schema = this.scope.effect("Schema");
         const args = e.arguments;
         const resultType = this.scope.resolve(e.type);
-        const withMakeInput = (value: Emitted): Emitted =>
-          resultType.kind === "schema" && resultType.makeInput !== undefined
+        const withSchemaView = (value: Emitted): Emitted =>
+          resultType.kind === "schema" && (resultType.makeInput !== undefined ||
+              resultType.constructorDefault === true ||
+              resultType.optionalKey === true ||
+              resultType.encodedOptionalKey === true ||
+              resultType.decodedOptionalKey === true)
             ? emitted([
               `${schema}.make<`,
               typeDoc(this.scope, resultType),
@@ -1405,7 +1409,7 @@ export class ExprEmitter {
           const callback = this.pure(args[1]);
           const effectful = args[1].type.kind === "function" &&
             args[1].type.execution === "effect";
-          return emitted([
+          return withSchemaView(emitted([
             `${schema}.make<(`,
             typeDoc(this.scope, sourceType),
             ' & { readonly "~type.make.in": ',
@@ -1418,7 +1422,7 @@ export class ExprEmitter {
             }(() => `,
             at(callback, PREC.member),
             "())))",
-          ]);
+          ]));
         }
         if (e.op === "identity") {
           const type = this.scope.resolve(e.type);
@@ -1428,7 +1432,7 @@ export class ExprEmitter {
           return emitted(schemaDoc(this.scope, type.decoded));
         }
         if (e.op === "array" || e.op === "struct") {
-          return withMakeInput(emitted([
+          return withSchemaView(emitted([
             `${schema}.${e.op === "array" ? "Array" : "Struct"}`,
             callArguments([kid(args[0])]),
           ]));
@@ -1438,7 +1442,7 @@ export class ExprEmitter {
           const option = this.scope.effect("Option");
           const source = this.scope.temp();
           const value = this.scope.temp();
-          return withMakeInput(emitted([
+          return withSchemaView(emitted([
             "((",
             source,
             ": ",
@@ -1454,16 +1458,16 @@ export class ExprEmitter {
           ]));
         }
         if (e.op === "optional-key") {
-          return emitted([
+          return withSchemaView(emitted([
             `${schema}.optionalKey`,
             callArguments([kid(args[0])]),
-          ]);
+          ]));
         }
         if (e.op === "option-from-optional-key") {
-          return emitted([
+          return withSchemaView(emitted([
             `${schema}.OptionFromOptionalKey`,
             callArguments([kid(args[0])]),
-          ]);
+          ]));
         }
         if (
           e.op === "default-key" || e.op === "default-null-key" ||
@@ -1511,7 +1515,7 @@ export class ExprEmitter {
             const omit = options?.kind === "record" &&
               options.fields[0].value.kind === "literal" &&
               options.fields[0].value.value === "omit";
-            return withMakeInput(emitted([
+            return withSchemaView(emitted([
               "((",
               source,
               ": ",
@@ -1530,7 +1534,7 @@ export class ExprEmitter {
               ")",
             ]));
           }
-          return withMakeInput(emitted([
+          return withSchemaView(emitted([
             at(kid(args[0]), PREC.member),
             ".pipe(",
             `${schema}.${
@@ -1552,7 +1556,7 @@ export class ExprEmitter {
               args[index].type.execution === "effect"
               ? "transformOptionalEffect"
               : "transformOptional";
-          return withMakeInput(emitted([
+          return withSchemaView(emitted([
             at(kid(args[0]), PREC.member),
             ".pipe(",
             `${schema}.decodeTo(`,
@@ -1594,7 +1598,7 @@ export class ExprEmitter {
               encodeValue,
               "))",
             ];
-          return withMakeInput(emitted([
+          return withSchemaView(emitted([
             at(kid(args[0]), PREC.member),
             ".pipe(",
             `${schema}.decodeTo(`,
@@ -1618,7 +1622,7 @@ export class ExprEmitter {
           ]));
         }
         if (e.op === "union") {
-          return withMakeInput(
+          return withSchemaView(
             emitted([`${schema}.Union`, callArguments([kid(args[0])])]),
           );
         }
@@ -1734,7 +1738,7 @@ export class ExprEmitter {
         const effectful = (index: number) =>
           args[index].type.kind === "function" &&
           args[index].type.execution === "effect";
-        return withMakeInput(emitted([
+        return withSchemaView(emitted([
           at(source, PREC.member),
           ".pipe(",
           `${schema}.decodeTo(`,

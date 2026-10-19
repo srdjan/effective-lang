@@ -71,8 +71,10 @@ signatures, wrong nested wire or make data, forged service directions, and
 attempts to use identity derivation for distinct D/E.
 
 The [field-default extension](2026-10-19-schema-constructor-fields-contract.md)
-now decorates existing descriptors. Applying field adapters after constructor
-defaults is the next investigation. Mutual recursion, transformed recursive discriminators,
+now decorates existing descriptors. The
+[adapter-order extension](2026-10-19-schema-constructor-order-contract.md)
+specifies retained, target and reset defaults. Guarded recursive self use
+through field adapters is next. Mutual recursion, transformed recursive discriminators,
 arbitrary self-bearing adapters, constructor options, and arbitrary AST access
 remain outside this slice. Broader package interoperability, item 9, stays
 deferred by user instruction.

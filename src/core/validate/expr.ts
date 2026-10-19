@@ -1706,11 +1706,20 @@ export class BodyValidator {
     );
     const schemaOf = (type: Type) => {
       const found = unfold(this.env, type);
+      const acceptsDefault = [
+        "optional-key",
+        "null-to-missing-key",
+        "default-key",
+        "default-null-key",
+        "default-encoded-key",
+        "option-from-optional-key",
+        "optional-from-required",
+      ].includes(e.op);
       return found.kind === "schema" &&
           (e.op === "constructor-default" || (found.optionalKey !== true &&
             found.encodedOptionalKey !== true &&
             found.decodedOptionalKey !== true)) &&
-          found.constructorDefault !== true &&
+          (acceptsDefault || found.constructorDefault !== true) &&
           (found.makeInput === undefined ||
             same(this.env, found.makeInput, found.decoded) ||
             [
@@ -1737,8 +1746,7 @@ export class BodyValidator {
       const found = unfold(this.env, type);
       return found.kind === "schema" && found.optionalKey === true &&
           found.encodedOptionalKey !== true &&
-          found.decodedOptionalKey !== true &&
-          found.constructorDefault !== true
+          found.decodedOptionalKey !== true
         ? found
         : undefined;
     };
@@ -1869,9 +1877,10 @@ export class BodyValidator {
       if (args.length !== 1 || input === undefined) {
         return bad("schemaOptionFromOptionalKey needs one ordinary Schema");
       }
+      const { constructorDefault: _constructorDefault, ...plain } = input;
       return {
         type: {
-          ...input,
+          ...plain,
           decoded: { kind: "option", element: input.decoded },
           makeInput: { kind: "option", element: input.decoded },
           encodedOptionalKey: true,
@@ -2110,6 +2119,9 @@ export class BodyValidator {
             ...encode.effects.requirements,
           ]),
           decodedOptionalKey: true,
+          ...(target.constructorDefault === true
+            ? { constructorDefault: true as const }
+            : {}),
           ...(target.makeInput === undefined
             ? {}
             : { makeInput: target.makeInput }),
@@ -2184,6 +2196,9 @@ export class BodyValidator {
             ...encode.effects.requirements,
           ]),
           optionalKey: true,
+          ...(target.constructorDefault === true
+            ? { constructorDefault: true as const }
+            : {}),
           ...(target.makeInput === undefined
             ? {}
             : { makeInput: target.makeInput }),

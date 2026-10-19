@@ -193,99 +193,8 @@ export function typeDoc(scope: Scope, type: Type): Doc {
         "> }",
       ];
     }
-    case "schema":
-      if (type.constructorDefault === true) {
-        const { constructorDefault: _constructorDefault, ...base } = type;
-        const schema = scope.effect("Schema");
-        return [
-          `${schema}.withConstructorDefault<(`,
-          typeDoc(scope, base),
-          ' & { readonly "~type.make.in": ',
-          typeDoc(scope, type.makeInput ?? type.decoded),
-          ` } & ${schema}.WithoutConstructorDefault)>`,
-        ];
-      }
-      if (type.makeInput !== undefined) {
-        const { makeInput, ...base } = type;
-        return [
-          "(",
-          typeDoc(scope, base),
-          ' & { readonly "~type.make.in": ',
-          typeDoc(scope, makeInput ?? type.decoded),
-          " })",
-        ];
-      }
-      if (type.decodedOptionalKey === true) {
-        const schema = scope.effect("Schema");
-        const rd = requirementUnion(scope, type.decodeRequirements) ?? "never";
-        const re = requirementUnion(scope, type.encodeRequirements) ?? "never";
-        return [
-          `${schema}.decodeTo<${schema}.optionalKey<${schema}.Codec<`,
-          typeDoc(scope, type.decoded),
-          ", unknown, ",
-          rd,
-          ", ",
-          re,
-          `>>, ${schema}.Codec<unknown, `,
-          typeDoc(scope, type.encoded),
-          ", ",
-          rd,
-          ", ",
-          re,
-          ">>",
-        ];
-      }
-      if (type.encodedOptionalKey === true) {
-        const schema = scope.effect("Schema");
-        return [
-          `${schema}.decodeTo<${schema}.Codec<`,
-          typeDoc(scope, type.decoded),
-          ", unknown, ",
-          requirementUnion(scope, type.decodeRequirements) ?? "never",
-          ", ",
-          requirementUnion(scope, type.encodeRequirements) ?? "never",
-          `>, ${schema}.optionalKey<${schema}.Codec<unknown, `,
-          typeDoc(scope, type.encoded),
-          ", ",
-          requirementUnion(scope, type.decodeRequirements) ?? "never",
-          ", ",
-          requirementUnion(scope, type.encodeRequirements) ?? "never",
-          ">>>",
-        ];
-      }
-      if (type.optionalKey === true) {
-        const schema = scope.effect("Schema");
-        const decoded = typeDoc(scope, type.decoded);
-        const encoded = typeDoc(scope, type.encoded);
-        const rd = requirementUnion(scope, type.decodeRequirements) ?? "never";
-        const re = requirementUnion(scope, type.encodeRequirements) ?? "never";
-        return [
-          "(",
-          `${schema}.optionalKey<${schema}.Codec<`,
-          decoded,
-          ", ",
-          encoded,
-          ", ",
-          rd,
-          ", ",
-          re,
-          ">> | ",
-          `${schema}.decodeTo<${schema}.optionalKey<${schema}.Codec<`,
-          decoded,
-          ", unknown, ",
-          rd,
-          ", ",
-          re,
-          `>>, ${schema}.optionalKey<${schema}.Codec<unknown, `,
-          encoded,
-          ", ",
-          rd,
-          ", ",
-          re,
-          ">>>)",
-        ];
-      }
-      return [
+    case "schema": {
+      const codec: Doc = [
         `${scope.effect("Schema")}.Codec`,
         typeArguments([
           typeDoc(scope, type.decoded),
@@ -294,6 +203,29 @@ export function typeDoc(scope: Scope, type: Type): Doc {
           requirementUnion(scope, type.encodeRequirements) ?? "never",
         ]),
       ];
+      if (
+        type.makeInput === undefined && type.constructorDefault !== true &&
+        type.optionalKey !== true && type.encodedOptionalKey !== true &&
+        type.decodedOptionalKey !== true
+      ) return codec;
+      return [
+        "(",
+        codec,
+        ' & { readonly "~type.make.in": ',
+        typeDoc(scope, type.makeInput ?? type.decoded),
+        '; readonly "~type.optionality": "',
+        type.optionalKey === true || type.decodedOptionalKey === true
+          ? "optional"
+          : "required",
+        '"; readonly "~encoded.optionality": "',
+        type.optionalKey === true || type.encodedOptionalKey === true
+          ? "optional"
+          : "required",
+        '"; readonly "~type.constructor.default": "',
+        type.constructorDefault === true ? "with-default" : "no-default",
+        '" })',
+      ];
+    }
     case "closeable-scope":
       return scope.scopeRuntime().type;
     case "fiber":

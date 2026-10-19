@@ -46,7 +46,6 @@ Deno.test("constructor field defaults reject erased flags, duplicate defaults an
       "const bad = schemaEncode(optionalField, { score: 4 })",
       "const bad = schemaOptionalKey(decodedField)",
       "const bad = schemaDefaultKey(optionalField, (): D => ({ score: 4 }))",
-      "const bad = schemaOptionalTransform(optionalField, schemaOptionalKey(child), (value: Option<D>): Option<E> => None, (value: Option<E>): Option<D> => None)",
       "const bad = schemaConstructorDefault(schemaOptionFromOptionalKey(child), (): Option<M> => Some({}))",
       "service Extra { next(): M }\nconst bad = schemaConstructorDefault(schemaOptionalKey(child), (): M uses Extra.next => Extra.next())",
     ]

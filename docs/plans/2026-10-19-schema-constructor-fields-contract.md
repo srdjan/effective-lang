@@ -13,7 +13,7 @@ composition, all selected adapters, Option contents, failures and cleanup.
 schemaConstructorDefault now accepts an ordinary Schema or any one existing
 field descriptor that does not already carry a constructor default. It retains
 the decoded and encoded presence flags, D/E/M, and directional service channels.
-The result remains a struct-only field descriptor.
+The result retains its field-descriptor type.
 
 | Input | Result |
 | --- | --- |
@@ -57,8 +57,11 @@ missing. Encoding strategies and wire service requirements retain their
 existing behavior. Constructor failure paths, defects, interruption and awaited
 cleanup also retain the existing rule.
 
-Apply field adapters first and attach the constructor default last. Further
-adapters and runners reject a decorated field; duplicate defaults remain errors.
+The [adapter-order extension](2026-10-19-schema-constructor-order-contract.md)
+now permits supported adapters after constructor defaults, retaining unary
+defaults, selecting bridge target defaults, and resetting Option defaults.
+Incompatible input presence, descriptor runners and duplicate retained defaults
+remain errors.
 The selected recursive guard can traverse the constructor wrapper and its
 structural argument, but default callbacks still cannot capture self.
 
@@ -68,10 +71,10 @@ No new IR fields or operations are needed. The existing constructorDefault flag
 may coexist with one of optionalKey, encodedOptionalKey or decodedOptionalKey.
 The three presence flags remain mutually exclusive. The checker and independent
 validator recompute the combined flags and parent make shape; old payloads keep
-their meaning. Emitted public types use native Schema.withConstructorDefault
-around the restored no-default field view, because that wrapper does not retain
-the input adapter's helper properties. Runtime emission continues to use public
-Schema.make and native withConstructorDefault, without casts or private APIs.
+their meaning. The adapter-order extension now emits structural Codec metadata
+views, avoiding assumptions about adapter helper properties in either order.
+Runtime emission continues to use public Schema.make and native
+withConstructorDefault, without casts or private APIs.
 
 The [fixture](../../fixtures/emit/schema-constructor-fields.eff),
 [source and IR boundaries](../../tests/schema_constructor_fields_test.ts), and
@@ -80,9 +83,9 @@ all three presence forms and every selected field adapter, imported descriptors,
 nested partial M, unchanged D/E, fresh callbacks, separate wire defaults and
 services, encoder omission, Option contents, failures, defects, and awaited
 cleanup. Boundaries reject erased flags, forged presence combinations, duplicate
-defaults, descriptor runners, subsequent adapters, callback services and partial
+defaults, descriptor runners, incompatible subsequent adapters, callback services and partial
 Option defaults.
 
-Applying field adapters after constructor defaults is the next investigation.
+Guarded recursive self use through field adapters is next.
 Constructor options and arbitrary AST access remain outside this slice.
 Broader package interoperability, item 9, stays deferred by user instruction.

@@ -1506,12 +1506,21 @@ export class BodyChecker {
         this.table.isAssignable(type.decoded, type.makeInput));
     const asSchema = (info: NodeInfo, at: NodeId) => {
       const type = this.table.node(this.table.unfold(info.type));
+      const acceptsDefault = [
+        "optional-key",
+        "null-to-missing-key",
+        "default-key",
+        "default-null-key",
+        "default-encoded-key",
+        "option-from-optional-key",
+        "optional-from-required",
+      ].includes(op);
       if (
         (type.kind !== "schema" ||
           (op !== "constructor-default" && (type.optionalKey === true ||
             type.encodedOptionalKey === true ||
             type.decodedOptionalKey === true)) ||
-          type.constructorDefault === true) &&
+          (!acceptsDefault && type.constructorDefault === true)) &&
         !this.isError(info.type)
       ) {
         this.report(
@@ -1553,15 +1562,14 @@ export class BodyChecker {
           (op === "constructor-default" || (type.optionalKey !== true &&
             type.encodedOptionalKey !== true &&
             type.decodedOptionalKey !== true)) &&
-          type.constructorDefault !== true
+          (acceptsDefault || type.constructorDefault !== true)
         ? type
         : undefined;
     };
     const asOptional = (info: NodeInfo, at: NodeId) => {
       const type = this.table.node(this.table.unfold(info.type));
       if (
-        type.kind !== "schema" || type.optionalKey !== true ||
-        type.constructorDefault === true
+        type.kind !== "schema" || type.optionalKey !== true
       ) {
         if (!this.isError(info.type)) {
           this.report(
@@ -1875,6 +1883,7 @@ export class BodyChecker {
           false,
           false,
           target.makeInput ?? target.decoded,
+          target.constructorDefault === true,
         ),
         combine([sourceInfo, targetInfo, decode.info, encode.info]),
       );
@@ -1967,6 +1976,7 @@ export class BodyChecker {
           false,
           true,
           target.makeInput ?? target.decoded,
+          target.constructorDefault === true,
         ),
         combine([sourceInfo, targetInfo, decode.info, encode.info]),
       );
@@ -2040,6 +2050,7 @@ export class BodyChecker {
           false,
           false,
           schema.makeInput ?? schema.decoded,
+          schema.constructorDefault === true,
         ),
         combine([first]),
       );
@@ -2056,6 +2067,7 @@ export class BodyChecker {
           false,
           false,
           schema.makeInput ?? schema.decoded,
+          schema.constructorDefault === true,
         ),
         combine([first]),
       );
@@ -2198,6 +2210,7 @@ export class BodyChecker {
           true,
           false,
           schema.makeInput ?? schema.decoded,
+          schema.constructorDefault === true,
         ),
         combine([
           first,

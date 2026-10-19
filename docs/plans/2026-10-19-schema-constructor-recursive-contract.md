@@ -80,6 +80,8 @@ and self captured inside a default callback.
 The [recursive wire extension](2026-10-19-schema-recursive-wire-contract.md)
 now allows distinct decoded and encoded recursive aliases while retaining M and
 directional services. The [field-default extension](2026-10-19-schema-constructor-fields-contract.md)
-now attaches defaults to descriptors. Applying adapters after constructor defaults
-is next. Mutual recursion, constructor options, and arbitrary AST access remain
+now attaches defaults to descriptors. The
+[adapter-order extension](2026-10-19-schema-constructor-order-contract.md)
+specifies retained, target and reset defaults. Guarded self use through field
+adapters is next. Mutual recursion, constructor options, and arbitrary AST access remain
 outside this slice. Broader package interoperability, item 9, stays deferred.

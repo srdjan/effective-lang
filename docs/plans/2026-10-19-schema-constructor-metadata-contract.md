@@ -61,7 +61,7 @@ Ordinary fields remain required in M even if their nested M contains defaults.
 Wrapping the whole nested Schema with schemaConstructorDefault makes the outer
 field optional too. Decoded and encoded field presence are unchanged. A default
 descriptor cannot be run, used as a union/array member, wrapped twice, or
-wrapped in another field adapter. The
+used by incompatible field adapters. The
 [field-default extension](2026-10-19-schema-constructor-fields-contract.md) now
 permits attaching a constructor default after a field adapter.
 
@@ -117,5 +117,7 @@ defaults, invalid callbacks, services, descriptor runners, and unsupported
 metadata derivation.
 
 Constructor metadata through optional adapters and guarded recursion is implemented.
-Applying field adapters after constructor defaults is next. Broader package interoperability, item 9, stays deferred
+The [adapter-order extension](2026-10-19-schema-constructor-order-contract.md)
+now specifies supported defaults through adapters. Guarded recursive self use
+through field adapters is next. Broader package interoperability, item 9, stays deferred
 by user instruction.

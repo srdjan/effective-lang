@@ -1,0 +1,66 @@
+import { Int, Text, D, E, M, Read, Write, Defaults, optionalField } from "./schema-constructor-fields.eff"
+type NullableE = E | null
+type Required = { settings: D }
+type Optional = { settings?: D }
+type OptionalWire = { settings?: E }
+type NullableWire = { settings?: NullableE }
+type TextWire = { settings?: Text }
+type RequiredTextWire = { settings: Text }
+type Input = { settings?: M }
+type OptionRecord = { settings: Option<D> }
+type OptionInput = { settings?: Option<D> }
+
+const integer: Schema<Int> = schema()
+const text: Schema<Text> = schema()
+const shifted: Schema<Int, Text, Read.parse, Write.print> = schemaTransform(text, integer,
+  (value: Text): Option<Int> uses Read.parse => Some(Read.parse(value)),
+  (value: Int): Option<Text> uses Write.print => Some(Write.print(value)))
+const child: Schema<D,E,Read.parse,Write.print,M> =
+  schemaStruct({ score: schemaConstructorDefault(shifted, (): Int => 4) })
+export const sourceDefault: SchemaConstructorDefault<D,E,Read.parse,Write.print,M> =
+  schemaConstructorDefault(child, (): M => ({}))
+export const optionalAfter: SchemaOptionalConstructorDefault<D,E,Read.parse,Write.print,M> =
+  schemaOptionalKey(sourceDefault)
+export const optionalRecord: Schema<Optional,OptionalWire,Read.parse,Write.print,Input> = schemaStruct({ settings: optionalAfter })
+export const nullAfter: SchemaOptionalConstructorDefault<D,NullableE,Read.parse,Write.print,M> =
+  schemaNullToMissingKey(sourceDefault)
+export const nullRecord: Schema<Optional,NullableWire,Read.parse,Write.print,Input> = schemaStruct({ settings: nullAfter })
+export const decodedAfter: SchemaEncodedOptionalConstructorDefault<D,E,Read.parse | Defaults.next,Write.print,M> =
+  schemaDefaultKey(sourceDefault, (): D uses Defaults.next => Defaults.next())
+export const decodedRecord: Schema<Required,OptionalWire,Read.parse | Defaults.next,Write.print,Input> = schemaStruct({ settings: decodedAfter })
+export const nullDefaultAfter: SchemaEncodedOptionalConstructorDefault<D,NullableE,Read.parse | Defaults.next,Write.print,M> =
+  schemaDefaultNullKey(sourceDefault, (): D uses Defaults.next => Defaults.next())
+export const nullDefaultRecord: Schema<Required,NullableWire,Read.parse | Defaults.next,Write.print,Input> = schemaStruct({ settings: nullDefaultAfter })
+export const encodedAfter: SchemaEncodedOptionalConstructorDefault<D,E,Read.parse | Defaults.encoded,Write.print,M> =
+  schemaDefaultEncodedKey(sourceDefault, (): E uses Defaults.encoded => Defaults.encoded(), { encodingStrategy: "omit" })
+export const encodedRecord: Schema<Required,OptionalWire,Read.parse | Defaults.encoded,Write.print,Input> = schemaStruct({ settings: encodedAfter })
+export const optionAfter: SchemaEncodedOptional<Option<D>,E,Read.parse,Write.print> = schemaOptionFromOptionalKey(sourceDefault)
+export const optionRecord: Schema<OptionRecord,OptionalWire,Read.parse,Write.print> = schemaStruct({ settings: optionAfter })
+export const optionRestored: SchemaEncodedOptionalConstructorDefault<Option<D>,E,Read.parse,Write.print> =
+  schemaConstructorDefault(optionAfter, (): Option<D> => Some({ score: 6 }))
+export const optionRestoredRecord: Schema<OptionRecord,OptionalWire,Read.parse,Write.print,OptionInput> = schemaStruct({ settings: optionRestored })
+
+const sourceText: SchemaConstructorDefault<Text> = schemaConstructorDefault(text, (): Text => "source")
+const sourceOptional: SchemaOptionalConstructorDefault<Text> = schemaOptionalKey(sourceText)
+const targetOptional: SchemaOptional<D,E,Read.parse,Write.print,M> = schemaOptionalKey(child)
+export const targetBridge: SchemaOptionalConstructorDefault<D,Text,Read.parse,Write.print,M> = schemaOptionalTransform(
+  sourceOptional, optionalField,
+  (value: Option<Text>): Option<E> => match value { Some(item) => Some({ score: item }), None => None },
+  (value: Option<E>): Option<Text> => match value { Some(item) => Some(item.score), None => None })
+export const targetRecord: Schema<Optional,TextWire,Read.parse,Write.print,Input> = schemaStruct({ settings: targetBridge })
+export const sourceBridge: SchemaOptional<D,Text,Read.parse,Write.print,M> = schemaOptionalTransform(
+  sourceOptional, targetOptional,
+  (value: Option<Text>): Option<E> => match value { Some(item) => Some({ score: item }), None => None },
+  (value: Option<E>): Option<Text> => match value { Some(item) => Some(item.score), None => None })
+export const sourceRecord: Schema<Optional,TextWire,Read.parse,Write.print,Input> = schemaStruct({ settings: sourceBridge })
+export const requiredBridge: SchemaDecodedOptionalConstructorDefault<D,Text,Read.parse,Write.print,M> = schemaOptionalFromRequired(
+  sourceText, optionalField,
+  (value: Text): Option<E> => Some({ score: value }),
+  (value: Option<E>): Text => match value { Some(item) => item.score, None => "" })
+export const requiredRecord: Schema<Optional,RequiredTextWire,Read.parse,Write.print,Input> = schemaStruct({ settings: requiredBridge })
+
+export const waiting = (pending: Effect<M,SchemaIssue>): Schema<Required,OptionalWire,Read.parse | Defaults.next,Write.print,Input> =>
+  schemaStruct({ settings: schemaDefaultKey(schemaConstructorDefault(child, (): M fails SchemaIssue => run(pending)), (): D uses Defaults.next => Defaults.next()) })
+export const makeDecoded = (input: Input): Required fails SchemaIssue => schemaMake(decodedRecord, input)
+export const makeOption = (input: OptionRecord): OptionRecord fails SchemaIssue => schemaMake(optionRecord, input)
+export const readDecoded = (input: unknown): Required fails SchemaError uses Read.parse | Defaults.next => schemaDecode(decodedRecord, input)
