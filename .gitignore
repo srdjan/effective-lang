@@ -4,6 +4,8 @@ fixtures/**/*.ts
 fixtures/**/*.ts.map
 !fixtures/golden/**
 !fixtures/examples/users-live.ts
+!fixtures/emit/scopes/host.ts
+!fixtures/emit/sinks/host.ts
 !fixtures/host-boundary/**
 editors/vscode/node_modules/
 playground/dist/
