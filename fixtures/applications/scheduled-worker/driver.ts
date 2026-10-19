@@ -1,5 +1,5 @@
 import { Duration, Effect, Layer } from "effect";
-import { Clock, JobFailure, Jobs } from "./contracts.ts";
+import { Clock, type JobFailure, Jobs } from "./contracts.ts";
 
 export interface DriverOptions {
   readonly open?: (id: number) => Effect.Effect<void, JobFailure>;

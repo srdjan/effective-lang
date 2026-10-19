@@ -1,0 +1,4 @@
+import { Store, StoreFailure } from "./contracts.eff"
+export opaque type Backend
+export service Runtime { database(): Backend fails StoreFailure }
+export provider StoreLive provides Store fails StoreFailure uses Runtime.database

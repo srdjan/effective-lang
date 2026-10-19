@@ -489,15 +489,24 @@ a scheduled worker, and a stream processor. Each must compile with precise
 contracts and pass failure, cancellation, and cleanup checks. Application
 orchestration stays in `.eff`; typed host adapters may supply drivers and the
 runtime entry point. The [scheduled worker](plans/2026-10-19-scheduled-worker-application.md)
-now passes its application gate. The service workflow and stream processor
-remain pending.
+now passes its application gate. The
+[service workflow](plans/2026-10-19-service-workflow-application.md) also passes.
+The stream processor remains pending.
 
 The scheduled worker uses existing source recursion, RetrySchedule, primitive
 clock waits and withResource. Nine compiled application checks cover virtual
 time, Effect replay, selective retry, validation, failures, defects and awaited
 cleanup during work and both kinds of wait. No new API is selected. Separate
 source probes retain the opaque Schedule retry and repetition consumer gaps.
-The service workflow baseline is next.
+
+The service workflow keeps validation, catalog use, total calculation and
+selective retry in source. Its registered native SQL adapter owns one atomic
+save and connection lifecycle. Fourteen compiled cases cover parameterized
+commit, input rejection, retry timing and replay, failure classification,
+rollback, defects and cancellation. Body interruption awaits rollback and release;
+interruption after COMMIT starts can preserve a committed row. No new API is
+selected. Recording drivers establish no external database integration.
+The stream processor baseline is next.
 Try equivalent existing source compositions before selecting a new builtin.
 Time control, general Schedule consumers and user generics remain candidates, subject to demonstrated
 application blockers. Further Schema expansion, including recursive Option,

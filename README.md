@@ -6,7 +6,7 @@ The design is in `docs/transpiler-design.md`. The Phase A plan is in `docs/plans
 
 ## Status
 
-The accepted [application acceptance rule](docs/plans/2026-10-19-application-acceptance-rule.md) bounds further gap work. The target covers a service workflow, a scheduled worker, and a stream processor. Each application must retain precise contracts and pass failure, cancellation, and cleanup checks. The [scheduled worker](fixtures/applications/scheduled-worker/README.md) now passes with existing language forms, including nine compiled runtime cases. The service workflow and stream processor remain pending. The service workflow baseline is next; item 9 remains deferred.
+The accepted [application acceptance rule](docs/plans/2026-10-19-application-acceptance-rule.md) bounds further gap work. The target covers a service workflow, a scheduled worker, and a stream processor. Each application must retain precise contracts and pass failure, cancellation, and cleanup checks. The [scheduled worker](fixtures/applications/scheduled-worker/README.md) now passes with existing language forms, including nine compiled runtime cases. The [service workflow](fixtures/applications/service-workflow/README.md) also passes with a registered atomic SQL adapter and fourteen compiled runtime cases. The stream processor gate remains pending and is next. Item 9 remains deferred.
 
 Parts A1, A2, A3a, A3b, A4, A5, A6a, A6b, A7, and A8 exist. Part A1 adds the project skeleton, the lexer, a lossless parser with error recovery, and the `syntax` diagnostics. The parser reads `.eff` source files and `.effi` host interface files.
 

@@ -1,0 +1,10 @@
+export type Int = int
+export type Text = string
+export type Request = { sku: Text, quantity: Int }
+export type Order = { sku: Text, quantity: Int, total: Int }
+export type Receipt = { sku: Text, quantity: Int, total: Int }
+export error InvalidOrder = { reason: Text }
+export error CatalogFailure = { sku: Text }
+export error StoreFailure = { kind: "Transient" | "Permanent", stage: Text }
+export service Catalog { price(sku: Text): Int fails CatalogFailure }
+export service Store { save(order: Order): Receipt fails StoreFailure }

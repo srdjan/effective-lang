@@ -1,5 +1,10 @@
 import { Cause, Duration, Effect, Option, Schedule } from "effect";
-import { JobFailure, Jobs, type Policy, type Report } from "./contracts.ts";
+import {
+  type JobFailure,
+  Jobs,
+  type Policy,
+  type Report,
+} from "./contracts.ts";
 
 /** Native reference for valid policies, independent of the source loop. */
 export const nativeWorker = (policy: Policy) =>

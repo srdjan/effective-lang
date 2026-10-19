@@ -24,4 +24,4 @@ The history uses one commit for each complete unit of work on local `main`. Use 
 
 Follow the accepted [application acceptance rule](docs/plans/2026-10-19-application-acceptance-rule.md) when selecting gap work. The stopping rule requires three complete applications with precise contracts and passing failure, cancellation, and cleanup checks. Keep application orchestration in `.eff`; typed host adapters may supply drivers and the runtime entry point. Add features only for demonstrated application blockers after checking existing source compositions.
 
-The scheduled worker gate now passes with existing forms. Start the service workflow baseline next. General Schedule consumers remain candidates only for demonstrated blockers. Broader package interoperability, gap item 9, remains deferred by user instruction.
+The scheduled worker and service workflow gates now pass with existing forms. Start the stream processor baseline next. General Schedule consumers remain candidates only for demonstrated blockers. Broader package interoperability, gap item 9, remains deferred by user instruction.

@@ -1,0 +1,24 @@
+import { Int, Request, Receipt, InvalidOrder, CatalogFailure, StoreFailure, Catalog, Store } from "./contracts.eff"
+import { StoreLive, Runtime } from "host:store"
+
+const requestSchema: Schema<Request> = schema()
+const storageRetry: RetrySchedule<StoreFailure> =
+  retrySchedule((error: StoreFailure, attempt: Int): Option<Int> =>
+    if (error.kind === "Transient" && attempt <= 2) { Some(attempt * 5) } else { None })
+
+export const submit = (input: unknown): Receipt
+  fails SchemaError | InvalidOrder | CatalogFailure | StoreFailure
+  uses Catalog.price | Runtime.database => {
+    const request = schemaDecode(requestSchema, input)
+    if (request.sku === "" || request.quantity < 1 || request.quantity > 100) {
+      fail(InvalidOrder({ reason: "request" }))
+    } else {
+      const unitPrice = Catalog.price(request.sku)
+      if (unitPrice < 0 || unitPrice > 100000) {
+        fail(InvalidOrder({ reason: "price" }))
+      } else {
+        const order = { sku: request.sku, quantity: request.quantity, total: unitPrice * request.quantity }
+        provide(StoreLive, () => retry(() => Store.save(order), { schedule: storageRetry }))
+      }
+    }
+  }

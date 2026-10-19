@@ -1,0 +1,8 @@
+{
+  "host": {
+    "store": {
+      "interface": "./host.effi",
+      "module": "./adapter.ts"
+    }
+  }
+}
