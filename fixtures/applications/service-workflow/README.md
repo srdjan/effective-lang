@@ -49,5 +49,4 @@ The checks establish the service workflow gate with a typed transaction adapter.
 They do not establish external driver integration or source transaction callbacks.
 The simulated COMMIT error precedes committed-state mutation and proves no retry.
 It does not establish actual ambiguous-commit behavior.
-All three accepted application gates now pass using existing forms.
-Gap item 9 remains deferred.
+See [docs/status.md](../../../docs/status.md) for the project status.

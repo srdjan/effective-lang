@@ -59,7 +59,7 @@ evidence rule. Recursive Option data no longer takes automatic priority.
 
 ## Deferred boundary
 
-The [remaining and deferred gap record](../effect-4-gap-audit.md#remaining-and-deferred-gaps)
+The [remaining and deferred gap record](../status.md#remaining-and-deferred-gaps)
 consolidates current open APIs, explicit deferrals and evidence limits. It is
 not an implementation queue.
 

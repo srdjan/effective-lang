@@ -40,4 +40,4 @@ The two source probes retain the general Schedule consumer gap separately.
 
 The driver performs no network or database I/O. These checks establish the
 scheduled-worker application gate, not external driver integration or full
-Schedule parity. Gap item 9 remains deferred.
+Schedule parity. See [docs/status.md](../../../docs/status.md) for the project status.

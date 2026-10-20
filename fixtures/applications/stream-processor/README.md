@@ -51,5 +51,4 @@ probe records this limitation; session cleanup runs outside item recovery.
 
 runtime_test.ts runs thirteen compiled cases. Together with source contract,
 IR and strict emitted checks, these cases complete the stream processor gate.
-All three accepted application gates now pass. Broader API parity and external
-integration remain separate work. Gap item 9 stays deferred.
+See [docs/status.md](../../../docs/status.md) for the project status.

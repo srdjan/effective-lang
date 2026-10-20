@@ -279,68 +279,7 @@ Effective construct. An equivalent composition in `.eff` would count as support.
 
 ## Remaining and deferred gaps
 
-Current disposition: 2026-10-19, design draft 0.57, `effect@4.0.5`.
-This section consolidates the remaining boundaries after all three
-[application gates](plans/2026-10-19-application-acceptance-rule.md) passed.
-Earlier update entries and probe diagnostics describe their original snapshots.
-The tables below are a record of gaps, not an implementation queue.
-
-### Open API and language gaps outside the accepted target
-
-| Area | Remaining boundary | Existing support and evidence |
-| --- | --- | --- |
-| General Effect and concurrency APIs | Other first-class combinators, coordination primitives and cause-level recovery APIs lack general source forms. | Effect values, collections, racing, supervised fibers and scope-bound children cover the selected subset. See the [coverage map](#coverage-map). |
-| Full Scope parity | Supplied close Exits, exit-aware callbacks, parallel finalization strategies, mandatory closure and static dependency-cycle detection remain outside the selected contract. | Shared CloseableScope authority closes once with Exit.void and caches cleanup completion. See the [ownership contract](plans/2026-10-18-scope-ownership-contract.md). |
-| General Stream and Sink APIs | Other operators, arbitrary source Sink constructors, chunk-cost throttling and unrestricted nested group streams need additional source and lifetime rules. | Leftovers, transduction, aggregation and callback-owned keyed groups are implemented. Selected external interruption has a source composition. See the [investigation](plans/2026-10-18-general-stream-schedule-design.md). |
-| General Schedule APIs | Opaque Schedule consumers for retry and repetition, composition with incomparable input types, other combinators and cron policies remain uncovered. | RetrySchedule and a concrete source repetition policy meet the worker gate. General schedules support aggregation and selected comparable-input composition. See the [worker limits](plans/2026-10-19-scheduled-worker-application.md#disposition-and-limits). |
-| Time control | A general source clock and time-control API remains a candidate without a demonstrated application blocker. | Primitive clock services and native virtual-time checks cover the selected applications. See the [accepted rule](plans/2026-10-19-application-acceptance-rule.md#feature-selection). |
-| Schema and recursion | Recursive Option data, mutual recursion, arbitrary self-bearing transformations and general Schema AST construction remain unsupported. | Guarded recursion preserves separate decoded, encoded and make-input types through selected adapters. See the [recursive field contract](plans/2026-10-19-schema-recursive-adapters-contract.md). |
-| General language extensions | User-defined generics, effect-row polymorphism, source purity assertions, macros and early returns remain deferred language extensions. | Builtin generic types and concrete source compositions cover the accepted applications. The [specification](../../effective/public/effective-spec.html#examples) retains the broader language boundary. |
-
-Reopen an item only for a demonstrated application blocker or an explicit
-change to the accepted target. First check equivalent existing source
-compositions. Record a minimal witness, intended contract, observed diagnostic
-or behavior, and the required failure, cancellation and cleanup semantics.
-No item has an automatic priority or implementation commitment.
-
-### Explicit user deferral: item 9
-
-Broader package interoperability remains deferred until the user revisits it.
-This covers arbitrary external package imports, external values and constructors,
-and package-specific API objects or builders authored directly in source.
-Direct source composition of HTTP, SQL, RPC, AI and observability builders
-belongs to this deferral.
-The registered typed host interface remains available for concrete adapters.
-The [adapter investigation](plans/2026-10-18-schema-ecosystem-design.md) records
-the supported route and its limits.
-
-A new application blocker does not revoke the explicit deferral of item 9.
-The user must change that instruction before broader interoperability work starts.
-
-### Runtime behavior and evidence limits
-
-These are limits of the selected witnesses, not automatically selected features.
-The three application gates establish neither complete Effect API parity nor
-external integration coverage.
-
-| Boundary | Recorded behavior or evidence limit |
-| --- | --- |
-| Typed recovery and mixed causes | Native catchTags can select a typed reason and discard an accompanying defect. The stream witness records this limit. Its session finalizers run outside item recovery. |
-| Transaction cancellation | Body interruption awaits rollback and release. Interruption after COMMIT starts can preserve a committed row. The simulated COMMIT error proves no retry, not actual ambiguous-commit behavior. |
-| Stream failure and buffering | Native transduction can emit a partial batch before upstream failure. The pinned backpressure trace establishes no global memory bound. |
-| Delivery guarantees | The applications promise neither exactly-once delivery nor rollback of earlier successful batches. |
-| External services | Recording drivers and local adapters perform no external HTTP, database, RPC, AI or telemetry integration acceptance checks. |
-
-The [service workflow](plans/2026-10-19-service-workflow-application.md#disposition-and-limits)
-and [stream processor](plans/2026-10-19-stream-processor-application.md#disposition-and-limits)
-record these boundaries with compiled checks.
-
-### Separate release acceptance
-
-Editor behavior, packaging, performance and external integration acceptance
-remain separate work. Passing the application gates does not establish their
-completion or declare existing editor and packaging implementations absent.
-This gap record selects no release task or additional language implementation.
+This section moved to [status.md](status.md#remaining-and-deferred-gaps).
 
 ## Coverage map
 
@@ -378,7 +317,7 @@ Each `.eff` probe below used a separate temporary project containing `effective.
 
 | `main.eff` body                                                                                                                    | Original result                                                                                   | Current interpretation                                                                                                                        |
 | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `export const pair = (): int[] => [1, 2]`                                                                                          | `syntax/008: expected an expression, found [`                                                     | Phase 2 now accepts the array literal. The [source rule](phase-a-rules.md#lexer-and-parser-a1) records its inference and contextual behavior. |
+| `export const pair = (): int[] => [1, 2]`                                                                                          | `syntax/008: expected an expression, found [`                                                     | Phase 2 now accepts the array literal. The [source rule](language-rules.md#lexer-and-parser) records its inference and contextual behavior. |
 | `import { Effect } from "effect"` followed by `export const answer = (): int => 1`                                                 | `module/001: import effect must start with ./ or ../, or use the host: prefix`                    | `.eff` cannot directly import the package API.                                                                                                |
 | `export const delayed = (): Effect<int> => 1`                                                                                      | `unknown-name/001: unknown type Effect`                                                           | Phase 4 now recognizes the type. The initializer remains invalid because `1` is not an Effect value; `defer(() => 1)` constructs one.         |
 | `export const numbers = (): Stream<int> => 1`                                                                                      | `unknown-name/001: unknown type Stream`                                                           | Phase 7 recognizes `Stream<int>`. The body remains invalid because `1` is not a Stream; `unfold(0, (n) => ...)` constructs one.               |
