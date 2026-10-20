@@ -834,125 +834,68 @@ export class TypeTable {
     const known = memo.get(ref);
     if (known !== undefined) return known <= budget ? known : Infinity;
     if (budget < 1) return Infinity;
-    const node = this.node(ref);
     let tallest = 0;
-    switch (node.kind) {
-      case "named": {
-        if (this.guardedAliases.has(node.id as TypeId)) break;
-        const alias = this.aliases.get(node.id as TypeId);
-        if (alias === undefined) break;
-        tallest = this.heightWithin(alias, budget - 1, memo);
-        if (tallest === Infinity) return Infinity;
-        break;
-      }
-      case "record":
-        for (const field of node.fields) {
-          const height = this.heightWithin(field.type, budget - 1, memo);
-          if (height === Infinity) return Infinity;
-          if (height > tallest) tallest = height;
-        }
-        break;
-      case "array":
-      case "option": {
-        tallest = this.heightWithin(node.element, budget - 1, memo);
-        if (tallest === Infinity) return Infinity;
-        break;
-      }
-      case "tuple":
-        for (const element of node.elements) {
-          const height = this.heightWithin(element, budget - 1, memo);
-          if (height === Infinity) return Infinity;
-          if (height > tallest) tallest = height;
-        }
-        break;
-      case "union":
-        for (const member of node.members) {
-          const height = this.heightWithin(member, budget - 1, memo);
-          if (height === Infinity) return Infinity;
-          if (height > tallest) tallest = height;
-        }
-        break;
-      case "function": {
-        tallest = this.heightWithin(node.result, budget - 1, memo);
-        if (tallest === Infinity) return Infinity;
-        for (const parameter of node.parameters) {
-          const height = this.heightWithin(parameter, budget - 1, memo);
-          if (height === Infinity) return Infinity;
-          if (height > tallest) tallest = height;
-        }
-        break;
-      }
-      case "effect":
-        tallest = this.heightWithin(node.result, budget - 1, memo);
-        if (tallest === Infinity) return Infinity;
-        break;
-      case "ref":
-        tallest = this.heightWithin(node.element, budget - 1, memo);
-        if (tallest === Infinity) return Infinity;
-        break;
-      case "retry-schedule":
-        tallest = this.heightWithin(node.error, budget - 1, memo);
-        if (tallest === Infinity) return Infinity;
-        break;
-      case "schema":
-        tallest = node.makeInput === undefined
-          ? 0
-          : this.heightWithin(node.makeInput, budget - 1, memo);
-        if (tallest === Infinity) return Infinity;
-        tallest = Math.max(
-          tallest,
-          this.heightWithin(node.decoded, budget - 1, memo),
-          this.heightWithin(node.encoded, budget - 1, memo),
-        );
-        if (tallest === Infinity) return Infinity;
-        break;
-      case "codec":
-        tallest = Math.max(
-          this.heightWithin(node.decoded, budget - 1, memo),
-          this.heightWithin(node.encoded, budget - 1, memo),
-        );
-        if (tallest === Infinity) return Infinity;
-        break;
-      case "fiber":
-        tallest = this.heightWithin(node.result, budget - 1, memo);
-        if (tallest === Infinity) return Infinity;
-        break;
-      case "stream":
-        tallest = this.heightWithin(node.element, budget - 1, memo);
-        if (tallest === Infinity) return Infinity;
-        break;
-      case "schedule":
-        tallest = Math.max(
-          this.heightWithin(node.output, budget - 1, memo),
-          this.heightWithin(node.input, budget - 1, memo),
-        );
-        if (tallest === Infinity) return Infinity;
-        break;
-      case "sink":
-        tallest = this.heightWithin(node.input, budget - 1, memo);
-        if (tallest === Infinity) return Infinity;
-        {
-          const resultHeight = this.heightWithin(node.result, budget - 1, memo);
-          if (resultHeight === Infinity) return Infinity;
-          if (resultHeight > tallest) tallest = resultHeight;
-          const leftoverHeight = this.heightWithin(
-            node.leftover,
-            budget - 1,
-            memo,
-          );
-          if (leftoverHeight === Infinity) return Infinity;
-          if (leftoverHeight > tallest) tallest = leftoverHeight;
-        }
-        break;
-      case "primitive":
-      case "literal":
-      case "provider":
-      case "error":
-        break;
+    for (const child of this.childRefs(this.node(ref))) {
+      const height = this.heightWithin(child, budget - 1, memo);
+      if (height === Infinity) return Infinity;
+      if (height > tallest) tallest = height;
     }
     const height = 1 + tallest;
     memo.set(ref, height);
     return height;
+  }
+
+  /**
+   * The types that one level below `node` counts toward its height. An alias
+   * name has its target as its child, unless the alias is guarded or undefined.
+   * A switch over every node kind makes a new kind a compile error here.
+   */
+  private childRefs(node: TypeNode): readonly TypeRef[] {
+    switch (node.kind) {
+      case "named": {
+        if (this.guardedAliases.has(node.id as TypeId)) return [];
+        const alias = this.aliases.get(node.id as TypeId);
+        return alias === undefined ? [] : [alias];
+      }
+      case "record":
+        return node.fields.map((field) => field.type);
+      case "array":
+      case "option":
+      case "ref":
+      case "stream":
+        return [node.element];
+      case "tuple":
+        return node.elements;
+      case "union":
+        return node.members;
+      case "function":
+        return [node.result, ...node.parameters];
+      case "effect":
+      case "fiber":
+        return [node.result];
+      case "retry-schedule":
+        return [node.error];
+      case "schema":
+        return node.makeInput === undefined
+          ? [node.decoded, node.encoded]
+          : [node.makeInput, node.decoded, node.encoded];
+      case "codec":
+        return [node.decoded, node.encoded];
+      case "schedule":
+        return [node.output, node.input];
+      case "sink":
+        return [node.input, node.result, node.leftover];
+      case "primitive":
+      case "literal":
+      case "provider":
+      case "closeable-scope":
+      case "error":
+        return [];
+      default: {
+        const unreachable: never = node;
+        return unreachable;
+      }
+    }
   }
 
   // -------------------------------------------------------------- IR conversion
