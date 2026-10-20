@@ -41,6 +41,7 @@ import type {
   ValueId,
 } from "./ir.ts";
 import { TokenKind } from "./lex.ts";
+import { stronglyConnectedComponents } from "./modes.ts";
 import type { ModuleInfo } from "./project.ts";
 import type { Target } from "./resolve.ts";
 import type { Result, Span } from "./source.ts";
@@ -1346,73 +1347,23 @@ class ModuleChecker {
   private checkCycles(): void {
     const infos = new Map<string, TypeNodeInfo>();
     for (const info of this.typeInfos) infos.set(info.id, info);
-    const index = new Map<string, number>();
-    const low = new Map<string, number>();
-    const onStack = new Set<string>();
-    const stack: string[] = [];
-    let counter = 0;
+    // The search starts from the declarations in source order, and follows the
+    // references of each one in text order.
+    const nodes = [...infos.values()];
+    const indexOfId = new Map<string, number>();
+    nodes.forEach((node, n) => indexOfId.set(node.id, n));
+    const edges = nodes.map((node) =>
+      [...node.refs].sort(compareText).flatMap((ref) => {
+        const target = indexOfId.get(ref);
+        return target === undefined ? [] : [target];
+      })
+    );
     const components: TypeNodeInfo[][] = [];
-
-    // An explicit stack of frames replaces the recursion, so that a long chain
-    // of aliases cannot overflow the call stack.
-    interface Frame {
-      readonly id: string;
-      readonly refs: readonly string[];
-      next: number;
-    }
-    // Every id that the search reaches has an index and a low link.
-    const indexOf = (id: string): number => index.get(id) ?? 0;
-    const lowOf = (id: string): number => low.get(id) ?? 0;
-    const enter = (frames: Frame[], id: string): void => {
-      index.set(id, counter);
-      low.set(id, counter);
-      counter++;
-      stack.push(id);
-      onStack.add(id);
-      const refs = [...infos.get(id)?.refs ?? []].filter((r) => infos.has(r))
-        .sort(compareText);
-      frames.push({ id, refs, next: 0 });
-    };
-    const visit = (root: string): void => {
-      const frames: Frame[] = [];
-      enter(frames, root);
-      while (frames.length > 0) {
-        const frame = frames[frames.length - 1];
-        const id = frame.id;
-        if (frame.next < frame.refs.length) {
-          const next = frame.refs[frame.next++];
-          if (!index.has(next)) {
-            enter(frames, next);
-          } else if (onStack.has(next)) {
-            low.set(id, Math.min(lowOf(id), indexOf(next)));
-          }
-          continue;
-        }
-        frames.pop();
-        if (low.get(id) === index.get(id)) {
-          const component: TypeNodeInfo[] = [];
-          for (
-            let member = stack.pop();
-            member !== undefined;
-            member = stack.pop()
-          ) {
-            onStack.delete(member);
-            const info = infos.get(member);
-            if (info !== undefined) component.push(info);
-            if (member === id) break;
-          }
-          const selfLoop = component.length === 1 &&
-            component[0].refs.has(component[0].id);
-          if (component.length > 1 || selfLoop) components.push(component);
-        }
-        const parent = frames[frames.length - 1];
-        if (parent !== undefined) {
-          low.set(parent.id, Math.min(lowOf(parent.id), lowOf(id)));
-        }
-      }
-    };
-    for (const info of this.typeInfos) {
-      if (!index.has(info.id)) visit(info.id);
+    for (const members of stronglyConnectedComponents(nodes.length, edges)) {
+      const component = members.map((n) => nodes[n]);
+      const selfLoop = component.length === 1 &&
+        component[0].refs.has(component[0].id);
+      if (component.length > 1 || selfLoop) components.push(component);
     }
 
     for (const component of components) {
