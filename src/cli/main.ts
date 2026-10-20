@@ -4,8 +4,10 @@
 // so that tests run it in process with in-memory doubles. The real entry at the
 // end of this file wires the Deno APIs.
 //
-// Exit codes: 0 when there is no diagnostic, 1 when there is at least one, and
-// 2 for a usage or configuration error.
+// Exit codes: 0 when there is no diagnostic, 1 when there is at least one, 2
+// for a usage or configuration error, and 3 for an internal error. An internal
+// error is an unexpected throw. It gets its own code so that it never reads as
+// a diagnostic.
 
 import { type Command, parseArgs, USAGE } from "./args.ts";
 import type { BuildOptions } from "./build.ts";
@@ -18,6 +20,7 @@ import { watchLoop } from "./watch.ts";
 export const EXIT_OK = 0;
 export const EXIT_DIAGNOSTICS = 1;
 export const EXIT_USAGE = 2;
+export const EXIT_INTERNAL = 3;
 
 function optionsOf(command: Command): BuildOptions {
   switch (command.kind) {
@@ -32,6 +35,19 @@ function optionsOf(command: Command): BuildOptions {
 }
 
 export async function main(
+  args: readonly string[],
+  io: CliIo,
+): Promise<number> {
+  try {
+    return await execute(args, io);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    io.stderr(`effective: internal error: ${message}\n`);
+    return EXIT_INTERNAL;
+  }
+}
+
+async function execute(
   args: readonly string[],
   io: CliIo,
 ): Promise<number> {

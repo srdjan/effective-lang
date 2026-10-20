@@ -538,3 +538,20 @@ Deno.test("debounceBatches joins events that arrive close together", async () =>
 Deno.test("debounceBatches ends when the source ends", async () => {
   assertEquals(await collect(debounceBatches(timed([]), 10)), []);
 });
+
+Deno.test("an unexpected throw is an internal error with exit code 3", async () => {
+  const m = memoryIo({ [`${ROOT}/effective.json`]: "{}" });
+  const io = {
+    ...m.io,
+    fs: {
+      ...m.io.fs,
+      kind: (): never => {
+        throw new Error("boom");
+      },
+    },
+  };
+  const code = await main(["check", ROOT], io);
+  assertEquals(code, 3);
+  assertEquals(m.err, ["effective: internal error: boom\n"]);
+  assertEquals(m.out, []);
+});

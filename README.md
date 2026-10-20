@@ -405,7 +405,7 @@ A diagnostic prints as `path:line:column: error code: message`. The path is rela
 
 The message is one line. Stdout holds only diagnostics, except for `--help`, which prints the usage on stdout. A summary line and all other messages go to stderr.
 
-The exit code is 0 when there is no diagnostic. It is 1 when there is at least one diagnostic or a build step fails. It is 2 for a usage or configuration error. A failed build step is a failed write, or a `deno check` that cannot run or that fails with no diagnostic. A usage error is a missing or unknown command, an unknown flag, an extra argument, or a missing root directory. A configuration error is a missing or invalid `effective.json`, or a read error in the root.
+The exit code is 0 when there is no diagnostic. It is 1 when there is at least one diagnostic or a build step fails. It is 2 for a usage or configuration error. It is 3 for an internal error, which is an unexpected throw. The tool prints one `effective: internal error: <message>` line to stderr for it. A failed build step is a failed write, or a `deno check` that cannot run or that fails with no diagnostic. A usage error is a missing or unknown command, an unknown flag, an extra argument, or a missing root directory. A configuration error is a missing or invalid `effective.json`, or a read error in the root.
 
 `build` writes a module only when it has no error. A module with an error keeps its last good `.ts` and `.ts.map` files. The tool writes a file only when its text changes. `--validate` runs `validateProject` on the lowered IR. A module with a validation diagnostic is not written.
 

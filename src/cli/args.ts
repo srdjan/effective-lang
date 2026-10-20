@@ -22,7 +22,7 @@ export const USAGE = [
   "  watch [root] [--tsc]                  build, then rebuild when a source changes",
   "",
   "root is the project directory with effective.json. The default is the current directory.",
-  "exit codes: 0 no diagnostics, 1 at least one diagnostic, 2 usage or configuration error",
+  "exit codes: 0 no diagnostics, 1 at least one diagnostic, 2 usage or configuration error, 3 internal error",
   "",
 ].join("\n");
 

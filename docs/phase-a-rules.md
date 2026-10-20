@@ -178,6 +178,7 @@ the implementer picks the stricter rule and records it here.
 | Watch events | The real source debounces events for 100 ms and keeps only `.eff`, `.effi`, and `effective.json` paths |
 | Watch rebuild | Each batch rereads the root and gives the program the files that changed. A batch with no change prints nothing |
 | Watch output | `rechecked: <modules>` and the summary go to stderr. Diagnostics go to stdout. Only a changed file starts a build |
+| Internal error | An unexpected throw prints `effective: internal error: <message>` on stderr and gives exit code 3 |
 | Watch errors | A broken project file at start gives exit code 2. A broken project file later prints an error and the loop goes on |
 | Watch and `--tsc` | `watch --tsc` runs `deno check` after each build without errors |
 | Public API | `mod.ts` re-exports the IR types with `export type *`. The explicit `Diagnostic` of the core wins over the one in `ir.ts` |
