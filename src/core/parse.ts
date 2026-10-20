@@ -631,6 +631,16 @@ class Parser {
     }
   }
 
+  /**
+   * The opener is the current token. Consumes it, parses a comma-separated list,
+   * and expects `closer`, which the message names.
+   */
+  private parseDelimited(closer: TokenKind, item: () => void): void {
+    const group = this.open("free");
+    this.parseCommaList(closer, item);
+    this.close(group, closer, describeTokenKind(closer));
+  }
+
   /** Items separated by newlines or semicolons, up to `}`. Used for blocks and service bodies. */
   private parseSeparated(item: () => void): void {
     while (true) {
@@ -696,9 +706,7 @@ class Parser {
     this.begin();
     this.tok(); // import
     if (this.kind() === TokenKind.LBrace) {
-      const group = this.open("free");
-      this.parseCommaList(TokenKind.RBrace, () => this.parseName("binding"));
-      this.close(group, TokenKind.RBrace, "`}`");
+      this.parseDelimited(TokenKind.RBrace, () => this.parseName("binding"));
     } else {
       this.missing("`{`");
     }
@@ -929,9 +937,7 @@ class Parser {
   private parseParamList(): void {
     this.begin();
     if (this.kind() === TokenKind.LParen) {
-      const group = this.open("free");
-      this.parseCommaList(TokenKind.RParen, () => this.parseParam());
-      this.close(group, TokenKind.RParen, "`)`");
+      this.parseDelimited(TokenKind.RParen, () => this.parseParam());
     } else {
       this.missing("`(`");
     }
@@ -1018,9 +1024,7 @@ class Parser {
         this.parseName("type");
         if (this.kind() === TokenKind.Lt) {
           this.begin();
-          const group = this.open("free");
-          this.parseCommaList(TokenKind.Gt, () => this.parseType());
-          this.close(group, TokenKind.Gt, "`>`");
+          this.parseDelimited(TokenKind.Gt, () => this.parseType());
           this.end(SyntaxKind.TypeArgs);
         }
         this.end(SyntaxKind.NamedType);
@@ -1040,9 +1044,7 @@ class Parser {
         return;
       case TokenKind.LBracket: {
         this.begin();
-        const group = this.open("free");
-        this.parseCommaList(TokenKind.RBracket, () => this.parseType());
-        this.close(group, TokenKind.RBracket, "`]`");
+        this.parseDelimited(TokenKind.RBracket, () => this.parseType());
         this.end(SyntaxKind.TupleType);
         return;
       }
@@ -1102,8 +1104,7 @@ class Parser {
 
   private parseRecordType(): void {
     this.begin();
-    const group = this.open("free");
-    this.parseCommaList(TokenKind.RBrace, () => {
+    this.parseDelimited(TokenKind.RBrace, () => {
       this.begin();
       this.parseName("member");
       if (this.kind() === TokenKind.Question) this.tok();
@@ -1116,7 +1117,6 @@ class Parser {
       this.parseType();
       this.end(SyntaxKind.FieldType);
     });
-    this.close(group, TokenKind.RBrace, "`}`");
     this.end(SyntaxKind.RecordType);
   }
 
@@ -1195,9 +1195,7 @@ class Parser {
 
   private parseArgList(): void {
     this.begin();
-    const group = this.open("free");
-    this.parseCommaList(TokenKind.RParen, () => this.parseExpr());
-    this.close(group, TokenKind.RParen, "`)`");
+    this.parseDelimited(TokenKind.RParen, () => this.parseExpr());
     this.end(SyntaxKind.ArgList);
   }
 
@@ -1248,9 +1246,7 @@ class Parser {
         return;
       case TokenKind.LBracket: {
         this.begin();
-        const group = this.open("free");
-        this.parseCommaList(TokenKind.RBracket, () => this.parseExpr());
-        this.close(group, TokenKind.RBracket, "`]`");
+        this.parseDelimited(TokenKind.RBracket, () => this.parseExpr());
         this.end(SyntaxKind.ListExpr);
         return;
       }
@@ -1338,9 +1334,8 @@ class Parser {
 
   private parseRecordExpr(): void {
     this.begin();
-    const group = this.open("free");
     let index = 0;
-    this.parseCommaList(TokenKind.RBrace, () => {
+    this.parseDelimited(TokenKind.RBrace, () => {
       const k = this.kind();
       if (k === TokenKind.DotDotDot) {
         if (index > 0) {
@@ -1372,7 +1367,6 @@ class Parser {
       }
       index++;
     });
-    this.close(group, TokenKind.RBrace, "`}`");
     this.end(SyntaxKind.RecordExpr);
   }
 
@@ -1409,9 +1403,7 @@ class Parser {
     this.tok(); // match
     this.parseExpr();
     if (this.kind() === TokenKind.LBrace) {
-      const group = this.open("free");
-      this.parseCommaList(TokenKind.RBrace, () => this.parseArm());
-      this.close(group, TokenKind.RBrace, "`}`");
+      this.parseDelimited(TokenKind.RBrace, () => this.parseArm());
     } else {
       this.missing("`{`");
     }
@@ -1440,9 +1432,7 @@ class Parser {
       this.begin();
       this.tok(); // catch
       if (this.kind() === TokenKind.LBrace) {
-        const group = this.open("free");
-        this.parseCommaList(TokenKind.RBrace, () => this.parseHandler());
-        this.close(group, TokenKind.RBrace, "`}`");
+        this.parseDelimited(TokenKind.RBrace, () => this.parseHandler());
       } else {
         this.missing("`{`");
       }
@@ -1520,9 +1510,7 @@ class Parser {
       this.end(SyntaxKind.LiteralPattern);
     } else if (k === TokenKind.LBrace) {
       this.begin();
-      const group = this.open("free");
-      this.parseCommaList(TokenKind.RBrace, () => this.parsePatternField());
-      this.close(group, TokenKind.RBrace, "`}`");
+      this.parseDelimited(TokenKind.RBrace, () => this.parsePatternField());
       this.end(SyntaxKind.RecordPattern);
     } else {
       this.invalidPattern(
