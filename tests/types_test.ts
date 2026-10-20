@@ -1,6 +1,11 @@
 // Tests for the type intern table and the compatibility rules.
 
-import { assert, assertEquals, assertNotEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertNotEquals,
+  assertStrictEquals,
+} from "@std/assert";
 import type { ErrorId, Type, TypeId } from "../src/core/ir.ts";
 import { canonicalJson, type TypeRef, TypeTable } from "../src/core/types.ts";
 
@@ -91,15 +96,15 @@ Deno.test("Sink leftovers are covariant and preserve legacy IR defaults", () => 
 
 Deno.test("equal structural types share one id", () => {
   const t = fresh();
-  assertEquals(t.array(t.int), t.array(t.int));
+  assertStrictEquals(t.array(t.int), t.array(t.int));
   assertNotEquals(t.array(t.int), t.array(t.number));
-  assertEquals(t.option(t.string), t.option(t.string));
-  assertEquals(t.tuple([t.int, t.string]), t.tuple([t.int, t.string]));
+  assertStrictEquals(t.option(t.string), t.option(t.string));
+  assertStrictEquals(t.tuple([t.int, t.string]), t.tuple([t.int, t.string]));
   assertNotEquals(t.tuple([t.int, t.string]), t.tuple([t.string, t.int]));
-  assertEquals(t.literal("a"), t.literal("a"));
+  assertStrictEquals(t.literal("a"), t.literal("a"));
   assertNotEquals(t.literal("1"), t.literal(1));
-  assertEquals(t.named(USER), t.named(USER));
-  assertEquals(t.primitive("int"), t.int);
+  assertStrictEquals(t.named(USER), t.named(USER));
+  assertStrictEquals(t.primitive("int"), t.int);
 });
 
 Deno.test("records sort by field name, so field order does not matter", () => {
