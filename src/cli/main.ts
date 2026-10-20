@@ -12,8 +12,8 @@
 
 import { type Command, parseArgs, USAGE } from "./args.ts";
 import type { BuildOptions, BuildOutcome } from "./build.ts";
-import { denoIo } from "./deno_io.ts";
-import type { CliIo } from "./io.ts";
+import { denoIo } from "../host/deno_io.ts";
+import type { CliIo } from "../host/io.ts";
 import { printOutcome, rechecked } from "./report.ts";
 import { Session, type SyncResult } from "./session.ts";
 

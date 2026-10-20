@@ -11,8 +11,8 @@ import {
   validateProject,
 } from "../core/mod.ts";
 import { formatDiagnostics, type TextOf } from "./format.ts";
-import type { CliIo } from "./io.ts";
-import { writeGenerated } from "./outputs.ts";
+import type { CliIo } from "../host/io.ts";
+import { writeGenerated } from "../host/outputs.ts";
 import { runTsc } from "./tsc.ts";
 
 export interface BuildOptions {

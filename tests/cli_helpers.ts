@@ -7,7 +7,7 @@ import type {
   DenoCheckRun,
   DirectoryEntry,
   FileFailure,
-} from "../src/cli/io.ts";
+} from "../src/host/io.ts";
 import type { ReadError, Result } from "../src/core/source.ts";
 
 export interface MemoryIo {

@@ -9,7 +9,7 @@
 // The feature handlers are in `features.ts`. This file wires them to the method
 // names and sends `effective/generatedChanged` after a flush.
 
-import type { CliFs } from "../cli/io.ts";
+import type { CliFs } from "../host/io.ts";
 import type { Result } from "../core/mod.ts";
 import {
   definitionRequest,

@@ -19,7 +19,7 @@
 // Each target gets a temporary directory. The harness removes it at the end
 // and leaves nothing in the working tree.
 
-import { denoIo } from "../src/cli/deno_io.ts";
+import { denoIo } from "../src/host/deno_io.ts";
 import { tscConfig } from "../src/cli/tsc.ts";
 import type { Result } from "../src/core/source.ts";
 import {

@@ -3,7 +3,7 @@
 // exit codes, and stderr. `deliver` frames each message, decodes it, and calls
 // the server as the stdio loop does.
 
-import type { CliFs } from "../src/cli/io.ts";
+import type { CliFs } from "../src/host/io.ts";
 import type { ReadError, Result } from "../src/core/source.ts";
 import {
   FrameDecoder,

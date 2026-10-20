@@ -6,7 +6,7 @@
 // This file imports only types from `server.ts`. The server imports the values
 // of this file, so a value import back would form a cycle.
 
-import { writeGenerated } from "../cli/outputs.ts";
+import { writeGenerated } from "../host/outputs.ts";
 import {
   definitionAt,
   documentSymbols,

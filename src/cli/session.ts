@@ -15,8 +15,8 @@ import {
   type BuildOutcome,
   buildRevision,
 } from "./build.ts";
-import type { CliIo } from "./io.ts";
-import { readWorkspace } from "./workspace.ts";
+import type { CliIo } from "../host/io.ts";
+import { readWorkspace } from "../host/workspace.ts";
 
 export type SyncResult =
   /** No file changed since the last sync. */

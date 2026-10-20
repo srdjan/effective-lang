@@ -1,7 +1,7 @@
 // Printing of a build outcome: diagnostics on stdout, everything else on stderr.
 
 import type { BuildOutcome } from "./build.ts";
-import type { CliIo } from "./io.ts";
+import type { CliIo } from "../host/io.ts";
 
 /** The modules a revision checked, as one line of text. */
 export function rechecked(names: readonly string[]): string {

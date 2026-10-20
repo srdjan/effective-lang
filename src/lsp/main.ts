@@ -3,7 +3,7 @@
 // write. Log text goes to stderr and never to stdout. The end of stdin ends the
 // process: code 0 after `shutdown`, else 1.
 
-import { denoFs } from "../cli/deno_io.ts";
+import { denoFs } from "../host/deno_io.ts";
 import {
   encodeMessage,
   FrameDecoder,

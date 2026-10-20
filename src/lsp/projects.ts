@@ -7,8 +7,8 @@
 // Nothing here throws on purpose. The server wraps each handler, and that
 // wrapper is the only exception boundary.
 
-import type { CliFs } from "../cli/io.ts";
-import { isSourcePath, readWorkspace } from "../cli/workspace.ts";
+import type { CliFs } from "../host/io.ts";
+import { isSourcePath, readWorkspace } from "../host/workspace.ts";
 import {
   CONFIG_FILE,
   type ConfigError,

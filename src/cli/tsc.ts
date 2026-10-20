@@ -8,7 +8,7 @@ import {
   type ProjectConfig,
   type SpanTable,
 } from "../core/mod.ts";
-import type { CliIo } from "./io.ts";
+import type { CliIo } from "../host/io.ts";
 import { formatTscMappings, type TextOf } from "./format.ts";
 
 /** The version of Effect that the generated code targets. */

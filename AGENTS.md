@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-The core library is in `src/core/`, the command-line tool in `src/cli/`, and the language server in `src/lsp/`. The VS Code client is in `editors/vscode/`, the browser playground in `playground/`, the measurement harnesses in `bench/`, and the task scripts in `scripts/`. Tests and test helpers are in `tests/`. Test inputs are in `fixtures/`. Design and plans are in `docs/`. The README describes each directory and the fixture conventions. Solved problems are recorded in `docs/solutions/<category>/`, with YAML frontmatter (`module`, `problem_type`, `tags`). Shared terms are in `CONCEPTS.md`. Search both before you change a documented area.
+The core library is in `src/core/`, the command-line tool in `src/cli/`, the host adapters that the command-line tool and the language server share in `src/host/`, and the language server in `src/lsp/`. The VS Code client is in `editors/vscode/`, the browser playground in `playground/`, the measurement harnesses in `bench/`, and the task scripts in `scripts/`. Tests and test helpers are in `tests/`. Test inputs are in `fixtures/`. Design and plans are in `docs/`. The README describes each directory and the fixture conventions. Solved problems are recorded in `docs/solutions/<category>/`, with YAML frontmatter (`module`, `problem_type`, `tags`). Shared terms are in `CONCEPTS.md`. Search both before you change a documented area.
 
 ## Build, Test, and Development Commands
 
