@@ -107,7 +107,7 @@ const FUNCTION: Type = {
 Deno.test("a pipeline into an error constructor is a checker error", () => {
   // The direct form `Stop({ ... })` needs a record literal (check_expr.ts
   // errorConstruction). A pipeline stage has no record literal of its own, so
-  // both stage forms get type-mismatch/010 on the stage, whatever the piped value is.
+  // both stage forms get type-mismatch/010 on the stage when the piped value fits.
   const message =
     "the error `Stop` needs a record literal such as Stop({ field: value })";
   const head = "error Stop = { code: int }\ntype R = { code: int }\n" +
@@ -128,6 +128,22 @@ Deno.test("a pipeline into an error constructor is a checker error", () => {
     assertEquals(found[0].message, message, expression);
     assertEquals(text.slice(found[0].span.start, found[0].span.end), stage);
     assertEquals(checked.diagnostics.length, 1, expression);
+  }
+});
+
+Deno.test("a piped value that does not fit an error constructor gets only its type report", () => {
+  // As in the direct form `Stop(1)`, the type report is the only diagnostic.
+  for (const value of ["1", "({ code: 1, x: 2 })"]) {
+    for (const stage of ["Stop()", "Stop"]) {
+      const text = "error Stop = { code: int }\n" +
+        `const mk = (): Stop => ${value} |> ${stage}\n`;
+      const checked = check({ "main.eff": text });
+      assertEquals(
+        checked.diagnostics.map((d) => d.code),
+        ["type-mismatch/003"],
+        `${value} |> ${stage}`,
+      );
+    }
   }
 });
 

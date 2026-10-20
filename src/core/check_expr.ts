@@ -973,11 +973,12 @@ export class BodyChecker {
         );
         // The IR error node lists its fields, so the argument must be a record
         // literal without a spread. A pipeline stage with one piped value has no
-        // record literal of its own, so the stage is the error.
+        // record literal of its own, so the stage is the error. A value that
+        // does not fit has its type report already, as in the direct form.
         const piped = arg.pre !== undefined && args.length === 1;
         if (
-          piped || (fits && !this.isError(info.type) &&
-            !this.isPlainRecordLiteral(arg.node))
+          fits && !this.isError(info.type) &&
+          (piped || !this.isPlainRecordLiteral(arg.node))
         ) {
           this.report(
             "type-mismatch/010",
