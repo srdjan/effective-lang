@@ -557,18 +557,22 @@ export class ExprEmitter {
 
   // -------------------------------------------------------------- entry points
 
-  /** A TypeScript expression for a pure-mode node. */
-  pure(e: Expr): Emitted {
+  /**
+   * A TypeScript expression for a pure-mode node. `expected` is the type of
+   * the slot that the value fills. A block, an `if`, and a `match` give it to
+   * their results, their branches, and their arms.
+   */
+  pure(e: Expr, expected?: Type): Emitted {
     if (e.execution !== "pure") {
       throw internal(`pure() received an effect-mode ${e.kind} node`);
     }
-    return this.tag(e, this.structural(e, "pure"));
+    return this.tag(e, this.structural(e, "pure", expected));
   }
 
   /** A TypeScript expression that is valid inside a generator body. */
-  inGen(e: Expr): Emitted {
-    if (e.execution === "pure") return this.pure(e);
-    return this.tag(e, this.genNode(e));
+  inGen(e: Expr, expected?: Type): Emitted {
+    if (e.execution === "pure") return this.pure(e, expected);
+    return this.tag(e, this.genNode(e, expected));
   }
 
   /** A TypeScript expression of type `Effect.Effect<...>`. */
@@ -576,17 +580,28 @@ export class ExprEmitter {
     return this.tag(e, this.effectNode(e, expected));
   }
 
-  /** The statements of an `Effect.gen` or plain function body for a block. */
+  /**
+   * The statements of an `Effect.gen` or plain function body for a block. The
+   * result fills the slot `expected`, or the own type of the block when the
+   * caller states no function slot.
+   */
   blockStatements(
     block: Extract<Expr, { kind: "block" }>,
     gen: boolean,
+    expected?: Type,
   ): Doc[] {
     const mode: Mode = gen ? "gen" : "pure";
     const statements: Doc[] = [];
     for (const step of block.steps) {
       statements.push(this.step(step, mode));
     }
-    statements.push(this.returnStatement(block.result, block.type, mode));
+    statements.push(
+      this.returnStatement(
+        block.result,
+        this.slotOf(expected, block.type),
+        mode,
+      ),
+    );
     return statements;
   }
 
@@ -724,28 +739,63 @@ export class ExprEmitter {
   }
 
   /**
+   * The type that a block result, a branch, or an arm fills: the slot type
+   * `expected` when it is a function type, else the own type of the node. The
+   * own type of a node can differ from its slot in the execution of a function
+   * type only.
+   */
+  private slotOf(expected: Type | undefined, own: Type): Type {
+    return expected !== undefined && this.functionTypeOf(expected) !== undefined
+      ? expected
+      : own;
+  }
+
+  /** True when `e` is a pure function value for a slot of an effect function type. */
+  private liftsInto(e: Expr, expected: Type | undefined): boolean {
+    if (expected === undefined) return false;
+    const from = this.functionTypeOf(e.type);
+    const to = this.functionTypeOf(expected);
+    return from !== undefined && to !== undefined &&
+      from.execution === "pure" && to.execution === "effect";
+  }
+
+  /**
    * `e` as a value of the type `expected`. A pure function fits a slot of an
    * effect function type (spec: the checker allows it), so the emitter wraps
    * its result: `(a) => Effect.succeed(f(a))`. Every other value stays as it is.
+   *
+   * A pure-mode `e` gets one wrap of its whole value. An effect-mode block,
+   * `if`, or `match` gives the slot type to its results, so that each result
+   * gets its own wrap after the effects of the block run. Any other effect-mode
+   * `e` binds its value once: `(($f) => (a) => Effect.succeed($f(a)))(yield* e)`.
    */
   fit(e: Expr, expected: Type | undefined, mode: Mode): Emitted {
-    const plain = mode === "gen" ? this.inGen(e) : this.pure(e);
-    if (expected === undefined) return plain;
+    if (!this.liftsInto(e, expected)) {
+      return mode === "gen" ? this.inGen(e, expected) : this.pure(e, expected);
+    }
     const from = this.functionTypeOf(e.type);
-    const to = this.functionTypeOf(expected);
-    if (
-      from === undefined || to === undefined || from.execution !== "pure" ||
-      to.execution !== "effect"
-    ) {
-      return plain;
+    if (from === undefined) {
+      throw internal("a lifted value has no function type");
     }
     if (e.execution !== "pure") {
-      throw unsupported(
-        "a pure function value from an effect-mode expression fits an effect function type only by a lift",
-        e.span,
+      const plain = mode === "gen" ? this.inGen(e, expected) : this.pure(e);
+      if (e.kind === "block" || e.kind === "if" || e.kind === "match") {
+        return plain;
+      }
+      const bound = this.scope.temp();
+      const lifted = this.lift(from, bound);
+      return emitted(
+        ["(", this.arrow(`(${bound})`, lifted), ")", callArguments([plain])],
+        PREC.member,
       );
     }
+    const plain = mode === "gen" ? this.inGen(e) : this.pure(e);
     if (e.kind === "closure") return this.tag(e, this.closure(e, true, true));
+    return this.lift(from, at(plain, PREC.member));
+  }
+
+  /** `(a) => Effect.succeed(callee(a))` for a pure function type `from`. */
+  private lift(from: FunctionType, callee: Doc): Emitted {
     const names = from.parameters.map(() => this.scope.temp());
     const parameters = bracketed(
       "(",
@@ -754,12 +804,12 @@ export class ExprEmitter {
       false,
     );
     const effect = this.scope.effect("Effect");
-    const call = emitted([at(plain, PREC.member), "(", join(", ", names), ")"]);
+    const call = emitted([callee, "(", join(", ", names), ")"]);
     const body = emitted([`${effect}.succeed`, callArguments([call])]);
     return this.arrowEmitted(parameters, { kind: "expr", body });
   }
 
-  private structural(e: Expr, mode: Mode): Emitted {
+  private structural(e: Expr, mode: Mode, expected?: Type): Emitted {
     if (isLeafExpr(e)) {
       throw internal(`${e.kind} node in a structural position`);
     }
@@ -1408,11 +1458,11 @@ export class ExprEmitter {
       case "call":
         return this.nonLeafCall(e, kid);
       case "block":
-        return this.nestedBlock(e, mode);
+        return this.nestedBlock(e, mode, expected);
       case "if":
-        return this.conditional(e, kid);
+        return this.conditional(e, kid, expected);
       case "match":
-        return this.match(e);
+        return this.match(e, expected);
       case "binary":
         return this.binary(e, kid);
     }
@@ -2033,10 +2083,12 @@ export class ExprEmitter {
   private conditional(
     e: Extract<Expr, { kind: "if" }>,
     kid: Kid,
+    expected: Type | undefined,
   ): Emitted {
+    const slot = this.slotOf(expected, e.type);
     const condition = kid(e.condition);
-    const then = at(kid(e.then, e.type), PREC.conditional);
-    const otherwise = kid(e.else, e.type);
+    const then = at(kid(e.then, slot), PREC.conditional);
+    const otherwise = kid(e.else, slot);
     const rest = otherwise.condChain;
     // A test that breaks keeps its lines one level deeper than the `?` line.
     // After a `return` or `=` that is two levels, as the body of an arrow one.
@@ -2093,7 +2145,7 @@ export class ExprEmitter {
     if (e.body.kind === "block" && e.body.steps.length > 0) {
       return this.arrowEmitted(parameters, {
         kind: "block",
-        statements: this.blockStatements(e.body, false),
+        statements: this.blockStatements(e.body, false, type.result),
       });
     }
     return this.arrowEmitted(parameters, {
@@ -2202,12 +2254,20 @@ export class ExprEmitter {
   private nestedBlock(
     e: Extract<Expr, { kind: "block" }>,
     mode: Mode,
+    expected: Type | undefined,
   ): Emitted {
-    if (e.steps.length === 0) return this.kid(mode)(e.result);
+    const slot = this.slotOf(expected, e.type);
+    if (e.steps.length === 0) return this.kid(mode)(e.result, slot);
     if (mode === "gen") {
-      return this.yieldOf(this.genCall(this.blockStatements(e, true)));
+      return this.yieldOf(
+        this.genCall(this.blockStatements(e, true, slot)),
+      );
     }
-    return emitted(["(() => ", braces(this.blockStatements(e, false)), ")()"]);
+    return emitted([
+      "(() => ",
+      braces(this.blockStatements(e, false, slot)),
+      ")()",
+    ]);
   }
 
   private yieldOf(effect: Emitted): Emitted {
@@ -2216,13 +2276,17 @@ export class ExprEmitter {
 
   // -------------------------------------------------------------- match
 
-  private match(e: Extract<Expr, { kind: "match" }>): Emitted {
+  private match(
+    e: Extract<Expr, { kind: "match" }>,
+    expected: Type | undefined,
+  ): Emitted {
     const effectful = e.execution === "effect";
+    const slot = this.slotOf(expected, e.type);
     const subject = effectful ? this.inGen(e.subject) : this.pure(e.subject);
     const body = (arm: Arm): Emitted =>
       effectful
-        ? this.asEffect(arm.body, e.type)
-        : this.fit(arm.body, e.type, "pure");
+        ? this.asEffect(arm.body, slot)
+        : this.fit(arm.body, slot, "pure");
     const optionLike =
       e.arms.every((a) =>
         a.pattern.kind === "some" || a.pattern.kind === "none" ||
@@ -2385,16 +2449,18 @@ export class ExprEmitter {
         callArguments([this.fit(e, expected, "pure")]),
       ]);
     }
-    if (this.isLeaf(e)) return this.leafEffect(e, false);
+    if (this.isLeaf(e) && !this.liftsInto(e, expected)) {
+      return this.leafEffect(e, false);
+    }
     if (e.kind === "block" && e.steps.length > 0) {
-      return this.genCall(this.blockStatements(e, true));
+      return this.genCall(this.blockStatements(e, true, expected));
     }
     return this.genCall([this.returnStatement(e, expected, "gen")]);
   }
 
-  private genNode(e: Expr): Emitted {
+  private genNode(e: Expr, expected: Type | undefined): Emitted {
     if (this.isLeaf(e)) return this.leafEffect(e, true);
-    return this.structural(e, "gen");
+    return this.structural(e, "gen", expected);
   }
 
   private isLeaf(e: Expr): boolean {

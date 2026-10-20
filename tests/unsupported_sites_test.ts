@@ -1,7 +1,6 @@
-// Tests for the failure results of lowering and emission. Thirteen sites throw
-// `unsupported`. A source program reaches one of them (`emit/expr.ts` `fit`).
-// The checker or the parser excludes the other twelve, so these tests forge the
-// input: a changed CheckedProject for `lowerModule`, and changed IR for
+// Tests for the failure results of lowering and emission. Twelve sites throw
+// `unsupported`. The checker or the parser excludes all of them, so no source
+// program reaches one, and these tests forge the input: a changed CheckedProject for `lowerModule`, and changed IR for
 // `emitModule`.
 // The same file tests the other results of the two entry points: `no-interface`,
 // `internal`, and the rethrow of a foreign error.
@@ -280,12 +279,13 @@ Deno.test("lowerModule rethrows an error that is not a lowering failure", () => 
   assertThrows(() => lowerModule(forged, "main"), RangeError, "foreign");
 });
 
-// ------------------------------------------------------------------ emission: reachable from source
+// ------------------------------------------------------------------ emission: no source program fails
 
-Deno.test("an effect-mode branch with a pure function type gives an unsupported emission error", () => {
-  // Reachable: an effect-mode block whose type is a pure function, in a branch
-  // of an if that has an effect function type. The program passes the checker
-  // and the lowering.
+Deno.test("an effect-mode branch with a pure function type emits with a wrap", () => {
+  // Decision D6. The block of the then branch is effect-mode and has a pure
+  // function type, and the if has an effect function type. The emitter gives
+  // the slot type to the branch, so the pure function is wrapped and no
+  // `unsupported` result remains (emit/expr.ts fit).
   const text = `type Int = int
 error Stop = {}
 service Gate { pick(): Int fails Stop }
@@ -295,18 +295,10 @@ const choose = (): ((n: Int) => Int fails Stop) fails Stop uses Gate.pick =>
   if (Gate.pick() > 0) { Gate.pick(); pure } else { other }
 `;
   const { ir } = lowerOk(text);
-  const error = emitError(ir);
-  assert(error.tag === "unsupported");
-  assertEquals(error.module, "main");
-  assertEquals(
-    error.message,
-    "a pure function value from an effect-mode expression fits an effect function type only by a lift",
-  );
-  assert(error.span !== undefined);
-  assertEquals(
-    text.slice(error.span.start, error.span.end),
-    "{ Gate.pick(); pure }",
-  );
+  const result = emitModule(ir, NO_CONFIG);
+  assert(result.ok, JSON.stringify(result));
+  assert(result.value.text.includes("Effect.succeed(pure("));
+  assert(!result.value.text.includes("return pure;"));
 });
 
 // ------------------------------------------------------------------ emission: forged IR

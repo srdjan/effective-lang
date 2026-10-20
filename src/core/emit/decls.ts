@@ -471,7 +471,11 @@ export class DeclarationEmitter {
       d.type.execution === "pure" && d.body.kind === "block" &&
       d.body.steps.length > 0
     ) {
-      const statements = this.expr.blockStatements(d.body, false);
+      const statements = this.expr.blockStatements(
+        d.body,
+        false,
+        d.type.result,
+      );
       return [prefix, " = ", this.expr.arrowBlock(header, statements), ";"];
     }
     const body = d.type.execution === "effect"
