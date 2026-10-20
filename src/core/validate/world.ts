@@ -15,7 +15,14 @@ import type {
 } from "../ir.ts";
 import { SCOPE_CAPABILITY } from "../ir.ts";
 import { AREA, type Report } from "./report.ts";
-import { dataOnly, isNever, same, type TypeEnv, unfold } from "./typing.ts";
+import {
+  dataOnly,
+  isNever,
+  MAX_DEPTH,
+  same,
+  type TypeEnv,
+  unfold,
+} from "./typing.ts";
 import { sameSet } from "./sets.ts";
 
 export const PRELUDE_MODULE = "effective:prelude";
@@ -162,7 +169,10 @@ export function checkTypeIds(
     });
   };
   const walk = (t: Type, at: string, depth: number): void => {
-    if (depth > 200) return;
+    if (depth > MAX_DEPTH) {
+      report.addDepth(at, MAX_DEPTH, span);
+      return;
+    }
     switch (t.kind) {
       case "closeable-scope":
       case "primitive":
@@ -329,7 +339,10 @@ export function checkRecordFields(
   span: Span,
 ): void {
   const walk = (t: Type, at: string, depth: number): void => {
-    if (depth > 200) return;
+    if (depth > MAX_DEPTH) {
+      ctx.report.addDepth(at, MAX_DEPTH, span);
+      return;
+    }
     switch (t.kind) {
       case "record":
         checkFieldNames(ctx, t.fields, `${at}.fields`, span);
@@ -690,8 +703,16 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
     ) guarded.add(d.id);
   });
   const reported = new Set<string>();
+  const decls = ir.declarations;
   const reaches = (type: Type, from: string, depth: number): void => {
-    if (depth > 200) return;
+    if (depth > MAX_DEPTH) {
+      // An imported declaration has no index here: its own module reports it.
+      const at = index.get(from);
+      if (at !== undefined) {
+        ctx.report.addDepth(`declarations[${at}]`, MAX_DEPTH, decls[at].span);
+      }
+      return;
+    }
     switch (type.kind) {
       case "named":
         if (type.id === from && guarded.has(from)) return;
