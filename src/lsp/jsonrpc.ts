@@ -2,9 +2,8 @@
 // returns the complete messages. A bad frame is an error value, never an
 // exception. The module has no I/O.
 //
-// Recovery rule: after a malformed header block, or a header block that grows
-// past MAX_HEADER_BYTES without its end, the decoder drops bytes up to the
-// next `Content-Length:` (ASCII case-insensitive) that starts after the first
+// Recovery rule: after a malformed or oversized header block, the decoder drops
+// bytes up to the next `Content-Length:` (ASCII case-insensitive) after the first
 // byte of the bad block. If the buffer holds no such text, the decoder keeps
 // only a short tail and keeps skipping on the next chunk. Each bad region gives
 // one error. A body that is not valid UTF-8 JSON consumes its whole frame.
@@ -63,7 +62,7 @@ export type FrameError =
   | { readonly tag: "bad-header"; readonly message: string }
   | { readonly tag: "bad-json"; readonly message: string };
 
-/** A header block larger than this is malformed. */
+/** A header block, including its final CRLFCRLF, larger than this is malformed. */
 export const MAX_HEADER_BYTES = 8192;
 /** A body larger than this is refused as a malformed header. */
 export const MAX_BODY_BYTES = 256 * 1024 * 1024;
@@ -177,8 +176,10 @@ export class FrameDecoder {
       }
       if (this.#buffer.length === 0) return out;
       const end = indexOfBytes(this.#buffer, HEADER_END, 0);
-      if (end < 0) {
-        if (this.#buffer.length <= MAX_HEADER_BYTES) return out;
+      const headerBytes = end < 0
+        ? this.#buffer.length
+        : end + HEADER_END.length;
+      if (headerBytes > MAX_HEADER_BYTES) {
         out.push({
           ok: false,
           error: {
@@ -189,6 +190,7 @@ export class FrameDecoder {
         this.#recover();
         continue;
       }
+      if (end < 0) return out;
       const header = parseHeader(this.#buffer.subarray(0, end));
       if (!header.ok) {
         out.push(header);

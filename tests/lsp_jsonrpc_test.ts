@@ -185,6 +185,67 @@ Deno.test("decoder recovery: a header block that never ends is an error", () => 
   assertEquals(values(decoder.push(frame('{"k":2}'))), [{ k: 2 }]);
 });
 
+Deno.test("decoder: the header limit includes CRLFCRLF and ignores chunk boundaries", () => {
+  const prefix = "Content-Length: 2\r\nX-Padding: ";
+  const suffix = "\r\n\r\n";
+  for (
+    const size of [
+      MAX_HEADER_BYTES - 1,
+      MAX_HEADER_BYTES,
+      MAX_HEADER_BYTES + 1,
+      MAX_HEADER_BYTES + 17,
+    ]
+  ) {
+    const header = prefix + "x".repeat(size - prefix.length - suffix.length) +
+      suffix;
+    const bytes = join(encoder.encode(`${header}{}`), frame(SAMPLE));
+    // Split inside the terminator, beyond the limit, and inside the next frame.
+    for (
+      const cut of [
+        0,
+        size - 4,
+        size - 1,
+        size,
+        size + 1,
+        size + 10,
+        bytes.length,
+      ]
+    ) {
+      const decoder = new FrameDecoder();
+      const out = [
+        ...decoder.push(bytes.subarray(0, cut)),
+        ...decoder.push(bytes.subarray(cut)),
+      ];
+      assertEquals(out.length, 2, `header ${size}, cut ${cut}`);
+      if (size <= MAX_HEADER_BYTES) {
+        assertEquals(out[0], { ok: true, value: {} });
+      } else {
+        assert(!out[0].ok && out[0].error.tag === "bad-header");
+      }
+      assertEquals(out[1], { ok: true, value: SAMPLE_VALUE });
+    }
+  }
+});
+
+Deno.test("decoder recovery: an oversized block can resume at its later Content-Length", () => {
+  const prefix = encoder.encode(
+    `X-Padding: ${"x".repeat(MAX_HEADER_BYTES)}\r\n`,
+  );
+  const bytes = join(prefix, frame(SAMPLE));
+  for (
+    const cut of [0, MAX_HEADER_BYTES + 1, prefix.length + 5, bytes.length]
+  ) {
+    const decoder = new FrameDecoder();
+    const out = [
+      ...decoder.push(bytes.subarray(0, cut)),
+      ...decoder.push(bytes.subarray(cut)),
+    ];
+    assertEquals(out.length, 2, `cut ${cut}`);
+    assert(!out[0].ok && out[0].error.tag === "bad-header");
+    assertEquals(out[1], { ok: true, value: SAMPLE_VALUE });
+  }
+});
+
 Deno.test("encoder: header counts UTF-8 bytes and the decoder reads it back", () => {
   const message = notificationMessage("window/logMessage", {
     message: "é😀",

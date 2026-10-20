@@ -170,53 +170,55 @@ Deno.test("execution and release defects retain their channel and bypass typed r
 });
 
 Deno.test("shutdown during work waits behind a blocked source-owned release", async () => {
-  await run(Effect.gen(function* () {
-    const entered = yield* Deferred.make<void>();
-    const releasing = yield* Deferred.make<void>();
-    const release = yield* Deferred.make<void>();
-    let workClosed = false;
-    let interrupted = false;
-    const driver = makeDriver({
-      execute: () =>
-        Deferred.succeed(entered, undefined).pipe(
-          Effect.andThen(Effect.never),
-          Effect.ensuring(Effect.sync(() => {
-            workClosed = true;
-          })),
-        ),
-      close: () =>
-        Deferred.succeed(releasing, undefined).pipe(
-          Effect.andThen(Deferred.await(release)),
-        ),
-    });
-    const fiber = yield* Effect.forkChild(
-      runWorker(policy).pipe(Effect.provide(driver.layer)),
-    );
-    yield* Deferred.await(entered);
-    const closing = yield* Effect.forkChild(
-      Fiber.interrupt(fiber).pipe(Effect.andThen(Effect.sync(() => {
-        interrupted = true;
-      }))),
-    );
-    yield* Deferred.await(releasing);
-    yield* Effect.yieldNow;
-    yield* Effect.sync(() => {
-      assertEquals(
-        [workClosed, interrupted, driver.active.size, driver.attempts],
-        [true, false, 1, 1],
+  const release = Deferred.makeUnsafe<void>();
+  await run(
+    Effect.gen(function* () {
+      const entered = yield* Deferred.make<void>();
+      const releasing = yield* Deferred.make<void>();
+      let workClosed = false;
+      let interrupted = false;
+      const driver = makeDriver({
+        execute: () =>
+          Deferred.succeed(entered, undefined).pipe(
+            Effect.andThen(Effect.never),
+            Effect.ensuring(Effect.sync(() => {
+              workClosed = true;
+            })),
+          ),
+        close: () =>
+          Deferred.succeed(releasing, undefined).pipe(
+            Effect.andThen(Deferred.await(release)),
+          ),
+      });
+      const fiber = yield* Effect.forkChild(
+        runWorker(policy).pipe(Effect.provide(driver.layer)),
       );
-      assertEquals(driver.events.at(-1), "close:1");
-    }).pipe(Effect.ensuring(Deferred.succeed(release, undefined)));
-    yield* Fiber.join(closing);
-    const exit = yield* Fiber.await(fiber);
-    assert(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause));
-    assertEquals([interrupted, driver.active.size, driver.attempts], [
-      true,
-      0,
-      1,
-    ]);
-    assert(!driver.events.some((event) => event.startsWith("wait:")));
-  }));
+      yield* Deferred.await(entered);
+      const closing = yield* Effect.forkChild(
+        Fiber.interrupt(fiber).pipe(Effect.andThen(Effect.sync(() => {
+          interrupted = true;
+        }))),
+      );
+      yield* Deferred.await(releasing);
+      yield* Effect.yieldNow;
+      yield* Effect.sync(() => {
+        assertEquals(
+          [workClosed, interrupted, driver.active.size, driver.attempts],
+          [true, false, 1, 1],
+        );
+        assertEquals(driver.events.at(-1), "close:1");
+      }).pipe(Effect.ensuring(Deferred.succeed(release, undefined)));
+      yield* Fiber.join(closing);
+      const exit = yield* Fiber.await(fiber);
+      assert(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause));
+      assertEquals([interrupted, driver.active.size, driver.attempts], [
+        true,
+        0,
+        1,
+      ]);
+      assert(!driver.events.some((event) => event.startsWith("wait:")));
+    }).pipe(Effect.ensuring(Deferred.succeed(release, undefined))),
+  );
 });
 
 Deno.test("shutdown during a repetition delay closes the wait and starts no later job", async () => {
@@ -284,42 +286,95 @@ Deno.test("shutdown during a native retry delay closes its clock operation witho
 });
 
 Deno.test("a failed attempt finishes release before retrying", async () => {
-  await run(Effect.gen(function* () {
-    const releasing = yield* Deferred.make<void>();
-    const release = yield* Deferred.make<void>();
-    const driver = makeDriver({
-      execute: (id) =>
-        id === 1
-          ? Effect.fail(new JobFailure({ kind: "Transient", id }))
-          : Effect.succeed(id * 10),
-      close: (id) =>
-        id === 1
-          ? Deferred.succeed(releasing, undefined).pipe(
+  const release = Deferred.makeUnsafe<void>();
+  await run(
+    Effect.gen(function* () {
+      const releasing = yield* Deferred.make<void>();
+      const driver = makeDriver({
+        execute: (id) =>
+          id === 1
+            ? Effect.fail(new JobFailure({ kind: "Transient", id }))
+            : Effect.succeed(id * 10),
+        close: (id) =>
+          id === 1
+            ? Deferred.succeed(releasing, undefined).pipe(
+              Effect.andThen(Deferred.await(release)),
+            )
+            : Effect.void,
+      });
+      const fiber = yield* Effect.forkChild(
+        runWorker({ ...policy, runs: 1, retryMillis: 0 }).pipe(
+          Effect.provide(driver.layer),
+        ),
+      );
+      yield* Deferred.await(releasing);
+      yield* Effect.yieldNow;
+      assertEquals([driver.opened, driver.attempts, driver.active.size], [
+        1,
+        1,
+        1,
+      ]);
+      yield* Deferred.succeed(release, undefined);
+      assertEquals(yield* Fiber.join(fiber), {
+        completed: 1,
+        last: Option.some(20),
+      });
+      assertEquals(driver.active.size, 0);
+      assertEquals(
+        driver.events.indexOf("released:1") < driver.events.indexOf("open:2"),
+        true,
+      );
+    }).pipe(Effect.ensuring(Deferred.succeed(release, undefined))),
+  );
+});
+
+Deno.test("worker test assertion failures unblock release before joining children", async () => {
+  for (const retrying of [false, true]) {
+    for (const stage of ["started", "releasing"]) {
+      const release = Deferred.makeUnsafe<void>();
+      const entered = Deferred.makeUnsafe<void>();
+      const releasing = Deferred.makeUnsafe<void>();
+      const driver = makeDriver({
+        execute: (id) =>
+          Deferred.succeed(entered, undefined).pipe(
+            Effect.andThen(
+              retrying
+                ? Effect.fail(new JobFailure({ kind: "Transient", id }))
+                : Effect.never,
+            ),
+          ),
+        close: () =>
+          Deferred.succeed(releasing, undefined).pipe(
             Effect.andThen(Deferred.await(release)),
-          )
-          : Effect.void,
-    });
-    const fiber = yield* Effect.forkChild(
-      runWorker({ ...policy, runs: 1, retryMillis: 0 }).pipe(
-        Effect.provide(driver.layer),
-      ),
-    );
-    yield* Deferred.await(releasing);
-    yield* Effect.yieldNow;
-    assertEquals([driver.opened, driver.attempts, driver.active.size], [
-      1,
-      1,
-      1,
-    ]);
-    yield* Deferred.succeed(release, undefined);
-    assertEquals(yield* Fiber.join(fiber), {
-      completed: 1,
-      last: Option.some(20),
-    });
-    assertEquals(driver.active.size, 0);
-    assertEquals(
-      driver.events.indexOf("released:1") < driver.events.indexOf("open:2"),
-      true,
-    );
-  }));
+          ),
+      });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const exit = await Promise.race([
+          Effect.runPromiseExit(
+            Effect.gen(function* () {
+              const fiber = yield* Effect.forkChild(
+                runWorker(policy).pipe(Effect.provide(driver.layer)),
+              );
+              yield* Deferred.await(entered);
+              if (stage === "started") assert(false, "injected assertion");
+              if (!retrying) yield* Effect.forkChild(Fiber.interrupt(fiber));
+              yield* Deferred.await(releasing);
+              assert(false, "injected assertion");
+            }).pipe(Effect.ensuring(Deferred.succeed(release, undefined))),
+          ),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error("cleanup hung")), 1000);
+          }),
+        ]);
+        assert(Exit.isFailure(exit) && Cause.hasDies(exit.cause));
+        assert(Cause.pretty(exit.cause).includes("injected assertion"));
+        assertEquals(driver.active.size, 0);
+        assertEquals(driver.events.at(-1), "released:1");
+      } finally {
+        clearTimeout(timer);
+        await Effect.runPromise(Deferred.succeed(release, undefined));
+      }
+    }
+  }
 });

@@ -215,6 +215,64 @@ Deno.test("a thrown value that is not an Error becomes the internal message", ()
   assertEquals(result.error, { tag: "internal", message: "plain" });
 });
 
+for (
+  const phase of ["before update", "after update", "during emission"] as const
+) {
+  Deno.test(`an internal error ${phase} resends failed edits when another file changes`, () => {
+    let calls = 0;
+    const sets: ReadonlyMap<string, string>[] = [];
+    const real = new Program("");
+    const program: ProgramPort = {
+      update(changes) {
+        calls++;
+        assert(changes.set instanceof Map);
+        sets.push(changes.set);
+        if (calls === 2 && phase === "before update") throw new Error("boom");
+        const result = real.update(changes);
+        if (calls === 2) {
+          if (phase === "after update") throw new Error("boom");
+          assert(result.ok);
+          result.value.emitted = () => {
+            throw new Error("boom");
+          };
+        }
+        return result;
+      },
+    };
+    const pg = createPlayground(FILES, { now: () => 0, program });
+    assert(pg.start().ok);
+    const failed = pg.update("users.eff", BAD_USERS);
+    assert(!failed.ok);
+    assertEquals(failed.error, { tag: "internal", message: "boom" });
+    const recovered = okOf(pg.update("main.eff", FILES["main.eff"]));
+    assertEquals([...sets[2].keys()].sort(), Object.keys(FILES).sort());
+    assertEquals(sets[2].get("users.eff"), BAD_USERS);
+    assertEquals(recovered.diagnostics["users.eff"].length, 1);
+    assertEquals(
+      recovered.diagnostics["users.eff"][0].code,
+      "type-mismatch/007",
+    );
+    assertEquals(recovered.outputs["users.eff"]?.stale, true);
+  });
+}
+
+Deno.test("an internal error on start resends all files on the next edit", () => {
+  const real = new Program("");
+  let calls = 0;
+  const program: ProgramPort = {
+    update(changes) {
+      if (++calls === 1) throw new Error("boom");
+      return real.update(changes);
+    },
+  };
+  const pg = createPlayground(FILES, { now: () => 0, program });
+  const failed = pg.start();
+  assert(!failed.ok && failed.error.tag === "internal");
+  const recovered = okOf(pg.update("users.eff", BAD_USERS));
+  assertEquals(Object.keys(recovered.outputs).sort(), EFF_PATHS);
+  assertEquals(recovered.diagnostics["users.eff"].length, 1);
+});
+
 Deno.test("elapsedMs comes from the clock", () => {
   const times = [100, 107.5];
   const pg = createPlayground(FILES, { now: () => times.shift() ?? 0 });

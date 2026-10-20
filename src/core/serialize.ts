@@ -9,7 +9,7 @@
 import type { ModuleIR, Result } from "./ir.ts";
 
 export type SerializeError =
-  /** A `failures` or `requirements` list that is not sorted, or that repeats an entry. */
+  /** A failure or requirement set that is not sorted, or that repeats an entry. */
   | {
     readonly tag: "unsorted-set";
     /** Where the list sits, as `declarations[2].body.effects.failures`. */
@@ -18,7 +18,12 @@ export type SerializeError =
   /** A number literal that is `NaN` or infinite. */
   | { readonly tag: "non-finite-number"; readonly path: string };
 
-const SET_KEYS: ReadonlySet<string> = new Set(["failures", "requirements"]);
+const SET_KEYS: ReadonlySet<string> = new Set([
+  "failures",
+  "requirements",
+  "decodeRequirements",
+  "encodeRequirements",
+]);
 
 function compareText(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;

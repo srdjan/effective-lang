@@ -24,7 +24,7 @@
 // revision equals the result of a check from scratch. One test compares both.
 //
 // One `TypeTable` lives as long as the program, so that the type references in a
-// reused module stay valid. The table only grows. Its memory growth over a long
+// reused module stay valid. Its interned nodes only grow. Its memory growth over a long
 // watch session is measurement M4.
 //
 // Note on spans. The IR import of a module carries the interface payload of the

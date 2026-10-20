@@ -5,7 +5,7 @@
 // The test walks src/core with Deno.readDir, not with git, because
 // `deno task behavior:capture` runs the tests in an exported tree that has no
 // .git directory. It skips the capture hook files (HOOK_PATHS) that the capture
-// writes into that temporary tree: the hooks read the environment on purpose.
+// writes into that temporary tree: the hooks write their records on purpose.
 
 import { assertEquals } from "@std/assert";
 import { HOOK_PATHS } from "../scripts/behavior_capture.ts";

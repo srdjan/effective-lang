@@ -702,6 +702,9 @@ export class TypeTable {
 
   /** Registers the definition of an alias. The last definition wins. */
   defineAlias(id: TypeId, target: TypeRef): void {
+    this.brands.delete(id);
+    this.opaque.delete(id);
+    this.guardedAliases.delete(id);
     this.aliases.set(id, target);
   }
 
@@ -710,6 +713,9 @@ export class TypeTable {
   }
 
   defineBrand(id: TypeId, base: TypeRef): void {
+    this.aliases.delete(id);
+    this.guardedAliases.delete(id);
+    this.opaque.delete(id);
     this.brands.set(id, base);
   }
 

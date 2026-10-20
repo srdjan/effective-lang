@@ -19,6 +19,32 @@ function fresh(): TypeTable {
   return new TypeTable();
 }
 
+Deno.test("redefining a type replaces alias, brand, opaque and recursive metadata", () => {
+  const t = fresh();
+  const named = t.named(USER);
+  t.defineAlias(USER, t.int);
+  assert(t.isAssignable(t.int, named));
+  t.defineBrand(USER, t.int);
+  assert(!t.isAssignable(t.int, named));
+  assertEquals(t.unfold(named), named);
+  t.markOpaque(USER);
+  t.defineBrand(USER, t.string);
+  assert(!t.isOpaque(USER));
+  assertEquals(t.brandBaseOf(USER), t.string);
+  t.defineAlias(USER, t.int);
+  assertEquals(t.brandBaseOf(USER), undefined);
+  assert(t.isAssignable(t.int, named));
+
+  t.markGuardedAlias(USER);
+  t.defineAlias(USER, t.array(t.int));
+  assert(t.exceedsDepth(named, 2, new Map()));
+  t.markGuardedAlias(USER);
+  t.markOpaque(USER);
+  t.defineBrand(USER, t.int);
+  assert(!t.isOpaque(USER));
+  assertEquals(t.aliasOf(USER), undefined);
+});
+
 Deno.test("CloseableScope is an abstract leaf through aliases and IR conversion", () => {
   const t = fresh();
   const owner = t.fromIr({ kind: "closeable-scope" });

@@ -45,6 +45,7 @@ import {
   isNumeric,
   isStringLike,
   isUnknown,
+  MAX_DEPTH,
   members,
   NEVER,
   NUMBER,
@@ -52,6 +53,7 @@ import {
   same,
   show,
   STRING,
+  type TypeEnv,
   unfold,
   unionOf,
   UNIT,
@@ -106,18 +108,24 @@ function validSchemaCallback(
         fn.effects.requirements.length === 0));
 }
 
-function literalValues(
-  ctx: Ctx,
+/** Equality can match unknown values and the runtime base of nominal brands. */
+function tagMayEqual(
+  env: TypeEnv,
   type: Type,
-): (string | number | boolean | null)[] | undefined {
-  const values: (string | number | boolean | null)[] = [];
-  for (const member of members(ctx.world.env, type)) {
-    if (member.kind === "literal") values.push(member.value);
-    else if (member.kind === "primitive" && member.name === "boolean") {
-      values.push(true, false);
-    } else return undefined;
+  value: string,
+  seen = new Set<Type>(),
+): boolean {
+  if (seen.has(type) || seen.size >= MAX_DEPTH) return true;
+  const next = new Set(seen).add(type);
+  if (type.kind === "named") {
+    const base = env.aliases.get(type.id) ?? env.brands.get(type.id);
+    return base !== undefined && tagMayEqual(env, base, value, next);
   }
-  return values;
+  if (type.kind === "union") {
+    return type.members.some((m) => tagMayEqual(env, m, value, next));
+  }
+  if (type.kind === "primitive" && type.name === "unknown") return true;
+  return fits(env, { kind: "literal", value }, type);
 }
 
 /**
@@ -1601,7 +1609,7 @@ export class BodyValidator {
             if (m.kind !== "record") return false;
             const field = m.fields.find((f) => f.name === p.field);
             return field !== undefined &&
-              (literalValues(this.ctx, field.type)?.includes(p.value) ?? false);
+              tagMayEqual(env, field.type, p.value);
           })
           : [];
         if (!records || narrowed.length === 0) {

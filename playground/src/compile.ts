@@ -173,6 +173,7 @@ export function createPlayground(
         value: { diagnostics, outputs, elapsedMs: ports.now() - started },
       };
     } catch (thrown) {
+      sent = false;
       return {
         ok: false,
         error: { tag: "internal", message: messageOf(thrown) },

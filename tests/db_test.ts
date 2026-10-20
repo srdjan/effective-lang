@@ -103,6 +103,29 @@ class Session {
 
 const USERS = "users.eff";
 
+Deno.test("incremental alias and brand edits equal fresh checks across dependents and removal", () => {
+  const alias = "export type N = int\nexport const n: N = 1\n";
+  const brand = "export type N = Brand<int>\nexport const n: N = 1\n";
+  const files = {
+    "effective.json": "{}",
+    "a.eff": alias,
+    "b.eff": 'import { N, n } from "./a.eff"\nexport const copy: N = n\n',
+  };
+  const session = new Session(files);
+  assertEquals(session.apply(files).diagnostics, []);
+  const branded = session.apply({ "a.eff": brand });
+  assert(branded.diagnostics.some((d) => d.code === "type-mismatch/003"));
+  assertEquals(
+    session.apply({ "a.eff": brand.replace("= 1", "= N(1)") }).diagnostics,
+    [],
+  );
+  assertEquals(session.apply({ "a.eff": alias }).diagnostics, []);
+  session.apply({}, ["a.eff"]);
+  const restored = session.apply({ "a.eff": brand });
+  assert(restored.diagnostics.some((d) => d.code === "type-mismatch/003"));
+  assertEquals(session.apply({ "a.eff": alias }).diagnostics, []);
+});
+
 // ------------------------------------------------------------------ the memo
 
 Deno.test("the first revision checks every module in topological order", () => {

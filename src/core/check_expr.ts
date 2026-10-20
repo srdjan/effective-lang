@@ -6375,6 +6375,7 @@ export class BodyChecker {
   private recordTarget(
     expected: TypeRef | undefined,
     labels: readonly string[],
+    literals: ReadonlyMap<string, LiteralValue>,
   ): {
     readonly ref: TypeRef;
     readonly fields: readonly {
@@ -6396,7 +6397,14 @@ export class BodyChecker {
       labels.every((l) => c.fields.some((f) => f.name === l)) &&
       c.fields.every((f) => f.optional || labels.includes(f.name))
     );
-    return fitting[0] ?? candidates[0];
+    const discriminated = fitting.filter((c) =>
+      [...literals].every(([label, value]) => {
+        const field = c.fields.find((f) => f.name === label);
+        return field !== undefined &&
+          this.table.isAssignable(this.table.literal(value), field.type);
+      })
+    );
+    return discriminated[0] ?? fitting[0] ?? candidates[0];
   }
 
   private recordConstruction(
@@ -6408,7 +6416,20 @@ export class BodyChecker {
     const labels = parsed.flatMap((p) =>
       p.parts === undefined ? [] : [p.parts.label]
     );
-    const target = this.recordTarget(expected, labels);
+    const literals = new Map<string, LiteralValue>();
+    for (const { parts } of parsed) {
+      if (parts?.value === undefined) continue;
+      let valueNode = parts.value;
+      while (kindOf(this.tree, valueNode) === SyntaxKind.ParenExpr) {
+        const inner = this.kids(valueNode)[0];
+        if (inner === undefined) break;
+        valueNode = inner;
+      }
+      if (kindOf(this.tree, valueNode) !== SyntaxKind.LiteralExpr) continue;
+      const value = literalOf(this.tree, valueNode);
+      if (value !== undefined) literals.set(parts.label, value);
+    }
+    const target = this.recordTarget(expected, labels, literals);
     const seen = new Set<string>();
     const infos: NodeInfo[] = [];
     const inferred: { name: string; type: TypeRef; optional: boolean }[] = [];
@@ -7081,6 +7102,7 @@ export class BodyChecker {
         if (field === undefined) {
           return domain.members.length > 0 ? ["a tagged arm"] : [];
         }
+        if (domain.members.some((m) => !m.literals.has(field))) return ["_"];
         for (const value of taggedValues(domain.members, field)) {
           if (!state.covered.has(`T:${field}:${JSON.stringify(value)}`)) {
             missing.push(`{ ${field}: ${describeLiteral(value)} }`);
@@ -7337,7 +7359,10 @@ export class BodyChecker {
     }
     state.tagField = label;
     const known = taggedValues(domain.members, label);
-    if (!known.includes(value)) {
+    const narrowed = narrowTagged(this.table, domain.members, label, value).map(
+      (m) => m.type,
+    );
+    if (narrowed.length === 0) {
       this.foreign(
         node,
         known.length === 0
@@ -7348,9 +7373,6 @@ export class BodyChecker {
       return invalid();
     }
     this.reach(node, state, `T:${label}:${JSON.stringify(value)}`);
-    const narrowed = narrowTagged(domain.members, label, value).map((m) =>
-      m.type
-    );
     const binding = this.bindLocal(spreadName, this.table.union(narrowed));
     this.patternFact(node, {
       kind: "tag",

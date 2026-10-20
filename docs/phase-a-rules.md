@@ -51,6 +51,8 @@ the implementer picks the stricter rule and records it here.
 | Contract diagnostics | One diagnostic for each contract kind of a function: `failure-contract/001` lists every extra error, and `requirement-contract/001` lists every extra capability |
 | Literal widening | Unannotated bindings, branch joins, inferred results, and the `fold` accumulator widen literals to primitives |
 | Branch joins | Without an expected type, one branch type must accept the other; no union is formed |
+| Contextual record unions | Known literal field values select among shape-compatible record members before the checker applies contextual field types. Ambiguous candidates keep their existing order |
+| Tagged record coverage | A record match needs a wildcard when a member lacks the chosen field or has an optional or open discriminator. A tagged binding retains every member whose field can equal the literal at runtime, including optional fields, erased brand bases and unknown values. Generated tests guard property access when another member lacks the field |
 | Local recursion | A block-level function cannot call itself (`execution-mode/003`) |
 | Mode fixed point | Round cap 32 (`execution-mode/004`) |
 | Equality | Compares string, numeric, boolean, or one primitive brand; records and options are rejected |
@@ -101,7 +103,7 @@ the implementer picks the stricter rule and records it here.
 | Contextual nodes | For a literal, `None`, `Some`, record, array, tuple, closure, `if`, `match`, and `catch`, the parts must fit the recorded type |
 | Type equality | Mutual assignability, so aliases are transparent and union order does not matter |
 | Record fields | Field order does not matter; the checker compares fields in order |
-| Effect sets | Comparison ignores order and duplicates; an unsorted or duplicated set gives only `validation/008` |
+| Effect sets | Comparison ignores order and duplicates; an unsorted or duplicated set gives only `validation/008`. This includes Schema decode and encode requirement sets |
 | Closures | The type sets contain the body sets; the mode is effect when a set is nonempty or the body is effect |
 | Function contracts | An inferred contract equals the body sets; an explicit contract contains them |
 | Identities | `<kind>:<module>#<name>` for declarations and `cap:<module>#<Service>.<method>` for capabilities |

@@ -507,15 +507,16 @@ function equality(left: string, right: Doc): Doc {
   return group([left, " ===", indent(indent([line, right]))]);
 }
 
-/** The test of a match arm, with the two sides of its comparison. */
-interface ArmTest {
-  readonly doc: Doc;
-  readonly left: string;
-  readonly right: Doc;
+/** The test of a match arm, including a comparison's optional split. */
+interface ArmTest extends LaterTest {
+  readonly first?: Doc;
 }
 
 function armEquality(left: string, right: Doc): ArmTest {
-  return { doc: equality(left, right), left, right };
+  return {
+    doc: equality(left, right),
+    split: { head: [left, " ==="], right },
+  };
 }
 
 /** The `_tag` value of an error: the Effect SchemaError class has a fixed tag. */
@@ -2204,7 +2205,7 @@ export class ExprEmitter {
       );
     const result = optionLike
       ? this.optionMatch(e.arms, subject, body)
-      : this.selectorMatch(e.arms, subject, body);
+      : this.selectorMatch(e.arms, subject, e.subject.type, body);
     return effectful ? this.yieldOf(result) : result;
   }
 
@@ -2240,6 +2241,7 @@ export class ExprEmitter {
   private selectorMatch(
     arms: readonly Arm[],
     subject: Emitted,
+    subjectType: Type,
     body: (arm: Arm) => Emitted,
   ): Emitted {
     const selector = this.scope.temp();
@@ -2265,7 +2267,7 @@ export class ExprEmitter {
         last = armDoc(arm);
         continue;
       }
-      const test = this.armTest(arm.pattern, selector);
+      const test = this.armTest(arm.pattern, selector, subjectType);
       if (test === undefined) {
         // A wildcard before the last arm makes the later arms unreachable.
         last = armDoc(arm);
@@ -2276,14 +2278,8 @@ export class ExprEmitter {
     }
     if (last === undefined) throw internal("a match has no arm");
     const chain: Doc = pairs.length === 0 ? last : conditionalChain(
-      pairs[0].test.doc,
-      pairs.slice(1).map((pair) => ({
-        doc: pair.test.doc,
-        split: {
-          head: [pair.test.left, " ==="],
-          right: pair.test.right,
-        },
-      })),
+      pairs[0].test.first ?? pairs[0].test.doc,
+      pairs.slice(1).map((pair) => pair.test),
       pairs.map((pair) => pair.arm),
       last,
     );
@@ -2313,7 +2309,11 @@ export class ExprEmitter {
     return patternBinding(pattern);
   }
 
-  private armTest(pattern: Pattern, selector: string): ArmTest | undefined {
+  private armTest(
+    pattern: Pattern,
+    selector: string,
+    subject: Type,
+  ): ArmTest | undefined {
     switch (pattern.kind) {
       case "wildcard":
         return undefined;
@@ -2333,17 +2333,47 @@ export class ExprEmitter {
           `${selector}._tag`,
           JSON.stringify(errorTag(pattern.error)),
         );
-      case "tag":
+      case "tag": {
+        const left = `${selector}.${pattern.field}`;
+        const right = JSON.stringify(pattern.value);
+        if (this.recordMemberLacksField(subject, pattern.field)) {
+          const guard = `${JSON.stringify(pattern.field)} in ${selector} &&`;
+          const guarded = (tail: number): Doc => {
+            let rest: Doc = [
+              hard,
+              group([left, " ===", indent([line, right])]),
+            ];
+            for (let i = 0; i < tail; i++) rest = indent(rest);
+            return alt([[guard, " ", equality(left, right)], [guard, rest]]);
+          };
+          return {
+            doc: guarded(2),
+            first: guarded(1),
+            split: undefined,
+          };
+        }
         return armEquality(
-          `${selector}.${pattern.field}`,
-          JSON.stringify(pattern.value),
+          left,
+          right,
         );
+      }
       case "none":
       case "some":
         throw unsupported(
           "an option pattern in a match that is not an option match",
         );
     }
+  }
+
+  private recordMemberLacksField(type: Type, field: string): boolean {
+    const resolved = this.scope.resolve(type);
+    if (resolved.kind === "union") {
+      return resolved.members.some((m) =>
+        this.recordMemberLacksField(m, field)
+      );
+    }
+    return resolved.kind === "record" &&
+      !resolved.fields.some((f) => f.name === field);
   }
 
   // -------------------------------------------------------------- effects

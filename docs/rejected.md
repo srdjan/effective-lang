@@ -35,6 +35,6 @@ These items are not measured. Each one names the reason.
 - Core pinning. macOS has no `taskset` equivalent. The runs are not pinned.
 - Garbage collection. The harness does not force a collection between runs. A collection that falls in a timed region is part of the distribution.
 - The cost of the `$int` helper (D14). No harness compares `$int` with plain arithmetic.
-- The size of one module. Every synthetic feature module has 60 declarations, and the sizes change only the number of modules. Design section 4.5 asks for the largest realistic module, which is not measured.
+- The size of one module. Synthetic feature modules have at most 60 feature declarations. The small preset has one module with 30; the medium and large presets add modules with 60 each. Design section 4.5 asks for the largest realistic module, which is not measured.
 - The duration of the quick profile. No test or record shows that each measurement ends in less than one minute. M2 and M5 do not print their elapsed time.
 - Few pairs at the quick scale. M5 has two pairs for each target, so its p90 floor is almost the larger of two deviations.

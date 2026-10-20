@@ -3,7 +3,7 @@
 // match must cover. The functions here are pure. The body checker walks the
 // arms and reports the diagnostics.
 
-import type { ErrorId } from "./ir.ts";
+import type { ErrorId, TypeId } from "./ir.ts";
 import type { TypeRef, TypeTable } from "./types.ts";
 
 export type LiteralValue = string | number | boolean | null;
@@ -117,7 +117,7 @@ export function domainOf(table: TypeTable, subject: TypeRef): Domain {
       if (node.kind === "record") {
         for (const field of node.fields) {
           const values = literalValuesOf(table, field.type);
-          if (values !== undefined && values.length > 0) {
+          if (!field.optional && values !== undefined && values.length > 0) {
             fields.set(field.name, unique(values));
           }
         }
@@ -154,11 +154,42 @@ export function taggedValues(
 
 /** The members whose discriminator field admits `value`. */
 export function narrowTagged(
+  table: TypeTable,
   members: readonly TaggedMember[],
   field: string,
   value: LiteralValue,
 ): TaggedMember[] {
-  return members.filter((m) => m.literals.get(field)?.includes(value));
+  return members.filter((m) => {
+    const node = table.node(m.type);
+    const discriminator = node.kind === "record"
+      ? node.fields.find((f) => f.name === field)
+      : undefined;
+    return discriminator !== undefined &&
+      literalMayEqual(table, discriminator.type, value);
+  });
+}
+
+/** Runtime equality sees a brand's erased base and may inspect unknown data. */
+function literalMayEqual(
+  table: TypeTable,
+  type: TypeRef,
+  value: LiteralValue,
+  seen = new Set<TypeRef>(),
+): boolean {
+  // Keep a possible member when an invalid cycle or depth prevents a proof.
+  if (seen.has(type) || seen.size >= MAX_DEPTH) return true;
+  const next = new Set(seen).add(type);
+  const node = table.node(type);
+  if (node.kind === "named") {
+    const base = table.aliasOf(node.id as TypeId) ??
+      table.brandBaseOf(node.id as TypeId);
+    return base !== undefined && literalMayEqual(table, base, value, next);
+  }
+  if (node.kind === "union") {
+    return node.members.some((m) => literalMayEqual(table, m, value, next));
+  }
+  if (node.kind === "primitive" && node.name === "unknown") return true;
+  return table.isAssignable(table.literal(value), type);
 }
 
 export function describeLiteral(value: LiteralValue): string {

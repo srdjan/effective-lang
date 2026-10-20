@@ -489,7 +489,9 @@ export class Scope {
   /** Follows type aliases until a type that is not a name. A brand and an unknown name stay. */
   resolve(type: Type): Type {
     let current = type;
-    for (let depth = 0; depth < 64 && current.kind === "named"; depth++) {
+    const seen = new Set<DeclarationId>();
+    while (current.kind === "named" && !seen.has(current.id)) {
+      seen.add(current.id);
       const declaration = this.typeLevelDeclaration(current.id);
       if (
         declaration?.kind !== "type" || declaration.definition.kind !== "alias"

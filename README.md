@@ -122,23 +122,25 @@ The project needs Deno 2.9.7. The first test run downloads `@std/assert` from js
 
 Run every command from the repository root.
 
-| Command                       | What it does                                                                                                                                                                                                             |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `deno task check`             | Runs the format check, the lint, the type check, the fast tests, and the slow tests.                                                                                                                                     |
-| `deno task test`              | Runs the fast tests. It skips files named `*_slow_test.ts`.                                                                                                                                                              |
-| `deno task test:slow`         | Runs only files named `*_slow_test.ts`. They run `deno check`, `deno fmt`, and `deno run`.                                                                                                                               |
-| `deno task golden:update`     | Writes `fixtures/golden/<module>.ts` again from `fixtures/examples` and `fixtures/emit/traverse`.                                                                                                                        |
-| `deno task validate:update`   | Writes the mutation fixtures in `fixtures/validate/` again from the current lowering.                                                                                                                                    |
-| `deno task behavior:capture`  | Compares two revisions over all tests except its own. It records checker and program diagnostics, lowered IR, emitted modules, validator results, and their error results, also from subprocesses. Use it for refactors. |
-| `deno task measure`           | Prints the lines, branches, and cyclomatic numbers of the files that you name, as JSON.                                                                                                                                  |
-| `deno task measure:functions` | Prints the branches and cyclomatic number of each function in the files that you name, as TSV.                                                                                                                           |
-| `deno task effective`         | Runs the command-line tool. See "Using the command line".                                                                                                                                                                |
-| `deno task lsp`               | Runs the language server over standard input and output. See "Language server".                                                                                                                                          |
-| `deno task bench`             | Runs the measurement harnesses. See "Measurements".                                                                                                                                                                      |
-| `deno task playground:build`  | Writes the playground page to `playground/dist/`. See "Playground".                                                                                                                                                      |
-| `deno task playground:serve`  | Builds the playground page, then serves it on `http://127.0.0.1:8790/`.                                                                                                                                                  |
-| `deno task fmt`               | Formats the source files.                                                                                                                                                                                                |
-| `deno task lint`              | Runs the linter.                                                                                                                                                                                                         |
+| Command                       | What it does                                                                                                                                                |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deno task check`             | Runs the format check, the lint, the type check, the fast tests, and the slow tests.                                                                        |
+| `deno task test`              | Runs the fast tests. It skips files named `*_slow_test.ts`.                                                                                                 |
+| `deno task test:slow`         | Runs only files named `*_slow_test.ts`. They run `deno check`, `deno fmt`, and `deno run`.                                                                  |
+| `deno task golden:update`     | Writes `fixtures/golden/<module>.ts` again from `fixtures/examples` and `fixtures/emit/traverse`.                                                           |
+| `deno task validate:update`   | Writes the mutation fixtures in `fixtures/validate/` again from the current lowering.                                                                       |
+| `deno task behavior:capture`  | Compares two revisions using instrumented compiler entry points during tests, including subprocesses. See the capture boundary below. Use it for refactors. |
+| `deno task measure`           | Prints the lines, branches, and cyclomatic numbers of the files that you name, as JSON.                                                                     |
+| `deno task measure:functions` | Prints the branches and cyclomatic number of each function in the files that you name, as TSV.                                                              |
+| `deno task effective`         | Runs the command-line tool. See "Using the command line".                                                                                                   |
+| `deno task lsp`               | Runs the language server over standard input and output. See "Language server".                                                                             |
+| `deno task bench`             | Runs the measurement harnesses. See "Measurements".                                                                                                         |
+| `deno task playground:build`  | Writes the playground page to `playground/dist/`. See "Playground".                                                                                         |
+| `deno task playground:serve`  | Builds the playground page, then serves it on `http://127.0.0.1:8790/`.                                                                                     |
+| `deno task fmt`               | Formats the source files.                                                                                                                                   |
+| `deno task lint`              | Runs the linter.                                                                                                                                            |
+
+The capture records completed calls to `checkAnalysis`, `Program.update`, `lowerModule`, `emitModule`, and `validateModule`, including returned error results where present. It excludes its own tests and does not record every lower-level checker call. The temporary hooks embed their destination path, so child processes need write permission but no environment permission. A recording failure fails the capture visibly.
 
 ## Layout
 
@@ -381,7 +383,7 @@ The check key holds five items: the text of the module, its path, the project co
 
 The lowering key holds the hash of the full interface payload of each reached module. The IR import of a module carries source spans of the imported declarations. An edit that only moves such a declaration keeps the interface hash, so the importer is not checked again. The program builds the interface of the importer again and lowers the importer again.
 
-One `TypeTable` lives as long as the program, so reused modules keep valid type references. The table only grows. Its memory growth in a long watch session is measurement M4.
+One `TypeTable` lives as long as the program, so reused modules keep valid type references. Its interned nodes only grow; redefining a type replaces its previous alias, brand, opaque, and recursion metadata. Its memory growth in a long watch session is measurement M4.
 
 `src/core/mod.ts` re-exports the program and the pipeline functions. It also re-exports the span table and source map builders, the `deno check` parser and mapper, and the diagnostic types with `describeCode`. The IR types are in the list too.
 
@@ -594,4 +596,4 @@ The files `fixtures/parse/recovery-*.eff` use the same markers. The files `fixtu
 
 ## Format and lint scope
 
-`deno fmt` skips `docs/`, `src/core/ir.ts`, `editors/vscode/node_modules/`, and every `.eff` and `.effi` file. The copy of `ir.ts` stays as it is in the sibling repository. `deno fmt` checks `fixtures/golden/`. `deno lint` skips `docs/` and `fixtures/golden/`, because generated code keeps unused handler parameters. It also skips `editors/vscode/`, which holds plain JavaScript. Both tools skip `playground/dist/`, but `deno fmt` checks `playground/index.html` and `playground/app.css`.
+`deno fmt` skips `docs/`, `src/core/ir.ts`, `editors/vscode/node_modules/`, and every `.eff` and `.effi` file. The copy of `ir.ts` stays as it is in the sibling repository. `deno fmt` checks `fixtures/golden/`. `deno lint` skips `docs/` and `fixtures/golden/`, because generated code keeps unused handler parameters. It also skips `editors/vscode/`, which holds plain JavaScript. Both tools skip `playground/dist/`, but `deno fmt` checks `playground/index.html` and `playground/app.css`. The shared Deno exclusion keeps local `.claude/worktrees/` copies out of root checks.

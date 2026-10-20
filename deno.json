@@ -3,6 +3,7 @@
   "version": "0.5.1",
   "license": "MIT",
   "exports": "./src/core/mod.ts",
+  "exclude": [".claude/worktrees/"],
   "tasks": {
     "check": "deno fmt --check && deno lint && deno check 'src/**/*.ts' 'playground/**/*.ts' 'tests/**/*.ts' 'scripts/**/*.ts' 'bench/**/*.ts' && deno task test && deno task test:slow",
     "test": "deno test --allow-read --ignore='**/*_slow_test.ts' tests/",

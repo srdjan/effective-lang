@@ -312,61 +312,63 @@ Deno.test("cleanup defects preserve a simultaneous transient body failure and pr
 
 Deno.test("body cancellation waits for blocked rollback or release and commits no staged rows", async () => {
   for (const blocked of ["rollback", "release"]) {
-    await run(Effect.gen(function* () {
-      const entered = yield* Deferred.make<void>();
-      const cleaning = yield* Deferred.make<void>();
-      const finish = yield* Deferred.make<void>();
-      let interrupted = false;
-      const cleanup = Deferred.succeed(cleaning, undefined).pipe(
-        Effect.andThen(Deferred.await(finish)),
-      );
-      const driver = makeDriver({
-        execute: (phase) =>
-          phase === "write"
-            ? Deferred.succeed(entered, undefined).pipe(
-              Effect.andThen(Effect.never),
-            )
-            : phase === blocked
-            ? cleanup
-            : Effect.void,
-        release: () => blocked === "release" ? cleanup : Effect.void,
-      });
-      const fiber = yield* Effect.forkChild(
-        submit(request).pipe(Effect.provide(driver.layer)),
-      );
-      yield* Deferred.await(entered);
-      const stagedBeforeShutdown = driver.staged.size;
-      const closing = yield* Effect.forkChild(
-        Fiber.interrupt(fiber).pipe(Effect.andThen(Effect.sync(() => {
-          interrupted = true;
-        }))),
-      );
-      yield* Deferred.await(cleaning);
-      yield* Effect.yieldNow;
-      yield* Effect.sync(() => {
-        assertEquals(stagedBeforeShutdown, 1);
-        assertEquals([interrupted, driver.active.size, driver.staged.size], [
-          false,
+    const finish = Deferred.makeUnsafe<void>();
+    await run(
+      Effect.gen(function* () {
+        const entered = yield* Deferred.make<void>();
+        const cleaning = yield* Deferred.make<void>();
+        let interrupted = false;
+        const cleanup = Deferred.succeed(cleaning, undefined).pipe(
+          Effect.andThen(Deferred.await(finish)),
+        );
+        const driver = makeDriver({
+          execute: (phase) =>
+            phase === "write"
+              ? Deferred.succeed(entered, undefined).pipe(
+                Effect.andThen(Effect.never),
+              )
+              : phase === blocked
+              ? cleanup
+              : Effect.void,
+          release: () => blocked === "release" ? cleanup : Effect.void,
+        });
+        const fiber = yield* Effect.forkChild(
+          submit(request).pipe(Effect.provide(driver.layer)),
+        );
+        yield* Deferred.await(entered);
+        const stagedBeforeShutdown = driver.staged.size;
+        const closing = yield* Effect.forkChild(
+          Fiber.interrupt(fiber).pipe(Effect.andThen(Effect.sync(() => {
+            interrupted = true;
+          }))),
+        );
+        yield* Deferred.await(cleaning);
+        yield* Effect.yieldNow;
+        yield* Effect.sync(() => {
+          assertEquals(stagedBeforeShutdown, 1);
+          assertEquals([interrupted, driver.active.size, driver.staged.size], [
+            false,
+            1,
+            blocked === "rollback" ? 1 : 0,
+          ]);
+          assertEquals(driver.committed, []);
+        }).pipe(Effect.ensuring(Deferred.succeed(finish, undefined)));
+        yield* Fiber.join(closing);
+        const exit = yield* Fiber.await(fiber);
+        assert(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause));
+        assertEquals([driver.active.size, driver.staged.size, driver.leases], [
+          0,
+          0,
           1,
-          blocked === "rollback" ? 1 : 0,
+        ]);
+        assertEquals(driver.events.slice(-3), [
+          "rollback:1",
+          "release:1",
+          "released:1",
         ]);
         assertEquals(driver.committed, []);
-      }).pipe(Effect.ensuring(Deferred.succeed(finish, undefined)));
-      yield* Fiber.join(closing);
-      const exit = yield* Fiber.await(fiber);
-      assert(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause));
-      assertEquals([driver.active.size, driver.staged.size, driver.leases], [
-        0,
-        0,
-        1,
-      ]);
-      assertEquals(driver.events.slice(-3), [
-        "rollback:1",
-        "release:1",
-        "released:1",
-      ]);
-      assertEquals(driver.committed, []);
-    }));
+      }).pipe(Effect.ensuring(Deferred.succeed(finish, undefined))),
+    );
   }
 });
 
@@ -407,37 +409,93 @@ Deno.test("cancellation during either retry delay prevents a later transaction",
 });
 
 Deno.test("interruption after commit begins waits for commit and release without promising rollback", async () => {
-  await run(Effect.gen(function* () {
-    const committing = yield* Deferred.make<void>();
-    const finish = yield* Deferred.make<void>();
-    let interrupted = false;
-    const driver = makeDriver({
-      execute: (phase) =>
-        phase === "commit"
-          ? Deferred.succeed(committing, undefined).pipe(
-            Effect.andThen(Deferred.await(finish)),
-          )
-          : Effect.void,
-    });
-    const fiber = yield* Effect.forkChild(
-      submit(request).pipe(Effect.provide(driver.layer)),
-    );
-    yield* Deferred.await(committing);
-    const closing = yield* Effect.forkChild(
-      Fiber.interrupt(fiber).pipe(Effect.andThen(Effect.sync(() => {
-        interrupted = true;
-      }))),
-    );
-    yield* Effect.yieldNow;
-    yield* Effect.sync(() => {
-      assertEquals([interrupted, driver.active.size], [false, 1]);
-      assertEquals(driver.committed, []);
-    }).pipe(Effect.ensuring(Deferred.succeed(finish, undefined)));
-    yield* Fiber.join(closing);
-    const exit = yield* Fiber.await(fiber);
-    assert(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause));
-    assertEquals(driver.committed, [receipt]);
-    assertEquals(driver.active.size, 0);
-    assert(!driver.events.some((event) => event.startsWith("rollback:")));
-  }));
+  const finish = Deferred.makeUnsafe<void>();
+  await run(
+    Effect.gen(function* () {
+      const committing = yield* Deferred.make<void>();
+      let interrupted = false;
+      const driver = makeDriver({
+        execute: (phase) =>
+          phase === "commit"
+            ? Deferred.succeed(committing, undefined).pipe(
+              Effect.andThen(Deferred.await(finish)),
+            )
+            : Effect.void,
+      });
+      const fiber = yield* Effect.forkChild(
+        submit(request).pipe(Effect.provide(driver.layer)),
+      );
+      yield* Deferred.await(committing);
+      const closing = yield* Effect.forkChild(
+        Fiber.interrupt(fiber).pipe(Effect.andThen(Effect.sync(() => {
+          interrupted = true;
+        }))),
+      );
+      yield* Effect.yieldNow;
+      yield* Effect.sync(() => {
+        assertEquals([interrupted, driver.active.size], [false, 1]);
+        assertEquals(driver.committed, []);
+      }).pipe(Effect.ensuring(Deferred.succeed(finish, undefined)));
+      yield* Fiber.join(closing);
+      const exit = yield* Fiber.await(fiber);
+      assert(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause));
+      assertEquals(driver.committed, [receipt]);
+      assertEquals(driver.active.size, 0);
+      assert(!driver.events.some((event) => event.startsWith("rollback:")));
+    }).pipe(Effect.ensuring(Deferred.succeed(finish, undefined))),
+  );
+});
+
+Deno.test("workflow test assertion failures unblock cleanup before joining children", async () => {
+  for (const blocked of ["rollback", "release", "commit"]) {
+    for (const stage of ["started", "cleaning"]) {
+      const finish = Deferred.makeUnsafe<void>();
+      const entered = Deferred.makeUnsafe<void>();
+      const cleaning = Deferred.makeUnsafe<void>();
+      const cleanup = Deferred.succeed(cleaning, undefined).pipe(
+        Effect.andThen(Deferred.await(finish)),
+      );
+      const driver = makeDriver({
+        execute: (phase) =>
+          phase === "write" && blocked !== "commit"
+            ? Deferred.succeed(entered, undefined).pipe(
+              Effect.andThen(Effect.never),
+            )
+            : phase === "commit" && blocked === "commit"
+            ? Deferred.succeed(entered, undefined).pipe(Effect.andThen(cleanup))
+            : phase === blocked
+            ? cleanup
+            : Effect.void,
+        release: () => blocked === "release" ? cleanup : Effect.void,
+      });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const exit = await Promise.race([
+          Effect.runPromiseExit(
+            Effect.gen(function* () {
+              const fiber = yield* Effect.forkChild(
+                submit(request).pipe(Effect.provide(driver.layer)),
+              );
+              yield* Deferred.await(entered);
+              if (stage === "started") assert(false, "injected assertion");
+              yield* Effect.forkChild(Fiber.interrupt(fiber));
+              yield* Deferred.await(cleaning);
+              assert(false, "injected assertion");
+            }).pipe(Effect.ensuring(Deferred.succeed(finish, undefined))),
+          ),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error("cleanup hung")), 1000);
+          }),
+        ]);
+        assert(Exit.isFailure(exit) && Cause.hasDies(exit.cause));
+        assert(Cause.pretty(exit.cause).includes("injected assertion"));
+        assertEquals([driver.active.size, driver.staged.size], [0, 0]);
+        assertEquals(driver.events.at(-1), "released:1");
+        assertEquals(driver.committed, blocked === "commit" ? [receipt] : []);
+      } finally {
+        clearTimeout(timer);
+        await Effect.runPromise(Deferred.succeed(finish, undefined));
+      }
+    }
+  }
 });

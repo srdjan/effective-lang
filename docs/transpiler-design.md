@@ -370,8 +370,9 @@ from D9. M2 and M3 then show whether the whole-module recheck causes the miss
 
 Correction, 2026-10-17: the D9 budget is a time from `didChange` to
 `publishDiagnostics`. Only M1 measures that time, so M1 is the gate, as D9
-says. An earlier text named M2 as the gate. The synthetic sizes do not vary the
-size of one module: every feature module has 60 declarations. The size of the
+says. An earlier text named M2 as the gate. The synthetic presets cap each
+feature module at 60 feature declarations. The small preset has 30; the medium
+and large presets add modules with 60 each. The size of the
 largest realistic module is still not measured (`docs/rejected.md`).
 
 The program rechecks a dependent module when the interface hash of any module
@@ -679,8 +680,9 @@ shows a need. That escape hatch is a design property, not a plan.
 
 ## 10. What must be measured before committing
 
-No number in this document is a measurement. Each item below names the
-measurement, the input, and the decision it informs.
+The table below defines prospective measurements, their inputs, and the
+decisions they inform. Recorded M1 results appear with their sample counts and
+noise floors in the D9 decision record above.
 
 | # | Measurement | Input | Decides |
 | --- | --- | --- | --- |

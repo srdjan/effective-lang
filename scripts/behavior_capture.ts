@@ -55,7 +55,9 @@ export function capture(kind: string, value: unknown, input?: unknown): void {
     const text = JSON.stringify(value);
     const from = input === undefined ? "-" : hash(JSON.stringify(input));
     Deno.writeTextFileSync(RECORDS, \`\${kind} \${from} \${hash(text)} \${text.length}\\n\`, { append: true });
-  } catch { /* a process without write permission records nothing */ }
+  } catch (cause) {
+    throw new Error(\`behavior capture could not record to \${RECORDS}\`, { cause });
+  }
 }
 `;
 }

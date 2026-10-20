@@ -155,3 +155,73 @@ Deno.test("two different clean programs give different check, program, and valid
     Deno.removeSync(dir, { recursive: true });
   }
 });
+
+Deno.test("direct checkAnalysis and each incremental revision record completed diagnostics", async () => {
+  const dir = Deno.makeTempDirSync({
+    prefix: "effective-capture-entrypoints-",
+  });
+  try {
+    const records = `${dir}/capture.records`;
+    writeInstrumentedTree(dir, records);
+    const core: Core = await import(
+      new URL(`file://${dir}/src/core/mod.ts`).href
+    );
+    const checker: typeof import("../src/core/check_project.ts") = await import(
+      new URL(`file://${dir}/src/core/check_project.ts`).href
+    );
+    const checked = core.checkProject(core.memoryHost(PROJECT), "", ["m.eff"]);
+    assert(checked.ok);
+    Deno.writeTextFileSync(records, "");
+    checker.checkAnalysis(checked.value.analysis);
+    assertEquals(countKinds(Deno.readTextFileSync(records)).get("check"), 1);
+
+    Deno.writeTextFileSync(records, "");
+    const program = new core.Program("");
+    const initial = program.update({ set: PROJECT });
+    assert(initial.ok);
+    const repaired = program.update({
+      set: { "bad.eff": "export const x: Int = 1\ntype Int = int\n" },
+    });
+    assert(repaired.ok);
+    assertEquals(repaired.value.diagnostics, []);
+    const captures = Deno.readTextFileSync(records).split("\n").filter((line) =>
+      line.startsWith("program ")
+    );
+    assertEquals(captures.length, 2);
+    assert(captures[0] !== captures[1]);
+    assertEquals(
+      countKinds(Deno.readTextFileSync(records)).get("program-error"),
+      undefined,
+    );
+  } finally {
+    Deno.removeSync(dir, { recursive: true });
+  }
+});
+
+Deno.test("behavior capture fails visibly when a child cannot write its records", async () => {
+  const dir = Deno.makeTempDirSync({ prefix: "effective-capture-denied-" });
+  try {
+    const records = `${dir}/capture.records`;
+    writeInstrumentedTree(dir, records);
+    const probe = `${dir}/probe.ts`;
+    Deno.writeTextFileSync(
+      probe,
+      'import { capture } from "./src/core/capture_hook.ts";\ncapture("probe", []);\n',
+    );
+    const output = await new Deno.Command(Deno.execPath(), {
+      args: ["run", "--no-prompt", "--allow-read", probe],
+      cwd: dir,
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    assert(!output.success);
+    const stderr = new TextDecoder().decode(output.stderr);
+    assert(
+      stderr.includes(`behavior capture could not record to ${records}`),
+      stderr,
+    );
+    assert(stderr.includes("Requires write access"), stderr);
+  } finally {
+    Deno.removeSync(dir, { recursive: true });
+  }
+});
