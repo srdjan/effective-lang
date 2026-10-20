@@ -80,6 +80,52 @@ export function unsupported(message: string, span?: Span): EmitFailure {
   );
 }
 
+// ------------------------------------------------------------------ deferred types
+
+/**
+ * The Type kinds that have no schema and no runtime value: functions and the
+ * effectful or handle types. The type printers throw for them, and an alias
+ * that contains one is type-only.
+ */
+type DeferredKind =
+  | "function"
+  | "effect"
+  | "stream"
+  | "sink"
+  | "schedule"
+  | "provider"
+  | "ref"
+  | "retry-schedule"
+  | "codec"
+  | "schema"
+  | "closeable-scope"
+  | "fiber";
+
+export type DeferredType = Extract<Type, { readonly kind: DeferredKind }>;
+
+const DEFERRED_KINDS = {
+  "function": true,
+  "effect": true,
+  "stream": true,
+  "sink": true,
+  "schedule": true,
+  "provider": true,
+  "ref": true,
+  "retry-schedule": true,
+  "codec": true,
+  "schema": true,
+  "closeable-scope": true,
+  "fiber": true,
+} as const satisfies Record<DeferredKind, true>;
+
+/**
+ * True for a deferred Type kind. After this guard fails, a switch over the
+ * rest of the kinds is exhaustive, so a new kind is a compile error there.
+ */
+export function isDeferredType(type: Type): type is DeferredType {
+  return Object.hasOwn(DEFERRED_KINDS, type.kind);
+}
+
 // ------------------------------------------------------------------ identities
 
 /** The module part of an identity such as `type:users#User`. */
@@ -456,20 +502,8 @@ export class Scope {
   }
 
   containsFunction(type: Type): boolean {
+    if (isDeferredType(type)) return true;
     switch (type.kind) {
-      case "function":
-      case "effect":
-      case "stream":
-      case "sink":
-      case "schedule":
-      case "provider":
-      case "ref":
-      case "retry-schedule":
-      case "codec":
-      case "schema":
-      case "closeable-scope":
-      case "fiber":
-        return true;
       case "primitive":
       case "literal":
         return false;

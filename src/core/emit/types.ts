@@ -22,7 +22,13 @@ import {
   line,
   soft,
 } from "./doc.ts";
-import { internal, type Scope, servicesOf, unsupported } from "./scope.ts";
+import {
+  internal,
+  isDeferredType,
+  type Scope,
+  servicesOf,
+  unsupported,
+} from "./scope.ts";
 
 function literalText(value: string | number | boolean | null): string {
   return typeof value === "string" ? JSON.stringify(value) : String(value);
@@ -347,6 +353,9 @@ export function encodedTypeDoc(
   type: Type,
   recursiveId?: string,
 ): Doc {
+  if (isDeferredType(type)) {
+    throw unsupported("a deferred or function type has no schema");
+  }
   switch (type.kind) {
     case "primitive":
     case "literal":
@@ -399,25 +408,15 @@ export function encodedTypeDoc(
       return unionDoc(
         type.members.map((m) => encodedTypeDoc(scope, m, recursiveId)),
       );
-    case "function":
-    case "effect":
-    case "stream":
-    case "sink":
-    case "schedule":
-    case "provider":
-    case "ref":
-    case "retry-schedule":
-    case "codec":
-    case "schema":
-    case "closeable-scope":
-    case "fiber":
-      throw unsupported("a deferred or function type has no schema");
   }
 }
 
 /** The Effect Schema value of a type. The type has no function or provider in it. */
 export function schemaDoc(scope: Scope, type: Type, recursiveId?: string): Doc {
   const schema = scope.effect("Schema");
+  if (isDeferredType(type)) {
+    throw unsupported("a deferred or function type has no schema");
+  }
   switch (type.kind) {
     case "primitive":
       switch (type.name) {
@@ -502,18 +501,5 @@ export function schemaDoc(scope: Scope, type: Type, recursiveId?: string): Doc {
         ")",
       ];
     }
-    case "function":
-    case "effect":
-    case "stream":
-    case "sink":
-    case "schedule":
-    case "provider":
-    case "ref":
-    case "retry-schedule":
-    case "codec":
-    case "schema":
-    case "closeable-scope":
-    case "fiber":
-      throw unsupported("a deferred or function type has no schema");
   }
 }
