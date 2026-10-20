@@ -254,7 +254,16 @@ export class TypeLowerer {
     return this.env.tree;
   }
 
-  schemaData(ref: TypeRef, seen = new Set<TypeRef>()): boolean {
+  /**
+   * Whether `ref` is data a Schema may describe. A type that already has a
+   * reported error (`kind: "error"`) is data only when `acceptPoisoned` is
+   * true, so a Schema site does not report the same cause a second time.
+   */
+  schemaData(
+    ref: TypeRef,
+    acceptPoisoned = false,
+    seen = new Set<TypeRef>(),
+  ): boolean {
     const value = this.env.table.unfold(ref);
     if (seen.has(value)) return true;
     seen.add(value);
@@ -265,14 +274,20 @@ export class TypeLowerer {
       case "literal":
         return true;
       case "record":
-        return type.fields.every((field) => this.schemaData(field.type, seen));
+        return type.fields.every((field) =>
+          this.schemaData(field.type, acceptPoisoned, seen)
+        );
       case "array":
       case "option":
-        return this.schemaData(type.element, seen);
+        return this.schemaData(type.element, acceptPoisoned, seen);
       case "tuple":
-        return type.elements.every((element) => this.schemaData(element, seen));
+        return type.elements.every((element) =>
+          this.schemaData(element, acceptPoisoned, seen)
+        );
       case "union":
-        return type.members.every((member) => this.schemaData(member, seen));
+        return type.members.every((member) =>
+          this.schemaData(member, acceptPoisoned, seen)
+        );
       case "named": {
         if (
           type.id === "error:effect/SchemaError" ||
@@ -281,8 +296,11 @@ export class TypeLowerer {
         const nested = type.id.startsWith("error:")
           ? this.env.table.errorRecordOf(type.id as ErrorId)
           : this.env.table.brandBaseOf(type.id as TypeId);
-        return nested !== undefined && this.schemaData(nested, seen);
+        return nested !== undefined &&
+          this.schemaData(nested, acceptPoisoned, seen);
       }
+      case "error":
+        return acceptPoisoned;
       default:
         return false;
     }
@@ -747,8 +765,9 @@ export class TypeLowerer {
         ? first
         : this.lower(typeNodes[2]);
       if (
-        !this.schemaData(first.ref) || !this.schemaData(encoded.ref) ||
-        !this.schemaData(makeInput.ref)
+        !this.schemaData(first.ref, true) ||
+        !this.schemaData(encoded.ref, true) ||
+        !this.schemaData(makeInput.ref, true)
       ) {
         this.report(
           "type-mismatch/010",

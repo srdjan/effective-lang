@@ -1591,7 +1591,7 @@ export class BodyChecker {
         args[1].node,
       );
     }
-    if (!this.dataOnly(decoded) || !this.dataOnly(encoded)) {
+    if (!this.dataOnly(decoded, true) || !this.dataOnly(encoded, true)) {
       this.report(
         "type-mismatch/010",
         "codec types need compiler-derived schemas",
@@ -1727,8 +1727,9 @@ export class BodyChecker {
         );
       }
       if (
-        !this.dataOnly(hint.decoded) || !this.dataOnly(hint.encoded) ||
-        !this.dataOnly(hint.makeInput ?? hint.decoded)
+        !this.dataOnly(hint.decoded, true) ||
+        !this.dataOnly(hint.encoded, true) ||
+        !this.dataOnly(hint.makeInput ?? hint.decoded, true)
       ) {
         this.report(
           "type-mismatch/010",
@@ -2918,7 +2919,16 @@ export class BodyChecker {
     visit(body, undefined, undefined, false);
   }
 
-  private dataOnly(ref: TypeRef, seen = new Set<TypeRef>()): boolean {
+  /**
+   * Whether `ref` is data only. A type that already has a reported error
+   * (`kind: "error"`) is data only when `acceptPoisoned` is true, so a Schema
+   * derivation site does not report the same cause a second time.
+   */
+  private dataOnly(
+    ref: TypeRef,
+    acceptPoisoned = false,
+    seen = new Set<TypeRef>(),
+  ): boolean {
     const unfolded = this.table.unfold(ref);
     if (seen.has(unfolded)) return true;
     seen.add(unfolded);
@@ -2929,20 +2939,29 @@ export class BodyChecker {
       case "literal":
         return true;
       case "record":
-        return type.fields.every((f) => this.dataOnly(f.type, seen));
+        return type.fields.every((f) =>
+          this.dataOnly(f.type, acceptPoisoned, seen)
+        );
       case "array":
       case "option":
-        return this.dataOnly(type.element, seen);
+        return this.dataOnly(type.element, acceptPoisoned, seen);
       case "tuple":
-        return type.elements.every((element) => this.dataOnly(element, seen));
+        return type.elements.every((element) =>
+          this.dataOnly(element, acceptPoisoned, seen)
+        );
       case "union":
-        return type.members.every((member) => this.dataOnly(member, seen));
+        return type.members.every((member) =>
+          this.dataOnly(member, acceptPoisoned, seen)
+        );
       case "named": {
         const record = type.id.startsWith("error:")
           ? this.table.errorRecordOf(type.id as ErrorId)
           : this.table.brandBaseOf(type.id as TypeId);
-        return record !== undefined && this.dataOnly(record, seen);
+        return record !== undefined &&
+          this.dataOnly(record, acceptPoisoned, seen);
       }
+      case "error":
+        return acceptPoisoned;
       default:
         return false;
     }
