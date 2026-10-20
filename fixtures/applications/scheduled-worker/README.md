@@ -32,7 +32,7 @@ Cancellation waits for active resource release and timer cleanup. No shutdown
 or retry loop lives in the driver. Replaying one returned Effect resets source
 progress and retry budgets; the driver can still retain its own resource IDs.
 
-runtime_test.ts runs nine application checks, including a virtual-time comparison
+runtime_test.ts runs ten application checks, including a virtual-time comparison
 with reference.ts. The native reference uses Effect.repeat, Effect.retry and
 Schedule composition for valid policies. It compares job times and results;
 it does not establish equivalence for every opaque Schedule value.

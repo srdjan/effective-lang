@@ -43,7 +43,7 @@ and awaits connection release. Interruption after COMMIT starts waits for
 commit and release; the committed row can remain. The application does not
 promise rollback for every cancellation or exactly-once submission.
 
-runtime_test.ts runs fourteen compiled application checks. The driver records
+runtime_test.ts runs fifteen compiled application checks. The driver records
 one statement shape in memory and performs no database or network I/O.
 The checks establish the service workflow gate with a typed transaction adapter.
 They do not establish external driver integration or source transaction callbacks.
