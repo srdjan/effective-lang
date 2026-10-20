@@ -10,7 +10,7 @@ import type { Execution, Field, ModuleIR, Type } from "../src/core/ir.ts";
 import { lowerProject } from "../src/core/lower.ts";
 import { memoryHost } from "../src/core/source.ts";
 import { validateModule } from "../src/core/validate/index.ts";
-import { fits, same, type TypeEnv } from "../src/core/validate/typing.ts";
+import { fits, same, show, type TypeEnv } from "../src/core/validate/typing.ts";
 import { validateProject } from "../src/core/validate_project.ts";
 import { buildFixtures } from "../scripts/validate_fixtures.ts";
 import {
@@ -3000,4 +3000,66 @@ const name: Schema<Text> = schema()
     );
     assert(found.length > 0, flag);
   }
+});
+
+Deno.test("show prints Schema services so channel erasure is visible", () => {
+  const lowered = lowerText(`
+type Int = int
+service Read { next(value: Int): Option<Int> }
+service Write { previous(value: Int): Option<Int> }
+const integer: Schema<Int> = schema()
+export const shifted: Schema<Int, Int, Read.next, Write.previous> = schemaTransform(
+  integer,
+  integer,
+  (value: Int): Option<Int> uses Read.next => Read.next(value),
+  (value: Int): Option<Int> uses Write.previous => Write.previous(value)
+)
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const forged = copy(lowered.ir);
+  const shifted = forged.declarations.find((d) => d.name === "shifted");
+  assert(shifted?.kind === "constant" && shifted.value.type.kind === "schema");
+  const recorded = shifted.value.type;
+  assertEquals(recorded.decodeRequirements.length, 1);
+  Object.assign(recorded, { decodeRequirements: [] });
+  const found = validateModule(forged, lowered.sources).filter((d) =>
+    d.code === "validation/002"
+  );
+  assertEquals(found.length, 1);
+  const message = found[0].message;
+  const expected = message.match(/expected (Schema<[^>]*>)/)?.[1];
+  const actual = message.match(/recorded (Schema<[^>]*>)/)?.[1];
+  assertEquals(
+    expected,
+    "Schema<type:m#Int, type:m#Int, cap:m#Read.next, cap:m#Write.previous>",
+  );
+  assertEquals(
+    actual,
+    "Schema<type:m#Int, type:m#Int, never, cap:m#Write.previous>",
+  );
+});
+
+Deno.test("show prints a Schema make input after the requirement sets", () => {
+  assertEquals(
+    show({
+      kind: "schema",
+      decoded: STRING,
+      encoded: STRING,
+      decodeRequirements: [],
+      encodeRequirements: [],
+      makeInput: INT,
+    }),
+    "Schema<string, string, never, never, int>",
+  );
+  assertEquals(
+    show({
+      kind: "schema",
+      decoded: STRING,
+      encoded: STRING,
+      decodeRequirements: ["cap:Read.next", "cap:Read.more"],
+      encodeRequirements: ["cap:Write.previous"],
+      optionalKey: true,
+    }),
+    "SchemaOptional<string, string, cap:Read.next | cap:Read.more, cap:Write.previous>",
+  );
 });

@@ -468,7 +468,11 @@ export function show(type: Type): string {
           : "Schema"
       }${type.constructorDefault === true ? "ConstructorDefault" : ""}<${
         show(type.decoded)
-      }, ${show(type.encoded)}>`;
+      }, ${show(type.encoded)}, ${
+        type.decodeRequirements.join(" | ") || "never"
+      }, ${type.encodeRequirements.join(" | ") || "never"}${
+        type.makeInput === undefined ? "" : `, ${show(type.makeInput)}`
+      }>`;
     case "fiber":
       return `Fiber<${show(type.result)}, ${
         type.failures.join(" | ") || "never"
