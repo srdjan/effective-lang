@@ -10,4 +10,6 @@ fixtures/**/*.ts.map
 editors/vscode/node_modules/
 playground/dist/
 .playwright-mcp/
-docs/plans/
+docs/plans/*-probes/
+docs/plans/**/repro/
+docs/plans/rederive-review-evidence/*.ts

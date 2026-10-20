@@ -1,0 +1,120 @@
+layerCall (6)
+   5466: "`layer` needs a declared service name",
+   5473: "`layer` needs an inline acquisition callback",
+   5489: "`layer` must implement exactly the service methods",
+   5501: `\`layer\` method ${method.name} does not fit its service contract`,
+   5509: "`layer` acquisition must return a service method record",
+   5517: "`layer` acquisition cannot require a method it provides",
+retryScheduleCall (4)
+   1495: "`retrySchedule` needs a function",
+   1504: "the retry schedule callback takes an error and an attempt number",
+   1513: "the retry schedule callback needs a nominal error parameter",
+   1535: "the retry schedule callback must be pure",
+retryStreamCall (3)
+   4106: "`retryStream` needs a Stream value",
+   4113: "`retryStream` needs a RetrySchedule value",
+   4136: "`retryStream` policy must be pure",
+allCall (3)
+   5714: "`all` takes an Effect collection and an optional concurrency record",
+   5740: "`all` needs a tuple, record, or array of Effect values",
+   5754: "`all` requires every record field to be present",
+allResultsCall (3)
+   5940: "`allResults` takes an Effect collection and an optional concurrency record",
+   5969: "`allResults` needs a tuple, record, or array of Effect values",
+   5984: "`allResults` requires every record field to be present",
+withFiberCall (2)
+   2544: "`withFiber` needs an Effect value",
+   2559: "`withFiber` needs an inline use callback",
+checkBorrowedParameter (2)
+   3170: "a borrow parameter needs an opaque type",
+   3177: "a borrow function must return data only",
+mapEffectCall (2)
+   3251: "`mapEffect` takes a Stream, a callback, and an optional concurrency record",
+   3271: "`mapEffect` needs a Stream value",
+flatMapStreamsCall (2)
+   3929: "`flatMapStreams` takes a Stream, a callback, and an optional concurrency record",
+   3949: "`flatMapStreams` needs a Stream value",
+scheduleFromStepCall (2)
+   4738: "`scheduleFromStep` needs a nullary state factory and a two-parameter decision callback",
+   4758: "the decision callback needs ScheduleInput<Input>",
+mergeStreamsCall (2)
+   5217: "`mergeStreams` needs two Stream values",
+   5227: "`mergeStreams` needs compatible element types",
+raceCall (2)
+   5316: }
+   5322: "`race` needs compatible success types",
+mergeLayersCall (2)
+   5547: "`mergeLayers` needs two Layer values",
+   5560: "`mergeLayers` cannot provide one service twice",
+validateAllCall (2)
+   5874: "`validateAll` takes an Effect array, an error wrapper, and an optional concurrency record
+   5892: "`validateAll` needs an array of Effect values",
+recordUpdate (2)
+   6542: "a record spread must come first",
+   6552: `the field \`${parts.label}\` appears twice`,
+errorConstruction (1)
+   911: `${
+brandConstruction (1)
+   988: `the brand \`${
+builtinCall (1)
+   1203: `\`${name}\` is a value, not a function`,
+unbrandCall (1)
+   1269: "an opaque type cannot be unbranded in source",
+jobFunction (1)
+   1365: `\`${name}\` needs a function that takes no arguments, but the job has type ${
+retryCall (1)
+   1415: `the retry schedule does not accept ${failure}`,
+codecCall (1)
+   1565: "`codec` needs two single-argument functions",
+codecOperation (1)
+   2508: `\`${name}\` needs a Codec value`,
+fiberOperation (1)
+   2617: `\`${name}\` needs a Fiber value`,
+scopedCall (1)
+   2757: "`scoped` needs an Effect value",
+forkScopedCall (1)
+   2787: "`forkScoped` needs an Effect value",
+operationRecord (1)
+   2983: "acquisition must return a nonempty record of required operations",
+withResourceCall (1)
+   3026: "withResource requires three inline arrow callbacks",
+unfoldCall (1)
+   3231: "`unfold` callback must return Option<[Element, State]>",
+mapGroupsCall (1)
+   3331: "`mapGroups` needs a Stream value",
+mapAccumStreamCall (1)
+   3610: "`mapAccumStream` needs a Stream value",
+foldStreamCall (1)
+   3675: "`foldStream` needs a Stream value",
+foldEffectStreamCall (1)
+   3732: "`foldEffectStream` needs a Stream value",
+switchMapStreamsCall (1)
+   4008: "`switchMapStreams` needs a Stream value",
+catchStreamCall (1)
+   4059: "`catchStream` needs a Stream value",
+takeStreamCall (1)
+   4317: "`takeStream` needs a Stream value",
+dropStreamCall (1)
+   4351: "`dropStream` needs a Stream value",
+effectStreamPredicateCall (1)
+   4468: `${name} needs a Stream value`,
+sinkForEachCall (1)
+   4596: "`sinkForEach` needs a one-argument callback with an annotated input",
+scheduleMapCall (1)
+   4817: "`scheduleMap` needs a Schedule",
+runStreamCall (1)
+   5106: "`runStream` needs a Sink as its second argument",
+bufferStreamCall (1)
+   5144: "`bufferStream` needs a Stream value",
+refCall (1)
+   5364: `\`${name}\` needs a Ref value`,
+partitionAllCall (1)
+   5818: "`partitionAll` takes an Effect array and an optional concurrency record",
+collectionCall (1)
+   6048: "`traverse` takes two arguments and an optional concurrency record",
+recordConstruction (1)
+   6453: "a record spread must come first",
+pattern (1)
+   7253: `\`${target.name}\` cannot be a constructor pattern with a binding`,
+recordPattern (1)
+   7328: this.patternFact(node, { kind: "invalid" });
