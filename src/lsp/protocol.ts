@@ -59,10 +59,6 @@ export const FileChangeType = {
 
 type FileChangeTypeValue = 1 | 2 | 3;
 
-export const DiagnosticSeverity = { Error: 1, Warning: 2 } as const;
-
-export const MessageType = { Error: 1, Warning: 2, Info: 3, Log: 4 } as const;
-
 /** The symbol kinds of plan section 5.7. */
 export const SymbolKind = {
   Class: 5,
