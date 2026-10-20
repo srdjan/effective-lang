@@ -54,7 +54,14 @@ import {
   typeArguments,
   typeDoc,
 } from "./types.ts";
-import { evaluatedChildren, isLeafExpr } from "./shape.ts";
+import {
+  type Callee,
+  LEAF_CALLS,
+  OPERAND_CALLS,
+  type OperandCallKind,
+  type Treatment,
+} from "./calls.ts";
+import { evaluatedChildren, type ExprOf, isLeafExpr } from "./shape.ts";
 import { patternBinding } from "./walk.ts";
 
 // ------------------------------------------------------------------ precedence
@@ -543,6 +550,20 @@ function effectCollectionBuiltin(
   return name === "all" || name === "traverse" ? name : undefined;
 }
 
+/** The text of a concurrency limit: a number, or `"unbounded"` with its quotes. */
+function concurrencyText(limit: number | "unbounded"): string {
+  return limit === "unbounded" ? '"unbounded"' : String(limit);
+}
+
+/** The options argument `{ concurrency: n }`, or no argument when the program sets no limit. */
+function concurrencyArguments(
+  limit: number | "unbounded" | undefined,
+): Emitted[] {
+  return limit === undefined
+    ? []
+    : [emitted(`{ concurrency: ${concurrencyText(limit)} }`)];
+}
+
 type Mode = "pure" | "gen";
 type Kid = (e: Expr, expected?: Type) => Emitted;
 
@@ -933,13 +954,7 @@ export class ExprEmitter {
           callArguments([
             kid(e.stream),
             this.effectCallback(e.transform),
-            ...(e.concurrency === undefined
-              ? []
-              : [emitted(`{ concurrency: ${
-                e.concurrency === "unbounded"
-                  ? '"unbounded"'
-                  : e.concurrency
-              } }`)]),
+            ...concurrencyArguments(e.concurrency),
           ]),
         ]);
       }
@@ -982,13 +997,6 @@ export class ExprEmitter {
           ]),
         ]);
       }
-      case "map-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.map`,
-          callArguments([kid(e.stream), this.callback(e.transform, kid)]),
-        ]);
-      }
       case "scan-stream": {
         const stream = this.scope.effect("Stream");
         return emitted([
@@ -1022,35 +1030,8 @@ export class ExprEmitter {
           callArguments([
             kid(e.stream),
             this.callback(e.transform, kid),
-            ...(e.concurrency === undefined
-              ? []
-              : [emitted(`{ concurrency: ${
-                e.concurrency === "unbounded"
-                  ? '"unbounded"'
-                  : e.concurrency
-              } }`)]),
+            ...concurrencyArguments(e.concurrency),
           ]),
-        ]);
-      }
-      case "switch-map-streams": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.switchMap`,
-          callArguments([kid(e.stream), this.callback(e.transform, kid)]),
-        ]);
-      }
-      case "catch-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.catch`,
-          callArguments([kid(e.stream), this.callback(e.recover, kid)]),
-        ]);
-      }
-      case "retry-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.retry`,
-          callArguments([kid(e.stream), kid(e.policy)]),
         ]);
       }
       case "debounce-stream": {
@@ -1078,72 +1059,6 @@ export class ExprEmitter {
               `{ cost: (arr) => arr.length, units: ${e.units}, duration: ${duration}.millis(${e.durationMs}), strategy: "${e.strategy}" }`,
             ),
           ]),
-        ]);
-      }
-      case "take-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.take`,
-          callArguments([kid(e.stream), kid(e.count)]),
-        ]);
-      }
-      case "drop-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.drop`,
-          callArguments([kid(e.stream), kid(e.count)]),
-        ]);
-      }
-      case "drop-while-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.dropWhile`,
-          callArguments([kid(e.stream), this.callback(e.predicate, kid)]),
-        ]);
-      }
-      case "filter-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.filter`,
-          callArguments([kid(e.stream), this.callback(e.predicate, kid)]),
-        ]);
-      }
-      case "filter-effect-stream":
-      case "take-while-effect-stream":
-      case "take-until-effect-stream":
-      case "drop-while-effect-stream": {
-        const stream = this.scope.effect("Stream");
-        const method = e.kind === "filter-effect-stream"
-          ? "filterEffect"
-          : e.kind === "take-while-effect-stream"
-          ? "takeWhileEffect"
-          : e.kind === "take-until-effect-stream"
-          ? "takeUntilEffect"
-          : "dropWhileEffect";
-        return emitted([
-          `${stream}.${method}`,
-          callArguments([kid(e.stream), this.effectCallback(e.predicate)]),
-        ]);
-      }
-      case "take-while-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.takeWhile`,
-          callArguments([kid(e.stream), this.callback(e.predicate, kid)]),
-        ]);
-      }
-      case "take-until-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.takeUntil`,
-          callArguments([kid(e.stream), this.callback(e.predicate, kid)]),
-        ]);
-      }
-      case "sink-for-each": {
-        const sink = this.scope.effect("Sink");
-        return emitted([
-          `${sink}.forEach`,
-          callArguments([this.effectCallback(e.consume)]),
         ]);
       }
       case "take-sink": {
@@ -1218,11 +1133,6 @@ export class ExprEmitter {
           callArguments([kid(e.stream), kid(e.sink), kid(e.schedule)]),
         ]);
       }
-      case "schedule-recurs":
-        return emitted([
-          `${this.scope.effect("Schedule")}.recurs`,
-          callArguments([kid(e.times)]),
-        ]);
       case "schedule-spaced":
         return emitted([
           `${this.scope.effect("Schedule")}.spaced`,
@@ -1268,11 +1178,6 @@ export class ExprEmitter {
           `]), (${meta}) => ${effect}.succeed(${duration}.toMillis(${meta}.output)))`,
         ]);
       }
-      case "schedule-concat":
-        return emitted([
-          `${this.scope.effect("Schedule")}.concat`,
-          callArguments([kid(e.left), kid(e.right)]),
-        ]);
       case "schedule-from-step": {
         const policy = this.scope.resolve(e.type);
         if (policy.kind !== "schedule") {
@@ -1326,43 +1231,8 @@ export class ExprEmitter {
           ]),
         ]);
       }
-      case "merge-streams": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.merge`,
-          callArguments([kid(e.left), kid(e.right)]),
-        ]);
-      }
-      case "zip-streams": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.zip`,
-          callArguments([kid(e.left), kid(e.right)]),
-        ]);
-      }
-      case "concat-streams": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.concat`,
-          callArguments([kid(e.left), kid(e.right)]),
-        ]);
-      }
       case "layer":
         return this.sourceLayer(e);
-      case "merge-layers": {
-        const layer = this.scope.effect("Layer");
-        return emitted([
-          `${layer}.merge`,
-          callArguments([kid(e.left), kid(e.right)]),
-        ]);
-      }
-      case "race": {
-        const effect = this.scope.effect("Effect");
-        return emitted([
-          `${effect}.race`,
-          callArguments([kid(e.left), kid(e.right)]),
-        ]);
-      }
       case "retry-schedule": {
         const schedule = this.scope.effect("Schedule");
         const effect = this.scope.effect("Effect");
@@ -1465,6 +1335,44 @@ export class ExprEmitter {
         return this.match(e, expected);
       case "binary":
         return this.binary(e, kid);
+      default:
+        // The remaining kinds print as a simple call. A kind that has neither
+        // a case above nor a row in OPERAND_CALLS fails to compile here.
+        return this.operandCall(e.kind, e, kid);
+    }
+  }
+
+  /** A structural kind that prints as `callee(operands)`. */
+  private operandCall<K extends OperandCallKind>(
+    kind: K,
+    e: ExprOf<K>,
+    kid: Kid,
+  ): Emitted {
+    const row = OPERAND_CALLS[kind];
+    const callee = this.calleeText(row.callee);
+    const operands = row.operands(e).map(([expression, treatment]) =>
+      this.operand(expression, treatment, kid)
+    );
+    return emitted([callee, callArguments(operands)]);
+  }
+
+  private operand(e: Expr, treatment: Treatment, kid: Kid): Emitted {
+    switch (treatment) {
+      case "value":
+        return kid(e);
+      case "callback":
+        return this.callback(e, kid);
+      case "effect-callback":
+        return this.effectCallback(e);
+    }
+  }
+
+  private calleeText(callee: Callee): string {
+    switch (callee.kind) {
+      case "method":
+        return `${this.scope.effect(callee.module)}.${callee.method}`;
+      case "scope":
+        return this.scope.scopeRuntime()[callee.operation];
     }
   }
 
@@ -2624,8 +2532,6 @@ export class ExprEmitter {
         );
         return emitted([`${service}.use`, callArguments([arrow])]);
       }
-      case "fail":
-        return emitted([`${effect}.fail`, callArguments([children[0]])]);
       case "schema-make":
       case "schema-decode":
       case "schema-encode": {
@@ -2655,13 +2561,7 @@ export class ExprEmitter {
           callArguments([
             children[0],
             emitted("(job) => job"),
-            ...(e.concurrency === undefined
-              ? []
-              : [emitted(`{ concurrency: ${
-                e.concurrency === "unbounded"
-                  ? '"unbounded"'
-                  : e.concurrency
-              } }`)]),
+            ...concurrencyArguments(e.concurrency),
           ]),
         ]);
       case "validate-all":
@@ -2673,13 +2573,7 @@ export class ExprEmitter {
               callArguments([
                 children[0],
                 emitted("(job) => job"),
-                ...(e.concurrency === undefined
-                  ? []
-                  : [emitted(`{ concurrency: ${
-                    e.concurrency === "unbounded"
-                      ? '"unbounded"'
-                      : e.concurrency
-                  } }`)]),
+                ...concurrencyArguments(e.concurrency),
               ]),
             ]),
             children[1],
@@ -2694,34 +2588,11 @@ export class ExprEmitter {
               `{ mode: "result"${
                 e.concurrency === undefined
                   ? ""
-                  : `, concurrency: ${
-                    e.concurrency === "unbounded"
-                      ? '"unbounded"'
-                      : e.concurrency
-                  }`
+                  : `, concurrency: ${concurrencyText(e.concurrency)}`
               } }`,
             ),
           ]),
         ]);
-      case "make-scope":
-        return emitted([this.scope.scopeRuntime().make, callArguments([])]);
-      case "provide-scope":
-        return emitted([
-          this.scope.scopeRuntime().provide,
-          callArguments(children),
-        ]);
-      case "add-scope-finalizer":
-        return emitted([
-          this.scope.scopeRuntime().register,
-          callArguments(children),
-        ]);
-      case "close-scope":
-        return emitted([
-          this.scope.scopeRuntime().close,
-          callArguments(children),
-        ]);
-      case "scoped":
-        return emitted([`${effect}.scoped`, callArguments([children[0]])]);
       case "fork-scoped":
         return emitted([
           `${effect}.as`,
@@ -2730,13 +2601,6 @@ export class ExprEmitter {
             emitted("undefined"),
           ]),
         ]);
-      case "run-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.run`,
-          callArguments([children[0], children[1]]),
-        ]);
-      }
       case "fold-stream": {
         const stream = this.scope.effect("Stream");
         return emitted([
@@ -2762,48 +2626,6 @@ export class ExprEmitter {
             this.effectCallback(e.update),
           ]),
         ]);
-      }
-      case "collect-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.runCollect`,
-          callArguments([children[0]]),
-        ]);
-      }
-      case "head-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.runHead`,
-          callArguments([children[0]]),
-        ]);
-      }
-      case "last-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.runLast`,
-          callArguments([children[0]]),
-        ]);
-      }
-      case "drain-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.runDrain`,
-          callArguments([children[0]]),
-        ]);
-      }
-      case "make-ref":
-      case "get-ref":
-      case "set-ref":
-      case "update-ref": {
-        const ref = this.scope.effect("Ref");
-        const method = e.kind === "make-ref"
-          ? "make"
-          : e.kind === "get-ref"
-          ? "get"
-          : e.kind === "set-ref"
-          ? "set"
-          : "update";
-        return emitted([`${ref}.${method}`, callArguments(children)]);
       }
       case "with-resource": {
         if (
@@ -2865,6 +2687,14 @@ export class ExprEmitter {
       }
       case "catch":
         return this.catchEffect(e);
+      default:
+        // The remaining leaf kinds call a function on their children. A kind
+        // that has neither a case above nor a row in LEAF_CALLS fails to
+        // compile here.
+        return emitted([
+          this.calleeText(LEAF_CALLS[e.kind]),
+          callArguments(children),
+        ]);
     }
   }
 
