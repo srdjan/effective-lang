@@ -190,6 +190,319 @@ const PATTERN_KINDS: ReadonlySet<SyntaxKind> = new Set([
   SyntaxKind.RecordPattern,
 ]);
 
+// ------------------------------------------------------------------ call facts
+
+type FactKind = NodeFact["kind"];
+
+/** The argument reader of `invoke`: argument `i`, or an internal error. */
+type ArgumentAt = (i: number) => Expr;
+
+/**
+ * The fact kinds that `invoke` lowers in its own cases: a fact field with
+ * logic, a callee, a closure check, or no call at all.
+ */
+type SpecialKind =
+  | "call"
+  | "perform"
+  | "builtin"
+  | "error-construction"
+  | "brand-construction"
+  | "retry"
+  | "schema"
+  | "with-fiber"
+  | "with-resource"
+  | "map-groups"
+  | "debounce-stream"
+  | "throttle-stream"
+  | "take-sink"
+  | "buffer-stream"
+  | "layer"
+  | "none"
+  | "list"
+  | "field"
+  | "arrow"
+  | "binding"
+  | "pattern"
+  | "handler";
+
+/** The fact kinds whose node moves positional arguments into named fields. */
+type PositionalKind = Exclude<FactKind, SpecialKind>;
+
+/** The fact members that have a kind in `K`. */
+type FactOf<K extends FactKind> = NodeFact extends infer F
+  ? F extends { readonly kind: infer FK }
+    ? [Extract<K, FK>] extends [never] ? never
+    : F
+  : never
+  : never;
+
+/** The node members that have a kind in `K`, without their annotation. */
+type BodyOf<K extends PositionalKind> = Expr extends infer E
+  ? E extends { readonly kind: infer EK }
+    ? [Extract<K, EK>] extends [never] ? never
+    : Omit<E, keyof Annotation>
+  : never
+  : never;
+
+/**
+ * One builder for each positional kind. A kind without a row, and a row for a
+ * kind that `invoke` handles itself, fail to compile. A row that builds the
+ * wrong fields for its kind fails too.
+ */
+type PositionalBuilders = {
+  readonly [K in PositionalKind]: (
+    arg: ArgumentAt,
+    fact: FactOf<K>,
+  ) => BodyOf<K>;
+};
+
+const POSITIONAL_BUILDERS: PositionalBuilders = {
+  "unbrand": (arg) => ({ kind: "unbrand", value: arg(0) }),
+  "some": (arg) => ({ kind: "some", value: arg(0) }),
+  "fail": (arg) => ({ kind: "fail", error: arg(0) }),
+  "retry-schedule": (arg) => ({ kind: "retry-schedule", step: arg(0) }),
+  "retry-with-schedule": (arg) => ({
+    kind: "retry-with-schedule",
+    job: arg(0),
+    options: arg(1),
+  }),
+  "codec": (arg) => ({ kind: "codec", decode: arg(0), encode: arg(1) }),
+  "decode": (arg) => ({ kind: "decode", codec: arg(0), input: arg(1) }),
+  "encode": (arg) => ({ kind: "encode", codec: arg(0), input: arg(1) }),
+  "join-fiber": (arg) => ({ kind: "join-fiber", fiber: arg(0) }),
+  "interrupt-fiber": (arg) => ({ kind: "interrupt-fiber", fiber: arg(0) }),
+  "provide": (arg) => ({ kind: "provide", provider: arg(0), job: arg(1) }),
+  "defer": (arg) => ({ kind: "defer", job: arg(0) }),
+  "run": (arg) => ({ kind: "run", value: arg(0) }),
+  "scoped": (arg) => ({ kind: "scoped", value: arg(0) }),
+  "fork-scoped": (arg) => ({ kind: "fork-scoped", job: arg(0) }),
+  "make-scope": () => ({ kind: "make-scope" }),
+  "provide-scope": (arg) => ({
+    kind: "provide-scope",
+    owner: arg(0),
+    job: arg(1),
+  }),
+  "add-scope-finalizer": (arg) => ({
+    kind: "add-scope-finalizer",
+    owner: arg(0),
+    job: arg(1),
+  }),
+  "close-scope": (arg) => ({ kind: "close-scope", owner: arg(0) }),
+  "unfold": (arg) => ({ kind: "unfold", seed: arg(0), next: arg(1) }),
+  "map-effect": (arg, fact) => ({
+    kind: "map-effect",
+    stream: arg(0),
+    transform: arg(1),
+    concurrency: fact.concurrency,
+  }),
+  "map-stream": (arg) => ({
+    kind: "map-stream",
+    stream: arg(0),
+    transform: arg(1),
+  }),
+  "scan-stream": (arg) => ({
+    kind: "scan-stream",
+    stream: arg(0),
+    seed: arg(1),
+    update: arg(2),
+  }),
+  "map-accum-stream": (arg) => ({
+    kind: "map-accum-stream",
+    stream: arg(0),
+    seed: arg(1),
+    update: arg(2),
+  }),
+  "fold-stream": (arg) => ({
+    kind: "fold-stream",
+    stream: arg(0),
+    seed: arg(1),
+    update: arg(2),
+  }),
+  "fold-effect-stream": (arg) => ({
+    kind: "fold-effect-stream",
+    stream: arg(0),
+    seed: arg(1),
+    update: arg(2),
+  }),
+  "collect-stream": (arg) => ({ kind: "collect-stream", stream: arg(0) }),
+  "head-stream": (arg) => ({ kind: "head-stream", stream: arg(0) }),
+  "last-stream": (arg) => ({ kind: "last-stream", stream: arg(0) }),
+  "drain-stream": (arg) => ({ kind: "drain-stream", stream: arg(0) }),
+  "flat-map-streams": (arg, fact) => ({
+    kind: "flat-map-streams",
+    stream: arg(0),
+    transform: arg(1),
+    concurrency: fact.concurrency,
+  }),
+  "switch-map-streams": (arg) => ({
+    kind: "switch-map-streams",
+    stream: arg(0),
+    transform: arg(1),
+  }),
+  "catch-stream": (arg) => ({
+    kind: "catch-stream",
+    stream: arg(0),
+    recover: arg(1),
+  }),
+  "retry-stream": (arg) => ({
+    kind: "retry-stream",
+    stream: arg(0),
+    policy: arg(1),
+  }),
+  "take-stream": (arg) => ({
+    kind: "take-stream",
+    stream: arg(0),
+    count: arg(1),
+  }),
+  "drop-stream": (arg) => ({
+    kind: "drop-stream",
+    stream: arg(0),
+    count: arg(1),
+  }),
+  "drop-while-stream": (arg) => ({
+    kind: "drop-while-stream",
+    stream: arg(0),
+    predicate: arg(1),
+  }),
+  "filter-stream": (arg) => ({
+    kind: "filter-stream",
+    stream: arg(0),
+    predicate: arg(1),
+  }),
+  "filter-effect-stream": (arg) => ({
+    kind: "filter-effect-stream",
+    stream: arg(0),
+    predicate: arg(1),
+  }),
+  "take-while-effect-stream": (arg) => ({
+    kind: "take-while-effect-stream",
+    stream: arg(0),
+    predicate: arg(1),
+  }),
+  "take-until-effect-stream": (arg) => ({
+    kind: "take-until-effect-stream",
+    stream: arg(0),
+    predicate: arg(1),
+  }),
+  "drop-while-effect-stream": (arg) => ({
+    kind: "drop-while-effect-stream",
+    stream: arg(0),
+    predicate: arg(1),
+  }),
+  "take-while-stream": (arg) => ({
+    kind: "take-while-stream",
+    stream: arg(0),
+    predicate: arg(1),
+  }),
+  "take-until-stream": (arg) => ({
+    kind: "take-until-stream",
+    stream: arg(0),
+    predicate: arg(1),
+  }),
+  "partition-all": (arg, fact) => ({
+    kind: "partition-all",
+    jobs: arg(0),
+    concurrency: fact.concurrency,
+  }),
+  "validate-all": (arg, fact) => ({
+    kind: "validate-all",
+    jobs: arg(0),
+    onErrors: arg(1),
+    concurrency: fact.concurrency,
+  }),
+  "all-results": (arg, fact) => ({
+    kind: "all-results",
+    jobs: arg(0),
+    concurrency: fact.concurrency,
+  }),
+  "sink-for-each": (arg) => ({ kind: "sink-for-each", consume: arg(0) }),
+  "transduce-stream": (arg) => ({
+    kind: "transduce-stream",
+    stream: arg(0),
+    sink: arg(1),
+  }),
+  "aggregate-stream": (arg) => ({
+    kind: "aggregate-stream",
+    stream: arg(0),
+    sink: arg(1),
+  }),
+  "aggregate-within-stream": (arg) => ({
+    kind: "aggregate-within-stream",
+    stream: arg(0),
+    sink: arg(1),
+    schedule: arg(2),
+  }),
+  "schedule-from-step": (arg) => ({
+    kind: "schedule-from-step",
+    initial: arg(0),
+    decide: arg(1),
+  }),
+  "schedule-recurs": (arg) => ({ kind: "schedule-recurs", times: arg(0) }),
+  "schedule-spaced": (arg) => ({
+    kind: "schedule-spaced",
+    delayMillis: arg(0),
+  }),
+  "schedule-map": (arg) => ({
+    kind: "schedule-map",
+    schedule: arg(0),
+    transform: arg(1),
+  }),
+  "schedule-max": (arg) => ({
+    kind: "schedule-max",
+    left: arg(0),
+    right: arg(1),
+  }),
+  "schedule-min": (arg) => ({
+    kind: "schedule-min",
+    left: arg(0),
+    right: arg(1),
+  }),
+  "schedule-concat": (arg) => ({
+    kind: "schedule-concat",
+    left: arg(0),
+    right: arg(1),
+  }),
+  "run-stream": (arg) => ({ kind: "run-stream", stream: arg(0), sink: arg(1) }),
+  "merge-streams": (arg) => ({
+    kind: "merge-streams",
+    left: arg(0),
+    right: arg(1),
+  }),
+  "zip-streams": (arg) => ({
+    kind: "zip-streams",
+    left: arg(0),
+    right: arg(1),
+  }),
+  "concat-streams": (arg) => ({
+    kind: "concat-streams",
+    left: arg(0),
+    right: arg(1),
+  }),
+  "race": (arg) => ({ kind: "race", left: arg(0), right: arg(1) }),
+  "make-ref": (arg) => ({ kind: "make-ref", value: arg(0) }),
+  "get-ref": (arg) => ({ kind: "get-ref", ref: arg(0) }),
+  "set-ref": (arg) => ({ kind: "set-ref", ref: arg(0), value: arg(1) }),
+  "update-ref": (arg) => ({
+    kind: "update-ref",
+    ref: arg(0),
+    transform: arg(1),
+  }),
+  "merge-layers": (arg) => ({
+    kind: "merge-layers",
+    left: arg(0),
+    right: arg(1),
+  }),
+};
+
+/** The node of a positional fact, without its annotation. */
+function positionalBody<K extends PositionalKind>(
+  kind: K,
+  fact: FactOf<K>,
+  arg: ArgumentAt,
+): BodyOf<K> {
+  return POSITIONAL_BUILDERS[kind](arg, fact);
+}
+
 // ------------------------------------------------------------------ one body
 
 /**
@@ -487,7 +800,7 @@ class BodyLowerer {
     const annotation = override === undefined
       ? this.annotation(node)
       : this.annotationWith(info.type, override(args), this.span(node));
-    const arg = (i: number): Expr =>
+    const arg: ArgumentAt = (i) =>
       this.required(args[i], `argument ${i + 1}`, node);
     switch (fact.kind) {
       case "call":
@@ -545,12 +858,6 @@ class BodyLowerer {
           value: arg(0),
           ...annotation,
         };
-      case "unbrand":
-        return { kind: "unbrand", value: arg(0), ...annotation };
-      case "some":
-        return { kind: "some", value: arg(0), ...annotation };
-      case "fail":
-        return { kind: "fail", error: arg(0), ...annotation };
       case "retry":
         return {
           kind: "retry",
@@ -558,17 +865,6 @@ class BodyLowerer {
           times: this.required(fact.times, "the retry count", node),
           ...annotation,
         };
-      case "retry-schedule":
-        return { kind: "retry-schedule", step: arg(0), ...annotation };
-      case "retry-with-schedule":
-        return {
-          kind: "retry-with-schedule",
-          job: arg(0),
-          options: arg(1),
-          ...annotation,
-        };
-      case "codec":
-        return { kind: "codec", decode: arg(0), encode: arg(1), ...annotation };
       case "schema":
         return fact.op === "decode" || fact.op === "encode" ||
             fact.op === "make"
@@ -588,10 +884,6 @@ class BodyLowerer {
             arguments: args.map((_, i) => arg(i)),
             ...annotation,
           };
-      case "decode":
-        return { kind: "decode", codec: arg(0), input: arg(1), ...annotation };
-      case "encode":
-        return { kind: "encode", codec: arg(0), input: arg(1), ...annotation };
       case "with-fiber": {
         const job = arg(0);
         const use = arg(1);
@@ -606,32 +898,6 @@ class BodyLowerer {
           ...annotation,
         };
       }
-      case "join-fiber":
-        return { kind: "join-fiber", fiber: arg(0), ...annotation };
-      case "interrupt-fiber":
-        return { kind: "interrupt-fiber", fiber: arg(0), ...annotation };
-      case "provide":
-        return {
-          kind: "provide",
-          provider: arg(0),
-          job: arg(1),
-          ...annotation,
-        };
-      case "defer":
-        return { kind: "defer", job: arg(0), ...annotation };
-      case "run":
-        return { kind: "run", value: arg(0), ...annotation };
-      case "scoped":
-        return { kind: "scoped", value: arg(0), ...annotation };
-      case "fork-scoped":
-        return { kind: "fork-scoped", job: arg(0), ...annotation };
-      case "make-scope":
-        return { kind: "make-scope", ...annotation };
-      case "provide-scope":
-      case "add-scope-finalizer":
-        return { kind: fact.kind, owner: arg(0), job: arg(1), ...annotation };
-      case "close-scope":
-        return { kind: "close-scope", owner: arg(0), ...annotation };
       case "with-resource": {
         const acquire = arg(0);
         const use = arg(1);
@@ -652,8 +918,6 @@ class BodyLowerer {
           ...annotation,
         };
       }
-      case "unfold":
-        return { kind: "unfold", seed: arg(0), next: arg(1), ...annotation };
       case "map-groups": {
         const stream = arg(0);
         const key = arg(1);
@@ -675,90 +939,6 @@ class BodyLowerer {
           ...annotation,
         };
       }
-      case "map-effect":
-        return {
-          kind: "map-effect",
-          stream: arg(0),
-          transform: arg(1),
-          concurrency: fact.concurrency,
-          ...annotation,
-        };
-      case "map-stream":
-        return {
-          kind: "map-stream",
-          stream: arg(0),
-          transform: arg(1),
-          ...annotation,
-        };
-      case "scan-stream":
-        return {
-          kind: "scan-stream",
-          stream: arg(0),
-          seed: arg(1),
-          update: arg(2),
-          ...annotation,
-        };
-      case "map-accum-stream":
-        return {
-          kind: "map-accum-stream",
-          stream: arg(0),
-          seed: arg(1),
-          update: arg(2),
-          ...annotation,
-        };
-      case "fold-stream":
-        return {
-          kind: "fold-stream",
-          stream: arg(0),
-          seed: arg(1),
-          update: arg(2),
-          ...annotation,
-        };
-      case "fold-effect-stream":
-        return {
-          kind: "fold-effect-stream",
-          stream: arg(0),
-          seed: arg(1),
-          update: arg(2),
-          ...annotation,
-        };
-      case "collect-stream":
-        return { kind: "collect-stream", stream: arg(0), ...annotation };
-      case "head-stream":
-        return { kind: "head-stream", stream: arg(0), ...annotation };
-      case "last-stream":
-        return { kind: "last-stream", stream: arg(0), ...annotation };
-      case "drain-stream":
-        return { kind: "drain-stream", stream: arg(0), ...annotation };
-      case "flat-map-streams":
-        return {
-          kind: "flat-map-streams",
-          stream: arg(0),
-          transform: arg(1),
-          concurrency: fact.concurrency,
-          ...annotation,
-        };
-      case "switch-map-streams":
-        return {
-          kind: "switch-map-streams",
-          stream: arg(0),
-          transform: arg(1),
-          ...annotation,
-        };
-      case "catch-stream":
-        return {
-          kind: "catch-stream",
-          stream: arg(0),
-          recover: arg(1),
-          ...annotation,
-        };
-      case "retry-stream":
-        return {
-          kind: "retry-stream",
-          stream: arg(0),
-          policy: arg(1),
-          ...annotation,
-        };
       case "debounce-stream":
         return {
           kind: "debounce-stream",
@@ -775,155 +955,10 @@ class BodyLowerer {
           strategy: this.required(fact.strategy, "throttle strategy", node),
           ...annotation,
         };
-      case "take-stream":
-        return {
-          kind: "take-stream",
-          stream: arg(0),
-          count: arg(1),
-          ...annotation,
-        };
-      case "drop-stream":
-        return {
-          kind: "drop-stream",
-          stream: arg(0),
-          count: arg(1),
-          ...annotation,
-        };
-      case "drop-while-stream":
-        return {
-          kind: "drop-while-stream",
-          stream: arg(0),
-          predicate: arg(1),
-          ...annotation,
-        };
-      case "filter-stream":
-        return {
-          kind: "filter-stream",
-          stream: arg(0),
-          predicate: arg(1),
-          ...annotation,
-        };
-      case "filter-effect-stream":
-        return {
-          kind: "filter-effect-stream",
-          stream: arg(0),
-          predicate: arg(1),
-          ...annotation,
-        };
-      case "take-while-effect-stream":
-        return {
-          kind: "take-while-effect-stream",
-          stream: arg(0),
-          predicate: arg(1),
-          ...annotation,
-        };
-      case "take-until-effect-stream":
-        return {
-          kind: "take-until-effect-stream",
-          stream: arg(0),
-          predicate: arg(1),
-          ...annotation,
-        };
-      case "drop-while-effect-stream":
-        return {
-          kind: "drop-while-effect-stream",
-          stream: arg(0),
-          predicate: arg(1),
-          ...annotation,
-        };
-      case "take-while-stream":
-        return {
-          kind: "take-while-stream",
-          stream: arg(0),
-          predicate: arg(1),
-          ...annotation,
-        };
-      case "take-until-stream":
-        return {
-          kind: "take-until-stream",
-          stream: arg(0),
-          predicate: arg(1),
-          ...annotation,
-        };
-      case "partition-all":
-        return {
-          kind: "partition-all",
-          jobs: arg(0),
-          concurrency: fact.concurrency,
-          ...annotation,
-        };
-      case "validate-all":
-        return {
-          kind: "validate-all",
-          jobs: arg(0),
-          onErrors: arg(1),
-          concurrency: fact.concurrency,
-          ...annotation,
-        };
-      case "all-results":
-        return {
-          kind: "all-results",
-          jobs: arg(0),
-          concurrency: fact.concurrency,
-          ...annotation,
-        };
-      case "sink-for-each":
-        return { kind: "sink-for-each", consume: arg(0), ...annotation };
       case "take-sink":
         return {
           kind: "take-sink",
           count: this.required(fact.count, "the sink count", node),
-          ...annotation,
-        };
-      case "transduce-stream":
-        return {
-          kind: "transduce-stream",
-          stream: arg(0),
-          sink: arg(1),
-          ...annotation,
-        };
-      case "aggregate-stream":
-        return {
-          kind: "aggregate-stream",
-          stream: arg(0),
-          sink: arg(1),
-          ...annotation,
-        };
-      case "aggregate-within-stream":
-        return {
-          kind: "aggregate-within-stream",
-          stream: arg(0),
-          sink: arg(1),
-          schedule: arg(2),
-          ...annotation,
-        };
-      case "schedule-from-step":
-        return {
-          kind: "schedule-from-step",
-          initial: arg(0),
-          decide: arg(1),
-          ...annotation,
-        };
-      case "schedule-recurs":
-        return { kind: "schedule-recurs", times: arg(0), ...annotation };
-      case "schedule-spaced":
-        return { kind: "schedule-spaced", delayMillis: arg(0), ...annotation };
-      case "schedule-map":
-        return {
-          kind: "schedule-map",
-          schedule: arg(0),
-          transform: arg(1),
-          ...annotation,
-        };
-      case "schedule-max":
-      case "schedule-min":
-      case "schedule-concat":
-        return { kind: fact.kind, left: arg(0), right: arg(1), ...annotation };
-      case "run-stream":
-        return {
-          kind: "run-stream",
-          stream: arg(0),
-          sink: arg(1),
           ...annotation,
         };
       case "buffer-stream":
@@ -937,49 +972,6 @@ class BodyLowerer {
           ),
           ...annotation,
         };
-      case "merge-streams":
-        return {
-          kind: "merge-streams",
-          left: arg(0),
-          right: arg(1),
-          ...annotation,
-        };
-      case "zip-streams":
-        return {
-          kind: "zip-streams",
-          left: arg(0),
-          right: arg(1),
-          ...annotation,
-        };
-      case "concat-streams":
-        return {
-          kind: "concat-streams",
-          left: arg(0),
-          right: arg(1),
-          ...annotation,
-        };
-      case "race":
-        return { kind: "race", left: arg(0), right: arg(1), ...annotation };
-      case "make-ref":
-        return { kind: "make-ref", value: arg(0), ...annotation };
-      case "get-ref":
-        return { kind: "get-ref", ref: arg(0), ...annotation };
-      case "set-ref":
-        return { kind: "set-ref", ref: arg(0), value: arg(1), ...annotation };
-      case "update-ref":
-        return {
-          kind: "update-ref",
-          ref: arg(0),
-          transform: arg(1),
-          ...annotation,
-        };
-      case "merge-layers":
-        return {
-          kind: "merge-layers",
-          left: arg(0),
-          right: arg(1),
-          ...annotation,
-        };
       case "none":
       case "list":
       case "field":
@@ -990,10 +982,13 @@ class BodyLowerer {
         throw internal(
           `the fact ${fact.kind} is no call at ${this.describe(node)}`,
         );
-      default: {
-        const unreachable: never = fact;
-        return unreachable;
-      }
+      default:
+        // Every other fact kind has a row in POSITIONAL_BUILDERS. A kind
+        // without a row, or without a case above, fails to compile here.
+        return {
+          ...positionalBody(fact.kind, fact, arg),
+          ...annotation,
+        };
     }
   }
 
