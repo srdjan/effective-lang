@@ -3,9 +3,11 @@
 // column counts UTF-16 code units.
 
 import {
+  compareText,
   type Diagnostic,
   lineStarts,
   positionOf,
+  type Span,
   type TscMapping,
 } from "../core/mod.ts";
 
@@ -46,11 +48,20 @@ interface Located {
 }
 
 function compareLocated(a: Located, b: Located): number {
-  if (a.path !== b.path) return a.path < b.path ? -1 : 1;
-  if (a.line !== b.line) return a.line - b.line;
-  if (a.column !== b.column) return a.column - b.column;
-  if (a.code !== b.code) return a.code < b.code ? -1 : 1;
-  return a.message < b.message ? -1 : a.message > b.message ? 1 : 0;
+  return compareText(a.path, b.path) || a.line - b.line ||
+    a.column - b.column || compareText(a.code, b.code) ||
+    compareText(a.message, b.message);
+}
+
+/** The printed position of the start of `span`, with the code and the message. */
+function locate(
+  positions: Positions,
+  span: Span,
+  code: string,
+  message: string,
+): Located {
+  const at = positions.of(span.source, span.start);
+  return { path: span.source, line: at.line, column: at.column, code, message };
 }
 
 function line(located: Located): string {
@@ -65,16 +76,8 @@ export function formatDiagnostics(
   textOf: TextOf,
 ): string[] {
   const positions = new Positions(textOf);
-  return diagnostics.map((d): Located => {
-    const at = positions.of(d.span.source, d.span.start);
-    return {
-      path: d.span.source,
-      line: at.line,
-      column: at.column,
-      code: d.code,
-      message: d.message,
-    };
-  }).sort(compareLocated).map(line);
+  return diagnostics.map((d) => locate(positions, d.span, d.code, d.message))
+    .sort(compareLocated).map(line);
 }
 
 /**
@@ -92,14 +95,7 @@ export function formatTscMappings(
     switch (mapping.tag) {
       case "host-boundary": {
         const d = mapping.diagnostic;
-        const at = positions.of(d.span.source, d.span.start);
-        return {
-          path: d.span.source,
-          line: at.line,
-          column: at.column,
-          code: d.code,
-          message: d.message,
-        };
+        return locate(positions, d.span, d.code, d.message);
       }
       case "host-module":
         return {
@@ -109,16 +105,13 @@ export function formatTscMappings(
           code: "host-boundary/001",
           message: mapping.message,
         };
-      case "source": {
-        const at = positions.of(mapping.span.source, mapping.span.start);
-        return {
-          path: mapping.span.source,
-          line: at.line,
-          column: at.column,
-          code: `TS${mapping.tsCode}`,
-          message: mapping.message,
-        };
-      }
+      case "source":
+        return locate(
+          positions,
+          mapping.span,
+          `TS${mapping.tsCode}`,
+          mapping.message,
+        );
       case "generated":
         return {
           path: mapping.file,
