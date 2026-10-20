@@ -19,6 +19,7 @@ import type {
 } from "../ir.ts";
 import {
   alt,
+  assignment,
   braces,
   bracketed,
   type Doc,
@@ -33,6 +34,8 @@ import {
   indent,
   join,
   line,
+  member,
+  property,
   soft,
   spanEnds,
   spanned,
@@ -700,7 +703,7 @@ export class ExprEmitter {
    */
   arrowDeclaration(prefix: Doc, parameters: Doc, body: Emitted): Doc {
     if (body.chain === undefined) {
-      return [prefix, " = ", this.arrow(parameters, body)];
+      return assignment(prefix, this.arrow(parameters, body));
     }
     const options = chainOptions(
       this.chainOf(parameters, { kind: "expr", body }),
@@ -870,11 +873,11 @@ export class ExprEmitter {
         );
       }
       case "brand":
-        return emitted([
+        return emitted(member(
           this.scope.nameOf(e.brand),
-          ".make",
+          "make",
           callArguments([kid(e.value)]),
-        ]);
+        ));
       case "unbrand":
         return kid(e.value);
       case "some": {
@@ -900,8 +903,7 @@ export class ExprEmitter {
         return emitted([
           "new ",
           this.scope.nameOf(e.error),
-          "(",
-          this.objectLiteral(
+          callArguments([this.objectLiteral(
             e.fields.map((f) =>
               this.field(
                 f.name,
@@ -911,8 +913,7 @@ export class ExprEmitter {
               )
             ),
             [],
-          ).doc,
-          ")",
+          )]),
         ]);
       case "closure":
         return this.closure(e, true);
@@ -1840,7 +1841,7 @@ export class ExprEmitter {
     ) {
       return name;
     }
-    return [name, ": ", free(kid(value, expected))];
+    return property(name, free(kid(value, expected)));
   }
 
   /** The declared type of a field of a record type or of a brand of a record. */
@@ -1889,10 +1890,13 @@ export class ExprEmitter {
     kid: Kid,
   ): Emitted {
     const record = kid(e.record);
-    const access: Doc = [at(record, PREC.member), ".", e.field];
+    const access = member(at(record, PREC.member), e.field);
     if (this.isOptionalField(e.record.type, e.field)) {
       const option = this.scope.effect("Option");
-      return emitted([`${option}.fromUndefinedOr(`, access, ")"]);
+      return emitted([
+        `${option}.fromUndefinedOr`,
+        callArguments([emitted(access)]),
+      ]);
     }
     return emitted(access, PREC.member, {
       brace: leadingBrace(record, PREC.member),
@@ -1951,11 +1955,11 @@ export class ExprEmitter {
     if (brand !== undefined) {
       // The sum of two brand values is a plain number until `make` brands it.
       const body = emitted(runDoc(run, 1), prec);
-      return emitted([
+      return emitted(member(
         this.scope.nameOf(brand.id),
-        ".make",
+        "make",
         callArguments([brand.integral ? this.intCall(body) : body]),
-      ]);
+      ));
     }
     const arithmetic = e.operator === "+" || e.operator === "-" ||
       e.operator === "*";
@@ -2129,7 +2133,7 @@ export class ExprEmitter {
         if (args.length !== 3) throw internal("fold needs three arguments");
         const generic = e.type.kind === "primitive"
           ? ""
-          : ["<", typeDoc(this.scope, e.type), ">"];
+          : typeArguments([typeDoc(this.scope, e.type)]);
         return emitted([
           at(kid(args[0]), PREC.member),
           ".reduce",
@@ -2148,12 +2152,15 @@ export class ExprEmitter {
     const value = this.kid(mode);
     if (step.kind === "bind") {
       return [
-        "const ",
-        step.binding.name,
-        ": ",
-        typeDoc(this.scope, step.binding.type),
-        " = ",
-        free(value(step.value, step.binding.type)),
+        assignment(
+          [
+            "const ",
+            step.binding.name,
+            ": ",
+            typeDoc(this.scope, step.binding.type),
+          ],
+          free(value(step.value, step.binding.type)),
+        ),
         ";",
       ];
     }
@@ -2560,17 +2567,17 @@ export class ExprEmitter {
           PREC.yield,
           { huggable: true, bodyGroup },
         );
-        return emitted([`${service}.use`, callArguments([arrow])]);
+        return emitted(member(service, "use", callArguments([arrow])));
       }
       case "schema-make":
       case "schema-decode":
       case "schema-encode": {
         if (e.kind === "schema-make") {
-          return emitted([
+          return emitted(member(
             at(children[0], PREC.member),
-            ".makeEffect",
+            "makeEffect",
             callArguments([children[1]]),
-          ]);
+          ));
         }
         const schema = this.scope.effect("Schema");
         return emitted([

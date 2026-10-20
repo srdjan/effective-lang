@@ -195,6 +195,51 @@ export function callWith(callee: Doc, arg: Doc): Doc {
   ];
 }
 
+/** Keep a declaration's value beside `=` when its opening fits. */
+export function assignment(prefix: Doc, value: Doc): Doc {
+  return alt([ifFits(
+    [prefix, " = ", group(value, true), ";"],
+    [prefix, " = ", value],
+    [prefix, " =", indent([hard, value])],
+  )]);
+}
+
+/** A field or parameter whose value moves below a long label. */
+export function property(label: Doc, value: Doc): Doc {
+  const inline: Doc = [label, ": ", value];
+  return ifBreak(
+    alt([ifFits(
+      [label, ": ", group(value, true), ","],
+      inline,
+      [label, ":", indent([hard, value])],
+    )]),
+    inline,
+  );
+}
+
+/** A member access or call that breaks before the dot when its head is wide. */
+export function member(base: Doc, name: string, tail: Doc = ""): Doc {
+  if (tail === "") return group([base, indent([soft, ".", name])]);
+  const inline: Doc = [base, ".", name, tail];
+  const afterBase = indent([hard, ".", name, tail]);
+  const dot = typeof base === "string" ? base.indexOf(".") : -1;
+  const broken: Doc = typeof base === "string" && dot > 0
+    ? ifFits(
+      base,
+      [base, afterBase],
+      [base.slice(0, dot), indent([hard, base.slice(dot), ".", name, tail])],
+    )
+    : [base, afterBase];
+  return group(ifBreak(
+    alt([ifFits(
+      [base, ".", name, group(tail, true)],
+      inline,
+      broken,
+    )]),
+    inline,
+  ));
+}
+
 export interface SpanRecord {
   /** Offsets in UTF-16 code units of the rendered text. The end is exclusive. */
   readonly start: number;
@@ -451,7 +496,8 @@ export function render(doc: Doc, width = 80): Rendered {
         if (cmd.mode === "flat" && !d.hard) {
           if (!d.soft) write(" ");
         } else {
-          if (cmd.mode === "flat") remeasure = true;
+          // Later groups must fit their new column, even when an outer command is flat.
+          remeasure = true;
           newline(cmd.indent);
         }
         break;

@@ -15,6 +15,7 @@ import type {
 } from "../ir.ts";
 import { SCOPE_CAPABILITY } from "../ir.ts";
 import {
+  assignment,
   braces,
   bracketed,
   callWith,
@@ -25,6 +26,8 @@ import {
   indent,
   line,
   marked,
+  member,
+  property,
   soft,
 } from "./doc.ts";
 import { at, ExprEmitter } from "./expr.ts";
@@ -34,7 +37,13 @@ import {
   tokenOfId,
   unsupported,
 } from "./scope.ts";
-import { effectTypeDoc, encodedTypeDoc, schemaDoc, typeDoc } from "./types.ts";
+import {
+  effectTypeDoc,
+  encodedTypeDoc,
+  schemaDoc,
+  typeArguments,
+  typeDoc,
+} from "./types.ts";
 import { valueReferences } from "./walk.ts";
 
 const LINE_WIDTH = 80;
@@ -336,22 +345,19 @@ export class DeclarationEmitter {
     const schema = this.scope.effect("Schema");
     let value: Doc;
     if (d.definition.kind === "brand") {
-      value = [
+      value = member(
         schemaDoc(this.scope, d.definition.base),
+        "pipe",
         callWith(
-          ".pipe",
+          "",
           callWith(`${schema}.brand`, JSON.stringify(tokenOfId(d.id))),
         ),
-      ];
+      );
     } else {
       value = schemaDoc(this.scope, d.definition.type);
     }
     return [
-      keyword,
-      "const ",
-      d.name,
-      " = ",
-      value,
+      assignment([keyword, "const ", d.name], value),
       ";",
       hard,
       group([
@@ -385,11 +391,10 @@ export class DeclarationEmitter {
     const schema = this.scope.effect("Schema");
     const fields = d.fields.map((f) => {
       const inner = schemaDoc(this.scope, f.type);
-      return [
+      return property(
         f.name,
-        ": ",
-        f.optional ? [`${schema}.optionalKey(`, inner, ")"] : inner,
-      ];
+        f.optional ? member(schema, "optionalKey", callWith("", inner)) : inner,
+      );
     });
     const object: Doc = fields.length === 0
       ? "{}"
@@ -402,9 +407,16 @@ export class DeclarationEmitter {
       ")",
     ]);
     const keyword = this.exportKeyword(d.id);
-    const heritage = `${schema}.TaggedError<${d.name}>()`;
+    const heritage: Doc = [
+      `${schema}.TaggedError`,
+      typeArguments([d.name]),
+      "()",
+    ];
     // `deno fmt` moves `extends` to its own line when the first line is too wide.
-    if (`${keyword}class ${d.name} extends ${heritage}(`.length > LINE_WIDTH) {
+    if (
+      `${keyword}class ${d.name} extends ${schema}.TaggedError<${d.name}>()(`
+        .length > LINE_WIDTH
+    ) {
       return [
         `${keyword}class ${d.name}`,
         indent([hard, "extends ", heritage, args, " {}"]),
@@ -424,11 +436,15 @@ export class DeclarationEmitter {
     ]);
     const members: Doc = methods.length === 0 ? "{}" : braces(methods);
     const keyword = this.exportKeyword(d.id);
+    const argumentsDoc: Doc =
+      `  extends ${context}.Service<${d.name}, {`.length > LINE_WIDTH
+        ? typeArguments([d.name, members])
+        : ["<", d.name, ", ", members, ">"];
     const heritage: Doc = [
       "extends ",
-      `${context}.Service<${d.name}, `,
-      members,
-      callWith(">()", JSON.stringify(tokenOfId(d.id))),
+      `${context}.Service`,
+      argumentsDoc,
+      callWith("()", JSON.stringify(tokenOfId(d.id))),
       " {}",
     ];
     // `deno fmt` moves `extends` to its own line when the first line is too wide.
@@ -447,7 +463,7 @@ export class DeclarationEmitter {
       ")",
       declaration.parameters.map((
         p,
-      ) => [p.name, ": ", typeDoc(this.scope, p.type)]),
+      ) => property(p.name, typeDoc(this.scope, p.type))),
       false,
     );
   }
@@ -476,7 +492,10 @@ export class DeclarationEmitter {
         false,
         d.type.result,
       );
-      return [prefix, " = ", this.expr.arrowBlock(header, statements), ";"];
+      return [
+        assignment(prefix, this.expr.arrowBlock(header, statements)),
+        ";",
+      ];
     }
     const body = d.type.execution === "effect"
       ? this.expr.asEffect(d.body, d.type.result)

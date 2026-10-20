@@ -20,6 +20,8 @@ import {
   indent,
   join,
   line,
+  member,
+  property,
   soft,
 } from "./doc.ts";
 import {
@@ -138,11 +140,9 @@ function layerTypeDoc(
 }
 
 function functionTypeDoc(scope: Scope, type: FunctionType): Doc {
-  const parameters = type.parameters.map((p, i) => [
-    parameterName(i),
-    ": ",
-    typeDoc(scope, p),
-  ]);
+  const parameters = type.parameters.map((p, i) =>
+    property(parameterName(i), typeDoc(scope, p))
+  );
   const result = typeDoc(scope, type.result);
   const returns = type.execution === "effect"
     ? effectTypeDoc(scope, result, type.effects)
@@ -475,11 +475,12 @@ export function schemaDoc(scope: Scope, type: Type, recursiveId?: string): Doc {
     case "record": {
       const fields = type.fields.map((f) => {
         const inner = schemaDoc(scope, f.type, recursiveId);
-        return [
+        return property(
           f.name,
-          ": ",
-          f.optional ? [`${schema}.optionalKey(`, inner, ")"] : inner,
-        ];
+          f.optional
+            ? member(schema, "optionalKey", callWith("", inner))
+            : inner,
+        );
       });
       return [`${schema}.Struct(`, bracketed("{", "}", fields, true), ")"];
     }
