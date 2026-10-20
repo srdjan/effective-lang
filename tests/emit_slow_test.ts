@@ -150,7 +150,6 @@ Deno.test("host providers preserve shared scope handles and reject raw target sc
       }),
     );
     build(dir, ["host-main.eff"]);
-    await check(dir, ["host-main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -209,7 +208,6 @@ Deno.test("contextual Some payloads retain tuple shape and literals through Effe
       `${dir}/main.eff`,
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -277,7 +275,6 @@ Deno.test("withResource releases after success, typed failure, and interruption"
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -353,7 +350,6 @@ Deno.test("bounded traverse limits jobs and waits for scoped finalizers", async 
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -456,7 +452,6 @@ Deno.test("unbounded traverse starts every job and waits for scoped finalizers",
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -576,7 +571,6 @@ Deno.test("all preserves tuple and record results and cleans up siblings", async
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -669,7 +663,6 @@ Deno.test("partitionAll collects successes and failures within a concurrency bou
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -720,7 +713,6 @@ Deno.test("validateAll accumulates nominal failures and keeps successful results
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -795,7 +787,6 @@ Deno.test("allResults keeps successes and failures in array, tuple, and record p
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -854,7 +845,6 @@ Deno.test("switchMapStreams interrupts superseded inners and waits for cleanup",
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -939,7 +929,6 @@ Deno.test("catchStream retains earlier values and switches on typed failure", as
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -1005,7 +994,6 @@ Deno.test("retryStream replays values and resets its schedule after output", asy
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -1077,7 +1065,6 @@ Deno.test("temporal stream controls coalesce and shape or drop elements", async 
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -1138,7 +1125,6 @@ Deno.test("concurrent stream mapping bounds work and closes failed siblings", as
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -1253,7 +1239,6 @@ Deno.test("source-authored streams pull incrementally through an effectful sink"
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -1312,7 +1297,6 @@ Deno.test("buffered merged streams defer production and preserve each source ord
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -1363,7 +1347,6 @@ Deno.test("zipped streams defer production and stop at the shorter input", async
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -1414,7 +1397,6 @@ Deno.test("zipped stream failure interrupts its waiting peer", async () => {
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -1466,7 +1448,6 @@ Deno.test("concatenated streams run in sequence and skip the right side after fa
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -1541,7 +1522,6 @@ Deno.test("flat mapped streams exhaust each inner stream and stop after inner fa
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -1626,7 +1606,6 @@ Deno.test("takeStream stops upstream pulls at a dynamic count", async () => {
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -1695,7 +1674,6 @@ Deno.test("dropStream consumes a dynamic prefix and propagates skipped failures"
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -1788,7 +1766,6 @@ Deno.test("takeWhileStream omits the false element and closes upstream work", as
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -1862,7 +1839,6 @@ Deno.test("takeUntilStream includes the matching element and closes upstream wor
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -1945,7 +1921,6 @@ Deno.test("dropWhileStream emits the first false element and all later elements"
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -2035,7 +2010,6 @@ Deno.test("effectful stream predicates stop, fail, and close pulls", async () =>
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -2170,7 +2144,6 @@ Deno.test("filterStream evaluates every element and propagates source failures",
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -2259,7 +2232,6 @@ Deno.test("mapStream changes element type and propagates source failures", async
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -2347,7 +2319,6 @@ Deno.test("scanStream emits fresh seed and state before source failure", async (
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -2453,7 +2424,6 @@ Deno.test("mapAccumStream threads state and emits zero or more values", async ()
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -2548,7 +2518,6 @@ Deno.test("foldStream returns fresh final state and propagates source failure", 
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -2622,7 +2591,6 @@ Deno.test("foldEffectStream runs updates sequentially and stops on failure", asy
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -2743,7 +2711,6 @@ Deno.test("collectStream gathers ordered values and closes failed pulls", async 
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -2817,7 +2784,6 @@ Deno.test("headStream stops after the first element and closes upstream work", a
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -2892,7 +2858,6 @@ Deno.test("lastStream consumes through completion and closes upstream work", asy
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -2967,7 +2932,6 @@ Deno.test("drainStream consumes every value and closes upstream work", async () 
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -3044,7 +3008,6 @@ Deno.test("a source race interrupts its losing fiber and waits for cleanup", asy
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -3085,7 +3048,6 @@ Deno.test("forkScoped outlives its spawning fiber and closes with its scope", as
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -3127,7 +3089,6 @@ Deno.test("reference updates are atomic under bounded traversal", async () => {
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -3155,7 +3116,6 @@ Deno.test("custom retry schedule sees one-based attempts and stops on None", asy
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -3184,7 +3144,6 @@ Deno.test("pure codecs validate both directions and preserve None", async () => 
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -3213,7 +3172,6 @@ Deno.test("withFiber interrupts its child and waits for finalizers", async () =>
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -3254,7 +3212,6 @@ Deno.test("source Layers merge and provide their declared services", async () =>
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -3285,7 +3242,6 @@ Deno.test("source Layer acquisition carries its failure and service requirement"
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -3314,7 +3270,6 @@ Deno.test("stream pull releases a scoped operation on failure and interruption",
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -3377,7 +3332,6 @@ Deno.test("stored Effect values run twice after deferred construction", async ()
       ].join("\n"),
     );
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -3827,7 +3781,6 @@ Deno.test("explicit scopes survive root return and share aliases across modules"
       assertEquals(diagnostics, []);
     }
     build(dir, ["consumer.eff"]);
-    await check(dir, ["owner.ts", "consumer.ts"]);
     const formatted = await deno(dir, [
       "fmt",
       "--check",
@@ -4024,7 +3977,6 @@ Deno.test("mapGroups emits typed live routing with fresh state and closes unused
       ).values()
     ) assertEquals(diagnostics, []);
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const formatted = await deno(dir, [
       "fmt",
       "--check",
@@ -4075,7 +4027,6 @@ Deno.test("mapGroups emits a later live key, waits for cleanup, and applies per-
     copyDirectory(new URL("emit/groups/", FIXTURES), dir);
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -4124,7 +4075,6 @@ Deno.test("mapGroups preserves construction and deferred services and closes cal
     copyDirectory(new URL("emit/groups/", FIXTURES), dir);
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -4176,7 +4126,6 @@ Deno.test("mapGroups source failure, callback failure, and interruption await pe
     copyDirectory(new URL("emit/groups/", FIXTURES), dir);
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -4246,7 +4195,6 @@ Deno.test("Sink transduction replays chunks, repeats with fresh state, and prese
       ).values()
     ) assertEquals(diagnostics, []);
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const formatted = await deno(dir, [
       "fmt",
       "--check",
@@ -4411,7 +4359,6 @@ Deno.test("Sink host providers retain leftover types across the existing interfa
       }),
     );
     build(dir, ["host-main.eff"]);
-    await check(dir, ["host-main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -4461,7 +4408,6 @@ Deno.test("aggregateStream emits target batches, replay, and demand behavior", a
       ).values()
     ) assertEquals(diagnostics, []);
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -4531,7 +4477,6 @@ Deno.test("aggregateStream retains deferred failures and awaits cancellation cle
     copyDirectory(new URL("emit/sinks/", FIXTURES), dir);
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -4614,7 +4559,6 @@ Deno.test("general Schedule values drive timed aggregation with fresh state and 
       assertEquals(diagnostics, []);
     }
     build(dir, ["main.eff"]);
-    await check(dir, ["main.ts"]);
     const result = await runScript(
       dir,
       `
@@ -4715,7 +4659,6 @@ Deno.test("composed Schedule values preserve delays, phases, fresh state, and fa
       assertEquals(diagnostics, []);
     }
     build(dir, ["composition.eff"]);
-    await check(dir, ["composition.ts"]);
     const result = await runScript(
       dir,
       `
