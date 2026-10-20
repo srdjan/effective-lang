@@ -1591,7 +1591,10 @@ export class BodyChecker {
         args[1].node,
       );
     }
-    if (!this.dataOnly(decoded, true) || !this.dataOnly(encoded, true)) {
+    if (
+      !this.dataOnly(decoded, true, undefined, true) ||
+      !this.dataOnly(encoded, true, undefined, true)
+    ) {
       this.report(
         "type-mismatch/010",
         "codec types need compiler-derived schemas",
@@ -2935,6 +2938,7 @@ export class BodyChecker {
     ref: TypeRef,
     acceptPoisoned = false,
     seen = new Set<TypeRef>(),
+    rejectReserved = false,
   ): boolean {
     const unfolded = this.table.unfold(ref);
     if (seen.has(unfolded)) return true;
@@ -2947,25 +2951,34 @@ export class BodyChecker {
         return true;
       case "record":
         return type.fields.every((f) =>
-          this.dataOnly(f.type, acceptPoisoned, seen)
+          this.dataOnly(f.type, acceptPoisoned, seen, rejectReserved)
         );
       case "array":
       case "option":
-        return this.dataOnly(type.element, acceptPoisoned, seen);
+        return this.dataOnly(
+          type.element,
+          acceptPoisoned,
+          seen,
+          rejectReserved,
+        );
       case "tuple":
         return type.elements.every((element) =>
-          this.dataOnly(element, acceptPoisoned, seen)
+          this.dataOnly(element, acceptPoisoned, seen, rejectReserved)
         );
       case "union":
         return type.members.every((member) =>
-          this.dataOnly(member, acceptPoisoned, seen)
+          this.dataOnly(member, acceptPoisoned, seen, rejectReserved)
         );
       case "named": {
+        if (
+          rejectReserved &&
+          (type.id === SCHEMA_ERROR_ID || type.id === SCHEMA_ISSUE_ID)
+        ) return false;
         const record = type.id.startsWith("error:")
           ? this.table.errorRecordOf(type.id as ErrorId)
           : this.table.brandBaseOf(type.id as TypeId);
         return record !== undefined &&
-          this.dataOnly(record, acceptPoisoned, seen);
+          this.dataOnly(record, acceptPoisoned, seen, rejectReserved);
       }
       case "error":
         return acceptPoisoned;

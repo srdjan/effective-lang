@@ -1869,7 +1869,10 @@ export class BodyValidator {
         e.span,
       );
     }
-    if (!this.dataOnly(d.result) || !this.dataOnly(d.parameters[0])) {
+    if (
+      !this.dataOnly(d.result, undefined, true) ||
+      !this.dataOnly(d.parameters[0], undefined, true)
+    ) {
       this.add(
         AREA.types,
         path,
@@ -3132,7 +3135,11 @@ export class BodyValidator {
     };
   }
 
-  private dataOnly(type: Type, seen = new Set<Type>()): boolean {
+  private dataOnly(
+    type: Type,
+    seen = new Set<Type>(),
+    rejectReserved = false,
+  ): boolean {
     const value = unfold(this.env, type);
     if (seen.has(value)) return true;
     seen.add(value);
@@ -3142,15 +3149,25 @@ export class BodyValidator {
       case "literal":
         return true;
       case "record":
-        return value.fields.every((f) => this.dataOnly(f.type, seen));
+        return value.fields.every((f) =>
+          this.dataOnly(f.type, seen, rejectReserved)
+        );
       case "array":
       case "option":
-        return this.dataOnly(value.element, seen);
+        return this.dataOnly(value.element, seen, rejectReserved);
       case "tuple":
-        return value.elements.every((t) => this.dataOnly(t, seen));
+        return value.elements.every((t) =>
+          this.dataOnly(t, seen, rejectReserved)
+        );
       case "union":
-        return value.members.every((t) => this.dataOnly(t, seen));
+        return value.members.every((t) =>
+          this.dataOnly(t, seen, rejectReserved)
+        );
       case "named": {
+        if (
+          rejectReserved &&
+          (value.id === SCHEMA_ERROR_ID || value.id === SCHEMA_ISSUE_ID)
+        ) return false;
         const nested = this.env.brands.get(value.id) ??
           (this.env.errors.has(value.id)
             ? {
@@ -3158,7 +3175,8 @@ export class BodyValidator {
               fields: this.env.errors.get(value.id)!,
             }
             : undefined);
-        return nested !== undefined && this.dataOnly(nested, seen);
+        return nested !== undefined &&
+          this.dataOnly(nested, seen, rejectReserved);
       }
       default:
         return false;
