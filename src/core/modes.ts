@@ -55,8 +55,11 @@ export function stronglyConnectedComponents(
       }
       if (low[frame.node] !== index[frame.node]) continue;
       const component: number[] = [];
-      while (true) {
-        const member = stack.pop()!;
+      for (
+        let member = stack.pop();
+        member !== undefined;
+        member = stack.pop()
+      ) {
         onStack[member] = false;
         component.push(member);
         if (member === frame.node) break;

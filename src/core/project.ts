@@ -537,7 +537,12 @@ function cycleDiagnostic(
   component: readonly string[],
 ): Diagnostic {
   const members = new Set(component);
-  const first = modules.get(component[0])!;
+  const first = modules.get(component[0]);
+  if (first === undefined) {
+    throw new Error(
+      `internal: the cycle names an unknown module ${component[0]}`,
+    );
+  }
   const link = first.links.find((l) =>
     l.target !== undefined && members.has(l.target) &&
     l.entry.specifierSpan !== undefined

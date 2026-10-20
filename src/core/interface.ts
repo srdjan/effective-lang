@@ -138,8 +138,7 @@ export function buildTypeGraph(declarations: ModuleDeclarations): TypeGraph {
   for (const id of declarations.exports) add(id);
   for (const id of exportedValueIds(declarations)) add(id);
 
-  while (pending.length > 0) {
-    const id = pending.pop()!;
+  for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
     const found = new Set<string>();
     const type = typeById.get(id);
     const error = errorById.get(id);
@@ -206,8 +205,8 @@ function foreignTypeGraph(
     for (const method of d.methods) referencedIds(method.type, seeds);
   }
   visit(seeds);
-  while (pending.length > 0) {
-    const d = foreign.get(pending.pop()!);
+  for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
+    const d = foreign.get(id);
     if (d === undefined) continue;
     const found = new Set<string>();
     switch (d.kind) {
@@ -337,8 +336,7 @@ export interface ProjectCheck {
 export function reachableModules(analysis: Analysis, module: string): string[] {
   const seen = new Set<string>();
   const stack = [...(analysis.project.graph.get(module) ?? [])];
-  while (stack.length > 0) {
-    const next = stack.pop()!;
+  for (let next = stack.pop(); next !== undefined; next = stack.pop()) {
     if (seen.has(next)) continue;
     seen.add(next);
     stack.push(...(analysis.project.graph.get(next) ?? []));

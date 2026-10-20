@@ -193,8 +193,11 @@ export function walk(
   visit: (node: NodeId) => boolean | void,
 ): void {
   const stack: NodeId[] = [node];
-  while (stack.length > 0) {
-    const current = stack.pop()!;
+  for (
+    let current = stack.pop();
+    current !== undefined;
+    current = stack.pop()
+  ) {
     if (visit(current) === false) continue;
     const kids = childrenOf(tree, current);
     for (let i = kids.length - 1; i >= 0; i--) stack.push(kids[i]);
@@ -217,8 +220,11 @@ export function printTree(tree: SyntaxTree): string {
   const { lexed } = tree;
   const out: string[] = [];
   const stack: NodeId[] = [tree.root];
-  while (stack.length > 0) {
-    const current = stack.pop()!;
+  for (
+    let current = stack.pop();
+    current !== undefined;
+    current = stack.pop()
+  ) {
     const kind = kindOf(tree, current);
     if (kind === SyntaxKind.Token) {
       const t = tree.tokens[current];

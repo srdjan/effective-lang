@@ -19,6 +19,7 @@ import {
   type DeclEntry,
   type DeclKind,
   isTypeKind,
+  type MethodEntry,
   nameTextOf,
 } from "./index.ts";
 import type {
@@ -532,20 +533,21 @@ class Resolver {
       this.bindingFor(this.name, decl, decl.nameSpan),
       decl.nameNode,
     );
-    const seen = new Set<string>();
+    const seen = new Map<string, MethodEntry>();
     for (const method of decl.methodList) {
-      if (seen.has(method.name)) {
+      const first = seen.get(method.name);
+      if (first !== undefined) {
         this.report(
           "declaration/001",
           `service \`${decl.name}\` already has a method named \`${method.name}\``,
           method.nameSpan,
           [{
-            span: decl.methods.get(method.name)!.nameSpan,
+            span: first.nameSpan,
             message: "first declared here",
           }],
         );
       }
-      seen.add(method.name);
+      if (first === undefined) seen.set(method.name, method);
       this.set(method.nameNode, {
         kind: "cap",
         id: `cap:${this.name}#${decl.name}.${method.name}`,

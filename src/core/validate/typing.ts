@@ -114,9 +114,10 @@ export function dataOnly(
         rejects.reserved &&
         (value.id === SCHEMA_ERROR_ID || value.id === SCHEMA_ISSUE_ID)
       ) return false;
+      const errorFields = env.errors.get(value.id);
       const base = env.brands.get(value.id) ??
-        (env.errors.has(value.id)
-          ? { kind: "record" as const, fields: env.errors.get(value.id)! }
+        (errorFields !== undefined
+          ? { kind: "record" as const, fields: errorFields }
           : undefined);
       return base !== undefined && nested(base);
     }

@@ -461,11 +461,17 @@ export class TypeLowerer {
         }
         const first = this.lower(args[0]);
         const second = args[1] === undefined ? undefined : this.lower(args[1]);
-        const ref = target.name === "ScheduleInput"
-          ? table.scheduleInput(first.ref)
-          : target.name === "ScheduleMetadata"
-          ? table.scheduleMetadata(first.ref, second!.ref)
-          : table.scheduleDecision(first.ref, second!.ref);
+        if (target.name === "ScheduleInput") {
+          const ref = table.scheduleInput(first.ref);
+          return { ref, ir: table.toIr(ref) };
+        }
+        // The arity check above gives the two-argument forms a second argument.
+        if (second === undefined) {
+          throw new Error("internal: a schedule type has no second argument");
+        }
+        const ref = target.name === "ScheduleMetadata"
+          ? table.scheduleMetadata(first.ref, second.ref)
+          : table.scheduleDecision(first.ref, second.ref);
         return { ref, ir: table.toIr(ref) };
       }
       case "Codec": {
@@ -1345,15 +1351,17 @@ class ModuleChecker {
       readonly refs: readonly string[];
       next: number;
     }
+    // Every id that the search reaches has an index and a low link.
+    const indexOf = (id: string): number => index.get(id) ?? 0;
+    const lowOf = (id: string): number => low.get(id) ?? 0;
     const enter = (frames: Frame[], id: string): void => {
       index.set(id, counter);
       low.set(id, counter);
       counter++;
       stack.push(id);
       onStack.add(id);
-      const refs = [...infos.get(id)!.refs].filter((r) => infos.has(r)).sort(
-        compareText,
-      );
+      const refs = [...infos.get(id)?.refs ?? []].filter((r) => infos.has(r))
+        .sort(compareText);
       frames.push({ id, refs, next: 0 });
     };
     const visit = (root: string): void => {
@@ -1367,17 +1375,21 @@ class ModuleChecker {
           if (!index.has(next)) {
             enter(frames, next);
           } else if (onStack.has(next)) {
-            low.set(id, Math.min(low.get(id)!, index.get(next)!));
+            low.set(id, Math.min(lowOf(id), indexOf(next)));
           }
           continue;
         }
         frames.pop();
         if (low.get(id) === index.get(id)) {
           const component: TypeNodeInfo[] = [];
-          while (true) {
-            const member = stack.pop()!;
+          for (
+            let member = stack.pop();
+            member !== undefined;
+            member = stack.pop()
+          ) {
             onStack.delete(member);
-            component.push(infos.get(member)!);
+            const info = infos.get(member);
+            if (info !== undefined) component.push(info);
             if (member === id) break;
           }
           const selfLoop = component.length === 1 &&
@@ -1386,7 +1398,7 @@ class ModuleChecker {
         }
         const parent = frames[frames.length - 1];
         if (parent !== undefined) {
-          low.set(parent.id, Math.min(low.get(parent.id)!, low.get(id)!));
+          low.set(parent.id, Math.min(lowOf(parent.id), lowOf(id)));
         }
       }
     };
@@ -1399,6 +1411,7 @@ class ModuleChecker {
       const first = component[0];
       if (component.length === 1 && first.kind === "alias") {
         const declaration = this.types.find((d) => d.id === first.id);
+        const aliased = this.table.aliasOf(first.id as TypeId);
         if (
           declaration?.definition.kind === "alias" &&
           guardedRecord(
@@ -1406,11 +1419,8 @@ class ModuleChecker {
             first.id as TypeId,
             (type) => this.literalTag(type),
           ) &&
-          dataOnly(
-            this.table,
-            this.table.aliasOf(first.id as TypeId)!,
-            "schema",
-          )
+          aliased !== undefined &&
+          dataOnly(this.table, aliased, "schema")
         ) {
           this.guardedAliases.add(first.id as TypeId);
           this.table.markGuardedAlias(first.id as TypeId);

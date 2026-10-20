@@ -395,7 +395,8 @@ export function checkModuleBodies(args: CheckArguments): ModuleBodies {
     entries.map((e) => [e.signature.id, e.signature]),
   );
   for (const cycle of initialization.cycles) {
-    const members = cycle.map((id) => signatures.get(id)!);
+    // A cycle lists ids of `entries`, so every id has a signature.
+    const members = cycle.flatMap((id) => signatures.get(id) ?? []);
     const first = members.find((m) => m.kind === "constant") ?? members[0];
     const loop = [...cycle.map(shortName), shortName(cycle[0])].join(" -> ");
     diagnostics.push(makeDiagnostic(

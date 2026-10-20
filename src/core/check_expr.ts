@@ -1744,6 +1744,10 @@ export class BodyChecker {
             : combine(args.map((a) => this.argInfo(a))),
         );
       }
+      // A hint comes only from an expected type.
+      if (expected === undefined) {
+        throw new Error("internal: a schema hint has no expected type");
+      }
       if (
         !dataOnly(this.table, hint.decoded, "value", true) ||
         !dataOnly(this.table, hint.encoded, "value", true) ||
@@ -1766,13 +1770,13 @@ export class BodyChecker {
             node,
           );
         }
-        return this.finish(node, expected!, PURE_EFFECTS);
+        return this.finish(node, expected, PURE_EFFECTS);
       }
       const callback = this.callback(
         name,
         args[0],
-        [expected!],
-        expected!,
+        [expected],
+        expected,
         false,
       );
       if (!this.guardedSchemaCallback(args[0].node)) {
@@ -1782,14 +1786,14 @@ export class BodyChecker {
           args[0].node,
         );
       }
-      if (!this.table.isAssignable(callback.result, expected!)) {
+      if (!this.table.isAssignable(callback.result, expected)) {
         this.report(
           "type-mismatch/003",
           "recursive schema body does not fit its expected Schema",
           args[0].node,
         );
       }
-      return this.finish(node, expected!, combine([callback.info]));
+      return this.finish(node, expected, combine([callback.info]));
     }
     if (op === "struct") {
       const input = this.argInfo(args[0]);
@@ -6270,7 +6274,7 @@ export class BodyChecker {
       ? undefined
       : table.node(table.unfold(expected));
     const elements = this.kids(node);
-    if (target?.kind === "tuple") {
+    if (expected !== undefined && target?.kind === "tuple") {
       this.fact(node, { kind: "list", shape: "tuple" });
       if (elements.length !== target.elements.length) {
         this.report(
@@ -6285,7 +6289,7 @@ export class BodyChecker {
         this.fits(element, info.type, hint, `tuple element ${i + 1}`);
         return info;
       });
-      return this.finish(node, expected!, combine(infos));
+      return this.finish(node, expected, combine(infos));
     }
 
     this.fact(node, { kind: "list", shape: "array" });
@@ -6297,8 +6301,8 @@ export class BodyChecker {
       }
       return info;
     });
-    if (hint !== undefined) {
-      return this.finish(node, expected!, combine(infos));
+    if (hint !== undefined && expected !== undefined) {
+      return this.finish(node, expected, combine(infos));
     }
     if (infos.length === 0) {
       this.report(
