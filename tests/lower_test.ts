@@ -7,7 +7,8 @@ import {
   type CheckedProject,
   checkProject,
 } from "../src/core/check_project.ts";
-import type { Expr, ModuleIR, Pattern, Span } from "../src/core/ir.ts";
+import type { Expr, ModuleIR, Span } from "../src/core/ir.ts";
+import { walkExpr } from "../src/core/emit/walk.ts";
 import {
   type LowerError,
   lowerModule,
@@ -74,86 +75,6 @@ function functionBody(ir: ModuleIR, name: string): Expr {
     }
   }
   throw new Error(`no function ${name}`);
-}
-
-/** Calls `visit` on an expression and on every expression below it, in tree order. */
-function walk(expr: Expr, visit: (expr: Expr, patterns: Pattern[]) => void) {
-  const patterns: Pattern[] = [];
-  const go = (e: Expr): void => {
-    visit(e, patterns);
-    switch (e.kind) {
-      case "literal":
-      case "reference":
-      case "none":
-        break;
-      case "record":
-      case "error":
-        e.fields.forEach((f) => go(f.value));
-        break;
-      case "update":
-        go(e.record);
-        e.fields.forEach((f) => go(f.value));
-        break;
-      case "array":
-      case "tuple":
-        e.elements.forEach(go);
-        break;
-      case "get":
-        go(e.record);
-        break;
-      case "brand":
-      case "unbrand":
-      case "some":
-        go(e.value);
-        break;
-      case "closure":
-        go(e.body);
-        break;
-      case "call":
-        go(e.callee);
-        e.arguments.forEach(go);
-        break;
-      case "perform":
-        e.arguments.forEach(go);
-        break;
-      case "block":
-        e.steps.forEach((s) => go(s.value));
-        go(e.result);
-        break;
-      case "if":
-        go(e.condition);
-        go(e.then);
-        go(e.else);
-        break;
-      case "match":
-        go(e.subject);
-        for (const arm of e.arms) {
-          patterns.push(arm.pattern);
-          visit(e, patterns);
-          go(arm.body);
-        }
-        break;
-      case "fail":
-        go(e.error);
-        break;
-      case "catch":
-        go(e.body);
-        e.handlers.forEach((h) => go(h.body));
-        break;
-      case "retry":
-        go(e.job);
-        break;
-      case "provide":
-        go(e.provider);
-        go(e.job);
-        break;
-      case "binary":
-        go(e.left);
-        go(e.right);
-        break;
-    }
-  };
-  go(expr);
 }
 
 function bodies(ir: ModuleIR): Expr[] {
@@ -488,7 +409,7 @@ Deno.test("equal closed builtin types share one identity", () => {
   }
   const used: string[] = [];
   for (const body of bodies(ir)) {
-    walk(body, (e) => {
+    walkExpr(body, (e) => {
       if (e.kind === "call" && e.callee.kind === "reference") {
         used.push(e.callee.target);
       }
@@ -621,9 +542,11 @@ Deno.test("every expression kind and pattern kind lowers", () => {
   const patterns = new Set<string>();
   for (const ir of all) {
     for (const body of bodies(ir)) {
-      walk(body, (e, seen) => {
+      walkExpr(body, (e) => {
         kinds.add(e.kind);
-        for (const p of seen) patterns.add(p.kind);
+        if (e.kind === "match") {
+          for (const arm of e.arms) patterns.add(arm.pattern.kind);
+        }
       });
     }
   }
