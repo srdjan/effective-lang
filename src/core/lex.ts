@@ -146,10 +146,6 @@ const RESERVED_WORDS: ReadonlySet<string> = new Set([
   "eval",
 ]);
 
-export function isReservedWord(word: string): boolean {
-  return RESERVED_WORDS.has(word);
-}
-
 const TOKEN_NAMES: Readonly<Record<number, string>> = {
   [TokenKind.Eof]: "end of file",
   [TokenKind.Newline]: "end of line",
@@ -202,10 +198,6 @@ const TOKEN_NAMES: Readonly<Record<number, string>> = {
 /** A short name for messages. */
 export function describeTokenKind(kind: TokenKind): string {
   return TOKEN_NAMES[kind] ?? "token";
-}
-
-export function tokenText(lexed: Lexed, index: number): string {
-  return lexed.text.slice(lexed.starts[index], lexed.ends[index]);
 }
 
 /** True when token `index` is an identifier that spells `word`. */

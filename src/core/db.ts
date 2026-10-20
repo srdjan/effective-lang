@@ -290,11 +290,6 @@ export class Program {
   /** `root` is the project directory that diagnostics and error values name. */
   constructor(private readonly root: string = "") {}
 
-  /** The revision count so far. */
-  get revisions(): number {
-    return this.count;
-  }
-
   /** A snapshot of the cumulative query counts over the life of the program. */
   get counts(): QueryCounts {
     return { ...this.counters };
