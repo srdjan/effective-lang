@@ -15,7 +15,7 @@ import type {
 } from "../ir.ts";
 import { SCOPE_CAPABILITY } from "../ir.ts";
 import { AREA, type Report } from "./report.ts";
-import { isNever, same, type TypeEnv, unfold } from "./typing.ts";
+import { dataOnly, isNever, same, type TypeEnv, unfold } from "./typing.ts";
 import { sameSet } from "./sets.ts";
 
 export const PRELUDE_MODULE = "effective:prelude";
@@ -223,9 +223,9 @@ export function checkTypeIds(
               Number(t.decodedOptionalKey === true) > 1
         ) fail(at, "Schema field optionality flags are mutually exclusive");
         if (
-          !recursiveDataOnly(world, t.decoded) ||
-          !recursiveDataOnly(world, t.encoded) ||
-          !recursiveDataOnly(world, t.makeInput ?? t.decoded)
+          !dataOnly(world.env, t.decoded, "schema") ||
+          !dataOnly(world.env, t.encoded, "schema") ||
+          !dataOnly(world.env, t.makeInput ?? t.decoded, "schema")
         ) {
           fail(at, "Schema decoded and encoded types must be data only");
         }
@@ -658,50 +658,6 @@ function guardedRecord(
   return walk(type, false) && sawSelf;
 }
 
-function recursiveDataOnly(
-  world: World,
-  type: Type,
-  seen = new Set<Type>(),
-): boolean {
-  const value = unfold(world.env, type);
-  if (seen.has(value)) return true;
-  seen.add(value);
-  switch (value.kind) {
-    case "primitive":
-      return value.name !== "unknown" && value.name !== "unit";
-    case "literal":
-      return true;
-    case "record":
-      return value.fields.every((field) =>
-        recursiveDataOnly(world, field.type, seen)
-      );
-    case "array":
-    case "option":
-      return recursiveDataOnly(world, value.element, seen);
-    case "tuple":
-      return value.elements.every((element) =>
-        recursiveDataOnly(world, element, seen)
-      );
-    case "union":
-      return value.members.every((member) =>
-        recursiveDataOnly(world, member, seen)
-      );
-    case "named": {
-      if (
-        value.id === "error:effect/SchemaError" ||
-        value.id === "error:effect/SchemaIssue"
-      ) return false;
-      const nested = world.env.brands.get(value.id) ??
-        (world.env.errors.has(value.id)
-          ? { kind: "record" as const, fields: world.env.errors.get(value.id)! }
-          : undefined);
-      return nested !== undefined && recursiveDataOnly(world, nested, seen);
-    }
-    default:
-      return false;
-  }
-}
-
 /** Reports cycles other than a single array-guarded data record. */
 export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
   const { world } = ctx;
@@ -730,7 +686,7 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
     if (
       d.kind === "type" && d.definition.kind === "alias" &&
       guardedRecord(d.definition.type, d.id, tagOf) &&
-      recursiveDataOnly(world, d.definition.type)
+      dataOnly(world.env, d.definition.type, "schema")
     ) guarded.add(d.id);
   });
   const reported = new Set<string>();

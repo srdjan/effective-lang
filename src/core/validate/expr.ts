@@ -37,6 +37,7 @@ import {
   asFunction,
   BOOLEAN,
   comparisonClass,
+  dataOnly,
   fieldsOf,
   fits,
   INT,
@@ -407,7 +408,7 @@ export class BodyValidator {
           parameter.span,
         );
       }
-      if (!this.dataOnly(d.type.result)) {
+      if (!dataOnly(this.env, d.type.result, "value")) {
         this.add(
           AREA.types,
           `${path}.type.result`,
@@ -1870,8 +1871,8 @@ export class BodyValidator {
       );
     }
     if (
-      !this.dataOnly(d.result, undefined, true) ||
-      !this.dataOnly(d.parameters[0], undefined, true)
+      !dataOnly(this.env, d.result, "codec") ||
+      !dataOnly(this.env, d.parameters[0], "codec")
     ) {
       this.add(
         AREA.types,
@@ -1961,7 +1962,7 @@ export class BodyValidator {
         args.length !== 0 || hint === undefined ||
         !same(this.env, hint.decoded, hint.encoded) ||
         hint.decodeRequirements.length || hint.encodeRequirements.length ||
-        !this.dataOnly(hint.decoded)
+        !dataOnly(this.env, hint.decoded, "value")
       ) {
         return bad("schema() needs an identity data Schema with no services");
       }
@@ -2375,8 +2376,9 @@ export class BodyValidator {
         !same(this.env, fn.parameters[0], hint) ||
         !fits(this.env, fn.result, hint) || fn.execution !== "pure" ||
         fn.effects.failures.length || fn.effects.requirements.length ||
-        !this.dataOnly(hint.decoded) || !this.dataOnly(hint.encoded) ||
-        !this.dataOnly(hint.makeInput ?? hint.decoded) ||
+        !dataOnly(this.env, hint.decoded, "value") ||
+        !dataOnly(this.env, hint.encoded, "value") ||
+        !dataOnly(this.env, hint.makeInput ?? hint.decoded, "value") ||
         !this.guardedSchemaBody(e.arguments[0])
       ) {
         return bad(
@@ -2686,7 +2688,7 @@ export class BodyValidator {
         e.use.span,
       );
     }
-    if (!this.dataOnly(fn.result)) {
+    if (!dataOnly(this.env, fn.result, "value")) {
       this.add(
         AREA.types,
         `${path}.use`,
@@ -3135,54 +3137,6 @@ export class BodyValidator {
     };
   }
 
-  private dataOnly(
-    type: Type,
-    seen = new Set<Type>(),
-    rejectReserved = false,
-  ): boolean {
-    const value = unfold(this.env, type);
-    if (seen.has(value)) return true;
-    seen.add(value);
-    switch (value.kind) {
-      case "primitive":
-        return value.name !== "unknown";
-      case "literal":
-        return true;
-      case "record":
-        return value.fields.every((f) =>
-          this.dataOnly(f.type, seen, rejectReserved)
-        );
-      case "array":
-      case "option":
-        return this.dataOnly(value.element, seen, rejectReserved);
-      case "tuple":
-        return value.elements.every((t) =>
-          this.dataOnly(t, seen, rejectReserved)
-        );
-      case "union":
-        return value.members.every((t) =>
-          this.dataOnly(t, seen, rejectReserved)
-        );
-      case "named": {
-        if (
-          rejectReserved &&
-          (value.id === SCHEMA_ERROR_ID || value.id === SCHEMA_ISSUE_ID)
-        ) return false;
-        const nested = this.env.brands.get(value.id) ??
-          (this.env.errors.has(value.id)
-            ? {
-              kind: "record" as const,
-              fields: this.env.errors.get(value.id)!,
-            }
-            : undefined);
-        return nested !== undefined &&
-          this.dataOnly(nested, seen, rejectReserved);
-      }
-      default:
-        return false;
-    }
-  }
-
   private checkOperationRecord(type: Type, path: string, span: Span): void {
     const value = unfold(this.env, type);
     if (
@@ -3200,8 +3154,10 @@ export class BodyValidator {
     for (const field of value.fields) {
       const fn = asFunction(this.env, field.type);
       if (
-        fn === undefined || !fn.parameters.every((p) => this.dataOnly(p)) ||
-        !this.dataOnly(fn.result)
+        fn === undefined || !fn.parameters.every((p) =>
+          dataOnly(this.env, p, "value")
+        ) ||
+        !dataOnly(this.env, fn.result, "value")
       ) {
         this.add(
           AREA.types,
@@ -3307,7 +3263,7 @@ export class BodyValidator {
         e.release.span,
       );
     }
-    if (!this.dataOnly(u.result)) {
+    if (!dataOnly(this.env, u.result, "value")) {
       this.add(
         AREA.types,
         `${path}.use.type.result`,
@@ -4556,7 +4512,7 @@ export class BodyValidator {
       !fits(this.env, classifier.result, consumer.parameters[0]) ||
       !same(this.env, group, consumer.parameters[1]) ||
       this.groupKeyClass(classifier.result) === undefined ||
-      !this.dataOnly(consumer.result)
+      !dataOnly(this.env, consumer.result, "value")
     ) {
       this.add(
         AREA.types,

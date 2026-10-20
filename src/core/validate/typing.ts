@@ -16,6 +16,7 @@
 //   - unknown is not a top type.
 
 import type { Execution, Field, FunctionType, Type } from "../ir.ts";
+import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID } from "../ir.ts";
 import { isSubset, sameSet } from "./sets.ts";
 
 export interface TypeEnv {
@@ -54,6 +55,73 @@ export function unfold(env: TypeEnv, type: Type): Type {
     current = alias;
   }
   return current;
+}
+
+/**
+ * The data-only rules. They differ in two decisions.
+ *
+ * - "value": a value or an operation type. Accepts `unit` and the reserved
+ *   Schema errors.
+ * - "codec": a codec type. Accepts `unit` and rejects the reserved Schema
+ *   errors, which have no compiler-derived schema.
+ * - "schema": a `Schema<...>` type. Rejects `unit` and the reserved Schema
+ *   errors.
+ */
+export type DataRule = "value" | "codec" | "schema";
+
+/**
+ * What each rule rejects. A `Record` over the closed union makes a new rule a
+ * compile error until this table names its two decisions.
+ */
+const DATA_RULES: Readonly<
+  Record<DataRule, { readonly unit: boolean; readonly reserved: boolean }>
+> = {
+  value: { unit: false, reserved: false },
+  codec: { unit: false, reserved: true },
+  schema: { unit: true, reserved: true },
+};
+
+/** Whether `type` is data only under `rule`. A cycle through `seen` counts as data. */
+export function dataOnly(
+  env: TypeEnv,
+  type: Type,
+  rule: DataRule,
+  seen = new Set<Type>(),
+): boolean {
+  const value = unfold(env, type);
+  if (seen.has(value)) return true;
+  seen.add(value);
+  const rejects = DATA_RULES[rule];
+  const nested = (child: Type): boolean => dataOnly(env, child, rule, seen);
+  switch (value.kind) {
+    case "primitive":
+      return value.name !== "unknown" &&
+        !(rejects.unit && value.name === "unit");
+    case "literal":
+      return true;
+    case "record":
+      return value.fields.every((field) => nested(field.type));
+    case "array":
+    case "option":
+      return nested(value.element);
+    case "tuple":
+      return value.elements.every(nested);
+    case "union":
+      return value.members.every(nested);
+    case "named": {
+      if (
+        rejects.reserved &&
+        (value.id === SCHEMA_ERROR_ID || value.id === SCHEMA_ISSUE_ID)
+      ) return false;
+      const base = env.brands.get(value.id) ??
+        (env.errors.has(value.id)
+          ? { kind: "record" as const, fields: env.errors.get(value.id)! }
+          : undefined);
+      return base !== undefined && nested(base);
+    }
+    default:
+      return false;
+  }
 }
 
 /** The members of a type after aliases unfold and unions flatten. */

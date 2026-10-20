@@ -70,6 +70,7 @@ import {
   without,
 } from "./tables.ts";
 import {
+  dataOnly,
   sortedUnique,
   type TypeNode,
   type TypeRef,
@@ -1592,8 +1593,8 @@ export class BodyChecker {
       );
     }
     if (
-      !this.dataOnly(decoded, true, undefined, true) ||
-      !this.dataOnly(encoded, true, undefined, true)
+      !dataOnly(this.table, decoded, "codec", true) ||
+      !dataOnly(this.table, encoded, "codec", true)
     ) {
       this.report(
         "type-mismatch/010",
@@ -1737,9 +1738,9 @@ export class BodyChecker {
         );
       }
       if (
-        !this.dataOnly(hint.decoded, true) ||
-        !this.dataOnly(hint.encoded, true) ||
-        !this.dataOnly(hint.makeInput ?? hint.decoded, true)
+        !dataOnly(this.table, hint.decoded, "value", true) ||
+        !dataOnly(this.table, hint.encoded, "value", true) ||
+        !dataOnly(this.table, hint.makeInput ?? hint.decoded, "value", true)
       ) {
         this.report(
           "type-mismatch/010",
@@ -2567,7 +2568,7 @@ export class BodyChecker {
     }
     const fiber = this.table.fiber(effect.result, effect.failures);
     const use = this.callback("withFiber", args[1], [fiber], expected, true);
-    if (!this.dataOnly(use.result)) {
+    if (!dataOnly(this.table, use.result, "value")) {
       this.report(
         "type-mismatch/010",
         "the fiber use result must be data only",
@@ -2929,64 +2930,6 @@ export class BodyChecker {
     visit(body, undefined, undefined, false);
   }
 
-  /**
-   * Whether `ref` is data only. A type that already has a reported error
-   * (`kind: "error"`) is data only when `acceptPoisoned` is true, so a Schema
-   * derivation site does not report the same cause a second time.
-   */
-  private dataOnly(
-    ref: TypeRef,
-    acceptPoisoned = false,
-    seen = new Set<TypeRef>(),
-    rejectReserved = false,
-  ): boolean {
-    const unfolded = this.table.unfold(ref);
-    if (seen.has(unfolded)) return true;
-    seen.add(unfolded);
-    const type = this.table.node(unfolded);
-    switch (type.kind) {
-      case "primitive":
-        return type.name !== "unknown";
-      case "literal":
-        return true;
-      case "record":
-        return type.fields.every((f) =>
-          this.dataOnly(f.type, acceptPoisoned, seen, rejectReserved)
-        );
-      case "array":
-      case "option":
-        return this.dataOnly(
-          type.element,
-          acceptPoisoned,
-          seen,
-          rejectReserved,
-        );
-      case "tuple":
-        return type.elements.every((element) =>
-          this.dataOnly(element, acceptPoisoned, seen, rejectReserved)
-        );
-      case "union":
-        return type.members.every((member) =>
-          this.dataOnly(member, acceptPoisoned, seen, rejectReserved)
-        );
-      case "named": {
-        if (
-          rejectReserved &&
-          (type.id === SCHEMA_ERROR_ID || type.id === SCHEMA_ISSUE_ID)
-        ) return false;
-        const record = type.id.startsWith("error:")
-          ? this.table.errorRecordOf(type.id as ErrorId)
-          : this.table.brandBaseOf(type.id as TypeId);
-        return record !== undefined &&
-          this.dataOnly(record, acceptPoisoned, seen, rejectReserved);
-      }
-      case "error":
-        return acceptPoisoned;
-      default:
-        return false;
-    }
-  }
-
   private operationRecord(ref: TypeRef, node: NodeId): boolean {
     const type = this.table.node(this.table.unfold(ref));
     if (
@@ -3004,8 +2947,10 @@ export class BodyChecker {
     for (const field of type.fields) {
       const fn = this.functionOf(field.type);
       if (
-        fn === undefined || !fn.parameters.every((p) => this.dataOnly(p)) ||
-        !this.dataOnly(fn.result)
+        fn === undefined || !fn.parameters.every((p) =>
+          dataOnly(this.table, p, "value")
+        ) ||
+        !dataOnly(this.table, fn.result, "value")
       ) {
         this.report(
           "type-mismatch/010",
@@ -3066,7 +3011,7 @@ export class BodyChecker {
       this.table.unit,
       "the release result",
     );
-    if (!this.dataOnly(use.result)) {
+    if (!dataOnly(this.table, use.result, "value")) {
       this.report(
         "type-mismatch/010",
         "the use result must be data only",
@@ -3186,7 +3131,7 @@ export class BodyChecker {
         body ?? this.tree.root,
       );
     }
-    if (!this.dataOnly(result)) {
+    if (!dataOnly(this.table, result, "value")) {
       this.report(
         "type-mismatch/010",
         "a borrow function must return data only",
@@ -3381,7 +3326,7 @@ export class BodyChecker {
         args[2].node,
       );
     }
-    if (!this.dataOnly(use.result)) {
+    if (!dataOnly(this.table, use.result, "value")) {
       this.report(
         "type-mismatch/010",
         "the group use result must be data only",

@@ -56,6 +56,7 @@ import {
   walk,
 } from "./syntax.ts";
 import {
+  dataOnly,
   guardedRecord,
   sortedUnique,
   type TypeRef,
@@ -252,58 +253,6 @@ export class TypeLowerer {
 
   private get tree(): SyntaxTree {
     return this.env.tree;
-  }
-
-  /**
-   * Whether `ref` is data a Schema may describe. A type that already has a
-   * reported error (`kind: "error"`) is data only when `acceptPoisoned` is
-   * true, so a Schema site does not report the same cause a second time.
-   */
-  schemaData(
-    ref: TypeRef,
-    acceptPoisoned = false,
-    seen = new Set<TypeRef>(),
-  ): boolean {
-    const value = this.env.table.unfold(ref);
-    if (seen.has(value)) return true;
-    seen.add(value);
-    const type = this.env.table.node(value);
-    switch (type.kind) {
-      case "primitive":
-        return type.name !== "unknown" && type.name !== "unit";
-      case "literal":
-        return true;
-      case "record":
-        return type.fields.every((field) =>
-          this.schemaData(field.type, acceptPoisoned, seen)
-        );
-      case "array":
-      case "option":
-        return this.schemaData(type.element, acceptPoisoned, seen);
-      case "tuple":
-        return type.elements.every((element) =>
-          this.schemaData(element, acceptPoisoned, seen)
-        );
-      case "union":
-        return type.members.every((member) =>
-          this.schemaData(member, acceptPoisoned, seen)
-        );
-      case "named": {
-        if (
-          type.id === "error:effect/SchemaError" ||
-          type.id === "error:effect/SchemaIssue"
-        ) return false;
-        const nested = type.id.startsWith("error:")
-          ? this.env.table.errorRecordOf(type.id as ErrorId)
-          : this.env.table.brandBaseOf(type.id as TypeId);
-        return nested !== undefined &&
-          this.schemaData(nested, acceptPoisoned, seen);
-      }
-      case "error":
-        return acceptPoisoned;
-      default:
-        return false;
-    }
   }
 
   report(
@@ -765,9 +714,9 @@ export class TypeLowerer {
         ? first
         : this.lower(typeNodes[2]);
       if (
-        !this.schemaData(first.ref, true) ||
-        !this.schemaData(encoded.ref, true) ||
-        !this.schemaData(makeInput.ref, true)
+        !dataOnly(this.env.table, first.ref, "schema", true) ||
+        !dataOnly(this.env.table, encoded.ref, "schema", true) ||
+        !dataOnly(this.env.table, makeInput.ref, "schema", true)
       ) {
         this.report(
           "type-mismatch/010",
@@ -1440,7 +1389,11 @@ class ModuleChecker {
             first.id as TypeId,
             (type) => this.literalTag(type),
           ) &&
-          this.lowerer.schemaData(this.table.aliasOf(first.id as TypeId)!)
+          dataOnly(
+            this.table,
+            this.table.aliasOf(first.id as TypeId)!,
+            "schema",
+          )
         ) {
           this.guardedAliases.add(first.id as TypeId);
           this.table.markGuardedAlias(first.id as TypeId);

@@ -16,6 +16,7 @@ import type {
   Type,
   TypeId,
 } from "./ir.ts";
+import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID } from "./ir.ts";
 
 declare const typeRefBrand: unique symbol;
 
@@ -1451,6 +1452,80 @@ export class TypeTable {
       case "error":
         return "<error>";
     }
+  }
+}
+
+/**
+ * The data-only rules. They differ in two decisions.
+ *
+ * - "value": a value or an operation type. Accepts `unit` and the reserved
+ *   Schema errors.
+ * - "codec": a codec type. Accepts `unit` and rejects the reserved Schema
+ *   errors, which have no compiler-derived schema.
+ * - "schema": a `Schema<...>` type. Rejects `unit` and the reserved Schema
+ *   errors.
+ */
+export type DataRule = "value" | "codec" | "schema";
+
+/**
+ * What each rule rejects. A `Record` over the closed union makes a new rule a
+ * compile error until this table names its two decisions.
+ */
+const DATA_RULES: Readonly<
+  Record<DataRule, { readonly unit: boolean; readonly reserved: boolean }>
+> = {
+  value: { unit: false, reserved: false },
+  codec: { unit: false, reserved: true },
+  schema: { unit: true, reserved: true },
+};
+
+/**
+ * Whether `ref` is data only under `rule`. A type that already has a reported
+ * error (`kind: "error"`) is data only when `acceptPoisoned` is true, so a
+ * Schema derivation site does not report the same cause a second time.
+ */
+export function dataOnly(
+  table: TypeTable,
+  ref: TypeRef,
+  rule: DataRule,
+  acceptPoisoned = false,
+  seen = new Set<TypeRef>(),
+): boolean {
+  const unfolded = table.unfold(ref);
+  if (seen.has(unfolded)) return true;
+  seen.add(unfolded);
+  const type = table.node(unfolded);
+  const rejects = DATA_RULES[rule];
+  const nested = (child: TypeRef): boolean =>
+    dataOnly(table, child, rule, acceptPoisoned, seen);
+  switch (type.kind) {
+    case "primitive":
+      return type.name !== "unknown" && !(rejects.unit && type.name === "unit");
+    case "literal":
+      return true;
+    case "record":
+      return type.fields.every((field) => nested(field.type));
+    case "array":
+    case "option":
+      return nested(type.element);
+    case "tuple":
+      return type.elements.every(nested);
+    case "union":
+      return type.members.every(nested);
+    case "named": {
+      if (
+        rejects.reserved &&
+        (type.id === SCHEMA_ERROR_ID || type.id === SCHEMA_ISSUE_ID)
+      ) return false;
+      const record = type.id.startsWith("error:")
+        ? table.errorRecordOf(type.id as ErrorId)
+        : table.brandBaseOf(type.id as TypeId);
+      return record !== undefined && nested(record);
+    }
+    case "error":
+      return acceptPoisoned;
+    default:
+      return false;
   }
 }
 
