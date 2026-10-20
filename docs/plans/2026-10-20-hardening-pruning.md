@@ -1,6 +1,8 @@
 # Hardening and pruning list
 
-Date: 2026-10-20. Base: `9adc5cd` plus the uncommitted disagreements work. Status: proposed. No item has started.
+Date: 2026-10-20. Base: `9adc5cd` plus the uncommitted disagreements work. Status: accepted on 2026-10-20. The user chose the recommended option for Q1 to Q4: Q1 (b), Q2 (b), Q3 (a), Q4 (a). So S1, S2, and S4 are in scope, and S3 and S5 to S7 are out of scope. Unused IR kinds stay.
+
+Website rule. The user asked to keep the website in `../effective` current. A commit that changes the language surface (S1, S2, S4) or the project status also updates `../effective/public/effective-spec.html`, `index.html`, and the examples, as a separate commit in that repository.
 
 This list is the cleanup step before more features. Its goal is a smaller design with the same functionality. It is a sibling of `2026-10-20-rederive-review.md`, not a replacement. That plan keeps its open items R7, R8, R11, R12, R13, R15, R16, R17, and R18. This list refers to them by number and does not restate them. Section 9 of that plan ("What not to touch") also applies here.
 
@@ -111,7 +113,7 @@ W5 (archive). Move the finished plans, the contract bodies after W2, both disagr
 
 W6 (ID collisions). Two disagreement ledgers both use C1 to C11 for different defects, and D1 has three meanings across the design, the 10-20 disagreements, and the rederive review (M). From now on, give each ledger its own prefix, as this list does.
 
-W7 (`.gitignore` and tracked plans). `docs/plans/` is gitignored, but 46 files under it are tracked (M). A new plan is ignored unless someone adds it with `git add -f`. Decide the rule in Q3.
+W7 (`.gitignore` and tracked plans). `docs/plans/` is gitignored, but 46 files under it are tracked (M). A new plan is ignored unless someone adds it with `git add -f`. Done under Q3 (a): `.gitignore` now ignores only `docs/plans/*-probes/`, `docs/plans/**/repro/`, and the evidence scripts. The change exposed that `2026-10-20-rederive-review.md`, its ledger, and its scout reports were never tracked, so they are now committed. The 57 probe files that were already tracked stay tracked until W5.
 
 ## 6. Decisions for the user
 

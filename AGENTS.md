@@ -24,4 +24,6 @@ The history uses one commit for each complete unit of work on local `main`. Use 
 
 Follow the accepted [application acceptance rule](docs/plans/2026-10-19-application-acceptance-rule.md) when selecting gap work. The stopping rule requires three complete applications with precise contracts and passing failure, cancellation, and cleanup checks. Keep application orchestration in `.eff`; typed host adapters may supply drivers and the runtime entry point. Add features only for demonstrated application blockers after checking existing source compositions.
 
+The website and canonical spec are in the sibling repository `../effective/public/`. When a change adds, removes, or renames a source form, or changes the project status, update that site in a separate commit there.
+
 All three application gates now pass with existing forms. Stop automatic API parity additions. Select further language features only for demonstrated application blockers or an explicit change to the accepted target. Release acceptance checks remain separate work. General Schedule consumers remain candidates only for demonstrated blockers. Broader package interoperability, gap item 9, remains deferred by user instruction.
