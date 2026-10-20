@@ -3,18 +3,9 @@
 
 import { assert } from "@std/assert";
 import { instrumentSources } from "../scripts/behavior_capture.ts";
+import { copyDirectory } from "./helpers.ts";
 
 const ROOT = new URL("../", import.meta.url);
-
-function copyDirectory(from: URL, to: string): void {
-  Deno.mkdirSync(to, { recursive: true });
-  for (const entry of Deno.readDirSync(from)) {
-    const source = new URL(entry.name + (entry.isDirectory ? "/" : ""), from);
-    const target = `${to}/${entry.name}`;
-    if (entry.isDirectory) copyDirectory(source, target);
-    else Deno.copyFileSync(source, target);
-  }
-}
 
 /**
  * Copies `src/`, `deno.json`, and `deno.lock` of the repository into `dir`,

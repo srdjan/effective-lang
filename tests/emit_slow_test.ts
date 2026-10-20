@@ -20,7 +20,13 @@ import {
   type SourceHost,
   spanText,
 } from "../src/core/source.ts";
-import { EXAMPLE_ENTRIES, FIXTURES, hostBoundaryManifest } from "./helpers.ts";
+import {
+  copyDirectory,
+  EXAMPLE_ENTRIES,
+  FIXTURES,
+  hostBoundaryManifest,
+} from "./helpers.ts";
+import { deno, runScript, withTemporaryDirectory } from "./process_helpers.ts";
 
 const DENO_CONFIG = JSON.stringify(
   {
@@ -34,16 +40,6 @@ const DENO_CONFIG = JSON.stringify(
   null,
   2,
 );
-
-function copyDirectory(from: URL, to: string): void {
-  Deno.mkdirSync(to, { recursive: true });
-  for (const entry of Deno.readDirSync(from)) {
-    const source = new URL(entry.name + (entry.isDirectory ? "/" : ""), from);
-    const target = `${to}/${entry.name}`;
-    if (entry.isDirectory) copyDirectory(source, target);
-    else Deno.copyFileSync(source, target);
-  }
-}
 
 /** A host that reads from the file system. Paths are absolute. */
 const fileHost: SourceHost = {
@@ -109,55 +105,13 @@ function buildProject(root: string, entries: readonly string[]): Built {
   };
 }
 
-interface Run {
-  readonly code: number;
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
-async function deno(cwd: string, args: readonly string[]): Promise<Run> {
-  const output = await new Deno.Command(Deno.execPath(), {
-    args: [...args],
-    cwd,
-    env: { NO_COLOR: "1" },
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  return {
-    code: output.code,
-    stdout: new TextDecoder().decode(output.stdout),
-    stderr: new TextDecoder().decode(output.stderr),
-  };
-}
-
-async function withTemporary<T>(body: (dir: string) => Promise<T>): Promise<T> {
-  const dir = Deno.makeTempDirSync({ prefix: "effective-emit-" });
-  try {
-    return await body(dir);
-  } finally {
-    Deno.removeSync(dir, { recursive: true });
-  }
+function withTemporary<T>(body: (dir: string) => Promise<T>): Promise<T> {
+  return withTemporaryDirectory("effective-emit-", body);
 }
 
 async function check(dir: string, files: readonly string[]): Promise<void> {
   const run = await deno(dir, ["check", "--config", "deno.json", ...files]);
   assertEquals(run.code, 0, `deno check failed:\n${run.stderr}`);
-}
-
-/** Runs a script in `dir` and parses its one line of JSON output. */
-async function runScript(dir: string, script: string): Promise<unknown> {
-  Deno.writeTextFileSync(`${dir}/run.ts`, script);
-  const run = await deno(dir, [
-    "run",
-    "--config",
-    "deno.json",
-    "--check",
-    "--no-prompt",
-    "run.ts",
-  ]);
-  assertEquals(run.code, 0, `deno run failed:\n${run.stderr}`);
-  const last = run.stdout.trim().split("\n").pop() ?? "";
-  return JSON.parse(last);
 }
 
 function buildExamples(dir: string): string[] {

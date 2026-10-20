@@ -5,15 +5,10 @@
 import { assert, assertEquals } from "@std/assert";
 import { decodeMappings } from "../src/core/emit/sourcemap.ts";
 import { tscConfig } from "../src/cli/tsc.ts";
-import { FIXTURES } from "./helpers.ts";
+import { copyDirectory, FIXTURES } from "./helpers.ts";
+import { type Run, withTemporaryDirectory } from "./process_helpers.ts";
 
 const REPOSITORY = new URL("../", import.meta.url).pathname;
-
-interface Run {
-  readonly code: number;
-  readonly stdout: string;
-  readonly stderr: string;
-}
 
 async function effective(args: readonly string[]): Promise<Run> {
   const output = await new Deno.Command(Deno.execPath(), {
@@ -30,23 +25,8 @@ async function effective(args: readonly string[]): Promise<Run> {
   };
 }
 
-function copyDirectory(from: URL, to: string): void {
-  Deno.mkdirSync(to, { recursive: true });
-  for (const entry of Deno.readDirSync(from)) {
-    const source = new URL(entry.name + (entry.isDirectory ? "/" : ""), from);
-    const target = `${to}/${entry.name}`;
-    if (entry.isDirectory) copyDirectory(source, target);
-    else Deno.copyFileSync(source, target);
-  }
-}
-
-async function withTemporary<T>(body: (dir: string) => Promise<T>): Promise<T> {
-  const dir = Deno.makeTempDirSync({ prefix: "effective-cli-" });
-  try {
-    return await body(dir);
-  } finally {
-    Deno.removeSync(dir, { recursive: true });
-  }
+function withTemporary<T>(body: (dir: string) => Promise<T>): Promise<T> {
+  return withTemporaryDirectory("effective-cli-", body);
 }
 
 const MODULES = ["collections", "log", "main", "pay", "users"];

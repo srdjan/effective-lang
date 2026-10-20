@@ -1,5 +1,7 @@
 // Shared helpers for the tests. Tests may use Deno APIs; the core may not.
 
+import { assert } from "@std/assert";
+
 import {
   type Diagnostic,
   DIAGNOSTIC_CODES,
@@ -13,7 +15,11 @@ import {
   type SourceHost,
 } from "../src/core/source.ts";
 import { analyzeProject } from "../src/core/analyze.ts";
-import { checkAnalysis, checkProject } from "../src/core/check_project.ts";
+import {
+  checkAnalysis,
+  type CheckedProject,
+  checkProject,
+} from "../src/core/check_project.ts";
 import { emitProject, type EmittedModule } from "../src/core/emit/emit.ts";
 import { lowerProject } from "../src/core/lower.ts";
 import type { Project } from "../src/core/project.ts";
@@ -427,6 +433,31 @@ export function caseExpected(c: ErrorCase): string[] {
     }
   }
   return result.sort();
+}
+
+/** Copies the directory tree at `from` into `to`, and creates `to` when it is missing. */
+export function copyDirectory(from: URL, to: string): void {
+  Deno.mkdirSync(to, { recursive: true });
+  for (const entry of Deno.readDirSync(from)) {
+    const source = new URL(entry.name + (entry.isDirectory ? "/" : ""), from);
+    const target = `${to}/${entry.name}`;
+    if (entry.isDirectory) copyDirectory(source, target);
+    else Deno.copyFileSync(source, target);
+  }
+}
+
+/**
+ * Checks one module that `text` holds, in an in-memory project whose config is
+ * `{}`. The project must load; its diagnostics are in the result.
+ */
+export function checkModule(text: string, file = "m.eff"): CheckedProject {
+  const result = checkProject(
+    memoryHost({ "effective.json": "{}", [file]: text }),
+    "",
+    [file],
+  );
+  assert(result.ok, JSON.stringify(result));
+  return result.value;
 }
 
 /** The text of every file of `fixtures/examples/`, keyed by its root-relative path. */

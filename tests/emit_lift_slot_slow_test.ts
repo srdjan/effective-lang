@@ -5,29 +5,9 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { LIFT_PROGRAMS } from "./lift_slot_programs.ts";
+import { deno, runScript } from "./process_helpers.ts";
 
 const CLI = new URL("../src/cli/main.ts", import.meta.url).pathname;
-
-interface Run {
-  readonly code: number;
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
-async function deno(cwd: string, args: readonly string[]): Promise<Run> {
-  const output = await new Deno.Command(Deno.execPath(), {
-    args: [...args],
-    cwd,
-    env: { NO_COLOR: "1" },
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  return {
-    code: output.code,
-    stdout: new TextDecoder().decode(output.stdout),
-    stderr: new TextDecoder().decode(output.stderr),
-  };
-}
 
 async function withProgram<T>(
   text: string,
@@ -66,9 +46,8 @@ async function build(dir: string): Promise<void> {
   );
 }
 
-/** Runs a script in `dir` and parses its last line of output as JSON. */
-async function runScript(dir: string, script: string): Promise<unknown> {
-  Deno.writeTextFileSync(`${dir}/run.ts`, script);
+/** Writes the strict `deno.json` of the lift tests, and runs the script as `runScript` does. */
+function runLiftScript(dir: string, script: string): Promise<unknown> {
   Deno.writeTextFileSync(
     `${dir}/deno.json`,
     JSON.stringify({
@@ -76,17 +55,7 @@ async function runScript(dir: string, script: string): Promise<unknown> {
       imports: { effect: "npm:effect@4.0.5" },
     }),
   );
-  const run = await deno(dir, [
-    "run",
-    "--config",
-    "deno.json",
-    "--check",
-    "--no-prompt",
-    "run.ts",
-  ]);
-  assertEquals(run.code, 0, `deno run failed:\n${run.stderr}`);
-  const last = run.stdout.trim().split("\n").pop() ?? "";
-  return JSON.parse(last);
+  return runScript(dir, script);
 }
 
 for (const [name, text] of Object.entries(LIFT_PROGRAMS)) {
@@ -123,7 +92,7 @@ ${body}
 Deno.test("an if branch runs the block once and returns the wrapped function", async () => {
   await withProgram(LIFT_PROGRAMS.branch, async (dir) => {
     await build(dir);
-    const result = await runScript(
+    const result = await runLiftScript(
       dir,
       gateScript(
         "choose",
@@ -144,7 +113,7 @@ Deno.test("an if branch runs the block once and returns the wrapped function", a
 Deno.test("a match arm runs the block once and returns the wrapped function", async () => {
   await withProgram(LIFT_PROGRAMS.arm, async (dir) => {
     await build(dir);
-    const result = await runScript(
+    const result = await runLiftScript(
       dir,
       gateScript(
         "choose",
@@ -164,7 +133,7 @@ Deno.test("a match arm runs the block once and returns the wrapped function", as
 Deno.test("an effect function body runs its block once and returns the wrapped function", async () => {
   await withProgram(LIFT_PROGRAMS.result, async (dir) => {
     await build(dir);
-    const result = await runScript(
+    const result = await runLiftScript(
       dir,
       gateScript(
         "chosen, viaConstant, declared",
@@ -183,7 +152,7 @@ Deno.test("an effect function body runs its block once and returns the wrapped f
 Deno.test("a call with an inferred pure function result runs once and returns the wrapped function", async () => {
   await withProgram(LIFT_PROGRAMS.inferred, async (dir) => {
     await build(dir);
-    const result = await runScript(
+    const result = await runLiftScript(
       dir,
       gateScript(
         "chosen, viaConstant",

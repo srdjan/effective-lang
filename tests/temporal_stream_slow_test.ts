@@ -9,6 +9,7 @@ import {
   lowerProject,
   memoryHost,
 } from "../src/core/mod.ts";
+import { runScript } from "./process_helpers.ts";
 
 const DENO_CONFIG = JSON.stringify(
   {
@@ -80,21 +81,6 @@ const result = await Effect.runPromise(
 console.log(JSON.stringify(result));
 `;
 
-async function deno(cwd: string, args: readonly string[]) {
-  const output = await new Deno.Command(Deno.execPath(), {
-    args: [...args],
-    cwd,
-    env: { NO_COLOR: "1" },
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  return {
-    code: output.code,
-    stdout: new TextDecoder().decode(output.stdout),
-    stderr: new TextDecoder().decode(output.stderr),
-  };
-}
-
 Deno.test("throttleStream shape delays the next element until the window elapses", async () => {
   const checked = checkProject(
     memoryHost({ "effective.json": "{}", "main.eff": SOURCE }),
@@ -113,18 +99,7 @@ Deno.test("throttleStream shape delays the next element until the window elapses
       Deno.writeTextFileSync(`${dir}/${result.value.path}`, result.value.text);
     }
     Deno.writeTextFileSync(`${dir}/deno.json`, DENO_CONFIG);
-    Deno.writeTextFileSync(`${dir}/run.ts`, SCRIPT);
-    const run = await deno(dir, [
-      "run",
-      "--config",
-      "deno.json",
-      "--check",
-      "--no-prompt",
-      "run.ts",
-    ]);
-    assertEquals(run.code, 0, `deno run failed:\n${run.stderr}`);
-    const last = run.stdout.trim().split("\n").pop() ?? "";
-    assertEquals(JSON.parse(last), {
+    assertEquals(await runScript(dir, SCRIPT), {
       initial: [1],
       beforeWindow: [1],
       afterWindow: [1, 2],

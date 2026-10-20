@@ -18,6 +18,7 @@ import { checkProject, lowerProject, memoryHost } from "../src/core/mod.ts";
 import type { ModuleIR, Type } from "../src/core/ir.ts";
 import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID } from "../src/core/ir.ts";
 import { validateModule } from "../src/core/validate/index.ts";
+import { checkModule } from "./helpers.ts";
 
 const DATA_ONLY = "Schema decoded and encoded types must be data only";
 
@@ -30,13 +31,7 @@ const NOT_DATA: readonly (readonly [string, Type])[] = [
 // ------------------------------------------------------------------ checker
 
 function check(text: string) {
-  const result = checkProject(
-    memoryHost({ "effective.json": "{}", "m.eff": text }),
-    "",
-    ["m.eff"],
-  );
-  assert(result.ok, JSON.stringify(result));
-  return result.value.diagnostics;
+  return checkModule(text).diagnostics;
 }
 
 for (const [name] of NOT_DATA) {

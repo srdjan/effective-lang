@@ -14,6 +14,7 @@ import type { Diagnostic } from "../src/core/mod.ts";
 import type { ModuleIR, Type } from "../src/core/ir.ts";
 import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID } from "../src/core/ir.ts";
 import { validateModule } from "../src/core/validate/index.ts";
+import { checkModule } from "./helpers.ts";
 import { declarationPath } from "./schema_diagnostics.ts";
 
 const MESSAGE = "codec types need compiler-derived schemas";
@@ -21,13 +22,7 @@ const MESSAGE = "codec types need compiler-derived schemas";
 // ------------------------------------------------------------------ checker
 
 function check(text: string): readonly Diagnostic[] {
-  const result = checkProject(
-    memoryHost({ "effective.json": "{}", "m.eff": text }),
-    "",
-    ["m.eff"],
-  );
-  assert(result.ok, JSON.stringify(result));
-  return result.value.diagnostics;
+  return checkModule(text).diagnostics;
 }
 
 /** A codec constant whose two sides both have type `t`. */

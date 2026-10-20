@@ -5,21 +5,11 @@
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import { FrameDecoder, type FrameError } from "../src/lsp/jsonrpc.ts";
 import type { Result } from "../src/core/source.ts";
-import { FIXTURES } from "./helpers.ts";
+import { copyDirectory, FIXTURES } from "./helpers.ts";
 import { frameOf } from "./lsp_helpers.ts";
 
 const REPOSITORY = new URL("../", import.meta.url).pathname;
 const TIMEOUT_MS = 20_000;
-
-function copyDirectory(from: URL, to: string): void {
-  Deno.mkdirSync(to, { recursive: true });
-  for (const entry of Deno.readDirSync(from)) {
-    const source = new URL(entry.name + (entry.isDirectory ? "/" : ""), from);
-    const target = `${to}/${entry.name}`;
-    if (entry.isDirectory) copyDirectory(source, target);
-    else Deno.copyFileSync(source, target);
-  }
-}
 
 /** A running server with a continuous reader on its stdout. */
 class Client {

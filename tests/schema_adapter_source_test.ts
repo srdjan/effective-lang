@@ -5,8 +5,8 @@
 // Each negative case pins the diagnostic code, a message fragment, and the
 // source text of the offending node.
 
-import { assert, assertEquals } from "@std/assert";
-import { checkProject, memoryHost } from "../src/core/mod.ts";
+import { assertEquals } from "@std/assert";
+import { checkModule } from "./helpers.ts";
 import { assertDiagnostics, type Expected } from "./schema_diagnostics.ts";
 
 /** Marks an offending node that spans the whole initializer of `bad`. */
@@ -27,13 +27,7 @@ interface Negative {
 }
 
 function check(source: string) {
-  const result = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": source }),
-    "",
-    ["main.eff"],
-  );
-  assert(result.ok, JSON.stringify(result));
-  return result.value.diagnostics;
+  return checkModule(source, "main.eff").diagnostics;
 }
 
 function accepted(source: string): void {

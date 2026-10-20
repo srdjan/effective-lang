@@ -1,22 +1,12 @@
 import { assert, assertEquals } from "@std/assert";
-import {
-  checkProject,
-  lowerProject,
-  memoryHost,
-  validateProject,
-} from "../src/core/mod.ts";
+import { lowerProject, validateProject } from "../src/core/mod.ts";
 import { validateModule } from "../src/core/validate/index.ts";
+import { checkModule } from "./helpers.ts";
 
 const HEAD = "type Int = int\ntype Text = string\n";
 
 function check(text: string) {
-  const result = checkProject(
-    memoryHost({ "effective.json": "{}", "m.eff": HEAD + text }),
-    "",
-    ["m.eff"],
-  );
-  assert(result.ok, JSON.stringify(result));
-  return result.value;
+  return checkModule(HEAD + text);
 }
 
 function valid(text: string) {
