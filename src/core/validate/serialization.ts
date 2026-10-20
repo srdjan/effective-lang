@@ -134,7 +134,8 @@ export function checkSerialization(
       const at = path === "" ? key : `${path}.${key}`;
       if (
         (key === "failures" || key === "requirements" ||
-          key === "decodeRequirements" || key === "encodeRequirements") &&
+          key === "decodeRequirements" || key === "encodeRequirements" ||
+          key === "provides") &&
         Array.isArray(child) &&
         !isSortedUnique(child)
       ) {

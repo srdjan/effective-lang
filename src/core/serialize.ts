@@ -9,7 +9,7 @@
 import type { ModuleIR, Result } from "./ir.ts";
 
 export type SerializeError =
-  /** A failure or requirement set that is not sorted, or that repeats an entry. */
+  /** A failure, requirement, or provides set that is not sorted, or that repeats an entry. */
   | {
     readonly tag: "unsorted-set";
     /** Where the list sits, as `declarations[2].body.effects.failures`. */
@@ -23,6 +23,7 @@ const SET_KEYS: ReadonlySet<string> = new Set([
   "requirements",
   "decodeRequirements",
   "encodeRequirements",
+  "provides",
 ]);
 
 function compareText(a: string, b: string): number {
