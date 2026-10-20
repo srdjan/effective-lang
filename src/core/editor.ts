@@ -22,7 +22,7 @@ import type { DeclEntry, FileIndex } from "./index.ts";
 import { parseFileFresh } from "./project.ts";
 import type { Target } from "./resolve.ts";
 import type { Span } from "./source.ts";
-import { type NodeId, nodeSpan } from "./syntax.ts";
+import { type NodeId, nodeSpan, type SyntaxTree } from "./syntax.ts";
 import type { BodyTable } from "./tables.ts";
 
 // ------------------------------------------------------------------ positions
@@ -138,29 +138,44 @@ function constantType(scope: Scope, d: ConstantDecl): string {
   return render(typeDoc(scope, d.type), FLAT_WIDTH).text;
 }
 
-/** The innermost node of the tables that covers the offset, as the checker info. */
-function innermost(
-  module: CheckedModule,
-  tables: Iterable<BodyTable>,
+/**
+ * The candidate whose node covers the offset with the least width. Equal widths
+ * go to the node with the lower id. The first of two equal nodes wins.
+ */
+function innermostNode<T>(
+  tree: SyntaxTree,
+  candidates: Iterable<T>,
+  nodeOf: (candidate: T) => NodeId,
   offset: number,
   afterEnd: boolean,
-): { node: NodeId; table: BodyTable } | undefined {
-  const { tree } = module;
-  let best: { node: NodeId; table: BodyTable; width: number } | undefined;
-  for (const table of tables) {
-    for (const node of table.info.keys()) {
-      const range = { start: tree.starts[node], end: tree.ends[node] };
-      if (!covers(range, offset, afterEnd)) continue;
-      const width = range.end - range.start;
-      if (
-        best === undefined || width < best.width ||
-        (width === best.width && node < best.node)
-      ) {
-        best = { node, table, width };
-      }
+): T | undefined {
+  let best: T | undefined;
+  let bestNode = 0;
+  let bestWidth = 0;
+  for (const candidate of candidates) {
+    const node = nodeOf(candidate);
+    const range = { start: tree.starts[node], end: tree.ends[node] };
+    if (!covers(range, offset, afterEnd)) continue;
+    const width = range.end - range.start;
+    if (
+      best === undefined || width < bestWidth ||
+      (width === bestWidth && node < bestNode)
+    ) {
+      best = candidate;
+      bestNode = node;
+      bestWidth = width;
     }
   }
   return best;
+}
+
+/** Every node of the body tables, with the table that holds its checker info. */
+function* tableNodes(
+  tables: Iterable<BodyTable>,
+): Generator<{ readonly node: NodeId; readonly table: BodyTable }> {
+  for (const table of tables) {
+    for (const node of table.info.keys()) yield { node, table };
+  }
 }
 
 function hoverPass(
@@ -194,7 +209,13 @@ function hoverPass(
     ...[...module.functions.values()].map((fn) => fn.table),
     ...[...module.constants.values()].map((constant) => constant.table),
   ];
-  const found = innermost(module, tables, offset, afterEnd);
+  const found = innermostNode(
+    module.tree,
+    tableNodes(tables),
+    (candidate) => candidate.node,
+    offset,
+    afterEnd,
+  );
   if (found === undefined) return undefined;
   const info = found.table.info.get(found.node);
   if (info === undefined) return undefined;
@@ -228,15 +249,12 @@ export function hoverAt(
 
 // ------------------------------------------------------------------ definition
 
-function declarationSpan(
-  revision: Revision,
-  id: string,
-): Span | undefined {
+/** The index entry of the declaration `id`, or undefined for a malformed or unknown id. */
+function declEntryOf(revision: Revision, id: string): DeclEntry | undefined {
   const module = moduleOfId(id);
   const name = nameOfId(id);
   if (module === undefined || name === undefined) return undefined;
-  return revision.project.modules.get(module)?.index.byName.get(name)
-    ?.nameSpan;
+  return revision.project.modules.get(module)?.index.byName.get(name);
 }
 
 function targetSpan(
@@ -250,16 +268,12 @@ function targetSpan(
     case "service":
     case "value":
     case "provider":
-      return declarationSpan(revision, target.id);
+      return declEntryOf(revision, target.id)?.nameSpan;
     case "cap": {
       const service = serviceOfCapability(target.id);
       const method = methodOfCapability(target.id);
       if (service === undefined || method === undefined) return undefined;
-      const moduleName = moduleOfId(service);
-      const name = nameOfId(service);
-      if (moduleName === undefined || name === undefined) return undefined;
-      return revision.project.modules.get(moduleName)?.index.byName.get(name)
-        ?.methods.get(method)?.nameSpan;
+      return declEntryOf(revision, service)?.methods.get(method)?.nameSpan;
     }
     case "local":
       return revision.checked.analysis.resolutions.get(module.module)?.locals
@@ -288,20 +302,15 @@ export function definitionAt(
   if (resolution === undefined) return undefined;
   const { tree } = module;
   for (const afterEnd of PASSES) {
-    let best: { node: NodeId; width: number } | undefined;
-    for (const node of resolution.targets.keys()) {
-      const range = { start: tree.starts[node], end: tree.ends[node] };
-      if (!covers(range, offset, afterEnd)) continue;
-      const width = range.end - range.start;
-      if (
-        best === undefined || width < best.width ||
-        (width === best.width && node < best.node)
-      ) {
-        best = { node, width };
-      }
-    }
+    const best = innermostNode(
+      tree,
+      resolution.targets.keys(),
+      (node) => node,
+      offset,
+      afterEnd,
+    );
     if (best === undefined) continue;
-    const target = resolution.targets.get(best.node);
+    const target = resolution.targets.get(best);
     return target === undefined
       ? undefined
       : targetSpan(revision, module, target);
