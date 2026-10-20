@@ -54,6 +54,7 @@ import {
   typeArguments,
   typeDoc,
 } from "./types.ts";
+import { evaluatedChildren, isLeafExpr } from "./shape.ts";
 import { patternBinding } from "./walk.ts";
 
 // ------------------------------------------------------------------ precedence
@@ -759,6 +760,9 @@ export class ExprEmitter {
   }
 
   private structural(e: Expr, mode: Mode): Emitted {
+    if (isLeafExpr(e)) {
+      throw internal(`${e.kind} node in a structural position`);
+    }
     const kid = this.kid(mode);
     switch (e.kind) {
       case "null":
@@ -1411,41 +1415,6 @@ export class ExprEmitter {
         return this.match(e);
       case "binary":
         return this.binary(e, kid);
-      case "perform":
-      case "fail":
-      case "schema-make":
-      case "schema-decode":
-      case "schema-encode":
-      case "catch":
-      case "retry":
-      case "retry-with-schedule":
-      case "with-fiber":
-      case "join-fiber":
-      case "interrupt-fiber":
-      case "provide":
-      case "run":
-      case "partition-all":
-      case "validate-all":
-      case "all-results":
-      case "scoped":
-      case "fork-scoped":
-      case "make-scope":
-      case "provide-scope":
-      case "add-scope-finalizer":
-      case "close-scope":
-      case "with-resource":
-      case "run-stream":
-      case "fold-stream":
-      case "fold-effect-stream":
-      case "collect-stream":
-      case "head-stream":
-      case "last-stream":
-      case "drain-stream":
-      case "make-ref":
-      case "get-ref":
-      case "set-ref":
-      case "update-ref":
-        throw internal(`${e.kind} node in a structural position`);
     }
   }
 
@@ -2429,111 +2398,16 @@ export class ExprEmitter {
   }
 
   private isLeaf(e: Expr): boolean {
-    switch (e.kind) {
-      case "call":
-        return this.isEffectfulFunction(e.callee.type);
-      case "schema-make":
-      case "schema-decode":
-      case "schema-encode":
-        return true;
-      case "perform":
-      case "fail":
-      case "retry":
-      case "retry-with-schedule":
-      case "with-fiber":
-      case "join-fiber":
-      case "interrupt-fiber":
-      case "provide":
-      case "run":
-      case "partition-all":
-      case "validate-all":
-      case "all-results":
-      case "scoped":
-      case "fork-scoped":
-      case "make-scope":
-      case "provide-scope":
-      case "add-scope-finalizer":
-      case "close-scope":
-      case "catch":
-      case "with-resource":
-      case "run-stream":
-      case "fold-stream":
-      case "fold-effect-stream":
-      case "collect-stream":
-      case "head-stream":
-      case "last-stream":
-      case "drain-stream":
-      case "make-ref":
-      case "get-ref":
-      case "set-ref":
-      case "update-ref":
-        return true;
-      default:
-        return false;
-    }
+    if (e.kind === "call") return this.isEffectfulFunction(e.callee.type);
+    return isLeafExpr(e);
   }
 
   /** The children that a leaf evaluates before it runs, in source order. */
   private evaluatedChildren(e: Expr): Expr[] {
-    switch (e.kind) {
-      case "call":
-        return e.callee.kind === "reference" &&
-            effectCollectionBuiltin(e.callee.target) !== undefined
-          ? [...e.arguments]
-          : [e.callee, ...e.arguments];
-      case "perform":
-        return [...e.arguments];
-      case "schema-make":
-      case "schema-decode":
-      case "schema-encode":
-        return [e.schema, e.input];
-      case "fail":
-        return [e.error];
-      case "run":
-      case "scoped":
-        return [e.value];
-      case "partition-all":
-        return [e.jobs];
-      case "validate-all":
-        return [e.jobs, e.onErrors];
-      case "all-results":
-        return [e.jobs];
-      case "make-scope":
-        return [];
-      case "provide-scope":
-      case "add-scope-finalizer":
-        return [e.owner, e.job];
-      case "close-scope":
-        return [e.owner];
-      case "fork-scoped":
-        return [e.job];
-      case "run-stream":
-        return [e.stream, e.sink];
-      case "fold-stream":
-        return [e.stream, e.seed, e.update];
-      case "fold-effect-stream":
-        return [e.stream, e.seed];
-      case "collect-stream":
-      case "head-stream":
-      case "last-stream":
-      case "drain-stream":
-        return [e.stream];
-      case "make-ref":
-        return [e.value];
-      case "get-ref":
-        return [e.ref];
-      case "set-ref":
-        return [e.ref, e.value];
-      case "update-ref":
-        return [e.ref, e.transform];
-      case "with-fiber":
-        return [e.job];
-      case "join-fiber":
-      case "interrupt-fiber":
-        return [e.fiber];
-      default:
-        return [];
-    }
+    return e.kind === "call" && e.callee.kind === "reference" &&
+        effectCollectionBuiltin(e.callee.target) !== undefined
+      ? [...e.arguments]
+      : evaluatedChildren(e);
   }
 
   /** The declared type of each evaluated child of a leaf, where the program states one. */
@@ -2638,6 +2512,9 @@ export class ExprEmitter {
   /** The Effect-valued expression of a leaf, with its evaluated children already printed. */
   private leaf(e: Expr, children: readonly Emitted[]): Emitted {
     const effect = this.scope.effect("Effect");
+    if (e.kind !== "call" && !isLeafExpr(e)) {
+      throw internal(`${e.kind} is not a leaf`);
+    }
     switch (e.kind) {
       case "call":
         if (e.callee.kind === "reference") {
@@ -2922,8 +2799,6 @@ export class ExprEmitter {
       }
       case "catch":
         return this.catchEffect(e);
-      default:
-        throw internal(`${e.kind} is not a leaf`);
     }
   }
 
