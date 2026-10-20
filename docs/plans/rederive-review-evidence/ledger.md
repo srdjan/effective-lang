@@ -41,3 +41,8 @@ Each row gives one commit, its measured AST branch delta and cyclomatic delta fr
 | edf12e7 | P5, identity parser | 9055 to 9054 (-1); lines 37889 to 37896 (+7); one `serviceOfCapability` and one `shortName` in `ids.ts`; the emitter keeps a throwing wrapper |
 | 879e8e3 | P5, decodeString | 9054 to 9048 (-6); lines 37896 to 37886 (-10) |
 | 02d12d3 | P9, watch loop | 9048 to 9047 (-1); lines 37886 to 37872 (-14); 75 to 74 files; `events.ts` and `explicit_scope.ts` stay |
+| c9cdc29 | R17, adapters through mod.ts | 9047 to 9047 (0); lines 37872 to 37893 (+21); 46 adapter imports of core files now use `mod.ts`; 11 new re-exports in `mod.ts` (a 12th name, `Span`, already came from the IR star export) |
+| 6ea9d53 | P4, src/host | 9047 to 9047 (0); lines 37893 to 37893 (0); `io.ts`, `workspace.ts`, `outputs.ts`, `deno_io.ts`, and `events.ts` move to `src/host/`; `src/lsp` imports nothing from `src/cli` |
+| 934576e | P8, exports | 9047 to 9047 (0); lines 37893 to 37893 (0); 100 exports removed; 2 dead constants in `src/lsp/protocol.ts` keep `export` for the lint rule `no-unused-vars` |
+| 01c5f96 | P1, R16 | 9047 to 9040 (-7); lines 37893 to 37843 (-50); `checkAnalysis` branches 7 to 3, `Program.check` branches 17 to 13; new `checkModuleStep` (1) and `reachedModules` (3); `checkDeclarations` is gone from `src/core/interface.ts`; capture af26d21 to 01c5f96: 7042 and 7042 records, 0 missing, 0 new |
+| 5021917 | P2, diffFiles | 9040 to 9038 (-2); lines 37843 to 37858 (+15); 74 to 75 files; one `diffFiles` for `Session.sync` and `ProjectSet.flush`; the playground keeps its own payload code |
