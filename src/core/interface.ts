@@ -40,7 +40,7 @@ import type { Result } from "./source.ts";
 import { canonicalJson, TypeTable } from "./types.ts";
 
 /** The `Import` payload without `module` and `bindings`. */
-export type InterfacePayload = Pick<
+type InterfacePayload = Pick<
   Import,
   "exports" | "values" | "types" | "errors" | "services"
 >;
@@ -314,7 +314,7 @@ export function buildInterface(
 
 // ------------------------------------------------------------------ the project driver
 
-export interface ModuleCheck {
+interface ModuleCheck {
   readonly module: string;
   readonly declarations: ModuleDeclarations;
   /** An error value when the mode map lacks an entry that the hash needs. */

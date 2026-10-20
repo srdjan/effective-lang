@@ -39,7 +39,7 @@ import type {
 export type LogType = 1 | 2 | 3 | 4;
 
 /** One open document of a project. */
-export interface OpenDocument {
+interface OpenDocument {
   readonly uri: string;
   version: number;
   text: string;
@@ -83,7 +83,7 @@ export class ProjectState {
 }
 
 /** A document that belongs to a project. */
-export interface DocumentRef {
+interface DocumentRef {
   readonly project: ProjectState;
   /** The root-relative path. */
   readonly path: string;
@@ -99,7 +99,7 @@ export type FlushOutcome =
   | { readonly tag: "config-error"; readonly error: ConfigError };
 
 /** The ports of the set. */
-export interface ProjectSetPorts {
+interface ProjectSetPorts {
   readonly fs: CliFs;
   /** Sends `textDocument/publishDiagnostics`. */
   publish(params: PublishDiagnosticsParams): void;
@@ -132,7 +132,7 @@ function relativeTo(root: string, absolute: string): string | undefined {
  * Converts the diagnostics of a revision, grouped by root-relative path. Each
  * text is the one that the revision used, else the wanted text.
  */
-export function groupDiagnostics(
+function groupDiagnostics(
   diagnostics: readonly CoreDiagnostic[],
   root: string,
   textOf: (path: string) => string,

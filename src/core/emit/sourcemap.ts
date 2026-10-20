@@ -43,7 +43,7 @@ export function encodeVlq(value: number): string {
   return out;
 }
 
-export type VlqError =
+type VlqError =
   | { readonly tag: "bad-character"; readonly index: number }
   | { readonly tag: "truncated"; readonly index: number };
 
@@ -226,14 +226,14 @@ export function serializeSourceMap(map: SourceMapV3): string {
 // ------------------------------------------------------------------ decoding
 
 /** One decoded segment. Positions are zero-based. A segment with no `source` ends a mapping. */
-export interface MapSegment {
+interface MapSegment {
   readonly generatedColumn: number;
   readonly source: number | undefined;
   readonly line: number | undefined;
   readonly column: number | undefined;
 }
 
-export type MappingsError =
+type MappingsError =
   | { readonly tag: "bad-vlq"; readonly line: number; readonly error: VlqError }
   | {
     readonly tag: "bad-segment";

@@ -17,7 +17,7 @@ export const AREA = {
   serialization: "validation/008",
 } as const;
 
-export type AreaCode = typeof AREA[keyof typeof AREA];
+type AreaCode = typeof AREA[keyof typeof AREA];
 
 export class Report {
   readonly items: Diagnostic[] = [];

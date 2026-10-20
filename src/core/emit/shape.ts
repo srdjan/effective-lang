@@ -7,7 +7,7 @@
 
 import type { Expr } from "../ir.ts";
 
-export type ExprKind = Expr["kind"];
+type ExprKind = Expr["kind"];
 
 /**
  * The members of Expr that have the kind `K`. A member that has several kinds,
@@ -26,7 +26,7 @@ export type ExprOf<K extends ExprKind> = Expr extends infer E
  * - `structural`: an ordinary expression that the emitter prints from its
  *   parts.
  */
-export type LeafRule = "leaf" | "call" | "structural";
+type LeafRule = "leaf" | "call" | "structural";
 
 export interface Shape<E extends Expr> {
   /**
@@ -272,7 +272,7 @@ export type LeafKind = {
 }[ExprKind];
 
 /** The expressions that the emitter always prints as leaf effects. */
-export type LeafExpr = ExprOf<LeafKind>;
+type LeafExpr = ExprOf<LeafKind>;
 
 const TABLE: ShapeTable = ROWS;
 

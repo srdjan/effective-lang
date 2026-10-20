@@ -17,10 +17,10 @@ import type { CliIo } from "../host/io.ts";
 import { printOutcome, rechecked } from "./report.ts";
 import { Session, type SyncResult } from "./session.ts";
 
-export const EXIT_OK = 0;
-export const EXIT_DIAGNOSTICS = 1;
-export const EXIT_USAGE = 2;
-export const EXIT_INTERNAL = 3;
+const EXIT_OK = 0;
+const EXIT_DIAGNOSTICS = 1;
+const EXIT_USAGE = 2;
+const EXIT_INTERNAL = 3;
 
 function optionsOf(command: Command): BuildOptions {
   switch (command.kind) {

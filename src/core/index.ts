@@ -24,7 +24,7 @@ import {
   type SyntaxTree,
 } from "./syntax.ts";
 
-export type DeclKind = "type" | "error" | "service" | "provider" | "const";
+type DeclKind = "type" | "error" | "service" | "provider" | "const";
 
 export interface MethodEntry {
   readonly name: string;
@@ -59,7 +59,7 @@ export interface DeclEntry {
   readonly broken: boolean;
 }
 
-export interface ImportName {
+interface ImportName {
   readonly name: string;
   readonly node: NodeId;
   readonly span: Span;

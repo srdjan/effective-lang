@@ -93,7 +93,7 @@ export type RequestHandler = (
 ) => Result<unknown, RequestFailure>;
 
 /** A failed notification: the text goes to stderr and the notification is dropped. */
-export type NotificationHandler = (
+type NotificationHandler = (
   params: unknown,
   ctx: ServerContext,
 ) => Result<void, string>;
@@ -201,7 +201,7 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export interface ServerOptions {
+interface ServerOptions {
   /** Request handlers added to the table. A test hook. */
   readonly extraRequests?: ReadonlyMap<string, RequestHandler>;
 }

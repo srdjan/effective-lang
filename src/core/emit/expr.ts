@@ -67,7 +67,7 @@ import { isLocalId } from "../ids.ts";
 // ------------------------------------------------------------------ precedence
 
 /** Precedence levels of the printed expressions. A larger number binds tighter. */
-export const PREC = {
+const PREC = {
   yield: 0,
   conditional: 1,
   or: 2,
@@ -122,7 +122,7 @@ interface Chain {
 }
 
 /** A printed expression with the facts that its parent needs. */
-export interface Emitted {
+interface Emitted {
   readonly doc: Doc;
   readonly prec: number;
   /** The text starts with `{`, so a statement or an arrow body needs parentheses. */

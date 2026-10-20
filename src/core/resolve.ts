@@ -162,7 +162,7 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set(
   Object.keys(PRELUDE),
 );
 
-export type BuiltinTypeName =
+type BuiltinTypeName =
   | "string"
   | "boolean"
   | "int"
@@ -209,7 +209,7 @@ export const BUILTIN_TYPE_NAMES: ReadonlySet<string> = new Set<
  * and `ReadonlyArray`. TypeScript rejects `any`, `bigint`, `object`, and
  * `symbol` as the name of a type or a class.
  */
-export const TARGET_NAMES: ReadonlySet<string> = new Set([
+const TARGET_NAMES: ReadonlySet<string> = new Set([
   "undefined",
   "Number",
   "RangeError",
@@ -283,7 +283,7 @@ export function targetText(target: Target): string {
 }
 
 /** A module-level name. */
-export interface Binding {
+interface Binding {
   readonly target: Target;
   /** For a service: the defining module and the declaration, to look up methods. */
   readonly service?: { readonly module: string; readonly entry: DeclEntry };
@@ -1367,7 +1367,7 @@ class Resolver {
 }
 
 /** Resolves every name of one module of the project. */
-export function resolveModule(
+function resolveModule(
   project: Project,
   info: ModuleInfo,
 ): ModuleResolution {

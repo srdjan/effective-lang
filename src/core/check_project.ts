@@ -95,7 +95,7 @@ export interface ConstantBody {
   readonly type: TypeRef;
 }
 
-export interface ModuleBodies {
+interface ModuleBodies {
   /** In source order. */
   readonly functions: ReadonlyMap<ValueId, FunctionBody>;
   /** In source order. */

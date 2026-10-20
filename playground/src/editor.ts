@@ -32,9 +32,9 @@ import { type HighlightKind, highlightTokens } from "./highlight.ts";
 import { type HoverBlock, hoverLines, wrapIndent } from "./model.ts";
 
 /** The answer of the facade for a hover at an offset of the active file. */
-export type HoverSource = (offset: number) => PlaygroundHover | undefined;
+type HoverSource = (offset: number) => PlaygroundHover | undefined;
 
-export interface SourceOptions {
+interface SourceOptions {
   /** Called for each hover. The page binds it to the active file. */
   readonly hover: HoverSource;
   /** Called for each view update, with the update of the editor. */

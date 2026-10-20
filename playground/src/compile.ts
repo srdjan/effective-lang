@@ -30,7 +30,7 @@ export interface ProgramPort {
   update(changes: ProgramChanges): Result<Revision, ConfigError>;
 }
 
-export interface PlaygroundPorts {
+interface PlaygroundPorts {
   /** The clock, in milliseconds. `performance.now` fits. */
   readonly now: () => number;
   /** The program. The default is `new Program("")`. */
@@ -47,7 +47,7 @@ export interface PlaygroundDiagnostic {
 }
 
 /** The generated TypeScript of one `.eff` file. */
-export interface PlaygroundOutput {
+interface PlaygroundOutput {
   readonly text: string;
   /** True when the text comes from an earlier revision, because this one has errors. */
   readonly stale: boolean;

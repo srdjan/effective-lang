@@ -9,7 +9,7 @@ import type { EffectModule } from "./scope.ts";
 import type { ExprOf } from "./shape.ts";
 
 /** The runtime helpers that the emitter writes for a closeable scope. */
-export type ScopeOperation = "make" | "provide" | "register" | "close";
+type ScopeOperation = "make" | "provide" | "register" | "close";
 
 /** The function that a simple call invokes. */
 export type Callee =
@@ -36,10 +36,10 @@ function scopeOperation(operation: ScopeOperation): Callee {
  */
 export type Treatment = "value" | "callback" | "effect-callback";
 
-export type Operand = readonly [expression: Expr, treatment: Treatment];
+type Operand = readonly [expression: Expr, treatment: Treatment];
 
 /** A call of a structural kind: the callee and the printed operands. */
-export interface OperandCall<E extends Expr> {
+interface OperandCall<E extends Expr> {
   readonly callee: Callee;
   readonly operands: (e: E) => readonly Operand[];
 }
@@ -166,7 +166,7 @@ export const OPERAND_CALLS: {
  * The leaf kinds that print as a call of their evaluated children. The
  * emitter prints the children first, so a row states the callee only.
  */
-export type LeafCallKind =
+type LeafCallKind =
   | "fail"
   | "scoped"
   | "run-stream"

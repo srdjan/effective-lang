@@ -12,7 +12,7 @@ import type { Project } from "./project.ts";
 import { validateModule } from "./validate/index.ts";
 
 /** The source texts of a project, keyed by the root-relative paths that spans use. */
-export function projectSources(project: Project): ReadonlyMap<string, string> {
+function projectSources(project: Project): ReadonlyMap<string, string> {
   const sources = new Map<string, string>();
   for (const info of project.modules.values()) {
     sources.set(info.path, info.tree.text);

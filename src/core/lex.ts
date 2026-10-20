@@ -60,7 +60,7 @@ export enum TriviaKind {
   BlockComment,
 }
 
-export interface TriviaTable {
+interface TriviaTable {
   readonly kinds: Uint8Array;
   readonly starts: Uint32Array;
   readonly ends: Uint32Array;

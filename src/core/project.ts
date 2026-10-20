@@ -57,7 +57,7 @@ export function moduleNameOf(path: string): string {
 
 // ------------------------------------------------------------------ configuration
 
-export interface HostModuleConfig {
+interface HostModuleConfig {
   /** Root-relative path of the `.effi` interface file. */
   readonly interfacePath: string;
   /** Root-relative path of the TypeScript module that implements the interface. */
@@ -116,7 +116,7 @@ function keySpan(text: string, name: string, from: number): Span {
 const TOP_KEYS: ReadonlySet<string> = new Set(["host"]);
 const HOST_KEYS: ReadonlySet<string> = new Set(["interface", "module"]);
 
-export interface ConfigResult {
+interface ConfigResult {
   readonly config: ProjectConfig;
   readonly diagnostics: readonly Diagnostic[];
 }
@@ -226,7 +226,7 @@ export function readConfig(
 
 // ------------------------------------------------------------------ modules
 
-export interface ImportLink {
+interface ImportLink {
   /** The import declaration in the index of the importing module. */
   readonly entry: ImportEntry;
   /** The imported module's name, or undefined when the import could not be linked. */
@@ -490,14 +490,14 @@ function compareText(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-export interface GraphResult {
+interface GraphResult {
   readonly graph: ReadonlyMap<string, readonly string[]>;
   readonly order: readonly string[];
   readonly diagnostics: readonly Diagnostic[];
 }
 
 /** Builds the graph, finds cycles with strongly connected components, and orders the modules. */
-export function linkModules(
+function linkModules(
   modules: ReadonlyMap<string, ModuleInfo>,
 ): GraphResult {
   const names = [...modules.keys()].sort(compareText);

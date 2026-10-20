@@ -8,7 +8,7 @@
 import type { Execution, ValueId } from "./ir.ts";
 
 /** The most rounds that one group may take (design 4.6, resource caps). */
-export const ROUND_CAP = 32;
+const ROUND_CAP = 32;
 
 /**
  * Strongly connected components of a graph over the nodes `0 .. count - 1`. The
@@ -74,14 +74,14 @@ export function stronglyConnectedComponents(
 }
 
 /** What one round of body checks returns. */
-export interface Round<R> {
+interface Round<R> {
   /** The checks of this round. The last round's results are the final ones. */
   readonly results: R;
   /** The mode that each pending member computed against the assumed modes. */
   readonly computed: ReadonlyMap<ValueId, Execution>;
 }
 
-export interface GroupSolution<R> {
+interface GroupSolution<R> {
   /** The settled modes of the pending members. */
   readonly modes: ReadonlyMap<ValueId, Execution>;
   /** The results of the last round. When `settled`, they used the final modes. */

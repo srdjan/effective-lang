@@ -111,7 +111,7 @@ async function denoCheck(
 }
 
 /** The quiet time after the last file event before a rebuild starts. */
-export const WATCH_DEBOUNCE_MS = 100;
+const WATCH_DEBOUNCE_MS = 100;
 /** A fallback rescan when the platform does not deliver file system events. */
 const WATCH_POLL_MS = 1_000;
 

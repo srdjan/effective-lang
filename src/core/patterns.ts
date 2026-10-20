@@ -10,7 +10,7 @@ import { isErrorId } from "./ids.ts";
 export type LiteralValue = string | number | boolean | null;
 
 /** One record member of a tagged union, with the literal values of each literal field. */
-export interface TaggedMember {
+interface TaggedMember {
   readonly type: TypeRef;
   readonly literals: ReadonlyMap<string, readonly LiteralValue[]>;
 }

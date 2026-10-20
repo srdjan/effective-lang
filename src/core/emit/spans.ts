@@ -14,7 +14,7 @@ import type { SpanRecord } from "./doc.ts";
 import type { EmittedModule, HostAssertionRecord } from "./emit.ts";
 
 /** A host assertion with the span of the Effective import that binds the provider. */
-export interface HostAssertionEntry extends HostAssertionRecord {
+interface HostAssertionEntry extends HostAssertionRecord {
   /**
    * The span of the imported name in the `.eff` import declaration, for
    * example `UsersLive` in `import { UsersLive } from "host:providers"`.

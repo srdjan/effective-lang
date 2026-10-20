@@ -31,7 +31,7 @@ export function patternBinding(pattern: Pattern): Parameter | null {
 }
 
 /** The binders that `expr` itself introduces (not those of its children). */
-export function bindersOf(expr: Expr): Parameter[] {
+function bindersOf(expr: Expr): Parameter[] {
   switch (expr.kind) {
     case "closure":
       return [...expr.parameters];

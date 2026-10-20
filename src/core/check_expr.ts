@@ -407,7 +407,7 @@ type PreludeHandlers = { readonly [K in PreludeCallName]: PreludeHandler<K> };
 
 // ------------------------------------------------------------------ the checker
 
-export class BodyChecker {
+class BodyChecker {
   readonly sink: Diagnostic[] = [];
   readonly body: BodyTable;
   private readonly lowerer: TypeLowerer;

@@ -88,7 +88,7 @@ export enum SyntaxKind {
 }
 
 /** The key and constructor options that one Schema type word selects. */
-export interface SchemaFlags {
+interface SchemaFlags {
   readonly optionalKey: boolean;
   readonly encodedOptionalKey: boolean;
   readonly decodedOptionalKey: boolean;
@@ -96,7 +96,7 @@ export interface SchemaFlags {
 }
 
 /** A type word that takes `<...>` arguments: its node kind and, for Schema words, its flags. */
-export interface TypeWord {
+interface TypeWord {
   readonly kind: SyntaxKind;
   readonly schema?: SchemaFlags;
 }

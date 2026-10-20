@@ -12,7 +12,7 @@ import type { CliIo } from "../host/io.ts";
 import { formatTscMappings, type TextOf } from "./format.ts";
 
 /** The version of Effect that the generated code targets. */
-export const EFFECT_SPECIFIER = "npm:effect@4.0.5";
+const EFFECT_SPECIFIER = "npm:effect@4.0.5";
 
 /** The configuration of the generated check: strict, with pinned host imports. */
 export function tscConfig(): string {
@@ -33,7 +33,7 @@ export function tscConfig(): string {
   ) + "\n";
 }
 
-export interface TscOutcome {
+interface TscOutcome {
   /** Lines for stdout: one per mapped diagnostic. */
   readonly lines: readonly string[];
   /** Lines for stderr: output that belongs to no diagnostic, and failures of the run. */

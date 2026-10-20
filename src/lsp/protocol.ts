@@ -23,16 +23,16 @@ export interface Location {
   readonly range: Range;
 }
 
-export interface TextDocumentIdentifier {
+interface TextDocumentIdentifier {
   readonly uri: string;
 }
 
-export interface VersionedTextDocumentIdentifier {
+interface VersionedTextDocumentIdentifier {
   readonly uri: string;
   readonly version: number;
 }
 
-export interface TextDocumentItem {
+interface TextDocumentItem {
   readonly uri: string;
   readonly languageId: string;
   readonly version: number;
@@ -57,7 +57,7 @@ export const FileChangeType = {
   Deleted: 3,
 } as const;
 
-export type FileChangeTypeValue = 1 | 2 | 3;
+type FileChangeTypeValue = 1 | 2 | 3;
 
 export const DiagnosticSeverity = { Error: 1, Warning: 2 } as const;
 
@@ -86,7 +86,7 @@ export const DEFAULT_INITIALIZATION_OPTIONS: InitializationOptions = {
   writeOnSave: true,
 };
 
-export interface ServerCapabilities {
+interface ServerCapabilities {
   readonly positionEncoding: "utf-16";
   readonly textDocumentSync: {
     readonly openClose: true;
@@ -110,12 +110,12 @@ export const SERVER_CAPABILITIES: ServerCapabilities = {
   documentSymbolProvider: true,
 };
 
-export interface InitializeResult {
+interface InitializeResult {
   readonly capabilities: ServerCapabilities;
   readonly serverInfo?: { readonly name: string; readonly version?: string };
 }
 
-export interface DiagnosticRelatedInformation {
+interface DiagnosticRelatedInformation {
   readonly location: Location;
   readonly message: string;
 }
@@ -137,7 +137,7 @@ export interface PublishDiagnosticsParams {
   readonly diagnostics: readonly Diagnostic[];
 }
 
-export interface MarkupContent {
+interface MarkupContent {
   readonly kind: "markdown" | "plaintext";
   readonly value: string;
 }
@@ -304,7 +304,7 @@ function narrowOptions(value: unknown): {
   return { options: { debounceMs, writeOnSave }, warnings };
 }
 
-export interface InitializeParams {
+interface InitializeParams {
   readonly options: InitializationOptions;
   /** Messages for `window/logMessage`, one per invalid option. */
   readonly warnings: readonly string[];
@@ -428,7 +428,7 @@ export interface FileEvent {
   readonly type: FileChangeTypeValue;
 }
 
-export interface DidChangeWatchedFilesParams {
+interface DidChangeWatchedFilesParams {
   readonly changes: readonly FileEvent[];
 }
 

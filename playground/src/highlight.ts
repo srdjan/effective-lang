@@ -26,7 +26,7 @@ export type HighlightKind =
   | "operator";
 
 /** A range of the text. `to` is exclusive. Ranges do not overlap. */
-export interface HighlightRange {
+interface HighlightRange {
   readonly from: number;
   readonly to: number;
   readonly kind: HighlightKind;

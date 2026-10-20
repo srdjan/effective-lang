@@ -97,7 +97,7 @@ export interface TypeEnv {
   readonly services: Map<ServiceId, ServiceDecl>;
 }
 
-export interface ParameterSignature {
+interface ParameterSignature {
   readonly name: string;
   readonly borrow: boolean;
   /** The local identity from the resolver. Absent in a function type, where names are labels. */
@@ -142,7 +142,7 @@ export interface ConstantSignature extends SignatureBase {
   readonly type: Lowered | undefined;
 }
 
-export interface ProviderSignature extends SignatureBase {
+interface ProviderSignature extends SignatureBase {
   readonly kind: "provider";
   readonly id: ValueId;
   readonly provides: readonly CapabilityId[];
@@ -178,7 +178,7 @@ export interface ModuleDeclarations {
 /** The execution mode of each function whose mode the sets do not decide. */
 export type ModeMap = ReadonlyMap<ValueId, Execution>;
 
-export type SignatureError =
+type SignatureError =
   | { readonly tag: "missing-mode"; readonly id: ValueId }
   | { readonly tag: "inferred-contract"; readonly id: ValueId };
 
@@ -208,7 +208,7 @@ export function executionOf(
   return { ok: true, value: mode };
 }
 
-export interface SignatureType {
+interface SignatureType {
   readonly ref: TypeRef;
   readonly ir: FunctionType;
 }
@@ -971,7 +971,7 @@ export class TypeLowerer {
   }
 }
 
-export interface LoweredField {
+interface LoweredField {
   readonly name: string;
   readonly optional: boolean;
   readonly type: Lowered;

@@ -46,7 +46,7 @@ export type EffectModule =
   | "Exit"
   | "Scope";
 
-export interface ScopeRuntimeNames {
+interface ScopeRuntimeNames {
   readonly type: string;
   readonly make: string;
   readonly provide: string;
@@ -54,7 +54,7 @@ export interface ScopeRuntimeNames {
   readonly close: string;
 }
 
-export type EmitFailureData =
+type EmitFailureData =
   | {
     readonly tag: "unsupported";
     readonly message: string;
@@ -102,7 +102,7 @@ type DeferredKind =
   | "closeable-scope"
   | "fiber";
 
-export type DeferredType = Extract<Type, { readonly kind: DeferredKind }>;
+type DeferredType = Extract<Type, { readonly kind: DeferredKind }>;
 
 const DEFERRED_KINDS = {
   "function": true,
@@ -169,7 +169,7 @@ function compareText(a: string, b: string): number {
 }
 
 /** The order of `deno fmt` for named imports: case-insensitive, then by code unit. */
-export function compareImportNames(a: string, b: string): number {
+function compareImportNames(a: string, b: string): number {
   return compareText(a.toLowerCase(), b.toLowerCase()) || compareText(a, b);
 }
 
@@ -212,7 +212,7 @@ export function relativeSpecifier(fromFile: string, toFile: string): string {
 
 // ------------------------------------------------------------------ the scope
 
-export interface HostBinding {
+interface HostBinding {
   /** The registry key: `providers` for `host:providers`. */
   readonly key: string;
   /** The name that the host module exports. */

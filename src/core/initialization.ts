@@ -23,7 +23,7 @@ export interface InitializationGraph {
   readonly cycles: readonly (readonly ValueId[])[];
 }
 
-export interface InitializationNode {
+interface InitializationNode {
   readonly id: ValueId;
   readonly kind: "function" | "constant";
   /** Module-level declarations that the body or initializer references. */

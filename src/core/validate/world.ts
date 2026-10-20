@@ -26,9 +26,9 @@ import {
 import { sameSet } from "./sets.ts";
 import { typeChildren } from "./type_children.ts";
 
-export const PRELUDE_MODULE = "effective:prelude";
+const PRELUDE_MODULE = "effective:prelude";
 
-export interface World {
+interface World {
   readonly module: string;
   readonly env: TypeEnv;
   readonly types: ReadonlyMap<string, TypeDecl>;
@@ -322,7 +322,7 @@ export function checkRecordFields(
 }
 
 /** Identity and field checks of one type in a declaration. */
-export function checkDeclaredType(
+function checkDeclaredType(
   ctx: Ctx,
   type: Type,
   path: string,

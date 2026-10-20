@@ -35,7 +35,7 @@ function literalText(value: string | number | boolean | null): string {
 }
 
 /** Parameter names of function types: `a`, `b`, `c`, ... */
-export function parameterName(index: number): string {
+function parameterName(index: number): string {
   return index < 26 ? String.fromCharCode(97 + index) : `a${index}`;
 }
 
@@ -53,7 +53,7 @@ function unionDoc(members: readonly Doc[]): Doc {
   return join(" | ", members);
 }
 
-export function failureUnion(
+function failureUnion(
   scope: Scope,
   failures: readonly ErrorId[],
 ): Doc | undefined {
@@ -61,7 +61,7 @@ export function failureUnion(
   return unionDoc(failures.map((id) => scope.nameOf(id)));
 }
 
-export function requirementUnion(
+function requirementUnion(
   scope: Scope,
   capabilities: readonly CapabilityId[],
 ): Doc | undefined {
@@ -120,7 +120,7 @@ function deferredArguments(
 }
 
 /** `Layer.Layer<S1 | S2, E, Rq>` for a provider type. */
-export function layerTypeDoc(
+function layerTypeDoc(
   scope: Scope,
   provides: readonly CapabilityId[],
   acquisition: Effects,

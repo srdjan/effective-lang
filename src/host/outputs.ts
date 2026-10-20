@@ -11,7 +11,7 @@ import {
 } from "../core/mod.ts";
 import type { CliFs } from "./io.ts";
 
-export interface GeneratedOutputs {
+interface GeneratedOutputs {
   /** The root-relative paths of the files that changed on disk. */
   readonly written: string[];
   /** The root-relative paths of the generated modules, in the order of `names`. */
@@ -24,7 +24,7 @@ export interface GeneratedOutputs {
   readonly failed: boolean;
 }
 
-export function describeLowerError(error: LowerError): string {
+function describeLowerError(error: LowerError): string {
   switch (error.tag) {
     case "diagnostics":
       return `${error.module} has ${error.count} diagnostics`;

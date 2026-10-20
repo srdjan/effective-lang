@@ -54,7 +54,7 @@ export type Doc =
   | { readonly k: "spanclose"; readonly span: Span; readonly id: GroupId };
 
 /** The `fill` node of the `Doc` type. */
-export type FillDoc = Extract<Doc, { readonly k: "fill" }>;
+type FillDoc = Extract<Doc, { readonly k: "fill" }>;
 
 /** Names a group, so that a later `ifBroke` can ask whether the group broke. */
 export type GroupId = object;
@@ -202,13 +202,13 @@ export interface SpanRecord {
   readonly span: Span;
 }
 
-export interface MarkRecord {
+interface MarkRecord {
   readonly key: string;
   readonly start: number;
   readonly end: number;
 }
 
-export interface Rendered {
+interface Rendered {
   readonly text: string;
   /** In the order in which the tagged parts close. */
   readonly spans: readonly SpanRecord[];

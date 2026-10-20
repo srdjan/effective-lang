@@ -5,7 +5,7 @@
 import type { Type } from "../ir.ts";
 
 /** A child type and the IR path suffix from its parent, such as `.fields[0].type`. */
-export interface TypeChild {
+interface TypeChild {
   readonly type: Type;
   readonly suffix: string;
 }

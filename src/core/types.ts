@@ -24,7 +24,7 @@ declare const typeRefBrand: unique symbol;
 /** An interned type. Equal structural types have equal refs. */
 export type TypeRef = number & { readonly [typeRefBrand]: true };
 
-export type PrimitiveName =
+type PrimitiveName =
   | "string"
   | "boolean"
   | "int"
@@ -231,7 +231,7 @@ export type TypeNode =
   /** The recovery type. It is compatible with every type in both directions. */
   | { readonly kind: "error" };
 
-export interface FunctionSpec {
+interface FunctionSpec {
   readonly execution: Execution;
   readonly parameters: readonly TypeRef[];
   readonly borrows?: readonly boolean[];
@@ -240,7 +240,7 @@ export interface FunctionSpec {
   readonly requirements: readonly CapabilityId[];
 }
 
-export interface ProviderSpec {
+interface ProviderSpec {
   readonly provides: readonly CapabilityId[];
   readonly execution: Execution;
   readonly failures: readonly ErrorId[];
@@ -295,7 +295,7 @@ export function canonicalJson(value: unknown): string {
 // ------------------------------------------------------------------ the table
 
 /** What a graph of imported declarations supplies to the table. */
-export interface DefinitionSource {
+interface DefinitionSource {
   readonly types: readonly {
     readonly id: TypeId;
     readonly opaque?: boolean;

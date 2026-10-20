@@ -97,7 +97,7 @@ export function tabCounts(result: PlaygroundResult): Record<string, number> {
  * has errors. `none`: the module never produced output. `interface`: the file
  * is a host interface file (`.effi`) and has no generated code.
  */
-export type OutputState =
+type OutputState =
   | { readonly tag: "text"; readonly text: string }
   | { readonly tag: "stale"; readonly text: string }
   | { readonly tag: "none" }
@@ -122,7 +122,7 @@ export interface HoverBlock {
   readonly code: boolean;
 }
 
-export interface HoverLines {
+interface HoverLines {
   /** The blocks of the tooltip: the contract, then the backend type when it exists. */
   readonly tooltip: readonly HoverBlock[];
   /** The text of the cursor line: the contract on one line. Empty without a hit. */

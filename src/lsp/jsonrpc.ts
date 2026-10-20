@@ -25,7 +25,7 @@ export interface NotificationMessage {
   readonly params?: unknown;
 }
 
-export interface ResponseError {
+interface ResponseError {
   readonly code: number;
   readonly message: string;
   readonly data?: unknown;
@@ -65,7 +65,7 @@ export type FrameError =
 /** A header block, including its final CRLFCRLF, larger than this is malformed. */
 export const MAX_HEADER_BYTES = 8192;
 /** A body larger than this is refused as a malformed header. */
-export const MAX_BODY_BYTES = 256 * 1024 * 1024;
+const MAX_BODY_BYTES = 256 * 1024 * 1024;
 
 const HEADER_END = Uint8Array.of(13, 10, 13, 10);
 const LENGTH_NAME = "content-length:";
@@ -258,7 +258,7 @@ export function notificationMessage(
   return { jsonrpc: "2.0", method, params };
 }
 
-export type IncomingMessage =
+type IncomingMessage =
   | { readonly tag: "request"; readonly message: RequestMessage }
   | { readonly tag: "notification"; readonly message: NotificationMessage }
   | { readonly tag: "response"; readonly message: ResponseMessage }

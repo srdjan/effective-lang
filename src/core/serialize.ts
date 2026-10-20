@@ -8,7 +8,7 @@
 
 import type { ModuleIR, Result } from "./ir.ts";
 
-export type SerializeError =
+type SerializeError =
   /** A failure, requirement, or provides set that is not sorted, or that repeats an entry. */
   | {
     readonly tag: "unsorted-set";
