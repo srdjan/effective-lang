@@ -5035,6 +5035,17 @@ export class BodyChecker {
     );
   }
 
+  /** Whether the argument is a direct call of the `takeSink` builtin. */
+  private isTakeSinkCall(arg: Arg): boolean {
+    if (
+      arg.pre !== undefined ||
+      kindOf(this.tree, arg.node) !== SyntaxKind.CallExpr
+    ) return false;
+    const callee = this.kids(arg.node)[0];
+    const target = callee === undefined ? undefined : this.targets.get(callee);
+    return target?.kind === "builtin" && target.name === "takeSink";
+  }
+
   private runStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
     this.fact(node, { kind: "run-stream" });
     if (!this.arity(node, "runStream", 2, args)) {
@@ -5046,8 +5057,20 @@ export class BodyChecker {
     }
     this.noPipeline("runStream", args);
     const stream = this.argInfo(args[0]);
-    const sink = this.argInfo(args[1]);
     const producer = this.table.node(this.table.unfold(stream.type));
+    // Only a direct `takeSink` call needs the producer element to find its
+    // input. A full expected Sink type would also constrain `if` and `match`
+    // branches that are named sinks, so every other argument gets no hint.
+    const hint = producer.kind === "stream" && this.isTakeSinkCall(args[1])
+      ? this.table.sink(
+        producer.element,
+        this.table.array(producer.element),
+        [],
+        [],
+        producer.element,
+      )
+      : undefined;
+    const sink = this.argInfo(args[1], hint);
     const consumer = this.table.node(this.table.unfold(sink.type));
     if (producer.kind !== "stream" && !this.isError(stream.type)) {
       this.report(
