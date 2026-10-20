@@ -311,3 +311,19 @@ Deno.test("a module path with special characters is a module diagnostic", () => 
   assert(project.diagnostics[0].message.includes("a#b.eff"));
   assertEquals(project.modules.has("a#b"), false);
 });
+
+Deno.test("a chain of 10000 modules links without overflowing the stack", () => {
+  const count = 10_000;
+  const files: Record<string, string> = { "effective.json": "{}" };
+  for (let i = 0; i < count; i++) {
+    const body = "export const v = (): int => 1\n";
+    files[`m${i}.eff`] = i + 1 < count
+      ? `import { v } from "./m${i + 1}.eff"\n${body}`
+      : body;
+  }
+  const project = load(files, ["m0.eff"]);
+  assertEquals(project.diagnostics.length, 0);
+  assertEquals(project.order.length, count);
+  assertEquals(project.order[0], `m${count - 1}`);
+  assertEquals(project.order[count - 1], "m0");
+});

@@ -8,6 +8,7 @@ import {
   normalizeDiagnostics,
 } from "./diagnostics.ts";
 import { buildIndex, type FileIndex, type ImportEntry } from "./index.ts";
+import { stronglyConnectedComponents } from "./modes.ts";
 import { parse, type ParseResult } from "./parse.ts";
 import type { ReadError, Result, SourceHost, Span } from "./source.ts";
 import type { FileMode, SyntaxTree } from "./syntax.ts";
@@ -495,7 +496,7 @@ export interface GraphResult {
   readonly diagnostics: readonly Diagnostic[];
 }
 
-/** Builds the graph, finds cycles with Tarjan's algorithm, and orders the modules. */
+/** Builds the graph, finds cycles with strongly connected components, and orders the modules. */
 export function linkModules(
   modules: ReadonlyMap<string, ModuleInfo>,
 ): GraphResult {
@@ -503,7 +504,7 @@ export function linkModules(
   const graph = new Map<string, readonly string[]>();
   for (const name of names) {
     const targets = new Set<string>();
-    for (const link of modules.get(name)!.links) {
+    for (const link of modules.get(name)?.links ?? []) {
       if (link.target !== undefined && modules.has(link.target)) {
         targets.add(link.target);
       }
@@ -511,46 +512,22 @@ export function linkModules(
     graph.set(name, [...targets].sort(compareText));
   }
 
-  const index = new Map<string, number>();
-  const low = new Map<string, number>();
-  const onStack = new Set<string>();
-  const stack: string[] = [];
+  // Module names are sorted, so ascending indexes keep the order of `names`.
+  const position = new Map<string, number>();
+  names.forEach((name, i) => position.set(name, i));
+  const edges = names.map((name) =>
+    (graph.get(name) ?? []).flatMap((target) => position.get(target) ?? [])
+  );
   const order: string[] = [];
   const diagnostics: Diagnostic[] = [];
-  let counter = 0;
-
-  const visit = (name: string): void => {
-    index.set(name, counter);
-    low.set(name, counter);
-    counter++;
-    stack.push(name);
-    onStack.add(name);
-    for (const next of graph.get(name) ?? []) {
-      if (!index.has(next)) {
-        visit(next);
-        low.set(name, Math.min(low.get(name)!, low.get(next)!));
-      } else if (onStack.has(next)) {
-        low.set(name, Math.min(low.get(name)!, index.get(next)!));
-      }
-    }
-    if (low.get(name) !== index.get(name)) return;
-    const component: string[] = [];
-    while (true) {
-      const member = stack.pop()!;
-      onStack.delete(member);
-      component.push(member);
-      if (member === name) break;
-    }
-    component.sort(compareText);
+  for (const indexes of stronglyConnectedComponents(names.length, edges)) {
+    const component = indexes.map((i) => names[i]);
     order.push(...component);
     const selfLoop = component.length === 1 &&
       (graph.get(component[0]) ?? []).includes(component[0]);
     if (component.length > 1 || selfLoop) {
       diagnostics.push(cycleDiagnostic(modules, component));
     }
-  };
-  for (const name of names) {
-    if (!index.has(name)) visit(name);
   }
   return { graph, order, diagnostics };
 }
