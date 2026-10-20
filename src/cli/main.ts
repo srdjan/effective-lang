@@ -1,4 +1,5 @@
-// The command-line tool `effective`: `check`, `build`, and `watch`.
+// The command-line tool `effective`: `check`, `build`, and `watch`. The watch
+// loop takes its event source as a parameter, so that a test drives it with a fake.
 //
 // `main(args, io)` returns the exit code and does everything else through `io`,
 // so that tests run it in process with in-memory doubles. The real entry at the
@@ -10,12 +11,11 @@
 // a diagnostic.
 
 import { type Command, parseArgs, USAGE } from "./args.ts";
-import type { BuildOptions } from "./build.ts";
+import type { BuildOptions, BuildOutcome } from "./build.ts";
 import { denoIo } from "./deno_io.ts";
 import type { CliIo } from "./io.ts";
-import { printOutcome } from "./report.ts";
-import { Session } from "./session.ts";
-import { watchLoop } from "./watch.ts";
+import { printOutcome, rechecked } from "./report.ts";
+import { Session, type SyncResult } from "./session.ts";
 
 export const EXIT_OK = 0;
 export const EXIT_DIAGNOSTICS = 1;
@@ -31,6 +31,53 @@ function optionsOf(command: Command): BuildOptions {
     case "check":
     case "help":
       return { write: false, validate: false, tsc: false };
+  }
+}
+
+/**
+ * Builds the `first` sync result, then builds once for each batch of `events`.
+ * Each build prints the modules that it checked again and its diagnostics.
+ * Returns when the event source ends. A broken project file prints an error,
+ * and the loop goes on.
+ */
+async function watchLoop(
+  io: CliIo,
+  session: Session,
+  first: SyncResult,
+  events: AsyncIterable<readonly string[]>,
+  options: BuildOptions,
+): Promise<void> {
+  const round = async (synced: SyncResult): Promise<void> => {
+    switch (synced.tag) {
+      case "unchanged":
+        return;
+      case "read-error":
+      case "config-error":
+        io.stderr(`error: ${synced.message}\n`);
+        return;
+      case "revision": {
+        const outcome: BuildOutcome = await session.build(
+          synced.revision,
+          options,
+        );
+        io.stderr(`rechecked: ${rechecked(synced.revision.rechecked)}\n`);
+        printOutcome(io, outcome, synced.revision.effModuleNames().length);
+      }
+    }
+  };
+  await round(first);
+  const iterator = events[Symbol.asyncIterator]();
+  let next = iterator.next();
+  try {
+    io.stderr(`watching ${session.root}\n`);
+    while (true) {
+      const event = await next;
+      if (event.done) break;
+      await round(session.sync());
+      next = iterator.next();
+    }
+  } finally {
+    await iterator.return?.();
   }
 }
 

@@ -198,7 +198,7 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
     decls.ts       Declarations, their order, and the export rule.
     walk.ts        Traversals of the IR.
 src/cli/       The command-line tool. Deno APIs stay here, in src/lsp/main.ts, bench/, playground/build.ts, playground/serve.ts, scripts/, and tests/.
-  main.ts        main(args, io) returns the exit code. The last lines wire the real io.
+  main.ts        main(args, io) returns the exit code, and the watch loop over an injected event source. The last lines wire the real io.
   args.ts        The command line: commands, root, and flags.
   io.ts          The ports: file system, deno check runner, and watch source.
   deno_io.ts     The real ports: Deno file system, subprocess, and Deno.watchFs.
@@ -208,7 +208,6 @@ src/cli/       The command-line tool. Deno APIs stay here, in src/lsp/main.ts, b
   tsc.ts         The generated deno check configuration and the mapping of its output.
   format.ts      The output line of a diagnostic.
   report.ts      Printing of a build outcome: diagnostics on stdout, the rest on stderr.
-  watch.ts       The watch loop over an injected event source.
   events.ts      Debouncing of file system events.
   outputs.ts     writeGenerated: the write of the .ts and .ts.map files, shared by build and the language server.
 src/lsp/       The language server. See "Language server".
