@@ -10,7 +10,7 @@
 // names and sends `effective/generatedChanged` after a flush.
 
 import type { CliFs } from "../host/io.ts";
-import type { Result } from "../core/mod.ts";
+import { errorMessage, type Result } from "../core/mod.ts";
 import {
   definitionRequest,
   didSave,
@@ -197,10 +197,6 @@ function describeError(error: unknown): string {
     : String(error);
 }
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 interface ServerOptions {
   /** Request handlers added to the table. A test hook. */
   readonly extraRequests?: ReadonlyMap<string, RequestHandler>;
@@ -351,7 +347,7 @@ export class LanguageServer {
     } catch (error) {
       this.#stderr(`request ${method} failed: ${describeError(error)}`);
       this.ports.send(
-        errorResponse(id, ErrorCodes.internalError, messageOf(error)),
+        errorResponse(id, ErrorCodes.internalError, errorMessage(error)),
       );
     }
   }

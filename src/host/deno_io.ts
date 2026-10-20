@@ -2,7 +2,7 @@
 // `Deno.watchFs`. In the CLI, only this file and the wiring at the end of
 // `main.ts` call Deno APIs.
 
-import type { ReadError, Result } from "../core/mod.ts";
+import { errorMessage, type ReadError, type Result } from "../core/mod.ts";
 import { debounceBatches } from "./events.ts";
 import type {
   CliFs,
@@ -17,10 +17,6 @@ import { isSourcePath } from "./workspace.ts";
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-function messageOf(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
-
 /** The real file system. The language server uses the same object. */
 export const denoFs: CliFs = {
   readText(path: string): Result<string, ReadError> {
@@ -32,7 +28,7 @@ export const denoFs: CliFs = {
       }
       return {
         ok: false,
-        error: { tag: "unreadable", path, message: messageOf(e) },
+        error: { tag: "unreadable", path, message: errorMessage(e) },
       };
     }
   },
@@ -43,7 +39,7 @@ export const denoFs: CliFs = {
       Deno.writeTextFileSync(path, text);
       return { ok: true, value: undefined };
     } catch (e) {
-      return { ok: false, error: { message: messageOf(e) } };
+      return { ok: false, error: { message: errorMessage(e) } };
     }
   },
   kind(path: string): "file" | "directory" | "missing" {
@@ -65,7 +61,7 @@ export const denoFs: CliFs = {
       }
       return { ok: true, value: entries };
     } catch (e) {
-      return { ok: false, error: { message: `${path}: ${messageOf(e)}` } };
+      return { ok: false, error: { message: `${path}: ${errorMessage(e)}` } };
     }
   },
   absolute(path: string): string {
@@ -98,7 +94,7 @@ async function denoCheck(
       value: { code: output.code, stderr: decoder.decode(output.stderr) },
     };
   } catch (e) {
-    return { ok: false, error: { message: messageOf(e) } };
+    return { ok: false, error: { message: errorMessage(e) } };
   } finally {
     if (directory !== undefined) {
       try {

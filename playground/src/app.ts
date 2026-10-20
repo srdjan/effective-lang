@@ -7,6 +7,7 @@
 
 import { EditorState } from "@codemirror/state";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
+import { errorMessage } from "../../src/core/mod.ts";
 import {
   createPlayground,
   type PlaygroundError,
@@ -87,9 +88,7 @@ async function loadExamples(): Promise<LoadResult> {
   } catch (error) {
     return {
       ok: false,
-      message: `examples.json: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      message: `examples.json: ${errorMessage(error)}`,
     };
   }
 }

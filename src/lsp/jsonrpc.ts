@@ -8,7 +8,7 @@
 // only a short tail and keeps skipping on the next chunk. Each bad region gives
 // one error. A body that is not valid UTF-8 JSON consumes its whole frame.
 
-import { isRecord, type Result } from "../core/mod.ts";
+import { errorMessage, isRecord, type Result } from "../core/mod.ts";
 
 export type RequestId = string | number;
 
@@ -150,8 +150,10 @@ function decodeBody(body: Uint8Array): Result<unknown, FrameError> {
   try {
     return { ok: true, value: JSON.parse(textDecoder.decode(body)) };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, error: { tag: "bad-json", message } };
+    return {
+      ok: false,
+      error: { tag: "bad-json", message: errorMessage(error) },
+    };
   }
 }
 

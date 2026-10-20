@@ -17,6 +17,7 @@
 import {
   type ConfigError,
   describeConfigError,
+  errorMessage,
   hoverAt,
   Program,
   type ProgramChanges,
@@ -120,10 +121,6 @@ function diagnosticsOf(
   return result;
 }
 
-function messageOf(thrown: unknown): string {
-  return thrown instanceof Error ? thrown.message : String(thrown);
-}
-
 export function createPlayground(
   files: Readonly<Record<string, string>>,
   ports: PlaygroundPorts,
@@ -174,7 +171,7 @@ export function createPlayground(
       sent = false;
       return {
         ok: false,
-        error: { tag: "internal", message: messageOf(thrown) },
+        error: { tag: "internal", message: errorMessage(thrown) },
       };
     }
   }

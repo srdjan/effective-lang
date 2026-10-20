@@ -12,7 +12,7 @@ import { stronglyConnectedComponents } from "./modes.ts";
 import { parse, type ParseResult } from "./parse.ts";
 import type { ReadError, Result, SourceHost, Span } from "./source.ts";
 import type { FileMode, SyntaxTree } from "./syntax.ts";
-import { compareText, isRecord } from "./util.ts";
+import { compareText, errorMessage, isRecord } from "./util.ts";
 
 export const CONFIG_FILE = "effective.json";
 
@@ -131,7 +131,7 @@ export function parseConfig(
       error: {
         tag: "malformed-json",
         path: CONFIG_FILE,
-        message: e instanceof Error ? e.message : String(e),
+        message: errorMessage(e),
       },
     };
   }
