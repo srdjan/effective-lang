@@ -147,6 +147,17 @@ Deno.test("a missing source text is an error value", () => {
  * of the generated text: each generated position maps back to the start line
  * and column of its innermost source span, or to nothing.
  */
+// A source is scanned once for its line starts, however many offsets look it up.
+const lineStartsCache = new Map<string, Uint32Array>();
+function cachedLineStarts(source: string): Uint32Array {
+  let starts = lineStartsCache.get(source);
+  if (starts === undefined) {
+    starts = lineStarts(source);
+    lineStartsCache.set(source, starts);
+  }
+  return starts;
+}
+
 function assertRoundTrip(
   table: SpanTable,
   text: string,
@@ -157,7 +168,7 @@ function assertRoundTrip(
   const decoded = decodeMappings(built.value.mappings);
   assert(decoded.ok, JSON.stringify(decoded));
   assertEquals(decoded.value.length, table.lineStarts.length);
-  const starts = lineStarts(text);
+  const starts = cachedLineStarts(text);
   for (let offset = 0; offset < text.length; offset++) {
     const generated = positionOf(starts, text, offset);
     const found = lookupMapping(
@@ -167,19 +178,34 @@ function assertRoundTrip(
     );
     const span = mapOffset(table, offset);
     if (span === undefined) {
-      assertEquals(found, undefined, `${table.path} offset ${offset}`);
+      // The message is built only on a mismatch.
+      if (found !== undefined) {
+        assertEquals(found, undefined, `${table.path} offset ${offset}`);
+      }
       continue;
     }
     const source = files[span.source];
-    const expected = positionOf(lineStarts(source), source, span.start);
+    const expected = positionOf(cachedLineStarts(source), source, span.start);
     assert(found !== undefined, `${table.path} offset ${offset} is unmapped`);
     const relative = built.value.sources[found.source ?? -1];
     const directory = table.path.slice(0, table.path.lastIndexOf("/") + 1);
-    assertEquals(
-      [directory + relative, found.line, found.column],
-      [span.source, expected.line - 1, expected.column - 1],
-      `${table.path} offset ${offset}`,
-    );
+    const actualTriple = [directory + relative, found.line, found.column];
+    const expectedTriple = [
+      span.source,
+      expected.line - 1,
+      expected.column - 1,
+    ];
+    if (
+      actualTriple[0] !== expectedTriple[0] ||
+      actualTriple[1] !== expectedTriple[1] ||
+      actualTriple[2] !== expectedTriple[2]
+    ) {
+      assertEquals(
+        actualTriple,
+        expectedTriple,
+        `${table.path} offset ${offset}`,
+      );
+    }
   }
 }
 

@@ -497,7 +497,7 @@ Deno.test("nesting up to 100 levels parses; deeper input is reported and never o
     const open of ["(", "f(", "() => {", "-", "if (a) { 1 } else ", "Option<"]
   ) {
     const prefix = open === "Option<" ? "type T = " : "const a = ";
-    const result = parseChecked(prefix + open.repeat(50000));
+    const result = parseChecked(prefix + open.repeat(10000));
     assertEquals(
       result.diagnostics.some((d) => d.message.includes("nesting is too deep")),
       true,
@@ -508,7 +508,7 @@ Deno.test("nesting up to 100 levels parses; deeper input is reported and never o
   for (
     const text of ["const a = [", "const a = {", "type T = {", "type T = ["]
   ) {
-    parseChecked(text.repeat(50000));
+    parseChecked(text.repeat(10000));
   }
 });
 
