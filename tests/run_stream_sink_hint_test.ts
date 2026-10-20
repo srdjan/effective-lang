@@ -1,5 +1,6 @@
-// `runStream` gives a direct `takeSink` call the producer element as its
-// expected input. Every other second argument keeps the unhinted check.
+// A sink argument of a stream gives `takeSink` the producer element as its
+// expected input when a direct `takeSink` call is one of its results, also
+// inside an `if` or `match`. Every other sink argument keeps the unhinted check.
 
 import { assert, assertEquals } from "@std/assert";
 import {
@@ -28,6 +29,7 @@ export type Flag = boolean
 export error Stop = {}
 export service Count { tick(value: Int): Int fails Stop }
 type Branch = Sink<Int, Text, Stop, Count.tick, Text>
+type Chunk = Sink<Int, Text, Stop, Count.tick, Int>
 `;
 
 function shortIds(ids: readonly string[]): string[] {
@@ -136,4 +138,57 @@ Deno.test("runStream rejects a sink input that the stream element does not fit",
     [["type-mismatch/003", "the sink input", "sink"]],
     "incompatible named sink",
   );
+});
+
+/** Checks, lowers, and validates a source that must have no diagnostics. */
+function clean(source: string): CheckedProject {
+  const project = checked(source);
+  assertEquals(project.diagnostics.map((d) => [d.code, d.message]), []);
+  const lowered = lowerProject(project);
+  for (const result of lowered.values()) {
+    assert(result.ok, JSON.stringify(result));
+  }
+  for (
+    const diagnostics of validateProject(project.analysis.project, lowered)
+      .values()
+  ) assertEquals(diagnostics, []);
+  return project;
+}
+
+Deno.test("stream transformations keep a sink chosen between named sinks unhinted", () => {
+  const project = clean(
+    `${PRELUDE}export const transduced = (s: Stream<Int>, flag: Flag, a: Chunk, b: Chunk): Stream<Text, Stop, Count.tick> =>
+  transduceStream(s, if (flag) { a } else { b })
+export const aggregated = (s: Stream<Int>, flag: Flag, a: Chunk, b: Chunk): Stream<Text, Stop, Count.tick> =>
+  aggregateStream(s, match (flag) { true => a, false => b })
+export const within = (s: Stream<Int>, flag: Flag, a: Chunk, b: Chunk): Stream<Text, Stop, Count.tick> =>
+  aggregateWithinStream(s, if (flag) { a } else { b }, scheduleSpaced(10))
+`,
+  );
+  for (const name of ["transduced", "aggregated", "within"]) {
+    assertEquals(
+      channels(project, name).result,
+      "Stream<Text, Stop, Count.tick>",
+      name,
+    );
+  }
+});
+
+Deno.test("a takeSink in an if or match branch gets the stream element", () => {
+  const project = clean(
+    `${PRELUDE}export const runIf = (s: Stream<Int>, flag: Flag): Int[] =>
+  runStream(s, if (flag) { takeSink(2) } else { takeSink(3) })
+export const runMatch = (s: Stream<Int>, flag: Flag): Int[] =>
+  runStream(s, match (flag) { true => takeSink(2), false => { takeSink(3) } })
+export const transduced = (s: Stream<Int>, flag: Flag): Stream<Int[]> =>
+  transduceStream(s, (if (flag) { takeSink(2) } else { takeSink(3) }))
+`,
+  );
+  for (const name of ["runIf", "runMatch"]) {
+    assertEquals(channels(project, name), {
+      result: "Int[]",
+      failures: [],
+      requirements: [],
+    }, name);
+  }
 });

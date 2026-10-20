@@ -4921,16 +4921,7 @@ export class BodyChecker {
     this.noPipeline("aggregateWithinStream", args);
     const stream = this.argInfo(args[0]);
     const producer = this.table.node(this.table.unfold(stream.type));
-    const hint = producer.kind === "stream"
-      ? this.table.sink(
-        producer.element,
-        this.table.array(producer.element),
-        [],
-        [],
-        producer.element,
-      )
-      : undefined;
-    const sink = this.argInfo(args[1], hint);
+    const sink = this.argInfo(args[1], this.takeSinkHint(stream.type, args[1]));
     const schedule = this.argInfo(args[2]);
     const consumer = this.table.node(this.table.unfold(sink.type));
     const policy = this.table.node(this.table.unfold(schedule.type));
@@ -4999,16 +4990,7 @@ export class BodyChecker {
     this.noPipeline(name, args);
     const stream = this.argInfo(args[0]);
     const producer = this.table.node(this.table.unfold(stream.type));
-    const hint = producer.kind === "stream"
-      ? this.table.sink(
-        producer.element,
-        this.table.array(producer.element),
-        [],
-        [],
-        producer.element,
-      )
-      : undefined;
-    const sink = this.argInfo(args[1], hint);
+    const sink = this.argInfo(args[1], this.takeSinkHint(stream.type, args[1]));
     const consumer = this.table.node(this.table.unfold(sink.type));
     if (producer.kind !== "stream" || consumer.kind !== "sink") {
       this.report(
@@ -5035,15 +5017,68 @@ export class BodyChecker {
     );
   }
 
-  /** Whether the argument is a direct call of the `takeSink` builtin. */
-  private isTakeSinkCall(arg: Arg): boolean {
+  /**
+   * The expected Sink type for a sink argument of a stream: the stream element
+   * as input, an array of it as result, and no channels. `takeSink` needs the
+   * element to find its input, so the argument gets this type when a direct
+   * `takeSink` call is one of its results. An expected type also constrains
+   * each `if` and `match` branch, so a sink with no `takeSink` result, such as
+   * a branch between named sinks, gets no expected type.
+   */
+  private takeSinkHint(stream: TypeRef, sink: Arg): TypeRef | undefined {
+    const producer = this.table.node(this.table.unfold(stream));
     if (
-      arg.pre !== undefined ||
-      kindOf(this.tree, arg.node) !== SyntaxKind.CallExpr
-    ) return false;
-    const callee = this.kids(arg.node)[0];
-    const target = callee === undefined ? undefined : this.targets.get(callee);
-    return target?.kind === "builtin" && target.name === "takeSink";
+      producer.kind !== "stream" || sink.pre !== undefined ||
+      !this.resultsInTakeSink(sink.node)
+    ) return undefined;
+    return this.table.sink(
+      producer.element,
+      this.table.array(producer.element),
+      [],
+      [],
+      producer.element,
+    );
+  }
+
+  /**
+   * Whether a direct call of the `takeSink` builtin is a result of the
+   * expression: the expression itself, or the result of a block, a branch of
+   * an `if`, or an arm of a `match` inside it.
+   */
+  private resultsInTakeSink(node: NodeId): boolean {
+    const kids = this.kids(node);
+    switch (kindOf(this.tree, node)) {
+      case SyntaxKind.CallExpr: {
+        const target = kids[0] === undefined
+          ? undefined
+          : this.targets.get(kids[0]);
+        return target?.kind === "builtin" && target.name === "takeSink";
+      }
+      case SyntaxKind.ParenExpr:
+        return kids[0] !== undefined && this.resultsInTakeSink(kids[0]);
+      case SyntaxKind.Block: {
+        const last = kids.at(-1);
+        return last !== undefined &&
+          kindOf(this.tree, last) !== SyntaxKind.ConstDecl &&
+          this.resultsInTakeSink(last);
+      }
+      case SyntaxKind.IfExpr:
+        return kids.slice(1, 3).some((branch) =>
+          this.resultsInTakeSink(branch)
+        );
+      case SyntaxKind.MatchExpr:
+        return kids.slice(1).some((arm) => {
+          if (kindOf(this.tree, arm) !== SyntaxKind.MatchArm) return false;
+          const parts = this.kids(arm);
+          const pattern = parts.find((k) =>
+            PATTERN_KINDS.has(kindOf(this.tree, k))
+          );
+          const body = parts.filter((k) => k !== pattern).pop();
+          return body !== undefined && this.resultsInTakeSink(body);
+        });
+      default:
+        return false;
+    }
   }
 
   private runStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
@@ -5058,19 +5093,7 @@ export class BodyChecker {
     this.noPipeline("runStream", args);
     const stream = this.argInfo(args[0]);
     const producer = this.table.node(this.table.unfold(stream.type));
-    // Only a direct `takeSink` call needs the producer element to find its
-    // input. A full expected Sink type would also constrain `if` and `match`
-    // branches that are named sinks, so every other argument gets no hint.
-    const hint = producer.kind === "stream" && this.isTakeSinkCall(args[1])
-      ? this.table.sink(
-        producer.element,
-        this.table.array(producer.element),
-        [],
-        [],
-        producer.element,
-      )
-      : undefined;
-    const sink = this.argInfo(args[1], hint);
+    const sink = this.argInfo(args[1], this.takeSinkHint(stream.type, args[1]));
     const consumer = this.table.node(this.table.unfold(sink.type));
     if (producer.kind !== "stream" && !this.isError(stream.type)) {
       this.report(

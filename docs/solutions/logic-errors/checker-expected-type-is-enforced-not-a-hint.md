@@ -51,62 +51,67 @@ requires an `Int[]` result and empty failure and requirement channels. A
 - The plan's own regression test used one named sink with a different
   result type. A named reference ignores the hint, so that test would pass
   and would not show the defect. Only a branching expression shows it.
+- The first fix (commit c1f07da) gave the hint only to a direct `takeSink`
+  call. A probe then showed that `transduceStream`, `aggregateStream`, and
+  `aggregateWithinStream` had the same defect, because they passed the full
+  hint for any sink argument. Moving them to the direct-call rule broke a
+  form that they accepted before:
+  `transduceStream(s, if (flag) { takeSink(2) } else { takeSink(3) })`.
+  A branch that is a `takeSink` call needs the hint as much as a direct call.
 
 ## Solution
 
-Commit c1f07da (on local main, not pushed yet) passes the hint only when the argument is a direct call of
-the `takeSink` builtin. `isTakeSinkCall` checks that the argument has no
-pipeline value, is a `CallExpr`, and that its callee resolves through
-`this.targets` to the builtin `takeSink`. A user-defined `takeSink` does not
-match. Every other argument keeps `argInfo(args[1])` with no hint.
+All four stream sites now call one helper, `takeSinkHint`, in
+`src/core/check_expr.ts`. It returns the constructed Sink type only when the
+first argument is a Stream and a direct `takeSink` call is one of the sink
+argument's results. `resultsInTakeSink` walks the result positions as the
+checker does: the expression itself, a parenthesized expression, the last
+item of a block, each branch of an `if`, and each arm body of a `match`. The
+callee must resolve through `this.targets` to the builtin `takeSink`, so a
+user-defined `takeSink` does not match. Any other sink argument, such as a
+branch between named sinks, gets no expected type.
 
 ```ts
-const hint = producer.kind === "stream" && this.isTakeSinkCall(args[1])
-  ? this.table.sink(
-    producer.element,
-    this.table.array(producer.element),
-    [],
-    [],
-    producer.element,
-  )
-  : undefined;
-const sink = this.argInfo(args[1], hint);
+const sink = this.argInfo(args[1], this.takeSinkHint(stream.type, args[1]));
 ```
 
-Tests: `tests/run_stream_sink_hint_test.ts` covers the inline `takeSink`,
-a named sink with nonempty channels, and `if` and `match` over named sinks
-with a `Text` result. `tests/run_stream_sink_hint_slow_test.ts` runs the
-emitted program under strict TypeScript.
+Tests: `tests/run_stream_sink_hint_test.ts` covers the inline `takeSink`, a
+named sink with nonempty channels, `if` and `match` over named sinks for all
+four builtins, and `takeSink` calls inside `if` and `match` branches.
+`tests/run_stream_sink_hint_slow_test.ts` runs the emitted program under
+strict TypeScript.
 
 ## Why This Works
 
-A direct `takeSink` call has a known result shape: its result is always an
-array of its input, with no channels. The constructed hint therefore holds
-exactly what the call produces. Any other expression can have a different
-result type and different channels. A full expected type would then become a
-constraint on that expression, not information for it.
+A `takeSink` call has a known result shape: its result is always an array of
+its input, with no channels. When a `takeSink` call is a result of the
+argument, the argument must have that shape, so the constructed type is exact.
+When no result is a `takeSink` call, nothing reads the constructed type, and
+leaving it out removes only a false constraint on the branches.
+
+A mix of a `takeSink` branch and a named sink with another result type still
+fails. This is earlier behavior: the constructed type is enforced on the named
+branch.
 
 ## Prevention
 
 - Treat the `expected` argument of `argInfo` as a constraint. Pass a type
   there only when every valid argument must have that complete type.
 - When only part of a type is known, for example a Sink input, give it only
-  to the constructors that need it. Gate the hint on the syntactic form of
-  the argument.
-- Test a new contextual hint with an `if` and a `match` whose branches have
-  a different result and nonempty channels. A named-value test does not
-  reach `joinResults`.
-- `sinkTransformStreamCall` (transduceStream, aggregateStream) and
-  `aggregateWithinStreamCall` still pass the full constructed hint for any
-  sink argument. This is earlier behavior that was not changed. A branching
-  sink argument there probably meets the same constraint; a probe can
-  confirm it.
+  to the result positions that need it. Gate it on the syntactic form of the
+  argument, including branch results.
+- Test a new contextual hint with an `if` and a `match` whose branches are
+  named values with another result and nonempty channels. Also test branches
+  that are the constructor that needs the hint. A named-value test alone does
+  not reach `joinResults`.
+- When a fix narrows when a hint is passed, probe every form that was
+  accepted before at each site, not only the forms of the new defect.
 
 ## Related Issues
 
 - `docs/solutions/logic-errors/checker-result-type-from-expected-hint.md`
   covers the opposite direction: a builtin that copies the expected type
   into its result.
-- Audit finding A7 (follow-up G3), from the audit of the Codex Effect 4
+- Audit finding A7 (follow-ups G3 and G10), from the audit of the Codex Effect 4
   feature commits. The plan and the Astra review were kept outside the
   repository.
