@@ -47,6 +47,7 @@ import type { Target } from "./resolve.ts";
 import type { Result, Span } from "./source.ts";
 import {
   childrenOf,
+  decodeString,
   kindOf,
   type NodeId,
   nodeSpan,
@@ -979,16 +980,6 @@ export interface LoweredField {
 
 function toIrField(field: LoweredField): Field {
   return { name: field.name, type: field.type.ir, optional: field.optional };
-}
-
-/** Decodes a string token. The lexer accepts only strings that JSON accepts. */
-export function decodeString(text: string): string | undefined {
-  try {
-    const value: unknown = JSON.parse(text);
-    return typeof value === "string" ? value : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 // ------------------------------------------------------------------ type graph walk

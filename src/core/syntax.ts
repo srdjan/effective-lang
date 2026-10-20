@@ -162,6 +162,16 @@ export interface SyntaxTree {
   readonly children: Uint32Array;
 }
 
+/** Decodes a string token. The lexer accepts only strings that JSON accepts. */
+export function decodeString(text: string): string | undefined {
+  try {
+    const value: unknown = JSON.parse(text);
+    return typeof value === "string" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function kindOf(tree: SyntaxTree, node: NodeId): SyntaxKind {
   return tree.kinds[node] as SyntaxKind;
 }

@@ -15,6 +15,7 @@ import { TokenKind } from "./lex.ts";
 import type { Span } from "./source.ts";
 import {
   childrenOf,
+  decodeString,
   hasProblem,
   kindOf,
   type NodeId,
@@ -347,19 +348,6 @@ function indexDecl(
     isArrow: split.isArrow,
     broken: hasProblem(tree, decl),
   };
-}
-
-/** Decodes a string token. Returns undefined when the token is not a closed JSON string. */
-function decodeString(text: string): string | undefined {
-  if (text.length < 2 || !text.startsWith('"') || !text.endsWith('"')) {
-    return undefined;
-  }
-  try {
-    const value: unknown = JSON.parse(text);
-    return typeof value === "string" ? value : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function indexImport(tree: SyntaxTree, node: NodeId): ImportEntry {

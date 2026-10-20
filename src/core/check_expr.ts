@@ -33,6 +33,7 @@ import type { PreludeName, Target } from "./resolve.ts";
 import type { Span } from "./source.ts";
 import {
   childrenOf,
+  decodeString,
   kindOf,
   type NodeId,
   nodeSpan,
@@ -42,7 +43,6 @@ import {
 } from "./syntax.ts";
 import {
   type ConstantSignature,
-  decodeString,
   type FunctionSignature,
   type TypeEnv,
   TypeLowerer,
