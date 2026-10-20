@@ -57,6 +57,28 @@ function rangeOfSpan(revision: Revision, span: Span): Range | undefined {
   return spanToRange(text, lineStarts(text), span);
 }
 
+/** The place of a request: the project, its newest good revision, the file, and the offset. */
+interface Cursor {
+  readonly project: ProjectState;
+  readonly revision: Revision;
+  readonly path: string;
+  readonly offset: number;
+}
+
+/** The cursor of a position request, or undefined when there is no good revision or text. */
+function cursorOf(
+  params: PositionParams,
+  ctx: ServerContext,
+): Cursor | undefined {
+  const found = ctx.projects.forRequest(params.textDocument.uri);
+  const revision = found?.project.lastGood;
+  if (found === undefined || revision === undefined) return undefined;
+  const text = revision.sourceTexts().get(found.path);
+  if (text === undefined) return undefined;
+  const offset = positionToOffset(text, lineStarts(text), params.position);
+  return { project: found.project, revision, path: found.path, offset };
+}
+
 // ---- Hover ------------------------------------------------------------------
 
 function fenced(language: string, body: string): string {
@@ -68,13 +90,10 @@ export function hoverRequest(
   params: PositionParams,
   ctx: ServerContext,
 ): Answer {
-  const found = ctx.projects.forRequest(params.textDocument.uri);
-  const revision = found?.project.lastGood;
-  if (found === undefined || revision === undefined) return answer(null);
-  const text = revision.sourceTexts().get(found.path);
-  if (text === undefined) return answer(null);
-  const offset = positionToOffset(text, lineStarts(text), params.position);
-  const hit = hoverAt(revision, found.path, offset);
+  const cursor = cursorOf(params, ctx);
+  if (cursor === undefined) return answer(null);
+  const { revision } = cursor;
+  const hit = hoverAt(revision, cursor.path, cursor.offset);
   if (hit === undefined) return answer(null);
   const range = rangeOfSpan(revision, hit.span);
   if (range === undefined) return answer(null);
@@ -95,16 +114,13 @@ export function definitionRequest(
   params: PositionParams,
   ctx: ServerContext,
 ): Answer {
-  const found = ctx.projects.forRequest(params.textDocument.uri);
-  const revision = found?.project.lastGood;
-  if (found === undefined || revision === undefined) return answer(null);
-  const text = revision.sourceTexts().get(found.path);
-  if (text === undefined) return answer(null);
-  const offset = positionToOffset(text, lineStarts(text), params.position);
-  const span = definitionAt(revision, found.path, offset);
+  const cursor = cursorOf(params, ctx);
+  if (cursor === undefined) return answer(null);
+  const { revision } = cursor;
+  const span = definitionAt(revision, cursor.path, cursor.offset);
   if (span === undefined) return answer(null);
   const range = rangeOfSpan(revision, span);
-  const uri = pathToUri(joinPath(found.project.root, span.source));
+  const uri = pathToUri(joinPath(cursor.project.root, span.source));
   if (range === undefined || uri === undefined) return answer(null);
   const location: Location = { uri, range };
   return answer(location);
