@@ -34,3 +34,10 @@ Each row gives one commit, its measured AST branch delta and cyclomatic delta fr
 | efaec3d | R9 | 9235 to 9102 (-133); `invoke` cyclomatic 115 to 47; 67 builder rows, no cast |
 | 9adc5cd | R10 | 9102 to 9031 (-71); `structural` 93 to 64, `leaf` 66 to 43 (cyclomatic); new `emit/calls.ts` |
 | 9adc5cd | track E3 capture | 0844b30 to 9adc5cd: 1 missing record, the `emit-error` of the old form-1 test (expected for D6); 45 new; gate: 1666 fast, 140 slow passed |
+| eaa8383 | P7, dead exports | 9088 to 9088 branches; non-blank code lines in `src/` and `playground/src` 37984 to 37974 (-10); `isReservedWord`, `tokenText`, and `Program.revisions` had 0 uses |
+| f2313c6 | P7, typeAt | 9088 to 9067 (-21); lines 37974 to 37916 (-58); fast tests 1689 to 1687 (two `typeAt` tests of `check_body_test.ts` repeated `editor_test.ts` assertions) |
+| 92d5ba3 | P3, checkCycles | 9067 to 9054 (-13); lines 37916 to 37869 (-47); the `?? 0` fallbacks are gone; roots stay in declaration order, so the component order is unchanged |
+| 8cae721 | H5 follow-up, fallbacks | 9054 to 9055 (+1); lines 37869 to 37889 (+20); 4 silent fallbacks become `internal:` throws |
+| edf12e7 | P5, identity parser | 9055 to 9054 (-1); lines 37889 to 37896 (+7); one `serviceOfCapability` and one `shortName` in `ids.ts`; the emitter keeps a throwing wrapper |
+| 879e8e3 | P5, decodeString | 9054 to 9048 (-6); lines 37896 to 37886 (-10) |
+| 02d12d3 | P9, watch loop | 9048 to 9047 (-1); lines 37886 to 37872 (-14); 75 to 74 files; `events.ts` and `explicit_scope.ts` stay |
