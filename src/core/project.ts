@@ -298,17 +298,21 @@ export const parseFileFresh: FileParser = (path, text) => {
   return { parsed, index: buildIndex(parsed.tree) };
 };
 
+interface LoadedFile {
+  readonly path: string;
+  readonly name: string;
+  readonly parsed: ParseResult;
+  readonly index: FileIndex;
+}
+
 class Loader {
   readonly modules = new Map<string, ModuleInfo>();
   readonly diagnostics: Diagnostic[] = [];
   private readonly pathOfName = new Map<string, string>();
   private readonly failures = new Map<string, LoadFailure>();
-  private readonly queue: string[] = [];
-  private readonly loaded = new Map<
-    string,
-    { tree: SyntaxTree; parsed: ParseResult; index: FileIndex; name: string }
-  >();
-  private readonly linkTable = new Map<string, ImportLink[]>();
+  /** The loaded files in load order. The loop in `run` appends to it. */
+  private readonly queue: LoadedFile[] = [];
+  private readonly loaded = new Set<string>();
 
   constructor(
     private readonly host: SourceHost,
@@ -342,8 +346,8 @@ class Loader {
     }
     const { parsed, index } = this.parseFile(path, read.value);
     this.pathOfName.set(name, path);
-    this.loaded.set(path, { tree: parsed.tree, parsed, index, name });
-    this.queue.push(path);
+    this.loaded.add(path);
+    this.queue.push({ path, name, parsed, index });
     return undefined;
   }
 
@@ -454,28 +458,18 @@ class Loader {
     return { entry, target: name, label: name, isHost: false };
   }
 
-  /** Loads every module that the entries reach, then builds the module records. */
+  /** Loads every module that the entries reach and builds the module records in load order. */
   run(): void {
     for (let i = 0; i < this.queue.length; i++) {
-      const path = this.queue[i];
-      const file = this.loaded.get(path);
-      if (file === undefined) continue;
-      this.linkTable.set(
+      const { path, name, parsed, index } = this.queue[i];
+      this.modules.set(name, {
+        name,
         path,
-        file.index.imports.map((entry) => this.linkImport(path, entry)),
-      );
-    }
-    for (const path of this.queue) {
-      const file = this.loaded.get(path);
-      if (file === undefined) continue;
-      this.modules.set(file.name, {
-        name: file.name,
-        path,
-        mode: file.tree.mode,
-        tree: file.tree,
-        parseDiagnostics: file.parsed.diagnostics,
-        index: file.index,
-        links: this.linkTable.get(path) ?? [],
+        mode: parsed.tree.mode,
+        tree: parsed.tree,
+        parseDiagnostics: parsed.diagnostics,
+        index,
+        links: index.imports.map((entry) => this.linkImport(path, entry)),
       });
     }
   }
