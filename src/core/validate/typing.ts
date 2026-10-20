@@ -120,8 +120,23 @@ export function dataOnly(
           : undefined);
       return base !== undefined && nested(base);
     }
-    default:
+    case "ref":
+    case "closeable-scope":
+    case "retry-schedule":
+    case "codec":
+    case "schema":
+    case "fiber":
+    case "effect":
+    case "stream":
+    case "schedule":
+    case "sink":
+    case "function":
+    case "provider":
       return false;
+    default: {
+      const unreachable: never = value;
+      return unreachable;
+    }
   }
 }
 
@@ -370,8 +385,27 @@ function guardedAlias(env: TypeEnv, id: string): boolean {
         );
       case "union":
         return type.members.some((member) => visit(member, true));
-      default:
+      case "primitive":
+      case "literal":
+      case "option":
+      case "ref":
+      case "tuple":
+      case "closeable-scope":
+      case "retry-schedule":
+      case "codec":
+      case "schema":
+      case "fiber":
+      case "effect":
+      case "stream":
+      case "schedule":
+      case "sink":
+      case "function":
+      case "provider":
         return false;
+      default: {
+        const unreachable: never = type;
+        return unreachable;
+      }
     }
   };
   return visit(alias, false);

@@ -403,8 +403,16 @@ export function checkRecordFields(
         );
         walk(t.result, `${at}.result`, depth + 1);
         return;
-      default:
+      case "primitive":
+      case "literal":
+      case "named":
+      case "closeable-scope":
+      case "provider":
         return;
+      default: {
+        const unreachable: never = t;
+        return unreachable;
+      }
     }
   };
   walk(type, path, 0);
@@ -619,8 +627,26 @@ function guardedRecord(
         return part.fields.some((field) => containsSelf(field.type));
       case "union":
         return part.members.some(containsSelf);
-      default:
+      case "primitive":
+      case "literal":
+      case "ref":
+      case "tuple":
+      case "closeable-scope":
+      case "retry-schedule":
+      case "codec":
+      case "schema":
+      case "fiber":
+      case "effect":
+      case "stream":
+      case "schedule":
+      case "sink":
+      case "function":
+      case "provider":
         return false;
+      default: {
+        const unreachable: never = part;
+        return unreachable;
+      }
     }
   };
   const tagged = type.kind === "union" && type.members.length >= 2 &&
@@ -664,8 +690,25 @@ function guardedRecord(
       case "primitive":
       case "literal":
         return true;
-      default:
+      case "option":
+      case "ref":
+      case "tuple":
+      case "closeable-scope":
+      case "retry-schedule":
+      case "codec":
+      case "schema":
+      case "fiber":
+      case "effect":
+      case "stream":
+      case "schedule":
+      case "sink":
+      case "function":
+      case "provider":
         return false;
+      default: {
+        const unreachable: never = part;
+        return unreachable;
+      }
     }
   };
   return walk(type, false) && sawSelf;
@@ -770,8 +813,15 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
         type.parameters.forEach((p) => reaches(p, from, depth + 1));
         reaches(type.result, from, depth + 1);
         return;
-      default:
+      case "primitive":
+      case "literal":
+      case "closeable-scope":
+      case "provider":
         return;
+      default: {
+        const unreachable: never = type;
+        return unreachable;
+      }
     }
   };
   const visit = (id: string): void => {
