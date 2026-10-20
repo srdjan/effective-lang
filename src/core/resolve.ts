@@ -43,216 +43,123 @@ import {
 
 // ------------------------------------------------------------------ prelude
 
-export type PreludeName =
-  | "fail"
-  | "retry"
-  | "provide"
-  | "defer"
-  | "run"
-  | "scoped"
-  | "forkScoped"
-  | "makeScope"
-  | "provideScope"
-  | "addScopeFinalizer"
-  | "closeScope"
-  | "withResource"
-  | "unfold"
-  | "mapEffect"
-  | "mapStream"
-  | "mapGroups"
-  | "scanStream"
-  | "mapAccumStream"
-  | "foldStream"
-  | "foldEffectStream"
-  | "collectStream"
-  | "headStream"
-  | "lastStream"
-  | "drainStream"
-  | "sinkForEach"
-  | "takeSink"
-  | "transduceStream"
-  | "aggregateStream"
-  | "aggregateWithinStream"
-  | "scheduleFromStep"
-  | "scheduleRecurs"
-  | "scheduleSpaced"
-  | "scheduleMap"
-  | "scheduleMax"
-  | "scheduleMin"
-  | "scheduleConcat"
-  | "runStream"
-  | "bufferStream"
-  | "mergeStreams"
-  | "zipStreams"
-  | "concatStreams"
-  | "flatMapStreams"
-  | "switchMapStreams"
-  | "catchStream"
-  | "retryStream"
-  | "debounceStream"
-  | "throttleStream"
-  | "takeStream"
-  | "dropStream"
-  | "dropWhileStream"
-  | "filterStream"
-  | "filterEffectStream"
-  | "takeWhileEffectStream"
-  | "takeUntilEffectStream"
-  | "dropWhileEffectStream"
-  | "takeWhileStream"
-  | "takeUntilStream"
-  | "race"
-  | "makeRef"
-  | "getRef"
-  | "setRef"
-  | "updateRef"
-  | "layer"
-  | "mergeLayers"
-  | "retrySchedule"
-  | "codec"
-  | "schema"
-  | "schemaArray"
-  | "schemaStruct"
-  | "schemaOptionalKey"
-  | "schemaNullToMissingKey"
-  | "schemaOptionFromOptionalKey"
-  | "schemaDefaultKey"
-  | "schemaConstructorDefault"
-  | "schemaDefaultNullKey"
-  | "schemaDefaultEncodedKey"
-  | "schemaOptionalTransform"
-  | "schemaOptionalFromRequired"
-  | "schemaUnion"
-  | "schemaTransform"
-  | "schemaRecursive"
-  | "schemaDecode"
-  | "schemaEncode"
-  | "schemaMake"
-  | "schemaInvalid"
-  | "schemaAt"
-  | "schemaBoth"
-  | "decode"
-  | "encode"
-  | "withFiber"
-  | "joinFiber"
-  | "interruptFiber"
-  | "unbrand"
-  | "Some"
-  | "None"
-  | "map"
-  | "filter"
-  | "fold"
-  | "all"
-  | "partitionAll"
-  | "validateAll"
-  | "allResults"
-  | "traverse";
+/**
+ * The prelude operations, in one table. `shadowable` marks a name that a module
+ * constant, a parameter, or a local may shadow. Existing programs may use these
+ * names as values. Bindings shadow these prelude operations; lookupValue already
+ * checks bindings first. Every other name is reserved.
+ */
+const PRELUDE = {
+  fail: { shadowable: false },
+  retry: { shadowable: false },
+  provide: { shadowable: false },
+  defer: { shadowable: false },
+  run: { shadowable: true },
+  scoped: { shadowable: true },
+  forkScoped: { shadowable: true },
+  makeScope: { shadowable: true },
+  provideScope: { shadowable: true },
+  addScopeFinalizer: { shadowable: true },
+  closeScope: { shadowable: true },
+  withResource: { shadowable: false },
+  unfold: { shadowable: false },
+  mapEffect: { shadowable: false },
+  mapStream: { shadowable: true },
+  mapGroups: { shadowable: true },
+  scanStream: { shadowable: true },
+  mapAccumStream: { shadowable: true },
+  foldStream: { shadowable: true },
+  foldEffectStream: { shadowable: true },
+  collectStream: { shadowable: true },
+  headStream: { shadowable: true },
+  lastStream: { shadowable: true },
+  drainStream: { shadowable: true },
+  sinkForEach: { shadowable: false },
+  takeSink: { shadowable: true },
+  transduceStream: { shadowable: true },
+  aggregateStream: { shadowable: true },
+  aggregateWithinStream: { shadowable: true },
+  scheduleFromStep: { shadowable: true },
+  scheduleRecurs: { shadowable: true },
+  scheduleSpaced: { shadowable: true },
+  scheduleMap: { shadowable: true },
+  scheduleMax: { shadowable: true },
+  scheduleMin: { shadowable: true },
+  scheduleConcat: { shadowable: true },
+  runStream: { shadowable: false },
+  bufferStream: { shadowable: false },
+  mergeStreams: { shadowable: false },
+  zipStreams: { shadowable: true },
+  concatStreams: { shadowable: true },
+  flatMapStreams: { shadowable: true },
+  switchMapStreams: { shadowable: true },
+  catchStream: { shadowable: true },
+  retryStream: { shadowable: true },
+  debounceStream: { shadowable: true },
+  throttleStream: { shadowable: true },
+  takeStream: { shadowable: true },
+  dropStream: { shadowable: true },
+  dropWhileStream: { shadowable: true },
+  filterStream: { shadowable: true },
+  filterEffectStream: { shadowable: true },
+  takeWhileEffectStream: { shadowable: true },
+  takeUntilEffectStream: { shadowable: true },
+  dropWhileEffectStream: { shadowable: true },
+  takeWhileStream: { shadowable: true },
+  takeUntilStream: { shadowable: true },
+  race: { shadowable: false },
+  makeRef: { shadowable: false },
+  getRef: { shadowable: false },
+  setRef: { shadowable: false },
+  updateRef: { shadowable: false },
+  layer: { shadowable: false },
+  mergeLayers: { shadowable: false },
+  retrySchedule: { shadowable: false },
+  codec: { shadowable: false },
+  schema: { shadowable: true },
+  schemaArray: { shadowable: true },
+  schemaStruct: { shadowable: true },
+  schemaOptionalKey: { shadowable: true },
+  schemaNullToMissingKey: { shadowable: true },
+  schemaOptionFromOptionalKey: { shadowable: true },
+  schemaDefaultKey: { shadowable: true },
+  schemaConstructorDefault: { shadowable: true },
+  schemaDefaultNullKey: { shadowable: true },
+  schemaDefaultEncodedKey: { shadowable: true },
+  schemaOptionalTransform: { shadowable: true },
+  schemaOptionalFromRequired: { shadowable: true },
+  schemaUnion: { shadowable: true },
+  schemaTransform: { shadowable: true },
+  schemaRecursive: { shadowable: true },
+  schemaDecode: { shadowable: true },
+  schemaEncode: { shadowable: true },
+  schemaMake: { shadowable: true },
+  schemaInvalid: { shadowable: true },
+  schemaAt: { shadowable: true },
+  schemaBoth: { shadowable: true },
+  decode: { shadowable: false },
+  encode: { shadowable: false },
+  withFiber: { shadowable: false },
+  joinFiber: { shadowable: false },
+  interruptFiber: { shadowable: false },
+  unbrand: { shadowable: false },
+  Some: { shadowable: false },
+  None: { shadowable: false },
+  map: { shadowable: false },
+  filter: { shadowable: false },
+  fold: { shadowable: false },
+  all: { shadowable: true },
+  partitionAll: { shadowable: true },
+  validateAll: { shadowable: true },
+  allResults: { shadowable: true },
+  traverse: { shadowable: false },
+} as const satisfies Record<string, { readonly shadowable: boolean }>;
 
-export const PRELUDE_NAMES: ReadonlySet<string> = new Set<PreludeName>([
-  "fail",
-  "retry",
-  "provide",
-  "defer",
-  "run",
-  "scoped",
-  "forkScoped",
-  "makeScope",
-  "provideScope",
-  "addScopeFinalizer",
-  "closeScope",
-  "withResource",
-  "unfold",
-  "mapEffect",
-  "mapStream",
-  "mapGroups",
-  "scanStream",
-  "mapAccumStream",
-  "foldStream",
-  "foldEffectStream",
-  "collectStream",
-  "headStream",
-  "lastStream",
-  "drainStream",
-  "sinkForEach",
-  "takeSink",
-  "transduceStream",
-  "aggregateStream",
-  "aggregateWithinStream",
-  "scheduleFromStep",
-  "scheduleRecurs",
-  "scheduleSpaced",
-  "scheduleMap",
-  "scheduleMax",
-  "scheduleMin",
-  "scheduleConcat",
-  "runStream",
-  "bufferStream",
-  "mergeStreams",
-  "zipStreams",
-  "concatStreams",
-  "flatMapStreams",
-  "switchMapStreams",
-  "catchStream",
-  "retryStream",
-  "debounceStream",
-  "throttleStream",
-  "takeStream",
-  "dropStream",
-  "dropWhileStream",
-  "filterStream",
-  "filterEffectStream",
-  "takeWhileEffectStream",
-  "takeUntilEffectStream",
-  "dropWhileEffectStream",
-  "takeWhileStream",
-  "takeUntilStream",
-  "race",
-  "makeRef",
-  "getRef",
-  "setRef",
-  "updateRef",
-  "layer",
-  "mergeLayers",
-  "retrySchedule",
-  "codec",
-  "schema",
-  "schemaArray",
-  "schemaStruct",
-  "schemaOptionalKey",
-  "schemaNullToMissingKey",
-  "schemaOptionFromOptionalKey",
-  "schemaDefaultKey",
-  "schemaConstructorDefault",
-  "schemaDefaultNullKey",
-  "schemaDefaultEncodedKey",
-  "schemaOptionalTransform",
-  "schemaOptionalFromRequired",
-  "schemaUnion",
-  "schemaTransform",
-  "schemaRecursive",
-  "schemaDecode",
-  "schemaEncode",
-  "schemaMake",
-  "schemaInvalid",
-  "schemaAt",
-  "schemaBoth",
-  "decode",
-  "encode",
-  "withFiber",
-  "joinFiber",
-  "interruptFiber",
-  "unbrand",
-  "Some",
-  "None",
-  "map",
-  "filter",
-  "fold",
-  "all",
-  "partitionAll",
-  "validateAll",
-  "allResults",
-  "traverse",
-]);
+export type PreludeName = keyof typeof PRELUDE;
+
+export const PRELUDE_NAMES: ReadonlySet<string> = new Set(
+  Object.keys(PRELUDE),
+);
 
 export type BuiltinTypeName =
   | "string"
@@ -314,84 +221,12 @@ export const TARGET_NAMES: ReadonlySet<string> = new Set([
   "symbol",
 ]);
 
-/**
- * Prelude names that a module constant, a parameter, or a local may shadow.
- * Existing programs may use these names as values. Bindings shadow these
- * prelude operations; lookupValue already checks bindings first.
- */
-export const SHADOWABLE_PRELUDE_NAMES: ReadonlySet<string> = new Set([
-  "run",
-  "all",
-  "partitionAll",
-  "validateAll",
-  "allResults",
-  "takeSink",
-  "transduceStream",
-  "aggregateStream",
-  "aggregateWithinStream",
-  "scheduleFromStep",
-  "scheduleRecurs",
-  "scheduleSpaced",
-  "scheduleMap",
-  "scheduleMax",
-  "scheduleMin",
-  "scheduleConcat",
-  "schema",
-  "schemaArray",
-  "schemaStruct",
-  "schemaTransform",
-  "schemaOptionalKey",
-  "schemaNullToMissingKey",
-  "schemaUnion",
-  "schemaOptionFromOptionalKey",
-  "schemaDefaultKey",
-  "schemaConstructorDefault",
-  "schemaDefaultNullKey",
-  "schemaDefaultEncodedKey",
-  "schemaOptionalTransform",
-  "schemaOptionalFromRequired",
-  "schemaRecursive",
-  "schemaDecode",
-  "schemaEncode",
-  "schemaMake",
-  "schemaInvalid",
-  "schemaAt",
-  "schemaBoth",
-  "makeScope",
-  "provideScope",
-  "addScopeFinalizer",
-  "closeScope",
-  "scoped",
-  "forkScoped",
-  "zipStreams",
-  "concatStreams",
-  "flatMapStreams",
-  "switchMapStreams",
-  "catchStream",
-  "retryStream",
-  "debounceStream",
-  "throttleStream",
-  "takeStream",
-  "dropStream",
-  "dropWhileStream",
-  "filterStream",
-  "filterEffectStream",
-  "takeWhileEffectStream",
-  "takeUntilEffectStream",
-  "dropWhileEffectStream",
-  "mapGroups",
-  "mapStream",
-  "scanStream",
-  "mapAccumStream",
-  "foldStream",
-  "foldEffectStream",
-  "collectStream",
-  "headStream",
-  "lastStream",
-  "drainStream",
-  "takeWhileStream",
-  "takeUntilStream",
-]);
+/** The prelude names that a module constant, a parameter, or a local may shadow. */
+export const SHADOWABLE_PRELUDE_NAMES: ReadonlySet<string> = new Set(
+  Object.entries(PRELUDE).filter(([, entry]) => entry.shadowable).map((
+    [name],
+  ) => name),
+);
 
 function isReservedPreludeName(name: string): boolean {
   return PRELUDE_NAMES.has(name) && !SHADOWABLE_PRELUDE_NAMES.has(name);

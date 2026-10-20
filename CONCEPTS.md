@@ -29,3 +29,9 @@ The second checker that recomputes every annotation of the typed IR without shar
 
 It acts as a differential oracle: a program that the checker accepts and the validator rejects shows a defect in one of the two. A disagreement is repaired so that both derive the same annotation, not by weakening the validator.
 _Avoid: IR checker, second pass_
+
+### Prelude table
+
+The one table in `resolve.ts` that lists every prelude operation, with a flag that tells whether a source binding may shadow it.
+
+The type `PreludeName`, the set `PRELUDE_NAMES`, and the set `SHADOWABLE_PRELUDE_NAMES` all derive from this table. The checker keeps a handler table that has one row for each prelude name except `None`, so a name without a handler is a compile error.

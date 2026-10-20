@@ -29,7 +29,7 @@ import type {
   ValueId,
 } from "./ir.ts";
 import { TokenKind } from "./lex.ts";
-import type { Target } from "./resolve.ts";
+import type { PreludeName, Target } from "./resolve.ts";
 import type { Span } from "./source.ts";
 import {
   childrenOf,
@@ -393,6 +393,22 @@ const SCHEMA_BUILTINS = {
     preservesMakeInput: true,
   },
 } as const satisfies Record<string, SchemaBuiltin>;
+
+type SchemaBuiltinName = keyof typeof SCHEMA_BUILTINS;
+
+/** The prelude names that have a handler. `None` is a value, so it has none. */
+type PreludeCallName = Exclude<PreludeName, "None">;
+
+type PreludeHandler<K extends PreludeCallName> = (
+  checker: BodyChecker,
+  node: NodeId,
+  name: K,
+  args: readonly Arg[],
+  expected: TypeRef | undefined,
+) => NodeInfo;
+
+/** One handler for each prelude name except `None`. A missing name is a compile error. */
+type PreludeHandlers = { readonly [K in PreludeCallName]: PreludeHandler<K> };
 
 // ------------------------------------------------------------------ the checker
 
@@ -1010,208 +1026,180 @@ export class BodyChecker {
 
   private builtinCall(
     node: NodeId,
-    name: string,
+    name: PreludeName,
     args: readonly Arg[],
     expected: TypeRef | undefined,
   ): NodeInfo {
-    switch (name) {
-      case "fail":
-        return this.failCall(node, args);
-      case "retry":
-        return this.retryCall(node, args);
-      case "retrySchedule":
-        return this.retryScheduleCall(node, args, expected);
-      case "codec":
-        return this.codecCall(node, args);
-      case "schema":
-      case "schemaArray":
-      case "schemaStruct":
-      case "schemaOptionalKey":
-      case "schemaNullToMissingKey":
-      case "schemaOptionFromOptionalKey":
-      case "schemaDefaultKey":
-      case "schemaConstructorDefault":
-      case "schemaDefaultNullKey":
-      case "schemaDefaultEncodedKey":
-      case "schemaOptionalTransform":
-      case "schemaOptionalFromRequired":
-      case "schemaUnion":
-      case "schemaTransform":
-      case "schemaRecursive":
-      case "schemaDecode":
-      case "schemaEncode":
-      case "schemaMake":
-      case "schemaInvalid":
-      case "schemaAt":
-      case "schemaBoth":
-        return this.schemaCall(node, name, args, expected);
-      case "decode":
-      case "encode":
-        return this.codecOperation(node, name, args);
-      case "withFiber":
-        return this.withFiberCall(node, args, expected);
-      case "joinFiber":
-      case "interruptFiber":
-        return this.fiberOperation(node, name, args);
-      case "provide":
-        return this.provideCall(node, args);
-      case "defer":
-        return this.deferCall(node, args);
-      case "run":
-        return this.runCall(node, args);
-      case "scoped":
-        return this.scopedCall(node, args);
-      case "forkScoped":
-        return this.forkScopedCall(node, args);
-      case "makeScope":
-      case "provideScope":
-      case "addScopeFinalizer":
-      case "closeScope":
-        return this.scopeCall(node, name, args);
-      case "withResource":
-        return this.withResourceCall(node, args, expected);
-      case "unfold":
-        return this.unfoldCall(node, args);
-      case "mapEffect":
-        return this.mapEffectCall(node, args);
-      case "mapStream":
-        return this.mapStreamCall(node, args);
-      case "mapGroups":
-        return this.mapGroupsCall(node, args);
-      case "scanStream":
-        return this.scanStreamCall(node, args);
-      case "mapAccumStream":
-        return this.mapAccumStreamCall(node, args);
-      case "foldStream":
-        return this.foldStreamCall(node, args);
-      case "foldEffectStream":
-        return this.foldEffectStreamCall(node, args);
-      case "collectStream":
-        return this.collectStreamCall(node, args);
-      case "headStream":
-        return this.headStreamCall(node, args);
-      case "lastStream":
-        return this.lastStreamCall(node, args);
-      case "drainStream":
-        return this.drainStreamCall(node, args);
-      case "flatMapStreams":
-        return this.flatMapStreamsCall(node, args);
-      case "switchMapStreams":
-        return this.switchMapStreamsCall(node, args);
-      case "catchStream":
-        return this.catchStreamCall(node, args);
-      case "retryStream":
-        return this.retryStreamCall(node, args);
-      case "debounceStream":
-        return this.debounceStreamCall(node, args);
-      case "throttleStream":
-        return this.throttleStreamCall(node, args);
-      case "takeStream":
-        return this.takeStreamCall(node, args);
-      case "dropStream":
-        return this.dropStreamCall(node, args);
-      case "dropWhileStream":
-        return this.dropWhileStreamCall(node, args);
-      case "filterStream":
-        return this.filterStreamCall(node, args);
-      case "filterEffectStream":
-        this.fact(node, { kind: "filter-effect-stream" });
-        return this.effectStreamPredicateCall(node, args, "filterEffectStream");
-      case "takeWhileEffectStream":
-        this.fact(node, { kind: "take-while-effect-stream" });
-        return this.effectStreamPredicateCall(
-          node,
-          args,
-          "takeWhileEffectStream",
-        );
-      case "takeUntilEffectStream":
-        this.fact(node, { kind: "take-until-effect-stream" });
-        return this.effectStreamPredicateCall(
-          node,
-          args,
-          "takeUntilEffectStream",
-        );
-      case "dropWhileEffectStream":
-        this.fact(node, { kind: "drop-while-effect-stream" });
-        return this.effectStreamPredicateCall(
-          node,
-          args,
-          "dropWhileEffectStream",
-        );
-      case "takeWhileStream":
-        return this.takeWhileStreamCall(node, args);
-      case "takeUntilStream":
-        return this.takeUntilStreamCall(node, args);
-      case "sinkForEach":
-        return this.sinkForEachCall(node, args);
-      case "takeSink":
-        return this.takeSinkCall(node, args, expected);
-      case "transduceStream":
-        return this.transduceStreamCall(node, args);
-      case "aggregateStream":
-        return this.aggregateStreamCall(node, args);
-      case "aggregateWithinStream":
-        return this.aggregateWithinStreamCall(node, args);
-      case "scheduleFromStep":
-        return this.scheduleFromStepCall(node, args);
-      case "scheduleRecurs":
-      case "scheduleSpaced":
-        return this.simpleScheduleCall(node, args, name);
-      case "scheduleMap":
-        return this.scheduleMapCall(node, args, expected);
-      case "scheduleMax":
-      case "scheduleMin":
-      case "scheduleConcat":
-        return this.scheduleComposeCall(node, args, name);
-      case "runStream":
-        return this.runStreamCall(node, args);
-      case "bufferStream":
-        return this.bufferStreamCall(node, args);
-      case "mergeStreams":
-        return this.mergeStreamsCall(node, args);
-      case "zipStreams":
-        return this.zipStreamsCall(node, args);
-      case "concatStreams":
-        return this.concatStreamsCall(node, args);
-      case "race":
-        return this.raceCall(node, args);
-      case "makeRef":
-      case "getRef":
-      case "setRef":
-      case "updateRef":
-        return this.refCall(node, name, args);
-      case "layer":
-        return this.layerCall(node, args);
-      case "mergeLayers":
-        return this.mergeLayersCall(node, args);
-      case "unbrand":
-        return this.unbrandCall(node, args);
-      case "Some":
-        return this.someCall(node, args, expected);
-      case "all":
-        return this.allCall(node, args);
-      case "partitionAll":
-        return this.partitionAllCall(node, args);
-      case "validateAll":
-        return this.validateAllCall(node, args);
-      case "allResults":
-        return this.allResultsCall(node, args);
-      case "map":
-      case "filter":
-      case "fold":
-      case "traverse":
-        return this.collectionCall(node, name, args, expected);
-      default: {
-        const infos = args.map((a) => this.argInfo(a));
-        this.report(
-          "type-mismatch/008",
-          `\`${name}\` is a value, not a function`,
-          node,
-        );
-        return this.finish(node, this.table.error, combine(infos));
-      }
+    if (name === "None") {
+      const infos = args.map((a) => this.argInfo(a));
+      this.report(
+        "type-mismatch/008",
+        `\`${name}\` is a value, not a function`,
+        node,
+      );
+      return this.finish(node, this.table.error, combine(infos));
     }
+    return this.preludeCall(node, name, args, expected);
   }
+
+  /** Runs the handler of a prelude name. The table has one row for each name except `None`. */
+  private preludeCall<K extends PreludeCallName>(
+    node: NodeId,
+    name: K,
+    args: readonly Arg[],
+    expected: TypeRef | undefined,
+  ): NodeInfo {
+    const handler: PreludeHandler<K> = BodyChecker.PRELUDE_HANDLERS[name];
+    return handler(this, node, name, args, expected);
+  }
+
+  private static readonly schemaBuiltin: PreludeHandler<SchemaBuiltinName> = (
+    c,
+    node,
+    name,
+    args,
+    expected,
+  ) => c.schemaCall(node, name, args, expected);
+
+  private static readonly PRELUDE_HANDLERS: PreludeHandlers = {
+    fail: (c, node, _name, args) => c.failCall(node, args),
+    retry: (c, node, _name, args) => c.retryCall(node, args),
+    retrySchedule: (c, node, _name, args, expected) =>
+      c.retryScheduleCall(node, args, expected),
+    codec: (c, node, _name, args) => c.codecCall(node, args),
+    schema: BodyChecker.schemaBuiltin,
+    schemaArray: BodyChecker.schemaBuiltin,
+    schemaStruct: BodyChecker.schemaBuiltin,
+    schemaOptionalKey: BodyChecker.schemaBuiltin,
+    schemaNullToMissingKey: BodyChecker.schemaBuiltin,
+    schemaOptionFromOptionalKey: BodyChecker.schemaBuiltin,
+    schemaDefaultKey: BodyChecker.schemaBuiltin,
+    schemaConstructorDefault: BodyChecker.schemaBuiltin,
+    schemaDefaultNullKey: BodyChecker.schemaBuiltin,
+    schemaDefaultEncodedKey: BodyChecker.schemaBuiltin,
+    schemaOptionalTransform: BodyChecker.schemaBuiltin,
+    schemaOptionalFromRequired: BodyChecker.schemaBuiltin,
+    schemaUnion: BodyChecker.schemaBuiltin,
+    schemaTransform: BodyChecker.schemaBuiltin,
+    schemaRecursive: BodyChecker.schemaBuiltin,
+    schemaDecode: BodyChecker.schemaBuiltin,
+    schemaEncode: BodyChecker.schemaBuiltin,
+    schemaMake: BodyChecker.schemaBuiltin,
+    schemaInvalid: BodyChecker.schemaBuiltin,
+    schemaAt: BodyChecker.schemaBuiltin,
+    schemaBoth: BodyChecker.schemaBuiltin,
+    decode: (c, node, name, args) => c.codecOperation(node, name, args),
+    encode: (c, node, name, args) => c.codecOperation(node, name, args),
+    withFiber: (c, node, _name, args, expected) =>
+      c.withFiberCall(node, args, expected),
+    joinFiber: (c, node, name, args) => c.fiberOperation(node, name, args),
+    interruptFiber: (c, node, name, args) => c.fiberOperation(node, name, args),
+    provide: (c, node, _name, args) => c.provideCall(node, args),
+    defer: (c, node, _name, args) => c.deferCall(node, args),
+    run: (c, node, _name, args) => c.runCall(node, args),
+    scoped: (c, node, _name, args) => c.scopedCall(node, args),
+    forkScoped: (c, node, _name, args) => c.forkScopedCall(node, args),
+    makeScope: (c, node, name, args) => c.scopeCall(node, name, args),
+    provideScope: (c, node, name, args) => c.scopeCall(node, name, args),
+    addScopeFinalizer: (c, node, name, args) => c.scopeCall(node, name, args),
+    closeScope: (c, node, name, args) => c.scopeCall(node, name, args),
+    withResource: (c, node, _name, args, expected) =>
+      c.withResourceCall(node, args, expected),
+    unfold: (c, node, _name, args) => c.unfoldCall(node, args),
+    mapEffect: (c, node, _name, args) => c.mapEffectCall(node, args),
+    mapStream: (c, node, _name, args) => c.mapStreamCall(node, args),
+    mapGroups: (c, node, _name, args) => c.mapGroupsCall(node, args),
+    scanStream: (c, node, _name, args) => c.scanStreamCall(node, args),
+    mapAccumStream: (c, node, _name, args) => c.mapAccumStreamCall(node, args),
+    foldStream: (c, node, _name, args) => c.foldStreamCall(node, args),
+    foldEffectStream: (c, node, _name, args) =>
+      c.foldEffectStreamCall(node, args),
+    collectStream: (c, node, _name, args) => c.collectStreamCall(node, args),
+    headStream: (c, node, _name, args) => c.headStreamCall(node, args),
+    lastStream: (c, node, _name, args) => c.lastStreamCall(node, args),
+    drainStream: (c, node, _name, args) => c.drainStreamCall(node, args),
+    flatMapStreams: (c, node, _name, args) => c.flatMapStreamsCall(node, args),
+    switchMapStreams: (c, node, _name, args) =>
+      c.switchMapStreamsCall(node, args),
+    catchStream: (c, node, _name, args) => c.catchStreamCall(node, args),
+    retryStream: (c, node, _name, args) => c.retryStreamCall(node, args),
+    debounceStream: (c, node, _name, args) => c.debounceStreamCall(node, args),
+    throttleStream: (c, node, _name, args) => c.throttleStreamCall(node, args),
+    takeStream: (c, node, _name, args) => c.takeStreamCall(node, args),
+    dropStream: (c, node, _name, args) => c.dropStreamCall(node, args),
+    dropWhileStream: (c, node, _name, args) =>
+      c.dropWhileStreamCall(node, args),
+    filterStream: (c, node, _name, args) => c.filterStreamCall(node, args),
+    filterEffectStream: (c, node, name, args) => {
+      c.fact(node, { kind: "filter-effect-stream" });
+      return c.effectStreamPredicateCall(node, args, name);
+    },
+    takeWhileEffectStream: (c, node, name, args) => {
+      c.fact(node, { kind: "take-while-effect-stream" });
+      return c.effectStreamPredicateCall(node, args, name);
+    },
+    takeUntilEffectStream: (c, node, name, args) => {
+      c.fact(node, { kind: "take-until-effect-stream" });
+      return c.effectStreamPredicateCall(node, args, name);
+    },
+    dropWhileEffectStream: (c, node, name, args) => {
+      c.fact(node, { kind: "drop-while-effect-stream" });
+      return c.effectStreamPredicateCall(node, args, name);
+    },
+    takeWhileStream: (c, node, _name, args) =>
+      c.takeWhileStreamCall(node, args),
+    takeUntilStream: (c, node, _name, args) =>
+      c.takeUntilStreamCall(node, args),
+    sinkForEach: (c, node, _name, args) => c.sinkForEachCall(node, args),
+    takeSink: (c, node, _name, args, expected) =>
+      c.takeSinkCall(node, args, expected),
+    transduceStream: (c, node, _name, args) =>
+      c.transduceStreamCall(node, args),
+    aggregateStream: (c, node, _name, args) =>
+      c.aggregateStreamCall(node, args),
+    aggregateWithinStream: (c, node, _name, args) =>
+      c.aggregateWithinStreamCall(node, args),
+    scheduleFromStep: (c, node, _name, args) =>
+      c.scheduleFromStepCall(node, args),
+    scheduleRecurs: (c, node, name, args) =>
+      c.simpleScheduleCall(node, args, name),
+    scheduleSpaced: (c, node, name, args) =>
+      c.simpleScheduleCall(node, args, name),
+    scheduleMap: (c, node, _name, args, expected) =>
+      c.scheduleMapCall(node, args, expected),
+    scheduleMax: (c, node, name, args) =>
+      c.scheduleComposeCall(node, args, name),
+    scheduleMin: (c, node, name, args) =>
+      c.scheduleComposeCall(node, args, name),
+    scheduleConcat: (c, node, name, args) =>
+      c.scheduleComposeCall(node, args, name),
+    runStream: (c, node, _name, args) => c.runStreamCall(node, args),
+    bufferStream: (c, node, _name, args) => c.bufferStreamCall(node, args),
+    mergeStreams: (c, node, _name, args) => c.mergeStreamsCall(node, args),
+    zipStreams: (c, node, _name, args) => c.zipStreamsCall(node, args),
+    concatStreams: (c, node, _name, args) => c.concatStreamsCall(node, args),
+    race: (c, node, _name, args) => c.raceCall(node, args),
+    makeRef: (c, node, name, args) => c.refCall(node, name, args),
+    getRef: (c, node, name, args) => c.refCall(node, name, args),
+    setRef: (c, node, name, args) => c.refCall(node, name, args),
+    updateRef: (c, node, name, args) => c.refCall(node, name, args),
+    layer: (c, node, _name, args) => c.layerCall(node, args),
+    mergeLayers: (c, node, _name, args) => c.mergeLayersCall(node, args),
+    unbrand: (c, node, _name, args) => c.unbrandCall(node, args),
+    Some: (c, node, _name, args, expected) => c.someCall(node, args, expected),
+    all: (c, node, _name, args) => c.allCall(node, args),
+    partitionAll: (c, node, _name, args) => c.partitionAllCall(node, args),
+    validateAll: (c, node, _name, args) => c.validateAllCall(node, args),
+    allResults: (c, node, _name, args) => c.allResultsCall(node, args),
+    map: (c, node, name, args, expected) =>
+      c.collectionCall(node, name, args, expected),
+    filter: (c, node, name, args, expected) =>
+      c.collectionCall(node, name, args, expected),
+    fold: (c, node, name, args, expected) =>
+      c.collectionCall(node, name, args, expected),
+    traverse: (c, node, name, args, expected) =>
+      c.collectionCall(node, name, args, expected),
+  };
 
   /** Reports a wrong argument count for a prelude call. Returns true when the count is right. */
   private arity(
@@ -1613,12 +1601,11 @@ export class BodyChecker {
 
   private schemaCall(
     node: NodeId,
-    name: string,
+    name: SchemaBuiltinName,
     args: readonly Arg[],
     expected: TypeRef | undefined,
   ): NodeInfo {
-    const builtin: SchemaBuiltin =
-      SCHEMA_BUILTINS[name as keyof typeof SCHEMA_BUILTINS];
+    const builtin: SchemaBuiltin = SCHEMA_BUILTINS[name];
     const op = builtin.op;
     this.fact(node, { kind: "schema", op });
     const actualCount = builtin.acceptsOptions === true && args.length === 3
