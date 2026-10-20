@@ -72,7 +72,7 @@ export {
 export type { ConfigError, Project, ProjectConfig } from "./project.ts";
 export { lineIndexOf, lineStarts, memoryHost, positionOf } from "./source.ts";
 export type { ReadError, Result, SourceHost } from "./source.ts";
-export { compareText } from "./util.ts";
+export { compareText, isRecord } from "./util.ts";
 
 // Diagnostics.
 export {

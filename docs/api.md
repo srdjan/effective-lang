@@ -30,7 +30,7 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
   db.ts          Program: revisions, parse memo, check memo with module cutoff, lazy IR, text, and maps.
   editor.ts      hoverAt, definitionAt, and documentSymbols over a revision.
   ids.ts         Parts of a declaration identity: module, name, and method.
-  util.ts        Small pure helpers of the front end and the edges: compareText.
+  util.ts        Small pure helpers of the front end and the edges: compareText and isRecord.
   mod.ts         The public API of the core: a list of re-exports.
   sha256.ts      Synchronous SHA-256 over the UTF-8 bytes of a string.
   lower.ts       Checked modules to typed IR: pipelines, builtin specialization, imports.

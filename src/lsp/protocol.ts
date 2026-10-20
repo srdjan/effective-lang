@@ -3,7 +3,7 @@
 // shape. A narrowing function returns a Result. Its error text is fit for the
 // message of a -32602 response.
 
-import type { Result } from "../core/mod.ts";
+import { isRecord, type Result } from "../core/mod.ts";
 
 // ---- Wire types -----------------------------------------------------------
 
@@ -201,10 +201,6 @@ function ok<T>(value: T): Narrowed<T> {
 
 function fail<T>(error: string): Narrowed<T> {
   return { ok: false, error };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isIndex(value: unknown): value is number {

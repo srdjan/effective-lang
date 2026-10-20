@@ -4,3 +4,10 @@
 export function compareText(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
+
+/** True for a plain JSON object: not null and not an array. */
+export function isRecord(
+  value: unknown,
+): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}

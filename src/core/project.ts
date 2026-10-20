@@ -12,7 +12,7 @@ import { stronglyConnectedComponents } from "./modes.ts";
 import { parse, type ParseResult } from "./parse.ts";
 import type { ReadError, Result, SourceHost, Span } from "./source.ts";
 import type { FileMode, SyntaxTree } from "./syntax.ts";
-import { compareText } from "./util.ts";
+import { compareText, isRecord } from "./util.ts";
 
 export const CONFIG_FILE = "effective.json";
 
@@ -99,10 +99,6 @@ export function describeConfigError(error: ConfigError): string {
     case "invalid-shape":
       return `${error.path} is not a valid project file: ${error.message}`;
   }
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** The span of the quoted key `"name"` at or after `from`, or an empty span at 0. */

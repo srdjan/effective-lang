@@ -8,7 +8,7 @@
 // only a short tail and keeps skipping on the next chunk. Each bad region gives
 // one error. A body that is not valid UTF-8 JSON consumes its whole frame.
 
-import type { Result } from "../core/mod.ts";
+import { isRecord, type Result } from "../core/mod.ts";
 
 export type RequestId = string | number;
 
@@ -268,10 +268,6 @@ type IncomingMessage =
     readonly id: RequestId | null;
     readonly reason: string;
   };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function isId(value: unknown): value is RequestId {
   return typeof value === "string" ||
