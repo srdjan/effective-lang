@@ -46,6 +46,7 @@ function namedIn(type: Type, out: Set<DeclarationId>): void {
   switch (type.kind) {
     case "primitive":
     case "literal":
+    case "closeable-scope":
       return;
     case "named":
       out.add(type.id);
@@ -55,7 +56,19 @@ function namedIn(type: Type, out: Set<DeclarationId>): void {
       return;
     case "array":
     case "option":
+    case "ref":
       namedIn(type.element, out);
+      return;
+    case "retry-schedule":
+      namedIn(type.error, out);
+      return;
+    case "codec":
+      namedIn(type.decoded, out);
+      namedIn(type.encoded, out);
+      return;
+    case "fiber":
+      namedIn(type.result, out);
+      effectsIn(type.failures, [], out);
       return;
     case "effect":
       namedIn(type.result, out);
@@ -79,6 +92,7 @@ function namedIn(type: Type, out: Set<DeclarationId>): void {
     case "schema":
       namedIn(type.decoded, out);
       namedIn(type.encoded, out);
+      if (type.makeInput !== undefined) namedIn(type.makeInput, out);
       effectsIn([], type.decodeRequirements, out);
       effectsIn([], type.encodeRequirements, out);
       return;
@@ -101,6 +115,10 @@ function namedIn(type: Type, out: Set<DeclarationId>): void {
         out,
       );
       return;
+    default: {
+      const unreachable: never = type;
+      return unreachable;
+    }
   }
 }
 
