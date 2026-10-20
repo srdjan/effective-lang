@@ -12,6 +12,7 @@ import { stronglyConnectedComponents } from "./modes.ts";
 import { parse, type ParseResult } from "./parse.ts";
 import type { ReadError, Result, SourceHost, Span } from "./source.ts";
 import type { FileMode, SyntaxTree } from "./syntax.ts";
+import { compareText } from "./util.ts";
 
 export const CONFIG_FILE = "effective.json";
 
@@ -485,10 +486,6 @@ class Loader {
 }
 
 // ------------------------------------------------------------------ graph
-
-function compareText(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
 
 interface GraphResult {
   readonly graph: ReadonlyMap<string, readonly string[]>;

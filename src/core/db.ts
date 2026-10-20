@@ -76,6 +76,7 @@ import {
 } from "./project.ts";
 import { memoryHost, type Result } from "./source.ts";
 import { canonicalJson, TypeTable } from "./types.ts";
+import { compareText } from "./util.ts";
 
 // ------------------------------------------------------------------ changes
 
@@ -128,10 +129,6 @@ interface Entry {
   emitted?: Result<EmittedModule, EmitProjectError>;
   table?: Result<SpanTable, EmitProjectError>;
   map?: Result<SourceMapV3, EmitProjectError | SourceMapError>;
-}
-
-function compareText(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function configKey(config: ProjectConfig): string {

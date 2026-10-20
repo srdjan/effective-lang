@@ -36,6 +36,7 @@ import type {
 } from "./ir.ts";
 import type { Result } from "./source.ts";
 import { canonicalJson } from "./types.ts";
+import { compareText } from "./util.ts";
 
 /** The `Import` payload without `module` and `bindings`. */
 type InterfacePayload = Pick<
@@ -55,10 +56,6 @@ export type InterfaceError = {
   /** Explicit functions with empty sets and no entry in the mode map, sorted. */
   readonly ids: readonly ValueId[];
 };
-
-function compareText(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
 
 function byId<T extends { readonly id: string }>(items: readonly T[]): T[] {
   return [...items].sort((a, b) => compareText(a.id, b.id));

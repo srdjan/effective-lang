@@ -10,6 +10,7 @@
 import type { CliFs } from "../host/io.ts";
 import { isSourcePath, readWorkspace } from "../host/workspace.ts";
 import {
+  compareText,
   CONFIG_FILE,
   type ConfigError,
   describeConfigError,
@@ -110,10 +111,6 @@ interface ProjectSetPorts {
   stderr(text: string): void;
   /** Called after each flush that ran `Program.update`, after the diagnostics went out. */
   flushed(project: ProjectState, outcome: FlushOutcome): void;
-}
-
-function compareText(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function parentOf(dir: string): string {
