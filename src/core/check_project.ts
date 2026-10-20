@@ -396,7 +396,13 @@ export function checkModuleBodies(args: CheckArguments): ModuleBodies {
   );
   for (const cycle of initialization.cycles) {
     // A cycle lists ids of `entries`, so every id has a signature.
-    const members = cycle.flatMap((id) => signatures.get(id) ?? []);
+    const members = cycle.map((id) => {
+      const signature = signatures.get(id);
+      if (signature === undefined) {
+        throw new Error("internal: a cycle id has no signature");
+      }
+      return signature;
+    });
     const first = members.find((m) => m.kind === "constant") ?? members[0];
     const loop = [...cycle.map(shortName), shortName(cycle[0])].join(" -> ");
     diagnostics.push(makeDiagnostic(

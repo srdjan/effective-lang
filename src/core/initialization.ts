@@ -79,24 +79,40 @@ export function buildInitializationGraph(
     cycles.push(component.map((p) => nodes[p].id));
   }
   // A cycle lists ids of `nodes`, so each first id has a position.
-  const firstPosition = (cycle: readonly ValueId[]): number =>
-    position.get(cycle[0]) ?? 0;
+  const firstPosition = (cycle: readonly ValueId[]): number => {
+    const at = position.get(cycle[0]);
+    if (at === undefined) {
+      throw new Error("internal: a cycle id has no position");
+    }
+    return at;
+  };
   cycles.sort((a, b) => firstPosition(a) - firstPosition(b));
 
   // Kahn's algorithm. A constant in a cycle never becomes ready, so the leftover
   // constants follow in source order.
   const remaining = new Map<ValueId, Set<ValueId>>();
   for (const id of constants) {
-    const pending = new Set(dependencies.get(id) ?? []);
+    // Every constant got an entry in the dependency loop above.
+    const found = dependencies.get(id);
+    if (found === undefined) {
+      throw new Error("internal: a constant has no dependency entry");
+    }
+    const pending = new Set(found);
     pending.delete(id);
     remaining.set(id, pending);
   }
   const order: ValueId[] = [];
   const done = new Set<ValueId>();
   while (done.size < constants.length) {
-    const ready = constants.find((id) =>
-      !done.has(id) && [...remaining.get(id) ?? []].every((d) => done.has(d))
-    );
+    const ready = constants.find((id) => {
+      if (done.has(id)) return false;
+      // `remaining` holds every constant.
+      const pending = remaining.get(id);
+      if (pending === undefined) {
+        throw new Error("internal: a constant has no pending set");
+      }
+      return [...pending].every((d) => done.has(d));
+    });
     const next = ready ?? constants.find((id) => !done.has(id));
     // The loop runs while a constant is left, so `find` always succeeds.
     if (next === undefined) throw new Error("internal: no constant is left");
