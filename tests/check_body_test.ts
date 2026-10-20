@@ -758,170 +758,170 @@ const use = (): Int => dropStream()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
-Deno.test("takeWhileStream preserves deferred channels and requires a pure boolean predicate", () => {
+Deno.test("takeWhileEffectStream with a pure callback preserves deferred channels and the stream alias", () => {
   const valid = checkText(`
 type Int = int
 error Stop = {}
 service Source { next(n: Int): Option<[Int, Int]> fails Stop }
 const source = unfold(0, (n) => Source.next(n))
-const prefix: Stream<Int, Stop, Source.next> = takeWhileStream(source, (n) => n < 3)
+const prefix: Stream<Int, Stop, Source.next> = takeWhileEffectStream(source, (n) => n < 3)
 `);
   assertEquals(codes(valid), [], messages(valid).join("\n"));
 
   const wrongResult = checkText(`
 type Int = int
-const bad = takeWhileStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => n + 1)
+const bad = takeWhileEffectStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => n + 1)
 `);
   assert(codes(wrongResult).includes("type-mismatch/003"));
 
   const effectful = checkText(`
 type Int = int
-service Probe { accept(n: Int): boolean }
-const bad = takeWhileStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => Probe.accept(n))
+type Bool = boolean
+service Probe { accept(n: Int): Bool }
+const bad = takeWhileEffectStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => Probe.accept(n))
 `);
-  assert(codes(effectful).includes("execution-mode/001"));
+  assertEquals(codes(effectful), [], messages(effectful).join("\n"));
 
   const wrongSource = checkText(`
 type Int = int
-const bad = takeWhileStream(3, (n) => n < 3)
+const bad = takeWhileEffectStream(3, (n) => n < 3)
 `);
   assert(codes(wrongSource).includes("type-mismatch/010"));
 });
 
-Deno.test("a source binding named takeWhileStream shadows the prelude operation", () => {
-  const project = checkText(`
-type Int = int
-const takeWhileStream = (): Int => 3
-const use = (): Int => takeWhileStream()
-`);
-  assertEquals(codes(project), [], messages(project).join("\n"));
-});
-
-Deno.test("dropWhileStream preserves deferred channels and requires a pure boolean predicate", () => {
+Deno.test("dropWhileEffectStream with a pure callback preserves deferred channels and the stream alias", () => {
   const valid = checkText(`
 type Int = int
 error Stop = {}
 service Source { next(n: Int): Option<[Int, Int]> fails Stop }
 const source = unfold(0, (n) => Source.next(n))
-const prefix: Stream<Int, Stop, Source.next> = dropWhileStream(source, (n) => n < 3)
+const prefix: Stream<Int, Stop, Source.next> = dropWhileEffectStream(source, (n) => n < 3)
 `);
   assertEquals(codes(valid), [], messages(valid).join("\n"));
 
   const wrongResult = checkText(`
 type Int = int
-const bad = dropWhileStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => n + 1)
+const bad = dropWhileEffectStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => n + 1)
 `);
   assert(codes(wrongResult).includes("type-mismatch/003"));
 
   const effectful = checkText(`
 type Int = int
-service Probe { accept(n: Int): boolean }
-const bad = dropWhileStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => Probe.accept(n))
+type Bool = boolean
+service Probe { accept(n: Int): Bool }
+const bad = dropWhileEffectStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => Probe.accept(n))
 `);
-  assert(codes(effectful).includes("execution-mode/001"));
+  assertEquals(codes(effectful), [], messages(effectful).join("\n"));
 
   const wrongSource = checkText(`
 type Int = int
-const bad = dropWhileStream(3, (n) => n < 3)
+const bad = dropWhileEffectStream(3, (n) => n < 3)
 `);
   assert(codes(wrongSource).includes("type-mismatch/010"));
 });
 
-Deno.test("a source binding named dropWhileStream shadows the prelude operation", () => {
-  const project = checkText(`
-type Int = int
-const dropWhileStream = (): Int => 3
-const use = (): Int => dropWhileStream()
-`);
-  assertEquals(codes(project), [], messages(project).join("\n"));
-});
-
-Deno.test("takeUntilStream preserves deferred channels and requires a pure boolean predicate", () => {
+Deno.test("takeUntilEffectStream with a pure callback preserves deferred channels and the stream alias", () => {
   const valid = checkText(`
 type Int = int
 error Stop = {}
 service Source { next(n: Int): Option<[Int, Int]> fails Stop }
 const source = unfold(0, (n) => Source.next(n))
-const prefix: Stream<Int, Stop, Source.next> = takeUntilStream(source, (n) => n === 3)
+const prefix: Stream<Int, Stop, Source.next> = takeUntilEffectStream(source, (n) => n === 3)
 `);
   assertEquals(codes(valid), [], messages(valid).join("\n"));
 
   const wrongResult = checkText(`
 type Int = int
-const bad = takeUntilStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => n + 1)
+const bad = takeUntilEffectStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => n + 1)
 `);
   assert(codes(wrongResult).includes("type-mismatch/003"));
 
   const effectful = checkText(`
 type Int = int
-service Probe { accept(n: Int): boolean }
-const bad = takeUntilStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => Probe.accept(n))
+type Bool = boolean
+service Probe { accept(n: Int): Bool }
+const bad = takeUntilEffectStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => Probe.accept(n))
 `);
-  assert(codes(effectful).includes("execution-mode/001"));
+  assertEquals(codes(effectful), [], messages(effectful).join("\n"));
 
   const wrongSource = checkText(`
 type Int = int
-const bad = takeUntilStream(3, (n) => n === 3)
+const bad = takeUntilEffectStream(3, (n) => n === 3)
 `);
   assert(codes(wrongSource).includes("type-mismatch/010"));
 });
 
-Deno.test("a source binding named takeUntilStream shadows the prelude operation", () => {
-  const project = checkText(`
-type Int = int
-const takeUntilStream = (): Int => 3
-const use = (): Int => takeUntilStream()
-`);
-  assertEquals(codes(project), [], messages(project).join("\n"));
-});
-
-Deno.test("filterStream preserves deferred channels and requires a pure boolean predicate", () => {
+Deno.test("filterEffectStream with a pure callback preserves deferred channels and the stream alias", () => {
   const valid = checkText(`
 type Int = int
 error Stop = {}
 service Source { next(n: Int): Option<[Int, Int]> fails Stop }
 const source = unfold(0, (n) => Source.next(n))
-const prefix: Stream<Int, Stop, Source.next> = filterStream(source, (n) => n < 3)
+const prefix: Stream<Int, Stop, Source.next> = filterEffectStream(source, (n) => n < 3)
 `);
   assertEquals(codes(valid), [], messages(valid).join("\n"));
 
   const wrongResult = checkText(`
 type Int = int
-const bad = filterStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => n + 1)
+const bad = filterEffectStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => n + 1)
 `);
   assert(codes(wrongResult).includes("type-mismatch/003"));
 
   const effectful = checkText(`
 type Int = int
-service Probe { accept(n: Int): boolean }
-const bad = filterStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => Probe.accept(n))
+type Bool = boolean
+service Probe { accept(n: Int): Bool }
+const bad = filterEffectStream(unfold(0, (n): Option<[Int, Int]> => None), (n) => Probe.accept(n))
 `);
-  assert(codes(effectful).includes("execution-mode/001"));
+  assertEquals(codes(effectful), [], messages(effectful).join("\n"));
 
   const wrongSource = checkText(`
 type Int = int
-const bad = filterStream(3, (n) => n < 3)
+const bad = filterEffectStream(3, (n) => n < 3)
 `);
   assert(codes(wrongSource).includes("type-mismatch/010"));
 });
 
-Deno.test("a source binding named filterStream shadows the prelude operation", () => {
-  const project = checkText(`
+Deno.test("a pure stream predicate keeps the stream alias and an effectful one widens it", () => {
+  const header = `
 type Int = int
-const filterStream = (): Int => 3
-const use = (): Int => filterStream()
-`);
-  assertEquals(codes(project), [], messages(project).join("\n"));
+type Bool = boolean
+service Source { next(n: Int): Option<[Int, Int]> }
+service Probe { accept(n: Int): Bool }
+type Ints = Stream<Int, never, Source.next>
+const source: Ints = unfold(0, (n) => Source.next(n))
+`;
+  for (
+    const name of [
+      "filterEffectStream",
+      "takeWhileEffectStream",
+      "takeUntilEffectStream",
+      "dropWhileEffectStream",
+    ]
+  ) {
+    const kept = checkText(
+      `${header}const c: Ints = ${name}(source, (n) => n < 3)\n`,
+    );
+    assertEquals(codes(kept), [], messages(kept).join("\n"));
+    const widened = checkText(
+      `${header}const c: Ints = ${name}(source, (n) => Probe.accept(n))\n`,
+    );
+    assertEquals(codes(widened), ["type-mismatch/003"], name);
+  }
+  const mapped = checkText(
+    `${header}const c: Stream<Bool, never, Source.next> = mapEffect(source, (n) => n < 3)\n`,
+  );
+  assertEquals(codes(mapped), [], messages(mapped).join("\n"));
 });
 
-Deno.test("mapStream changes the element type and preserves deferred channels", () => {
+Deno.test("mapEffect with a pure callback changes the element type and preserves deferred channels", () => {
   const valid = checkText(`
 type Int = int
 type Bool = boolean
 error Stop = {}
 service Source { next(n: Int): Option<[Int, Int]> fails Stop }
 const source = unfold(0, (n) => Source.next(n))
-const mapped: Stream<Bool, Stop, Source.next> = mapStream(source, (n) => n < 3)
+const mapped: Stream<Bool, Stop, Source.next> = mapEffect(source, (n) => n < 3)
 `);
   assertEquals(codes(valid), [], messages(valid).join("\n"));
 
@@ -929,13 +929,13 @@ const mapped: Stream<Bool, Stop, Source.next> = mapStream(source, (n) => n < 3)
 type Int = int
 service Probe { next(n: Int): Int }
 const source = unfold(0, (n): Option<[Int, Int]> => None)
-const bad = mapStream(source, (n) => Probe.next(n))
+const bad = mapEffect(source, (n) => Probe.next(n))
 `);
-  assert(codes(effectful).includes("execution-mode/001"));
+  assertEquals(codes(effectful), [], messages(effectful).join("\n"));
 
   const wrongSource = checkText(`
 type Int = int
-const bad = mapStream(3, (n) => n + 1)
+const bad = mapEffect(3, (n) => n + 1)
 `);
   assert(codes(wrongSource).includes("type-mismatch/010"));
 
@@ -943,18 +943,9 @@ const bad = mapStream(3, (n) => n + 1)
 type Int = int
 const convert = (n: Int): Int => n + 1
 const source = unfold(0, (n): Option<[Int, Int]> => None)
-const bad = mapStream(source, convert)
+const bad = mapEffect(source, convert)
 `);
   assert(codes(nonInline).includes("type-mismatch/010"));
-});
-
-Deno.test("a source binding named mapStream shadows the prelude operation", () => {
-  const project = checkText(`
-type Int = int
-const mapStream = (): Int => 3
-const use = (): Int => mapStream()
-`);
-  assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
 Deno.test("scanStream emits seed states and preserves deferred channels", () => {

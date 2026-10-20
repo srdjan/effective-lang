@@ -134,7 +134,7 @@ Deno.test("stream operations emit the Effect 4 Stream and Sink APIs", () => {
 service Source { next(state: Int): Option<[Int, Int]> }
 service Consumer { accept(value: Int): void }
 const source = unfold(0, (state) => Source.next(state))
-const mapped = mapEffect(source, (value) => value + 1)
+const mapped = mapEffect(source, (value) => value + 1, { concurrency: 2 })
 const sink = sinkForEach((value: Int) => Consumer.accept(value))
 export const main = (): void uses Source.next | Consumer.accept => runStream(mapped, sink)
 type Int = int
@@ -168,66 +168,91 @@ export const limit = (count: Int): Stream<Int, never, Source.next> =>
   assertStringIncludes(output, "Stream.drop(source, count)");
 });
 
-Deno.test("takeWhileStream emits Stream.takeWhile", () => {
+Deno.test("takeWhileEffectStream with a pure callback emits Stream.takeWhile", () => {
   const output = oneModule(`
 type Int = int
 service Source { next(state: Int): Option<[Int, Int]> }
 const source = unfold(0, (state) => Source.next(state))
 export const prefix: Stream<Int, never, Source.next> =
-  takeWhileStream(source, (n) => n < 3)
+  takeWhileEffectStream(source, (n) => n < 3)
 `);
   assertStringIncludes(output, "Stream.takeWhile(");
   assertStringIncludes(output, "(n) => n < 3");
 });
 
-Deno.test("dropWhileStream emits Stream.dropWhile", () => {
+Deno.test("dropWhileEffectStream with a pure callback emits Stream.dropWhile", () => {
   const output = oneModule(`
 type Int = int
 service Source { next(state: Int): Option<[Int, Int]> }
 const source = unfold(0, (state) => Source.next(state))
 export const prefix: Stream<Int, never, Source.next> =
-  dropWhileStream(source, (n) => n < 3)
+  dropWhileEffectStream(source, (n) => n < 3)
 `);
   assertStringIncludes(output, "Stream.dropWhile(");
   assertStringIncludes(output, "(n) => n < 3");
 });
 
-Deno.test("takeUntilStream emits Stream.takeUntil", () => {
+Deno.test("takeUntilEffectStream with a pure callback emits Stream.takeUntil", () => {
   const output = oneModule(`
 type Int = int
 service Source { next(state: Int): Option<[Int, Int]> }
 const source = unfold(0, (state) => Source.next(state))
 export const prefix: Stream<Int, never, Source.next> =
-  takeUntilStream(source, (n) => n === 3)
+  takeUntilEffectStream(source, (n) => n === 3)
 `);
   assertStringIncludes(output, "Stream.takeUntil(");
   assertStringIncludes(output, "(n) => n === 3");
 });
 
-Deno.test("filterStream emits Stream.filter", () => {
+Deno.test("filterEffectStream with a pure callback emits Stream.filter", () => {
   const output = oneModule(`
 type Int = int
 service Source { next(state: Int): Option<[Int, Int]> }
 const source = unfold(0, (state) => Source.next(state))
 export const prefix: Stream<Int, never, Source.next> =
-  filterStream(source, (n) => n < 3)
+  filterEffectStream(source, (n) => n < 3)
 `);
   assertStringIncludes(output, "Stream.filter(");
   assertStringIncludes(output, ") => n < 3");
 });
 
-Deno.test("mapStream emits pure Stream.map with a changed element type", () => {
+Deno.test("mapEffect with a pure callback emits pure Stream.map with a changed element type", () => {
   const output = oneModule(`
 type Int = int
 type Bool = boolean
 service Source { next(state: Int): Option<[Int, Int]> }
 const source = unfold(0, (state) => Source.next(state))
 export const mapped: Stream<Bool, never, Source.next> =
-  mapStream(source, (n) => n < 3)
+  mapEffect(source, (n) => n < 3)
 `);
   assertStringIncludes(output, "Stream.map(");
   assertStringIncludes(output, ") => n < 3");
   assertStringIncludes(output, "Stream.Stream<Bool, never, Source>");
+});
+
+Deno.test("mapEffect with a pure callback and a concurrency option stays Stream.mapEffect", () => {
+  const output = oneModule(`
+type Int = int
+type Bool = boolean
+service Source { next(state: Int): Option<[Int, Int]> }
+const source = unfold(0, (state) => Source.next(state))
+export const mapped: Stream<Bool, never, Source.next> =
+  mapEffect(source, (n) => n < 3, { concurrency: 2 })
+`);
+  assertStringIncludes(output, "Stream.mapEffect(");
+});
+
+Deno.test("a stream predicate with an effectful callback emits the effect operation", () => {
+  const output = oneModule(`
+type Int = int
+type Bool = boolean
+service Source { next(state: Int): Option<[Int, Int]> }
+service Probe { accept(n: Int): Bool }
+const source = unfold(0, (state) => Source.next(state))
+export const prefix: Stream<Int, never, Source.next | Probe.accept> =
+  filterEffectStream(source, (n) => Probe.accept(n))
+`);
+  assertStringIncludes(output, "Stream.filterEffect(");
 });
 
 Deno.test("scanStream emits Stream.scan with a lazy seed", () => {

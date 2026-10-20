@@ -32,7 +32,12 @@ function bindings(name: string, index: number): string {
 }
 
 Deno.test("stream and Schema prelude names are shadowable in each position", () => {
-  const names = ["mapStream", "takeStream", "schemaMake", "schemaStruct"];
+  const names = [
+    "filterEffectStream",
+    "takeStream",
+    "schemaMake",
+    "schemaStruct",
+  ];
   assertEquals(codes(names.map(bindings).join("")), []);
 });
 

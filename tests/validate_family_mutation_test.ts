@@ -48,7 +48,7 @@ const recover = (_: Stop): Stream<Int, Stop, Recovery.next> => unfold(9, (n) => 
 const allowed = (n: Int): Bool fails Stop uses Gate.allow => Gate.allow(n)
 const accept = (value: Int): void fails Stop uses Consumer.accept => Consumer.accept(value)
 
-const mapped: Stream<Int, Stop, Source.next> = mapStream(source, (n) => n + 1)
+const mapped: Stream<Int, Stop, Source.next> = mapEffect(source, (n) => n + 1)
 const mappedEffect: Stream<Int, Stop, Source.next | Accum.add> = mapEffect(source, (n) => Accum.add(n, 1))
 const scanned: Stream<Int, Stop, Source.next> = scanStream(source, 0, (total, n) => total + n)
 const accumulated: Stream<Bool, Stop, Source.next> =
@@ -59,10 +59,10 @@ const switched: Stream<Int, Stop, Source.next | Inner.next> =
   switchMapStreams(source, (n) => unfold(n, (m) => Inner.next(m)))
 const recovered: Stream<Int, Stop, Source.next | Recovery.next> =
   catchStream(source, (_) => unfold(9, (n) => Recovery.next(n)))
-const dropped: Stream<Int, Stop, Source.next> = dropWhileStream(source, (n) => n < 3)
-const filtered: Stream<Int, Stop, Source.next> = filterStream(source, (n) => n < 3)
-const takenWhile: Stream<Int, Stop, Source.next> = takeWhileStream(source, (n) => n < 3)
-const takenUntil: Stream<Int, Stop, Source.next> = takeUntilStream(source, (n) => n === 3)
+const dropped: Stream<Int, Stop, Source.next> = dropWhileEffectStream(source, (n) => n < 3)
+const filtered: Stream<Int, Stop, Source.next> = filterEffectStream(source, (n) => n < 3)
+const takenWhile: Stream<Int, Stop, Source.next> = takeWhileEffectStream(source, (n) => n < 3)
+const takenUntil: Stream<Int, Stop, Source.next> = takeUntilEffectStream(source, (n) => n === 3)
 const filteredEffect: Stream<Int, Stop, Source.next | Gate.allow> =
   filterEffectStream(source, (n) => Gate.allow(n))
 const takenWhileEffect: Stream<Int, Stop, Source.next | Gate.allow> =

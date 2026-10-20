@@ -1748,7 +1748,7 @@ console.log(JSON.stringify({ before, zero, negative, two, beyond, failure: { tag
   });
 });
 
-Deno.test("takeWhileStream omits the false element and closes upstream work", async () => {
+Deno.test("takeWhileEffectStream with a pure callback omits the false element and closes upstream work", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
     Deno.writeTextFileSync(
@@ -1761,7 +1761,7 @@ Deno.test("takeWhileStream omits the false element and closes upstream work", as
         "const source = unfold(0, (n) => Source.next(n))",
         "const sink = sinkForEach((value: Int) => Output.accept(value))",
         "export const main = (limit: Int): void fails Stop uses Source.next | Output.accept =>",
-        "  runStream(takeWhileStream(source, (n) => n < limit), sink)",
+        "  runStream(takeWhileEffectStream(source, (n) => n < limit), sink)",
         "",
       ].join("\n"),
     );
@@ -1821,7 +1821,7 @@ console.log(JSON.stringify({ before, empty, prefix, failure: { tag: failure._tag
   });
 });
 
-Deno.test("takeUntilStream includes the matching element and closes upstream work", async () => {
+Deno.test("takeUntilEffectStream with a pure callback includes the matching element and closes upstream work", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
     Deno.writeTextFileSync(
@@ -1834,7 +1834,7 @@ Deno.test("takeUntilStream includes the matching element and closes upstream wor
         "const source = unfold(0, (n) => Source.next(n))",
         "const sink = sinkForEach((value: Int) => Output.accept(value))",
         "export const main = (limit: Int): void fails Stop uses Source.next | Output.accept =>",
-        "  runStream(takeUntilStream(source, (n) => n === limit), sink)",
+        "  runStream(takeUntilEffectStream(source, (n) => n === limit), sink)",
         "",
       ].join("\n"),
     );
@@ -1903,7 +1903,7 @@ console.log(JSON.stringify({ before, first, prefix, noMatch, failure: { tag: fai
   });
 });
 
-Deno.test("dropWhileStream emits the first false element and all later elements", async () => {
+Deno.test("dropWhileEffectStream with a pure callback emits the first false element and all later elements", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
     Deno.writeTextFileSync(
@@ -1916,7 +1916,7 @@ Deno.test("dropWhileStream emits the first false element and all later elements"
         "const source = unfold(0, (n) => Source.next(n))",
         "const sink = sinkForEach((value: Int) => Output.accept(value))",
         "export const main = (limit: Int): void fails Stop uses Source.next | Output.accept =>",
-        "  runStream(dropWhileStream(source, (n) => n < limit), sink)",
+        "  runStream(dropWhileEffectStream(source, (n) => n < limit), sink)",
         "",
       ].join("\n"),
     );
@@ -2126,7 +2126,7 @@ console.log(JSON.stringify({ before, filterResult, whileResult, untilResult, dro
   });
 });
 
-Deno.test("filterStream evaluates every element and propagates source failures", async () => {
+Deno.test("filterEffectStream with a pure callback evaluates every element and propagates source failures", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
     Deno.writeTextFileSync(
@@ -2139,7 +2139,7 @@ Deno.test("filterStream evaluates every element and propagates source failures",
         "const source = unfold(0, (n) => Source.next(n))",
         "const sink = sinkForEach((value: Int) => Output.accept(value))",
         "export const main = (limit: Int): void fails Stop uses Source.next | Output.accept =>",
-        "  runStream(filterStream(source, (n) => n >= limit), sink)",
+        "  runStream(filterEffectStream(source, (n) => n >= limit), sink)",
         "",
       ].join("\n"),
     );
@@ -2213,7 +2213,7 @@ console.log(JSON.stringify({ before, all, selected, none, failure: { tag: failur
   });
 });
 
-Deno.test("mapStream changes element type and propagates source failures", async () => {
+Deno.test("mapEffect with a pure callback changes element type and propagates source failures", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
     Deno.writeTextFileSync(
@@ -2227,7 +2227,7 @@ Deno.test("mapStream changes element type and propagates source failures", async
         "const source = unfold(0, (n) => Source.next(n))",
         "const sink = sinkForEach((value: Bool) => Output.accept(value))",
         "export const main = (limit: Int): void fails Stop uses Source.next | Output.accept =>",
-        "  runStream(mapStream(source, (n) => n >= limit), sink)",
+        "  runStream(mapEffect(source, (n) => n >= limit), sink)",
         "",
       ].join("\n"),
     );

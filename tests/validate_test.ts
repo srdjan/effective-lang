@@ -869,13 +869,13 @@ const limited = (count: Int): Stream<Int, Stop, Source.next> => dropStream(sourc
   assert(codesOf(invalidChannel, lowered.sources).includes("validation/002"));
 });
 
-Deno.test("takeWhileStream validates predicate and deferred channels", () => {
+Deno.test("takeWhileEffectStream with a pure callback validates predicate and deferred channels", () => {
   const lowered = lowerText(`
 type Int = int
 error Stop = {}
 service Source { next(n: Int): Option<[Int, Int]> fails Stop }
 const source = unfold(0, (n) => Source.next(n))
-const prefix: Stream<Int, Stop, Source.next> = takeWhileStream(source, (n) => n < 3)
+const prefix: Stream<Int, Stop, Source.next> = takeWhileEffectStream(source, (n) => n < 3)
 `);
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
 
@@ -902,13 +902,13 @@ const prefix: Stream<Int, Stop, Source.next> = takeWhileStream(source, (n) => n 
   assert(codesOf(wrongChannel, lowered.sources).includes("validation/002"));
 });
 
-Deno.test("dropWhileStream validates predicate and deferred channels", () => {
+Deno.test("dropWhileEffectStream with a pure callback validates predicate and deferred channels", () => {
   const lowered = lowerText(`
 type Int = int
 error Stop = {}
 service Source { next(n: Int): Option<[Int, Int]> fails Stop }
 const source = unfold(0, (n) => Source.next(n))
-const prefix: Stream<Int, Stop, Source.next> = dropWhileStream(source, (n) => n < 3)
+const prefix: Stream<Int, Stop, Source.next> = dropWhileEffectStream(source, (n) => n < 3)
 `);
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
 
@@ -935,13 +935,13 @@ const prefix: Stream<Int, Stop, Source.next> = dropWhileStream(source, (n) => n 
   assert(codesOf(wrongChannel, lowered.sources).includes("validation/002"));
 });
 
-Deno.test("takeUntilStream validates predicate and deferred channels", () => {
+Deno.test("takeUntilEffectStream with a pure callback validates predicate and deferred channels", () => {
   const lowered = lowerText(`
 type Int = int
 error Stop = {}
 service Source { next(n: Int): Option<[Int, Int]> fails Stop }
 const source = unfold(0, (n) => Source.next(n))
-const prefix: Stream<Int, Stop, Source.next> = takeUntilStream(source, (n) => n === 3)
+const prefix: Stream<Int, Stop, Source.next> = takeUntilEffectStream(source, (n) => n === 3)
 `);
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
 
@@ -968,13 +968,13 @@ const prefix: Stream<Int, Stop, Source.next> = takeUntilStream(source, (n) => n 
   assert(codesOf(wrongChannel, lowered.sources).includes("validation/002"));
 });
 
-Deno.test("filterStream validates predicate and deferred channels", () => {
+Deno.test("filterEffectStream with a pure callback validates predicate and deferred channels", () => {
   const lowered = lowerText(`
 type Int = int
 error Stop = {}
 service Source { next(n: Int): Option<[Int, Int]> fails Stop }
 const source = unfold(0, (n) => Source.next(n))
-const prefix: Stream<Int, Stop, Source.next> = filterStream(source, (n) => n < 3)
+const prefix: Stream<Int, Stop, Source.next> = filterEffectStream(source, (n) => n < 3)
 `);
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
 
@@ -1001,14 +1001,14 @@ const prefix: Stream<Int, Stop, Source.next> = filterStream(source, (n) => n < 3
   assert(codesOf(wrongChannel, lowered.sources).includes("validation/002"));
 });
 
-Deno.test("mapStream validates the transformed element and deferred channels", () => {
+Deno.test("mapEffect with a pure callback validates the transformed element and deferred channels", () => {
   const lowered = lowerText(`
 type Int = int
 type Bool = boolean
 error Stop = {}
 service Source { next(n: Int): Option<[Int, Int]> fails Stop }
 const source = unfold(0, (n) => Source.next(n))
-const mapped: Stream<Bool, Stop, Source.next> = mapStream(source, (n) => n < 3)
+const mapped: Stream<Bool, Stop, Source.next> = mapEffect(source, (n) => n < 3)
 `);
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
 
