@@ -148,9 +148,15 @@ async function captureRevision(
     const records = `${tree}/capture.records`;
     const env = { EFFECTIVE_CAPTURE: records };
     const deno = Deno.execPath();
+    // The capture's own test reads the hook anchors, which the tree no longer has.
     for (
       const args of [
-        ["test", "--allow-all", "--ignore=**/*_slow_test.ts", "tests/"],
+        [
+          "test",
+          "--allow-all",
+          "--ignore=**/*_slow_test.ts,tests/behavior_capture_test.ts",
+          "tests/",
+        ],
         ["test", "--allow-all", "--permit-no-files", "tests/**/*_slow_test.ts"],
       ]
     ) {
