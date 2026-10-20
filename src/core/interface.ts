@@ -109,57 +109,91 @@ function exportedValueIds(declarations: ModuleDeclarations): Set<string> {
   return ids;
 }
 
+type GraphDecl = TypeDecl | ErrorDecl | ServiceDecl;
+
+/** Adds the identities that one declaration mentions. */
+function declarationRefs(d: GraphDecl, into: Set<string>): void {
+  switch (d.kind) {
+    case "type":
+      referencedIds(
+        d.definition.kind === "alias" ? d.definition.type : d.definition.base,
+        into,
+      );
+      return;
+    case "error":
+      for (const field of d.fields) referencedIds(field.type, into);
+      return;
+    case "service":
+      for (const method of d.methods) referencedIds(method.type, into);
+      return;
+  }
+}
+
+function declarationsOf(graph: TypeGraph): GraphDecl[] {
+  return [...graph.types, ...graph.errors, ...graph.services];
+}
+
+/** Every declaration of `pool` that the seeds reach, directly or through other declarations of `pool`. */
+function reach(
+  pool: ReadonlyMap<string, GraphDecl>,
+  seeds: Iterable<string>,
+): GraphDecl[] {
+  const reached = new Map<string, GraphDecl>();
+  const pending: GraphDecl[] = [];
+  const visit = (ids: Iterable<string>): void => {
+    for (const id of ids) {
+      const d = pool.get(id);
+      if (d === undefined || reached.has(id)) continue;
+      reached.set(id, d);
+      pending.push(d);
+    }
+  };
+  visit(seeds);
+  for (let d = pending.pop(); d !== undefined; d = pending.pop()) {
+    const found = new Set<string>();
+    declarationRefs(d, found);
+    visit(found);
+  }
+  return [...reached.values()];
+}
+
+function graphOf(declarations: readonly GraphDecl[]): TypeGraph {
+  const types: TypeDecl[] = [];
+  const errors: ErrorDecl[] = [];
+  const services: ServiceDecl[] = [];
+  for (const d of declarations) {
+    switch (d.kind) {
+      case "type":
+        types.push(d);
+        break;
+      case "error":
+        errors.push(d);
+        break;
+      case "service":
+        services.push(d);
+        break;
+    }
+  }
+  return { types, errors, services };
+}
+
 /**
  * The type graph that the exports of a module reach: the exported types, errors,
  * and services, and every private declaration of this module that they reach
  * through types, failures, and capabilities. The graph does not depend on modes.
  */
 export function buildTypeGraph(declarations: ModuleDeclarations): TypeGraph {
-  const typeById = new Map<string, TypeDecl>(
-    declarations.types.map((d) => [d.id, d]),
+  const own = new Map<string, GraphDecl>(
+    [...declarations.types, ...declarations.errors, ...declarations.services]
+      .map((d) => [d.id, d]),
   );
-  const errorById = new Map<string, ErrorDecl>(
-    declarations.errors.map((d) => [d.id, d]),
+  const graph = graphOf(
+    reach(own, [...declarations.exports, ...exportedValueIds(declarations)]),
   );
-  const serviceById = new Map<string, ServiceDecl>(
-    declarations.services.map((d) => [d.id, d]),
-  );
-  const reached = new Set<string>();
-  const pending: string[] = [];
-  const add = (id: string): void => {
-    if (reached.has(id)) return;
-    if (!typeById.has(id) && !errorById.has(id) && !serviceById.has(id)) return;
-    reached.add(id);
-    pending.push(id);
-  };
-
-  for (const id of declarations.exports) add(id);
-  for (const id of exportedValueIds(declarations)) add(id);
-
-  for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
-    const found = new Set<string>();
-    const type = typeById.get(id);
-    const error = errorById.get(id);
-    const service = serviceById.get(id);
-    if (type !== undefined) {
-      referencedIds(
-        type.definition.kind === "alias"
-          ? type.definition.type
-          : type.definition.base,
-        found,
-      );
-    } else if (error !== undefined) {
-      for (const field of error.fields) referencedIds(field.type, found);
-    } else if (service !== undefined) {
-      for (const method of service.methods) referencedIds(method.type, found);
-    }
-    for (const next of found) add(next);
-  }
-
   return {
-    types: byId(declarations.types.filter((d) => reached.has(d.id))),
-    errors: byId(declarations.errors.filter((d) => reached.has(d.id))),
-    services: byId(declarations.services.filter((d) => reached.has(d.id))),
+    types: byId(graph.types),
+    errors: byId(graph.errors),
+    services: byId(graph.services),
   };
 }
 
@@ -173,66 +207,13 @@ function foreignTypeGraph(
   own: TypeGraph,
   imported: ReadonlyMap<string, TypeGraph>,
 ): TypeGraph {
-  const foreign = new Map<string, TypeDecl | ErrorDecl | ServiceDecl>();
+  const foreign = new Map<string, GraphDecl>();
   for (const graph of imported.values()) {
-    for (const d of graph.types) foreign.set(d.id, d);
-    for (const d of graph.errors) foreign.set(d.id, d);
-    for (const d of graph.services) foreign.set(d.id, d);
+    for (const d of declarationsOf(graph)) foreign.set(d.id, d);
   }
-  const reached = new Set<string>();
-  const pending: string[] = [];
-  const visit = (ids: ReadonlySet<string>): void => {
-    for (const id of ids) {
-      if (reached.has(id) || !foreign.has(id)) continue;
-      reached.add(id);
-      pending.push(id);
-    }
-  };
-  visit(exportedValueIds(declarations));
-  const seeds = new Set<string>();
-  for (const d of own.types) {
-    referencedIds(
-      d.definition.kind === "alias" ? d.definition.type : d.definition.base,
-      seeds,
-    );
-  }
-  for (const d of own.errors) {
-    for (const field of d.fields) referencedIds(field.type, seeds);
-  }
-  for (const d of own.services) {
-    for (const method of d.methods) referencedIds(method.type, seeds);
-  }
-  visit(seeds);
-  for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
-    const d = foreign.get(id);
-    if (d === undefined) continue;
-    const found = new Set<string>();
-    switch (d.kind) {
-      case "type":
-        referencedIds(
-          d.definition.kind === "alias" ? d.definition.type : d.definition.base,
-          found,
-        );
-        break;
-      case "error":
-        for (const field of d.fields) referencedIds(field.type, found);
-        break;
-      case "service":
-        for (const method of d.methods) referencedIds(method.type, found);
-        break;
-    }
-    visit(found);
-  }
-  const types: TypeDecl[] = [];
-  const errors: ErrorDecl[] = [];
-  const services: ServiceDecl[] = [];
-  for (const id of reached) {
-    const d = foreign.get(id);
-    if (d?.kind === "type") types.push(d);
-    else if (d?.kind === "error") errors.push(d);
-    else if (d?.kind === "service") services.push(d);
-  }
-  return { types, errors, services };
+  const seeds = exportedValueIds(declarations);
+  for (const d of declarationsOf(own)) declarationRefs(d, seeds);
+  return graphOf(reach(foreign, seeds));
 }
 
 /**
