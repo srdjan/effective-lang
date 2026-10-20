@@ -161,3 +161,15 @@ The reviewing agent runs these checks after each commit. The implementer's claim
 ## 8. Validation record
 
 A Fable subagent validated this plan on 2026-10-20, with probes. It confirmed H1 to H4. It corrected the H0, H2, H5, and H6 counts, and found the `provides` gap in H4. It found that the S1 and S2 mechanism belongs in the checker, not in lowering, and found the stream-alias and concurrency rules. It found the S4 options-record conflict and showed that the adapter fold is not sound. It moved R17 before P4 and P8. All findings are applied above. None was rejected.
+
+## 9. Progress
+
+Status on 2026-10-20. Each batch passed `deno task check` and a review of its diff by the plan owner.
+
+- Done: H0 (`90fdf17`), H1 to H6 (`de0a213` to `7ebc86f`). Capture from `40854ce`: 0 records missing.
+- Done: W4, W6, P3, P5, P7, P9 in part (`c5f0e06` to `af26d21`), and the H5 fallback follow-up. Capture with the test set held constant: 0 new, 0 missing. P6 skipped: a shared walk makes the code longer. Two P9 inlines skipped: rederive section 9 lists those files as tight.
+- Done: R17, P4, P8, P1 (through R16), P2 (`c9cdc29` to `5b73848`), and `faad3ee`. Capture from `af26d21`: 0 new, 0 missing. `tests/check_test.ts` keeps a local declaration driver, because the public driver cannot take a mode map. The playground keeps its own update payload.
+- Done: T1 to T5 (`9939af0` to `14a1d06`). Capture from `faad3ee`: 0 new, 0 missing. Slow suite 126.3 s to 95.4 s (M, warm cache). `tests/` lost 781 lines.
+- Done: S1, S2, S4 (`404515d`, `bd004ac`, ledger `021a3f6`), website `72cfc93` (draft 0.58). The byte-identity proof compiled 52 old and new forms with the base and new compilers: 0 failures (M, rerun by the plan owner). A capture cannot hold the inputs constant here, because the tests changed their sources. One intended output change: a pure `mapEffect` without options now emits `Stream.map`. S4 costs +29 branches and +77 lines; the gain is two fewer prelude names.
+- Open: W1, W2, W3, W5. T6 is for the user (stale `.claude/worktrees/`, one locked).
+- Found during S: the spec says a source binding named `mapEffect` shadows the prelude operation, but `resolve.ts` marks `mapEffect` as not shadowable. One of them is wrong. This needs a decision.
