@@ -52,11 +52,11 @@ export const wide: Schedule<Millis> = scheduleFromStep(
 ## Solution
 
 The checker now always derives the output from the decision callback
-(`src/core/check_expr.ts:4726-4730`). The `expected` parameter of
+(`src/core/check_expr.ts:4739-4743`). The `expected` parameter of
 `scheduleFromStepCall` was removed, because the checker no longer reads it.
 The binding annotation is checked by ordinary assignability. Schedule output
 is covariant in `TypeTable.assignable` (`src/core/types.ts`, the `schedule`
-case). The validator derivation (`src/core/validate/expr.ts:4777`) did not
+case). The validator derivation (`src/core/validate/expr.ts:4672-4699`) did not
 change.
 
 Before:

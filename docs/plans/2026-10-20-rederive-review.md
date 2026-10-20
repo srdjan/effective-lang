@@ -1,6 +1,6 @@
 # Rederive review: measured re-basing plan
 
-Date: 2026-10-20. Base revision: 730977c. Status: Phase 0 accepted on 2026-10-20. The user chose option (a) for D1, D2, D3, and D4. Phase 0 and Phase 1 are on main at 5a4d684. Phases 2 to 4 and D5 and D6 (section 11) wait for a user decision.
+Date: 2026-10-20. Base revision: 730977c. Status: Phase 0 accepted on 2026-10-20. The user chose option (a) for D1, D2, D3, and D4. Phases 0 to 2 are done on main. R1 to R6, R9, R10, R14, and D1 to D6 are done. The Phase 3 and Phase 4 items R7, R8, R11, R12, R13, and R15 to R18 are open. The sibling plan `2026-10-20-hardening-pruning.md` carries the cleanup work that runs next.
 
 This document is a plan, not a change. It ranks the weak units of the transpiler by measured leverage. For each rederived unit, it gives the contract to keep, the judging tests, and the verification. The evidence is in `docs/plans/rederive-review-evidence/`. Each finding ID (for example CHK-2) points to a section of a scout report in that directory. The scratch paths under `/tmp/rederive/` in those reports are not kept.
 
@@ -97,7 +97,7 @@ R1, R2, R4, and R6 have low risk. R3 and R5 have medium risk: a wrong deferred f
 #### R1. One prelude registry (CHK-1, ARC-1)
 
 - Problem. `resolve.ts` holds the 103 prelude names twice: the `PreludeName` union (lines 46-149) and `PRELUDE_NAMES` (151-255). `SHADOWABLE_PRELUDE_NAMES` (322, 71 names) is an untyped `Set<string>`, so a typo compiles. The 21 schema names occur in 5 lists.
-- Problem in the checker. `builtinCall` (`check_expr.ts:1008`) widens the name to `string` and switches over 102 cases. Its `default` (line 1201) catches only `None`, and no test runs it.
+- Problem in the checker (state before commit a23f194; `builtinCall` is now table-driven, as the proposal says). `builtinCall` (`check_expr.ts:1008`) widens the name to `string` and switches over 102 cases. Its `default` (line 1201) catches only `None`, and no test runs it.
 - Proposal. Write one `as const` record in `resolve.ts` with a `shadowable` flag. Derive `PreludeName` and both sets from it, in the current order. In the checker, replace the switch with a `Record<Exclude<PreludeName, "None">, Handler>` table. Then a missing handler is a compile error.
 - Delta. -103 duplicate name lines and -71 lines for the shadowable list. builtinCall cyclomatic goes from 103 to about 2. One cast goes.
 - Contract and tests. The contract is in `scout-CHK.md` CHK-1. The judging tests are `resolve_test.ts` (35), `resolve_shadow_test.ts`, `vscode_client_test.ts`, `playground_highlight_test.ts`, and `check_body_test.ts`. A `None(1)` test (P0-6) comes first.

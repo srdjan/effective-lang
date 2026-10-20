@@ -27,7 +27,7 @@ and passed it as `argInfo(args[1], hint)`.
 
 That fix would have rejected valid programs. The `expected` argument of
 `BodyChecker.argInfo` is not an inference-only suggestion. For `if` and
-`match`, `joinResults` (`src/core/check_expr.ts`, about line 6858) checks each
+`match`, `joinResults` (`src/core/check_expr.ts`, about line 6877) checks each
 branch against `expected` with `fits` and returns `expected` as the result.
 
 ## Symptoms

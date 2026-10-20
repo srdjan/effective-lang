@@ -25,8 +25,8 @@ Each row gives one commit, its measured AST branch delta and cyclomatic delta fr
 | a23f194 | R1 | 9595 to 9427 (-168); `builtinCall` cyclomatic 103 to 2; one cast removed |
 | ee1dd02 | R2, checker | 9427 to 9518 (+91, listed arms at 9 sites) |
 | 3f6448c | R6, height | 9518 to 9489 (-29); `heightWithin` cyclomatic 56 to 7, new `childRefs` 25 |
-| 6720381 | R2, validator | +72 (listed arms at 6 sites) |
-| 6e6af2d | R4 | -42 with the new `validate/type_children.ts`; `checkRecordFields` walk 24 to 4, `reaches` 27 to 7 (cyclomatic) |
+| d330377 | R2, validator | +72 (listed arms at 6 sites) |
+| 94bd86e | R4 | -42 with the new `validate/type_children.ts`; `checkRecordFields` walk 24 to 4, `reaches` 27 to 7 (cyclomatic) |
 | 303f15a | R5 | -60; 4 reflective walkers and their casts removed |
 | 303f15a | Phase 2 result | 9592 to 9224 branches (-368) over 74 files; capture 254dee6 to 303f15a: 0 missing; same-tests capture (Phase 1 tests on 5a4d684 and on 303f15a source): 6455 and 6455 records, 0 missing, 0 new; gate: 1662 fast, 131 slow passed |
 | 0844b30 | D8 | `check`, `program`, and `validate` records hold an input hash; a new slow test proves that two clean programs give different records; capture 303f15a to 0844b30: 6754 and 6754 records, 0 missing, 0 new (deterministic); gate: 1662 fast, 132 slow passed |

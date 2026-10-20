@@ -190,6 +190,8 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
     tsc.ts         Parser for deno check output and the mapping of its errors.
     doc.ts         The printer: documents, layout at 80 columns, span tags.
     scope.ts       Names, fresh names, imports, host bindings, specifiers.
+    calls.ts       The simple calls: tables of the structural and leaf kinds that print as callee(operands).
+    shape.ts       The shape table of every IR expression kind: children, deferred children, and leaf effects.
     explicit_scope.ts Shared scope representation, service capture, and close completion.
     types.ts       The type printer and the schema printer.
     expr.ts        The expression scheme: pure, inGen, asEffect.
@@ -222,6 +224,10 @@ editors/vscode/ The VS Code client. See "VS Code client". Plain JavaScript, no b
 playground/    The browser playground. See "Playground". The page is in src/, the build in build.ts.
 scripts/       Scripts that the tasks run. golden_update.ts writes the golden files.
                validate_fixtures.ts writes the mutation fixtures.
+               behavior_capture.ts records the hashed compiler behavior of a git revision.
+               lex_snapshot.ts writes the lexer snapshot in fixtures/lex.
+               measure.ts counts branches and cyclomatic complexity of the files given.
+               measure_functions.ts counts the same for each function.
 tests/         Deno tests and test helpers.
 fixtures/      Input files for the tests.
   examples/      The five example programs, the host interface file, and users-live.ts.
@@ -229,6 +235,9 @@ fixtures/      Input files for the tests.
   emit/forms/    Extra programs for the emitter tests. They are not golden examples.
   host-boundary/ A wrong host module, captured deno check output, and manifest.json.
   ir/example/    The log example and its IR fixture.
+  applications/  The three application witnesses: service-workflow, scheduled-worker, and stream-processor.
+  host-adapter-files/ A project with a typed host adapter for effect/FileSystem.
+  lex/           snapshot.json: hashes of the lexer output for a fixed corpus.
   validate/      Mutated copies of lowered IR and manifest.json, which names the expected code of each.
   parse/         Valid syntax forms (ok-*) and recovery inputs (recovery-*).
   errors/        One file or one project directory for each error case, with markers.
