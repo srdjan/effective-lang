@@ -11,9 +11,13 @@ import type { Revision } from "./db.ts";
 import { bracketed, render } from "./emit/doc.ts";
 import { EmitFailure, Scope } from "./emit/scope.ts";
 import { effectTypeDoc, typeDoc } from "./emit/types.ts";
-import { methodOfCapability, moduleOfId, nameOfId } from "./ids.ts";
+import {
+  methodOfCapability,
+  moduleOfId,
+  nameOfId,
+  serviceOfCapability,
+} from "./ids.ts";
 import type { ConstantDecl, FunctionDecl, ModuleIR } from "./ir.ts";
-import { serviceOfCapability } from "./check.ts";
 import type { DeclEntry, FileIndex } from "./index.ts";
 import { parseFileFresh } from "./project.ts";
 import type { Target } from "./resolve.ts";

@@ -19,7 +19,6 @@ import {
   isPendingMode,
   type ModeMap,
   type ModuleDeclarations,
-  serviceOfCapability,
   signatureType,
   type TypeGraph,
   type ValueSignature,
@@ -31,13 +30,13 @@ import {
   type ConstantRun,
   type FunctionRun,
   kidsOf,
-  shortName,
 } from "./check_expr.ts";
 import {
   type Diagnostic,
   makeDiagnostic,
   normalizeDiagnostics,
 } from "./diagnostics.ts";
+import { serviceOfCapability, shortName } from "./ids.ts";
 import { isTypeKind } from "./index.ts";
 import {
   buildInitializationGraph,

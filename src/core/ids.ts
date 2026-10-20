@@ -3,7 +3,14 @@
 // malformed identity, so the editor queries never throw. The emitter wraps these
 // helpers and turns undefined into an internal failure.
 
-import type { CapabilityId, ErrorId, LocalId, TypeId, ValueId } from "./ir.ts";
+import type {
+  CapabilityId,
+  ErrorId,
+  LocalId,
+  ServiceId,
+  TypeId,
+  ValueId,
+} from "./ir.ts";
 
 /** The prefixes of declaration identities. A provider has a value identity. */
 export type DeclarationPrefix = "type" | "error" | "service" | "value";
@@ -61,4 +68,21 @@ export function methodOfCapability(
   const dot = capability.indexOf(".", capability.indexOf("#"));
   if (dot < 0) return undefined;
   return capability.slice(dot + 1);
+}
+
+/** `cap:m#S.method` to `service:m#S`. */
+export function serviceOfCapability(
+  capability: CapabilityId,
+): ServiceId | undefined {
+  const hash = capability.indexOf("#");
+  if (hash < 0) return undefined;
+  const dot = capability.indexOf(".", hash);
+  if (dot < 0) return undefined;
+  return `service:${capability.slice(4, dot)}`;
+}
+
+/** The name after the `#` of an identity, for messages. */
+export function shortName(id: string): string {
+  const hash = id.indexOf("#");
+  return hash < 0 ? id : id.slice(hash + 1);
 }

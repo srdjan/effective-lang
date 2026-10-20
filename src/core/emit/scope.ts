@@ -20,6 +20,7 @@ import {
   methodOfCapability as coreMethodOfCapability,
   moduleOfId as coreModuleOfId,
   nameOfId as coreNameOfId,
+  serviceOfCapability as coreServiceOfCapability,
 } from "../ids.ts";
 import { normalizeRelative, type ProjectConfig } from "../project.ts";
 import { collectBinderNames } from "./walk.ts";
@@ -148,12 +149,11 @@ export function tokenOfId(id: string): string {
 }
 
 export function serviceOfCapability(capability: CapabilityId): ServiceId {
-  const hash = capability.indexOf("#");
-  const dot = capability.indexOf(".", hash);
-  if (hash < 0 || dot < 0) {
+  const service = coreServiceOfCapability(capability);
+  if (service === undefined) {
     throw internal(`malformed capability ${capability}`);
   }
-  return `service:${capability.slice(4, dot)}`;
+  return service;
 }
 
 export function methodOfCapability(capability: CapabilityId): string {

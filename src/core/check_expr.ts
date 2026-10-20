@@ -76,7 +76,7 @@ import {
   type TypeRef,
   type TypeTable,
 } from "./types.ts";
-import { isErrorId, isTypeId } from "./ids.ts";
+import { isErrorId, isTypeId, serviceOfCapability, shortName } from "./ids.ts";
 
 // ------------------------------------------------------------------ environment
 
@@ -182,12 +182,6 @@ export function kidsOf(tree: SyntaxTree, node: NodeId): NodeId[] {
     }
   }
   return result;
-}
-
-/** The name after the `#` of an identity, for messages. */
-export function shortName(id: string): string {
-  const hash = id.indexOf("#");
-  return hash < 0 ? id : id.slice(hash + 1);
 }
 
 function names(ids: readonly string[]): string {
@@ -3093,7 +3087,7 @@ export class BodyChecker {
           const capability = method?.kind === "cap" ? method.id : undefined;
           const serviceId: ServiceId | undefined = capability === undefined
             ? undefined
-            : `service:${capability.slice(4, capability.lastIndexOf("."))}`;
+            : serviceOfCapability(capability);
           const signature = serviceId === undefined
             ? undefined
             : this.benv.env.services.get(serviceId)?.methods.find((m) =>
@@ -5519,12 +5513,8 @@ export class BodyChecker {
       );
       return this.finish(node, this.table.error, combine([left, right]));
     }
-    const services = new Set(
-      a.provides.map((id) => id.slice(0, id.lastIndexOf("."))),
-    );
-    if (
-      b.provides.some((id) => services.has(id.slice(0, id.lastIndexOf("."))))
-    ) {
+    const services = new Set(a.provides.map(serviceOfCapability));
+    if (b.provides.some((id) => services.has(serviceOfCapability(id)))) {
       this.report(
         "type-mismatch/010",
         "`mergeLayers` cannot provide one service twice",

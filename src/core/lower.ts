@@ -16,7 +16,7 @@ import {
   literalOf,
   operatorOf,
 } from "./check_expr.ts";
-import { serviceOfCapability, signatureType } from "./check.ts";
+import { signatureType } from "./check.ts";
 import type {
   CheckedModule,
   CheckedProject,
@@ -73,7 +73,7 @@ import {
   type TypeRef,
   type TypeTable,
 } from "./types.ts";
-import { isErrorId } from "./ids.ts";
+import { isErrorId, serviceOfCapability } from "./ids.ts";
 
 type FunctionNode = Extract<TypeNode, { readonly kind: "function" }>;
 

@@ -68,6 +68,7 @@ import {
   type DeclarationPrefix,
   isErrorId,
   isTypeId,
+  serviceOfCapability,
 } from "./ids.ts";
 
 // ------------------------------------------------------------------ shapes
@@ -1080,17 +1081,6 @@ export function effectIds(
     const service = serviceOfCapability(capability);
     if (service !== undefined) ids.add(service);
   }
-}
-
-/** `cap:m#S.method` to `service:m#S`. */
-export function serviceOfCapability(
-  capability: CapabilityId,
-): ServiceId | undefined {
-  const hash = capability.indexOf("#");
-  if (hash < 0) return undefined;
-  const dot = capability.indexOf(".", hash);
-  if (dot < 0) return undefined;
-  return `service:${capability.slice(4, dot)}`;
 }
 
 // ------------------------------------------------------------------ the module checker
