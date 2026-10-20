@@ -5,6 +5,10 @@
 export { Program, Revision, revisionDelta } from "./db.ts";
 export type { ProgramChanges, QueryCounts, RevisionDelta } from "./db.ts";
 
+// The difference between two file maps, for `Program.update`.
+export { diffFiles } from "./file_diff.ts";
+export type { FileDiff } from "./file_diff.ts";
+
 // The editor queries.
 export { definitionAt, documentSymbols, hoverAt } from "./editor.ts";
 export type {

@@ -14,6 +14,7 @@ import {
   type ConfigError,
   describeConfigError,
   type Diagnostic as CoreDiagnostic,
+  diffFiles,
   joinPath,
   lineStarts,
   Program,
@@ -376,13 +377,7 @@ export class ProjectSet {
     if (!project.dirty) return;
     project.dirty = false;
     const wanted = project.wanted();
-    const set = new Map<string, string>();
-    for (const [path, text] of wanted) {
-      if (project.current.get(path) !== text) set.set(path, text);
-    }
-    const remove = [...project.current.keys()].filter((path) =>
-      !wanted.has(path)
-    );
+    const { set, remove } = diffFiles(project.current, wanted);
     if (project.started && set.size === 0 && remove.length === 0) {
       this.#publish(project, wanted);
       return;

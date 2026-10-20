@@ -148,6 +148,7 @@ The capture records completed calls to `checkAnalysis`, `Program.update`, `lower
 src/core/      The core library. It is synchronous and does no I/O. Program memoizes its queries.
   ir.ts          Typed IR model, copied from the sibling repository effective.
   source.ts      SourceHost, line tables, positions, and span helpers.
+  file_diff.ts   diffFiles: the set and remove lists that turn one file map into another, for Program.update.
   diagnostics.ts Diagnostic type, the registry of codes, sort and dedupe.
   lex.ts         Lexer: typed arrays of tokens plus trivia.
   syntax.ts      Syntax tree types and the printer.

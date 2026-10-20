@@ -6,6 +6,7 @@
 import {
   type ConfigError,
   describeConfigError,
+  diffFiles,
   Program,
   type ProgramChanges,
   type Revision,
@@ -51,11 +52,7 @@ export class Session {
     const read = readWorkspace(this.io.fs, this.root);
     if (!read.ok) return { tag: "read-error", message: read.error };
     const files = read.value;
-    const set = new Map<string, string>();
-    for (const [path, text] of files) {
-      if (this.known.get(path) !== text) set.set(path, text);
-    }
-    const remove = [...this.known.keys()].filter((path) => !files.has(path));
+    const { set, remove } = diffFiles(this.known, files);
     if (this.started && set.size === 0 && remove.length === 0) {
       return { tag: "unchanged" };
     }
