@@ -3,7 +3,7 @@
 // shape. A narrowing function returns a Result. Its error text is fit for the
 // message of a -32602 response.
 
-import type { Result } from "../core/source.ts";
+import type { Result } from "../core/mod.ts";
 
 // ---- Wire types -----------------------------------------------------------
 

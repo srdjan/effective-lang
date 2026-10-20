@@ -1,12 +1,15 @@
 // One build of a revision: print the diagnostics, and for `build` and `watch`
 // also validate the IR, write the generated files, and run `deno check`.
 
-import type { Diagnostic } from "../core/diagnostics.ts";
-import type { Revision } from "../core/db.ts";
-import type { SpanTable } from "../core/emit/spans.ts";
-import type { ModuleIR, Result } from "../core/ir.ts";
-import type { LowerError } from "../core/lower.ts";
-import { validateProject } from "../core/validate_project.ts";
+import {
+  type Diagnostic,
+  type LowerError,
+  type ModuleIR,
+  type Result,
+  type Revision,
+  type SpanTable,
+  validateProject,
+} from "../core/mod.ts";
 import { formatDiagnostics, type TextOf } from "./format.ts";
 import type { CliIo } from "./io.ts";
 import { writeGenerated } from "./outputs.ts";

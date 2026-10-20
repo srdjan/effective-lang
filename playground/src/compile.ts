@@ -14,18 +14,16 @@
 // an `internal` error leaves the project unsent, so the next call sends every
 // file again.
 
-import type { Severity } from "../../src/core/diagnostics.ts";
-import {
-  Program,
-  type ProgramChanges,
-  type Revision,
-} from "../../src/core/db.ts";
-import { hoverAt } from "../../src/core/editor.ts";
 import {
   type ConfigError,
   describeConfigError,
-} from "../../src/core/project.ts";
-import type { Result } from "../../src/core/source.ts";
+  hoverAt,
+  Program,
+  type ProgramChanges,
+  type Result,
+  type Revision,
+  type Severity,
+} from "../../src/core/mod.ts";
 
 /** The part of `Program` that the facade uses. A test supplies a double. */
 export interface ProgramPort {

@@ -2,11 +2,13 @@
 // language server: emit each named module, build its source map, and write the
 // generated file and the map when their text changed.
 
-import type { Revision } from "../core/db.ts";
-import { serializeSourceMap } from "../core/emit/sourcemap.ts";
-import type { SpanTable } from "../core/emit/spans.ts";
-import type { LowerError } from "../core/lower.ts";
-import { joinPath } from "../core/project.ts";
+import {
+  joinPath,
+  type LowerError,
+  type Revision,
+  serializeSourceMap,
+  type SpanTable,
+} from "../core/mod.ts";
 import type { CliFs } from "./io.ts";
 
 export interface GeneratedOutputs {

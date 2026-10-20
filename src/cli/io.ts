@@ -2,7 +2,7 @@
 // The CLI reaches the file system, the subprocess runner, and the file watcher
 // only through `CliIo`, so that tests run `main` with in-memory doubles.
 
-import type { ReadError, Result } from "../core/source.ts";
+import type { ReadError, Result } from "../core/mod.ts";
 
 export interface DirectoryEntry {
   readonly name: string;

@@ -3,8 +3,13 @@
 // revision. The session keeps the file texts so that the output can show
 // one-based lines and columns.
 
-import { type ConfigError, describeConfigError } from "../core/project.ts";
-import { Program, type ProgramChanges, type Revision } from "../core/db.ts";
+import {
+  type ConfigError,
+  describeConfigError,
+  Program,
+  type ProgramChanges,
+  type Revision,
+} from "../core/mod.ts";
 import {
   type BuildOptions,
   type BuildOutcome,

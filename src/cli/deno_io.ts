@@ -2,7 +2,7 @@
 // `Deno.watchFs`. In the CLI, only this file and the wiring at the end of
 // `main.ts` call Deno APIs.
 
-import type { ReadError, Result } from "../core/source.ts";
+import type { ReadError, Result } from "../core/mod.ts";
 import { debounceBatches } from "./events.ts";
 import type {
   CliFs,

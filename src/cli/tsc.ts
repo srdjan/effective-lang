@@ -5,9 +5,9 @@ import {
   hostModulePaths,
   mapTscDiagnostic,
   parseDenoCheck,
-} from "../core/emit/tsc.ts";
-import type { SpanTable } from "../core/emit/spans.ts";
-import type { ProjectConfig } from "../core/project.ts";
+  type ProjectConfig,
+  type SpanTable,
+} from "../core/mod.ts";
 import type { CliIo } from "./io.ts";
 import { formatTscMappings, type TextOf } from "./format.ts";
 

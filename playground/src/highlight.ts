@@ -7,8 +7,14 @@
 // `provides`, and `from` as names. This file gives them the keyword kind by
 // position, from the token stream.
 
-import { KEYWORDS, lex, TokenKind, TriviaKind } from "../../src/core/lex.ts";
-import { BUILTIN_TYPE_NAMES, PRELUDE_NAMES } from "../../src/core/resolve.ts";
+import {
+  BUILTIN_TYPE_NAMES,
+  KEYWORDS,
+  lex,
+  PRELUDE_NAMES,
+  TokenKind,
+  TriviaKind,
+} from "../../src/core/mod.ts";
 
 export type HighlightKind =
   | "keyword"

@@ -2,9 +2,12 @@
 // The path is root-relative. The line and the column are one-based, and the
 // column counts UTF-16 code units.
 
-import type { Diagnostic } from "../core/diagnostics.ts";
-import type { TscMapping } from "../core/emit/tsc.ts";
-import { lineStarts, positionOf } from "../core/source.ts";
+import {
+  type Diagnostic,
+  lineStarts,
+  positionOf,
+  type TscMapping,
+} from "../core/mod.ts";
 
 /** The text of a file by its root-relative path, or undefined. */
 export type TextOf = (path: string) => string | undefined;

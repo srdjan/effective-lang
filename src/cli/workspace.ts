@@ -2,8 +2,7 @@
 // under the root, and `effective.json` at the root. The walk skips directories
 // whose names start with `.` and directories named `node_modules`.
 
-import { CONFIG_FILE, joinPath } from "../core/project.ts";
-import type { Result } from "../core/source.ts";
+import { CONFIG_FILE, joinPath, type Result } from "../core/mod.ts";
 import type { CliFs } from "./io.ts";
 
 function skippedDirectory(name: string): boolean {

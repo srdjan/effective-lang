@@ -59,9 +59,14 @@ export {
 export type { DenoCheckOutput, TscDiagnostic, TscMapping } from "./emit/tsc.ts";
 
 // The project file and the source host.
-export { describeConfigError, readConfig } from "./project.ts";
+export {
+  CONFIG_FILE,
+  describeConfigError,
+  joinPath,
+  readConfig,
+} from "./project.ts";
 export type { ConfigError, Project, ProjectConfig } from "./project.ts";
-export { memoryHost } from "./source.ts";
+export { lineIndexOf, lineStarts, memoryHost, positionOf } from "./source.ts";
 export type { ReadError, Result, SourceHost } from "./source.ts";
 
 // Diagnostics.
@@ -79,6 +84,10 @@ export type {
   RelatedSpan,
   Severity,
 } from "./diagnostics.ts";
+
+// The lexer and the prelude names, for the highlighter of the playground.
+export { KEYWORDS, lex, TokenKind, TriviaKind } from "./lex.ts";
+export { BUILTIN_TYPE_NAMES, PRELUDE_NAMES } from "./resolve.ts";
 
 // The IR types.
 export type * from "./ir.ts";

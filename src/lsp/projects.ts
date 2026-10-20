@@ -10,19 +10,17 @@
 import type { CliFs } from "../cli/io.ts";
 import { isSourcePath, readWorkspace } from "../cli/workspace.ts";
 import {
+  CONFIG_FILE,
+  type ConfigError,
+  describeConfigError,
+  type Diagnostic as CoreDiagnostic,
+  joinPath,
+  lineStarts,
   Program,
   type Revision,
   type RevisionDelta,
   revisionDelta,
-} from "../core/db.ts";
-import type { Diagnostic as CoreDiagnostic } from "../core/diagnostics.ts";
-import {
-  CONFIG_FILE,
-  type ConfigError,
-  describeConfigError,
-  joinPath,
-} from "../core/project.ts";
-import { lineStarts } from "../core/source.ts";
+} from "../core/mod.ts";
 import {
   applyContentChanges,
   pathToUri,

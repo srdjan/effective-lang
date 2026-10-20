@@ -8,7 +8,7 @@
 // only a short tail and keeps skipping on the next chunk. Each bad region gives
 // one error. A body that is not valid UTF-8 JSON consumes its whole frame.
 
-import type { Result } from "../core/source.ts";
+import type { Result } from "../core/mod.ts";
 
 export type RequestId = string | number;
 

@@ -10,7 +10,7 @@
 // names and sends `effective/generatedChanged` after a flush.
 
 import type { CliFs } from "../cli/io.ts";
-import type { Result } from "../core/source.ts";
+import type { Result } from "../core/mod.ts";
 import {
   definitionRequest,
   didSave,

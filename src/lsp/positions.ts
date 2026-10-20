@@ -4,7 +4,7 @@
 // `\r`. A position inside a surrogate pair is not corrected.
 
 import { fromFileUrl, isAbsolute, toFileUrl } from "@std/path";
-import { lineIndexOf, lineStarts, type Span } from "../core/source.ts";
+import { lineIndexOf, lineStarts, type Span } from "../core/mod.ts";
 import type { Position, Range, TextChange } from "./protocol.ts";
 
 /** Offset of the end of line `line`, before its terminator. */

@@ -7,16 +7,18 @@
 // of this file, so a value import back would form a cycle.
 
 import { writeGenerated } from "../cli/outputs.ts";
-import type { Revision } from "../core/db.ts";
 import {
   definitionAt,
   documentSymbols,
   type EditorSymbol,
   type EditorSymbolKind,
   hoverAt,
-} from "../core/editor.ts";
-import { joinPath } from "../core/project.ts";
-import { lineStarts, type Span } from "../core/source.ts";
+  joinPath,
+  lineStarts,
+  type Result,
+  type Revision,
+  type Span,
+} from "../core/mod.ts";
 import { pathToUri, positionToOffset, spanToRange } from "./positions.ts";
 import type {
   DocumentSymbol,
@@ -33,7 +35,6 @@ import { GENERATED_CHANGED_METHOD } from "./methods.ts";
 import { SymbolKind } from "./protocol.ts";
 import type { FlushOutcome, ProjectState } from "./projects.ts";
 import type { RequestFailure, ServerContext } from "./server.ts";
-import type { Result } from "../core/source.ts";
 
 type Answer = Result<unknown, RequestFailure>;
 

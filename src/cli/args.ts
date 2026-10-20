@@ -1,6 +1,6 @@
 // The command line: `effective check|build|watch [root] [flags]`.
 
-import type { Result } from "../core/source.ts";
+import type { Result } from "../core/mod.ts";
 
 export type Command =
   | { readonly kind: "help" }

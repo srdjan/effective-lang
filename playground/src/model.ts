@@ -2,8 +2,7 @@
 // the URL hash, the Problems list, the error count of each tab, the state of
 // the TypeScript pane, and the hover texts. Fast tests cover each function.
 
-import { lineStarts, positionOf } from "../../src/core/source.ts";
-import type { Severity } from "../../src/core/diagnostics.ts";
+import { lineStarts, positionOf, type Severity } from "../../src/core/mod.ts";
 import {
   BACKEND_UNAVAILABLE,
   type PlaygroundHover,
