@@ -38,10 +38,10 @@ function checked(source: string) {
 Deno.test("null defaults retain required decoded and nullable optional encoded fields", () => {
   const project = checked(
     prefix + `
-const implicit: Schema<Decoded, Encoded> = schemaStruct({ name: schemaDefaultNullKey(text, (): Text => "Ada") })
-const omitted: Schema<Decoded, Encoded> = schemaStruct({ name: schemaDefaultNullKey(text, (): Text => "Ada", { encodingStrategy: "omit" }) })
-const passed: Schema<Decoded, Encoded> = schemaStruct({ name: schemaDefaultNullKey(text, (): Text => "Ada", { encodingStrategy: "passthrough" }) })
-const shadow = (): Text => { const schemaDefaultNullKey = (): Text => "shadowed"; schemaDefaultNullKey() }
+const implicit: Schema<Decoded, Encoded> = schemaStruct({ name: schemaDefaultKey(text, (): Text => "Ada", { on: "null" }) })
+const omitted: Schema<Decoded, Encoded> = schemaStruct({ name: schemaDefaultKey(text, (): Text => "Ada", { on: "null", encodingStrategy: "omit" }) })
+const passed: Schema<Decoded, Encoded> = schemaStruct({ name: schemaDefaultKey(text, (): Text => "Ada", { on: "null", encodingStrategy: "passthrough" }) })
+const shadow = (): Text => { const schemaDefaultKey = (): Text => "shadowed"; schemaDefaultKey() }
 `,
   );
   assertEquals(project.diagnostics, []);
@@ -58,51 +58,51 @@ const shadow = (): Text => { const schemaDefaultNullKey = (): Text => "shadowed"
 Deno.test("null defaults reject nullable wrapped channels, descriptors, bad callbacks and options", () => {
   const cases: readonly Case[] = [
     [
-      "const bad = schemaDefaultNullKey(nullable, (): Nullable => null)",
+      'const bad = schemaDefaultKey(nullable, (): Nullable => null, { on: "null" })',
       [
         "type-mismatch/010",
-        "schemaDefaultNullKey needs nonnullable decoded and encoded field types",
+        "schemaDefaultKey needs nonnullable decoded and encoded field types",
         "nullable",
       ],
     ],
     [
-      'const bad = schemaDefaultNullKey(schemaOptionalKey(text), (): Text => "Ada")',
+      'const bad = schemaDefaultKey(schemaOptionalKey(text), (): Text => "Ada", { on: "null" })',
       [
         "type-mismatch/010",
-        "`schemaDefaultNullKey` needs a Schema value",
+        "`schemaDefaultKey` needs a Schema value",
         "schemaOptionalKey(text)",
       ],
     ],
     [
-      "const bad = schemaDefaultNullKey(text, (): Int => 1)",
+      'const bad = schemaDefaultKey(text, (): Int => 1, { on: "null" })',
       [
         "type-mismatch/003",
-        "schemaDefaultNullKey callback must return the decoded field type",
+        "schemaDefaultKey callback must return the decoded field type",
         "(): Int => 1",
       ],
     ],
     [
-      "const bad = schemaDefaultNullKey(text, (value: Text): Text => value)",
+      'const bad = schemaDefaultKey(text, (value: Text): Text => value, { on: "null" })',
       [
         "type-mismatch/004",
-        "the callback of `schemaDefaultNullKey` takes 0 parameters, but the function takes 1",
+        "the callback of `schemaDefaultKey` takes 0 parameters, but the function takes 1",
         "(value: Text): Text => value",
       ],
     ],
     [
-      'const make = (): Text => "Ada"\nconst bad = schemaDefaultNullKey(text, make)',
+      'const make = (): Text => "Ada"\nconst bad = schemaDefaultKey(text, make, { on: "null" })',
       [
         "type-mismatch/010",
-        "schemaDefaultNullKey needs an inline default callback",
+        "schemaDefaultKey needs an inline default callback",
         "make",
       ],
     ],
     [
-      'const bad = schemaDefaultNullKey(text, (): Text => "Ada", { encodingStrategy: "other" })',
+      'const bad = schemaDefaultKey(text, (): Text => "Ada", { on: "null", encodingStrategy: "other" })',
       [
         "type-mismatch/010",
-        'schemaDefaultNullKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record',
-        '{ encodingStrategy: "other" }',
+        'schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values',
+        '{ on: "null", encodingStrategy: "other" }',
       ],
       [
         "type-mismatch/003",
@@ -111,46 +111,46 @@ Deno.test("null defaults reject nullable wrapped channels, descriptors, bad call
       ],
     ],
     [
-      'const policy = { encodingStrategy: "omit" }\nconst bad = schemaDefaultNullKey(text, (): Text => "Ada", policy)',
+      'const policy = { encodingStrategy: "omit" }\nconst bad = schemaDefaultKey(text, (): Text => "Ada", policy)',
       [
         "type-mismatch/010",
-        'schemaDefaultNullKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record',
+        'schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values',
         "policy",
       ],
     ],
     [
-      'const bad = schemaDefaultNullKey(text, (): Text => "Ada", { encodingStrategy: "omit", extra: true })',
+      'const bad = schemaDefaultKey(text, (): Text => "Ada", { on: "null", encodingStrategy: "omit", extra: true })',
       [
         "type-mismatch/010",
-        'schemaDefaultNullKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record',
-        '{ encodingStrategy: "omit", extra: true }',
+        'schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values',
+        '{ on: "null", encodingStrategy: "omit", extra: true }',
       ],
       ["type-mismatch/005", "has no field `extra`", "extra"],
     ],
     [
-      "const bad = schemaDefaultNullKey",
+      "const bad = schemaDefaultKey",
       [
         "unknown-name/004",
         "can only be called or used as a pipeline stage",
-        "schemaDefaultNullKey",
+        "schemaDefaultKey",
       ],
     ],
     [
-      'const wire: Schema<Decoded, Encoded> = schemaStruct({ name: schemaDefaultNullKey(text, (): Text => "Ada") })\nconst bad = schemaEncode(wire, {})',
+      'const wire: Schema<Decoded, Encoded> = schemaStruct({ name: schemaDefaultKey(text, (): Text => "Ada", { on: "null" }) })\nconst bad = schemaEncode(wire, {})',
       ["execution-mode/002", PURE_CONSTANT, "schemaEncode(wire, {})"],
       ["type-mismatch/005", "the record is missing the field `name`", "{}"],
     ],
     [
-      'const bad = schemaDecode(schemaDefaultNullKey(text, (): Text => "Ada"), {})',
+      'const bad = schemaDecode(schemaDefaultKey(text, (): Text => "Ada", { on: "null" }), {})',
       [
         "execution-mode/002",
         PURE_CONSTANT,
-        'schemaDecode(schemaDefaultNullKey(text, (): Text => "Ada"), {})',
+        'schemaDecode(schemaDefaultKey(text, (): Text => "Ada", { on: "null" }), {})',
       ],
       [
         "type-mismatch/010",
         "`schemaDecode` needs a Schema value",
-        'schemaDefaultNullKey(text, (): Text => "Ada")',
+        'schemaDefaultKey(text, (): Text => "Ada", { on: "null" })',
       ],
     ],
   ];
@@ -169,10 +169,10 @@ Deno.test("null defaults reject nullable wrapped channels, descriptors, bad call
       },
   (value: ${encoded}): Option<${decoded}> => Some("Ada"),
   (value: ${decoded}): Option<${encoded}> => Some("Ada"))
-const bad = schemaDefaultNullKey(wire, (): ${decoded} => "Ada")`;
+const bad = schemaDefaultKey(wire, (): ${decoded} => "Ada", { on: "null" })`;
     assertDiagnostics(source, checked(source).diagnostics, [[
       "type-mismatch/010",
-      "schemaDefaultNullKey needs nonnullable decoded and encoded field types",
+      "schemaDefaultKey needs nonnullable decoded and encoded field types",
       "wire",
     ]], source);
   }
@@ -184,7 +184,7 @@ Deno.test("null default callbacks may fail only with SchemaIssue or SchemaError"
   ) {
     const accepted = checked(
       prefix +
-        `const ok = schemaDefaultNullKey(text, (): Text fails ${failures} => "Ada")`,
+        `const ok = schemaDefaultKey(text, (): Text fails ${failures} => "Ada", { on: "null" })`,
     );
     assertEquals(accepted.diagnostics, [], failures);
   }
@@ -196,7 +196,7 @@ Deno.test("null default callbacks may fail only with SchemaIssue or SchemaError"
   ) {
     const callback = `(): Text fails ${failures} => ${body}`;
     const source = prefix + "error Other = {}\n" +
-      `const bad = schemaDefaultNullKey(text, ${callback})`;
+      `const bad = schemaDefaultKey(text, ${callback}, { on: "null" })`;
     const { diagnostics } = checked(source);
     assertEquals(
       diagnostics.map((d) => d.code),
@@ -218,7 +218,7 @@ Deno.test("null default callbacks may fail only with SchemaIssue or SchemaError"
 
 Deno.test("independent validator rejects null-default channel and policy mutations", () => {
   const source = prefix +
-    'const field = schemaDefaultNullKey(text, (): Text => "Ada", { encodingStrategy: "omit" })';
+    'const field = schemaDefaultKey(text, (): Text => "Ada", { on: "null", encodingStrategy: "omit" })';
   const project = checked(source);
   assertEquals(project.diagnostics, []);
   const result = [...lowerProject(project).values()][0];
@@ -291,5 +291,81 @@ Deno.test("independent validator rejects null-default channel and policy mutatio
       nullableModule.value,
       new Map([["main.eff", nullableSource]]),
     ).some((d) => d.message.includes("nonnullable")),
+  );
+});
+
+function loweredField(source: string) {
+  const project = checked(prefix + source);
+  assertEquals(project.diagnostics, []);
+  const result = [...lowerProject(project).values()][0];
+  assert(result.ok, JSON.stringify(result));
+  const field = result.value.declarations.find((d) =>
+    d.kind === "constant" && d.name === "field"
+  );
+  assert(field?.kind === "constant" && field.value.kind === "schema");
+  return field.value;
+}
+
+Deno.test("the on option selects the operation and lowers without the on field", () => {
+  const cases = [
+    ['{ on: "missing" }', "default-key", 2],
+    ['{ on: "null" }', "default-null-key", 2],
+    ['{ on: "encoded" }', "default-encoded-key", 2],
+    ['{ encodingStrategy: "omit" }', "default-key", 3],
+    ['{ on: "null", encodingStrategy: "omit" }', "default-null-key", 3],
+    ['{ encodingStrategy: "omit", on: "encoded" }', "default-encoded-key", 3],
+  ] as const;
+  for (const [options, op, count] of cases) {
+    const expr = loweredField(
+      `const field = schemaDefaultKey(text, (): Text => "Ada", ${options})`,
+    );
+    assertEquals(expr.op, op, options);
+    assertEquals(expr.arguments.length, count, options);
+    const record = expr.arguments[2];
+    if (record !== undefined) {
+      assert(record.kind === "record" && record.type.kind === "record");
+      assertEquals(record.fields.map((f) => f.name), ["encodingStrategy"]);
+      assertEquals(record.type.fields.map((f) => f.name), ["encodingStrategy"]);
+    }
+  }
+});
+
+Deno.test("the on option must be a literal of the three operations", () => {
+  const cases = [
+    '{ on: "other" }',
+    "{ on: 1 }",
+    '{ on: "null", on: "encoded" }',
+  ];
+  for (const options of cases) {
+    const source = prefix +
+      `const bad = schemaDefaultKey(text, (): Text => "Ada", ${options})`;
+    const result = checkProject(
+      memoryHost({ "effective.json": "{}", "main.eff": source }),
+      "",
+      ["main.eff"],
+    );
+    assert(result.ok);
+    const messages = result.value.diagnostics.map((d) => d.message);
+    assert(
+      messages.some((m) =>
+        m.includes("`on` must be a literal") || m.includes("options must be")
+      ),
+      `${options}: ${messages.join("\n")}`,
+    );
+  }
+  const variable = checkProject(
+    memoryHost({
+      "effective.json": "{}",
+      "main.eff": prefix +
+        `const mode = "null"\nconst bad = schemaDefaultKey(text, (): Text => "Ada", { on: mode })`,
+    }),
+    "",
+    ["main.eff"],
+  );
+  assert(variable.ok);
+  assert(
+    variable.value.diagnostics.some((d) =>
+      d.message.includes("`on` must be a literal")
+    ),
   );
 });

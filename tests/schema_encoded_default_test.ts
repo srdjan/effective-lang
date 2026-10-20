@@ -38,10 +38,10 @@ function checked(source: string) {
 Deno.test("encoded defaults check callbacks against E and retain field directionality", () => {
   const project = checked(
     prefix + `
-const implicit: Schema<Decoded, Encoded> = schemaStruct({ score: schemaDefaultEncodedKey(converted, (): Text => "1") })
-const omitted: Schema<Decoded, Encoded> = schemaStruct({ score: schemaDefaultEncodedKey(converted, (): Text => "1", { encodingStrategy: "omit" }) })
-const passed: Schema<Decoded, Encoded> = schemaStruct({ score: schemaDefaultEncodedKey(converted, (): Text => "1", { encodingStrategy: "passthrough" }) })
-const shadow = (): Text => { const schemaDefaultEncodedKey = (): Text => "local"; schemaDefaultEncodedKey() }
+const implicit: Schema<Decoded, Encoded> = schemaStruct({ score: schemaDefaultKey(converted, (): Text => "1", { on: "encoded" }) })
+const omitted: Schema<Decoded, Encoded> = schemaStruct({ score: schemaDefaultKey(converted, (): Text => "1", { on: "encoded", encodingStrategy: "omit" }) })
+const passed: Schema<Decoded, Encoded> = schemaStruct({ score: schemaDefaultKey(converted, (): Text => "1", { on: "encoded", encodingStrategy: "passthrough" }) })
+const shadow = (): Text => { const schemaDefaultKey = (): Text => "local"; schemaDefaultKey() }
 `,
   );
   assertEquals(project.diagnostics, []);
@@ -58,43 +58,43 @@ const shadow = (): Text => { const schemaDefaultEncodedKey = (): Text => "local"
 Deno.test("encoded defaults reject decoded callbacks and invalid construction boundaries", () => {
   const cases: readonly Case[] = [
     [
-      "const bad = schemaDefaultEncodedKey(converted, (): Int => 1)",
+      'const bad = schemaDefaultKey(converted, (): Int => 1, { on: "encoded" })',
       [
         "type-mismatch/003",
-        "schemaDefaultEncodedKey callback must return the encoded field type",
+        "schemaDefaultKey callback must return the encoded field type",
         "(): Int => 1",
       ],
     ],
     [
-      'const bad = schemaDefaultEncodedKey(schemaOptionalKey(text), (): Text => "1")',
+      'const bad = schemaDefaultKey(schemaOptionalKey(text), (): Text => "1", { on: "encoded" })',
       [
         "type-mismatch/010",
-        "`schemaDefaultEncodedKey` needs a Schema value",
+        "`schemaDefaultKey` needs a Schema value",
         "schemaOptionalKey(text)",
       ],
     ],
     [
-      'const make = (): Text => "1"\nconst bad = schemaDefaultEncodedKey(converted, make)',
+      'const make = (): Text => "1"\nconst bad = schemaDefaultKey(converted, make, { on: "encoded" })',
       [
         "type-mismatch/010",
-        "schemaDefaultEncodedKey needs an inline default callback",
+        "schemaDefaultKey needs an inline default callback",
         "make",
       ],
     ],
     [
-      "const bad = schemaDefaultEncodedKey(converted, (value: Text): Text => value)",
+      'const bad = schemaDefaultKey(converted, (value: Text): Text => value, { on: "encoded" })',
       [
         "type-mismatch/004",
-        "the callback of `schemaDefaultEncodedKey` takes 0 parameters, but the function takes 1",
+        "the callback of `schemaDefaultKey` takes 0 parameters, but the function takes 1",
         "(value: Text): Text => value",
       ],
     ],
     [
-      'const bad = schemaDefaultEncodedKey(converted, (): Text => "1", { encodingStrategy: "other" })',
+      'const bad = schemaDefaultKey(converted, (): Text => "1", { on: "encoded", encodingStrategy: "other" })',
       [
         "type-mismatch/010",
-        'schemaDefaultEncodedKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record',
-        '{ encodingStrategy: "other" }',
+        'schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values',
+        '{ on: "encoded", encodingStrategy: "other" }',
       ],
       [
         "type-mismatch/003",
@@ -103,45 +103,45 @@ Deno.test("encoded defaults reject decoded callbacks and invalid construction bo
       ],
     ],
     [
-      'const policy = { encodingStrategy: "omit" }\nconst bad = schemaDefaultEncodedKey(converted, (): Text => "1", policy)',
+      'const policy = { encodingStrategy: "omit" }\nconst bad = schemaDefaultKey(converted, (): Int => 1, policy)',
       [
         "type-mismatch/010",
-        'schemaDefaultEncodedKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record',
+        'schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values',
         "policy",
       ],
     ],
     [
-      'const bad = schemaDefaultEncodedKey(converted, (): Text => "1", { encodingStrategy: "omit", extra: true })',
+      'const bad = schemaDefaultKey(converted, (): Text => "1", { on: "encoded", encodingStrategy: "omit", extra: true })',
       [
         "type-mismatch/010",
-        'schemaDefaultEncodedKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record',
-        '{ encodingStrategy: "omit", extra: true }',
+        'schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values',
+        '{ on: "encoded", encodingStrategy: "omit", extra: true }',
       ],
       ["type-mismatch/005", "has no field `extra`", "extra"],
     ],
     [
-      "const bad = schemaDefaultEncodedKey",
+      "const bad = schemaDefaultKey",
       [
         "unknown-name/004",
         "can only be called or used as a pipeline stage",
-        "schemaDefaultEncodedKey",
+        "schemaDefaultKey",
       ],
     ],
     [
-      'const bad = schemaDecode(schemaDefaultEncodedKey(converted, (): Text => "1"), {})',
+      'const bad = schemaDecode(schemaDefaultKey(converted, (): Text => "1", { on: "encoded" }), {})',
       [
         "execution-mode/002",
         PURE_CONSTANT,
-        'schemaDecode(schemaDefaultEncodedKey(converted, (): Text => "1"), {})',
+        'schemaDecode(schemaDefaultKey(converted, (): Text => "1", { on: "encoded" }), {})',
       ],
       [
         "type-mismatch/010",
         "`schemaDecode` needs a Schema value",
-        'schemaDefaultEncodedKey(converted, (): Text => "1")',
+        'schemaDefaultKey(converted, (): Text => "1", { on: "encoded" })',
       ],
     ],
     [
-      'const s: Schema<Decoded, Encoded> = schemaStruct({ score: schemaDefaultEncodedKey(converted, (): Text => "1") })\nconst bad = schemaEncode(s, {})',
+      'const s: Schema<Decoded, Encoded> = schemaStruct({ score: schemaDefaultKey(converted, (): Text => "1", { on: "encoded" }) })\nconst bad = schemaEncode(s, {})',
       ["execution-mode/002", PURE_CONSTANT, "schemaEncode(s, {})"],
       ["type-mismatch/005", "the record is missing the field `score`", "{}"],
     ],
@@ -159,7 +159,7 @@ Deno.test("encoded default callbacks may fail only with SchemaIssue or SchemaErr
   ) {
     const accepted = checked(
       prefix +
-        `const ok = schemaDefaultEncodedKey(converted, (): Text fails ${failures} => "1")`,
+        `const ok = schemaDefaultKey(converted, (): Text fails ${failures} => "1", { on: "encoded" })`,
     );
     assertEquals(accepted.diagnostics, [], failures);
   }
@@ -171,7 +171,7 @@ Deno.test("encoded default callbacks may fail only with SchemaIssue or SchemaErr
   ) {
     const callback = `(): Text fails ${failures} => ${body}`;
     const source = prefix + "error Other = {}\n" +
-      `const bad = schemaDefaultEncodedKey(converted, ${callback})`;
+      `const bad = schemaDefaultKey(converted, ${callback}, { on: "encoded" })`;
     const { diagnostics } = checked(source);
     assertEquals(
       diagnostics.map((d) => d.code),
@@ -193,7 +193,7 @@ Deno.test("encoded default callbacks may fail only with SchemaIssue or SchemaErr
 
 Deno.test("validator distinguishes encoded defaults from decoded defaults and checks policies", () => {
   const source = prefix +
-    'const field = schemaDefaultEncodedKey(converted, (): Text => "1", { encodingStrategy: "omit" })';
+    'const field = schemaDefaultKey(converted, (): Text => "1", { on: "encoded", encodingStrategy: "omit" })';
   const project = checked(source);
   assertEquals(project.diagnostics, []);
   const result = [...lowerProject(project).values()][0];

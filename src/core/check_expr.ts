@@ -324,20 +324,6 @@ const SCHEMA_BUILTINS = {
     acceptsDefault: false,
     preservesMakeInput: true,
   },
-  schemaDefaultNullKey: {
-    op: "default-null-key",
-    arity: 2,
-    acceptsOptions: true,
-    acceptsDefault: true,
-    preservesMakeInput: true,
-  },
-  schemaDefaultEncodedKey: {
-    op: "default-encoded-key",
-    arity: 2,
-    acceptsOptions: true,
-    acceptsDefault: true,
-    preservesMakeInput: true,
-  },
   schemaOptionalTransform: {
     op: "optional-transform",
     arity: 4,
@@ -405,6 +391,15 @@ const SCHEMA_BUILTINS = {
     preservesMakeInput: true,
   },
 } as const satisfies Record<string, SchemaBuiltin>;
+
+/** The values of the `on` option of `schemaDefaultKey`. */
+const DEFAULT_KEY_ON = ["missing", "null", "encoded"] as const;
+
+const DEFAULT_KEY_OPS = {
+  missing: "default-key",
+  null: "default-null-key",
+  encoded: "default-encoded-key",
+} as const;
 
 type SchemaBuiltinName = keyof typeof SCHEMA_BUILTINS;
 
@@ -1105,8 +1100,6 @@ class BodyChecker {
     schemaOptionFromOptionalKey: BodyChecker.schemaBuiltin,
     schemaDefaultKey: BodyChecker.schemaBuiltin,
     schemaConstructorDefault: BodyChecker.schemaBuiltin,
-    schemaDefaultNullKey: BodyChecker.schemaBuiltin,
-    schemaDefaultEncodedKey: BodyChecker.schemaBuiltin,
     schemaOptionalTransform: BodyChecker.schemaBuiltin,
     schemaOptionalFromRequired: BodyChecker.schemaBuiltin,
     schemaUnion: BodyChecker.schemaBuiltin,
@@ -1613,6 +1606,71 @@ class BodyChecker {
     );
   }
 
+  /** The literal value of a field in an inline options record, by label. */
+  private optionsField(
+    record: NodeId,
+    label: string,
+  ): { readonly value: NodeId | undefined } | undefined {
+    if (kindOf(this.tree, record) !== SyntaxKind.RecordExpr) return undefined;
+    for (const field of this.kids(record)) {
+      const parts = this.fieldParts(field);
+      if (parts?.label === label) return { value: parts.value };
+    }
+    return undefined;
+  }
+
+  /**
+   * The Schema operation that the `on` option of `schemaDefaultKey` selects.
+   * An absent `on` means "missing". An `on` that is not one of the three
+   * literals is reported here and selects the default operation.
+   */
+  private defaultKeyOp(
+    name: SchemaBuiltinName,
+    options: Arg,
+  ): "default-key" | "default-null-key" | "default-encoded-key" {
+    const field = this.optionsField(options.node, "on");
+    if (field === undefined) return "default-key";
+    const value = field.value;
+    const literal = value !== undefined &&
+        kindOf(this.tree, value) === SyntaxKind.LiteralExpr
+      ? literalOf(this.tree, value)
+      : undefined;
+    const on = DEFAULT_KEY_ON.find((candidate) => candidate === literal);
+    if (on === undefined) {
+      this.report(
+        "type-mismatch/010",
+        `${name} \`on\` must be a literal "missing", "null", or "encoded"`,
+        value ?? options.node,
+      );
+      return "default-key";
+    }
+    return DEFAULT_KEY_OPS[on];
+  }
+
+  /** Whether an options record is inline with distinct known fields. */
+  private defaultKeyOptionsShape(record: NodeId): boolean {
+    if (kindOf(this.tree, record) !== SyntaxKind.RecordExpr) return false;
+    const fields = this.kids(record);
+    if (fields.length < 1 || fields.length > 2) return false;
+    const seen = new Set<string>();
+    for (const field of fields) {
+      const parts = kindOf(this.tree, field) === SyntaxKind.RecordField
+        ? this.fieldParts(field)
+        : undefined;
+      if (
+        parts === undefined || parts.value === undefined ||
+        seen.has(parts.label) ||
+        kindOf(this.tree, parts.value) !== SyntaxKind.LiteralExpr
+      ) return false;
+      seen.add(parts.label);
+      if (parts.label === "encodingStrategy") {
+        const strategy = literalOf(this.tree, parts.value);
+        if (strategy !== "omit" && strategy !== "passthrough") return false;
+      } else if (parts.label !== "on") return false;
+    }
+    return true;
+  }
+
   private schemaCall(
     node: NodeId,
     name: SchemaBuiltinName,
@@ -1620,7 +1678,10 @@ class BodyChecker {
     expected: TypeRef | undefined,
   ): NodeInfo {
     const builtin: SchemaBuiltin = SCHEMA_BUILTINS[name];
-    const op = builtin.op;
+    // `schemaDefaultKey` selects its operation with the `on` option.
+    const op = name === "schemaDefaultKey" && args.length === 3
+      ? this.defaultKeyOp(name, args[2])
+      : builtin.op;
     this.fact(node, { kind: "schema", op });
     const actualCount = builtin.acceptsOptions === true && args.length === 3
       ? 3
@@ -2106,39 +2167,26 @@ class BodyChecker {
       const options = args[2] === undefined ? undefined : this.argInfo(
         args[2],
         this.table.record([{
+          name: "on",
+          type: this.table.union(
+            DEFAULT_KEY_ON.map((on) => this.table.literal(on)),
+          ),
+          optional: true,
+        }, {
           name: "encodingStrategy",
           type: this.table.union([
             this.table.literal("omit"),
             this.table.literal("passthrough"),
           ]),
-          optional: false,
+          optional: true,
         }]),
       );
-      if (options !== undefined) {
-        const fields = this.kids(args[2].node);
-        const value = fields.length === 1
-          ? this.kids(fields[0]).at(-1)
-          : undefined;
-        const strategy = value === undefined
-          ? undefined
-          : literalOf(this.tree, value);
-        const record = this.table.node(this.table.unfold(options.type));
-        if (
-          kindOf(this.tree, args[2].node) !== SyntaxKind.RecordExpr ||
-          fields.length !== 1 ||
-          kindOf(this.tree, fields[0]) !== SyntaxKind.RecordField ||
-          record.kind !== "record" || record.fields.length !== 1 ||
-          record.fields[0].name !== "encodingStrategy" ||
-          value === undefined ||
-          kindOf(this.tree, value) !== SyntaxKind.LiteralExpr ||
-          (strategy !== "omit" && strategy !== "passthrough")
-        ) {
-          this.report(
-            "type-mismatch/010",
-            `${name} options must be an inline { encodingStrategy: "omit" | "passthrough" } record with a literal strategy`,
-            args[2].node,
-          );
-        }
+      if (options !== undefined && !this.defaultKeyOptionsShape(args[2].node)) {
+        this.report(
+          "type-mismatch/010",
+          `${name} options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values`,
+          args[2].node,
+        );
       }
       return this.finish(
         node,
@@ -2472,8 +2520,7 @@ class BodyChecker {
         const values = args === undefined ? [] : this.kids(args);
         if (
           called === "schemaConstructorDefault" ||
-          called === "schemaDefaultKey" || called === "schemaDefaultNullKey" ||
-          called === "schemaDefaultEncodedKey"
+          called === "schemaDefaultKey"
         ) {
           return values.length >= 2 &&
             values.slice(1).every((value) => !containsSelf(value)) &&

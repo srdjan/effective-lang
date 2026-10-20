@@ -120,8 +120,6 @@ const PRELUDE = {
   schemaOptionFromOptionalKey: { shadowable: true },
   schemaDefaultKey: { shadowable: true },
   schemaConstructorDefault: { shadowable: true },
-  schemaDefaultNullKey: { shadowable: true },
-  schemaDefaultEncodedKey: { shadowable: true },
   schemaOptionalTransform: { shadowable: true },
   schemaOptionalFromRequired: { shadowable: true },
   schemaUnion: { shadowable: true },

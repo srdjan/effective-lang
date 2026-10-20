@@ -107,18 +107,18 @@ Deno.test("optional constructor inputs keep required keys, complete Options and 
       ],
     ],
     [
-      "const bad = schemaDefaultNullKey(child, (): M => ({}))",
+      'const bad = schemaDefaultKey(child, (): M => ({}), { on: "null" })',
       [
         "type-mismatch/003",
-        "schemaDefaultNullKey callback must return the decoded field type",
+        "schemaDefaultKey callback must return the decoded field type",
         "(): M => ({})",
       ],
     ],
     [
-      "const bad = schemaDefaultEncodedKey(child, (): M => ({}))",
+      'const bad = schemaDefaultKey(child, (): M => ({}), { on: "encoded" })',
       [
         "type-mismatch/003",
-        "schemaDefaultEncodedKey callback must return the encoded field type",
+        "schemaDefaultKey callback must return the encoded field type",
         "(): M => ({})",
       ],
     ],

@@ -881,7 +881,10 @@ class BodyLowerer {
           : {
             kind: "schema",
             op: fact.op,
-            arguments: args.map((_, i) => arg(i)),
+            arguments: this.schemaArguments(
+              fact.op,
+              args.map((_, i) => arg(i)),
+            ),
             ...annotation,
           };
       case "with-fiber": {
@@ -1419,6 +1422,42 @@ class BodyLowerer {
       target: this.valueTarget(parts.labelNode),
       ...this.annotation(field),
     };
+  }
+
+  /**
+   * The `on` option of `schemaDefaultKey` selects the operation and is not
+   * part of the IR. Rebuild the options record without it, or drop the record.
+   * The record type is the single required field that the IR always had.
+   */
+  private schemaArguments(
+    op: string,
+    args: readonly Expr[],
+  ): readonly Expr[] {
+    const options = args[2];
+    if (
+      (op !== "default-key" && op !== "default-null-key" &&
+        op !== "default-encoded-key") ||
+      options === undefined || options.kind !== "record"
+    ) return args;
+    const fields = options.fields.filter((field) => field.name !== "on");
+    if (fields.length === 0) return args.slice(0, 2);
+    const type = options.type;
+    return [
+      args[0],
+      args[1],
+      {
+        ...options,
+        fields,
+        type: type.kind === "record"
+          ? {
+            kind: "record",
+            fields: type.fields
+              .filter((field) => field.name !== "on")
+              .map((field) => ({ ...field, optional: false })),
+          }
+          : type,
+      },
+    ];
   }
 
   private recordFields(

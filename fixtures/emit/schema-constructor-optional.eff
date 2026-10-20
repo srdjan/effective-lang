@@ -41,10 +41,10 @@ export const decodedField: SchemaEncodedOptional<D, E, Read.parse | Defaults.nex
 export const decoded: Schema<Required, OptionalWire, Read.parse | Defaults.next, Write.print, Input> =
   schemaStruct({ settings: decodedField })
 export const nullDefault: Schema<Required, NullableWire, Read.parse | Defaults.next, Write.print, Input> =
-  schemaStruct({ settings: schemaDefaultNullKey(child,
-    (): D uses Defaults.next => Defaults.next(), { encodingStrategy: "omit" }) })
+  schemaStruct({ settings: schemaDefaultKey(child,
+    (): D uses Defaults.next => Defaults.next(), { on: "null", encodingStrategy: "omit" }) })
 export const encodedField: SchemaEncodedOptional<D, E, Read.parse | Defaults.encoded, Write.print, M> =
-  schemaDefaultEncodedKey(child, (): E uses Defaults.encoded => Defaults.encoded(), { encodingStrategy: "omit" })
+  schemaDefaultKey(child, (): E uses Defaults.encoded => Defaults.encoded(), { on: "encoded", encodingStrategy: "omit" })
 export const encoded: Schema<Required, OptionalWire, Read.parse | Defaults.encoded, Write.print, Input> =
   schemaStruct({ settings: encodedField })
 export const optionField: SchemaEncodedOptional<Option<D>, E, Read.parse, Write.print> =

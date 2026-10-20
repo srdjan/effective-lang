@@ -31,16 +31,16 @@ export const nullTree = (pending: Effect<Tree[],SchemaIssue>): Schema<Tree,Nulla
   (self: Schema<Tree,NullableTree,Read.parse,Write.print,Input>): Schema<Tree,NullableTree,Read.parse,Write.print,Input> =>
     schemaStruct({
       score: schemaConstructorDefault(score, (): Int => 4),
-      children: schemaDefaultNullKey(schemaConstructorDefault(schemaArray(self), (): Input[] => []),
-        (): Tree[] fails SchemaIssue => run(pending))
+      children: schemaDefaultKey(schemaConstructorDefault(schemaArray(self), (): Input[] => []),
+        (): Tree[] fails SchemaIssue => run(pending), { on: "null" })
     })
 )
 export const encoded: Schema<Tree,WireTree,Read.parse,Write.print,Input> = schemaRecursive(
   (self: Schema<Tree,WireTree,Read.parse,Write.print,Input>): Schema<Tree,WireTree,Read.parse,Write.print,Input> =>
     schemaStruct({
       score: schemaConstructorDefault(score, (): Int => 4),
-      children: schemaDefaultEncodedKey(schemaConstructorDefault(schemaArray(self), (): Input[] => []),
-        (): WireTree[] => [], { encodingStrategy: "omit" })
+      children: schemaDefaultKey(schemaConstructorDefault(schemaArray(self), (): Input[] => []),
+        (): WireTree[] => [], { on: "encoded", encodingStrategy: "omit" })
     })
 )
 export const node: Schema<Node,WireNode,Read.parse,Write.print,NodeInput> = schemaRecursive(

@@ -4095,7 +4095,7 @@ const SCHEMA_DEFAULT_KEY_CASES: readonly SchemaCase[] = [
     name: "options are not a record",
     tail: 'const bad = schemaDefaultKey(text, (): Text => "a", 1)',
     expected: [
-      'type-mismatch/010 | schemaDefaultKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record with a literal strategy | 1',
+      'type-mismatch/010 | schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values | 1',
     ],
   },
   {
@@ -4103,7 +4103,7 @@ const SCHEMA_DEFAULT_KEY_CASES: readonly SchemaCase[] = [
     tail:
       'const bad = schemaDefaultKey(text, (): Text => "a", { encodingStrategy: "other" })',
     expected: [
-      'type-mismatch/010 | schemaDefaultKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record with a literal strategy | { encodingStrategy: "other" }',
+      'type-mismatch/010 | schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values | { encodingStrategy: "other" }',
       'type-mismatch/003 | the field `encodingStrategy` has type string, but "omit" | "passthrough" is expected | "other"',
     ],
   },
@@ -4112,8 +4112,8 @@ const SCHEMA_DEFAULT_KEY_CASES: readonly SchemaCase[] = [
     tail:
       'const bad = schemaDefaultKey(text, (): Text => "a", { encodingStrategy: "omit", extra: true })',
     expected: [
-      'type-mismatch/010 | schemaDefaultKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record with a literal strategy | { encodingStrategy: "omit", extra: true }',
-      'type-mismatch/005 | the record type { encodingStrategy: "omit" | "passthrough" } has no field `extra` | extra',
+      'type-mismatch/010 | schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values | { encodingStrategy: "omit", extra: true }',
+      'type-mismatch/005 | the record type { encodingStrategy?: "omit" | "passthrough", on?: "missing" | "null" | "encoded" } has no field `extra` | extra',
     ],
   },
   {
@@ -4122,7 +4122,7 @@ const SCHEMA_DEFAULT_KEY_CASES: readonly SchemaCase[] = [
       'const bad = schemaDefaultKey(text, sample, { encodingStrategy: "x" })',
     expected: [
       "type-mismatch/010 | schemaDefaultKey needs an inline default callback | sample",
-      'type-mismatch/010 | schemaDefaultKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record with a literal strategy | { encodingStrategy: "x" }',
+      'type-mismatch/010 | schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values | { encodingStrategy: "x" }',
       'type-mismatch/003 | the field `encodingStrategy` has type string, but "omit" | "passthrough" is expected | "x"',
     ],
   },
@@ -4172,409 +4172,415 @@ Deno.test("schemaDefaultKey diagnostics keep their lists and order", () => {
 const SCHEMA_DEFAULT_NULL_KEY_CASES: readonly SchemaCase[] = [
   {
     name: "accepts a plain callback",
-    tail: 'const bad = schemaDefaultNullKey(text, (): Text => "a")',
+    tail: 'const bad = schemaDefaultKey(text, (): Text => "a", { on: "null" })',
     expected: [],
   },
   {
     name: "accepts SchemaIssue failure",
     tail:
-      'const bad = schemaDefaultNullKey(text, (): Text fails SchemaIssue => fail(schemaInvalid("x")))',
+      'const bad = schemaDefaultKey(text, (): Text fails SchemaIssue => fail(schemaInvalid("x")), { on: "null" })',
     expected: [],
   },
   {
     name: "accepts SchemaError failure",
     tail:
-      'const bad = schemaDefaultNullKey(text, (): Text fails SchemaError => schemaDecode(text, "x"))',
+      'const bad = schemaDefaultKey(text, (): Text fails SchemaError => schemaDecode(text, "x"), { on: "null" })',
     expected: [],
   },
   {
     name: "rejects SchemaIssue with SchemaError",
     tail:
-      'const bad = schemaDefaultNullKey(text, (): Text fails SchemaIssue | SchemaError => { const n = schemaDecode(text, "x")\n fail(schemaInvalid("x")) })',
+      'const bad = schemaDefaultKey(text, (): Text fails SchemaIssue | SchemaError => { const n = schemaDecode(text, "x")\n fail(schemaInvalid("x")) }, { on: "null" })',
     expected: [
-      'type-mismatch/010 | schemaDefaultNullKey callback may fail only with SchemaIssue or SchemaError | (): Text fails SchemaIssue | SchemaError => { const n = schemaDecode(text, "x")\n fail(schemaInvalid("x")) }',
+      'type-mismatch/010 | schemaDefaultKey callback may fail only with SchemaIssue or SchemaError | (): Text fails SchemaIssue | SchemaError => { const n = schemaDecode(text, "x")\n fail(schemaInvalid("x")) }',
     ],
   },
   {
     name: "rejects another failure",
     tail:
-      "const bad = schemaDefaultNullKey(text, (): Text fails Other => fail(Other({})))",
+      'const bad = schemaDefaultKey(text, (): Text fails Other => fail(Other({})), { on: "null" })',
     expected: [
-      "type-mismatch/010 | schemaDefaultNullKey callback may fail only with SchemaIssue or SchemaError | (): Text fails Other => fail(Other({}))",
+      "type-mismatch/010 | schemaDefaultKey callback may fail only with SchemaIssue or SchemaError | (): Text fails Other => fail(Other({}))",
     ],
   },
   {
     name: "rejects another failure with SchemaIssue",
     tail:
-      'const bad = schemaDefaultNullKey(text, (): Text fails SchemaIssue | Other => { fail(Other({}))\n fail(schemaInvalid("x")) })',
+      'const bad = schemaDefaultKey(text, (): Text fails SchemaIssue | Other => { fail(Other({}))\n fail(schemaInvalid("x")) }, { on: "null" })',
     expected: [
-      'type-mismatch/010 | schemaDefaultNullKey callback may fail only with SchemaIssue or SchemaError | (): Text fails SchemaIssue | Other => { fail(Other({}))\n fail(schemaInvalid("x")) }',
+      'type-mismatch/010 | schemaDefaultKey callback may fail only with SchemaIssue or SchemaError | (): Text fails SchemaIssue | Other => { fail(Other({}))\n fail(schemaInvalid("x")) }',
     ],
   },
   {
     name: "callback is not inline",
-    tail: "const bad = schemaDefaultNullKey(text, sample)",
+    tail: 'const bad = schemaDefaultKey(text, sample, { on: "null" })',
     expected: [
-      "type-mismatch/010 | schemaDefaultNullKey needs an inline default callback | sample",
+      "type-mismatch/010 | schemaDefaultKey needs an inline default callback | sample",
     ],
   },
   {
     name: "callback is not inline and fails",
-    tail: "const bad = schemaDefaultNullKey(text, failOther)",
+    tail: 'const bad = schemaDefaultKey(text, failOther, { on: "null" })',
     expected: [
-      "type-mismatch/010 | schemaDefaultNullKey callback may fail only with SchemaIssue or SchemaError | failOther",
-      "type-mismatch/010 | schemaDefaultNullKey needs an inline default callback | failOther",
+      "type-mismatch/010 | schemaDefaultKey callback may fail only with SchemaIssue or SchemaError | failOther",
+      "type-mismatch/010 | schemaDefaultKey needs an inline default callback | failOther",
     ],
   },
   {
     name: "callback is not a function",
-    tail: "const bad = schemaDefaultNullKey(text, 1)",
+    tail: 'const bad = schemaDefaultKey(text, 1, { on: "null" })',
     expected: [
-      "type-mismatch/010 | schemaDefaultNullKey needs an inline default callback | 1",
-      "type-mismatch/010 | the callback of `schemaDefaultNullKey` must be a function, but the value has type int | 1",
+      "type-mismatch/010 | schemaDefaultKey needs an inline default callback | 1",
+      "type-mismatch/010 | the callback of `schemaDefaultKey` must be a function, but the value has type int | 1",
     ],
   },
   {
     name: "callback returns the wrong type",
-    tail: "const bad = schemaDefaultNullKey(text, (): Int => 1)",
+    tail: 'const bad = schemaDefaultKey(text, (): Int => 1, { on: "null" })',
     expected: [
-      "type-mismatch/003 | schemaDefaultNullKey callback must return the decoded field type | (): Int => 1",
+      "type-mismatch/003 | schemaDefaultKey callback must return the decoded field type | (): Int => 1",
     ],
   },
   {
     name: "callback returns the wrong type and fails",
     tail:
-      "const bad = schemaDefaultNullKey(text, (): Int fails Other => fail(Other({})))",
+      'const bad = schemaDefaultKey(text, (): Int fails Other => fail(Other({})), { on: "null" })',
     expected: [
-      "type-mismatch/003 | schemaDefaultNullKey callback must return the decoded field type | (): Int fails Other => fail(Other({}))",
-      "type-mismatch/010 | schemaDefaultNullKey callback may fail only with SchemaIssue or SchemaError | (): Int fails Other => fail(Other({}))",
+      "type-mismatch/003 | schemaDefaultKey callback must return the decoded field type | (): Int fails Other => fail(Other({}))",
+      "type-mismatch/010 | schemaDefaultKey callback may fail only with SchemaIssue or SchemaError | (): Int fails Other => fail(Other({}))",
     ],
   },
   {
     name: "callback takes a parameter",
     tail:
-      "const bad = schemaDefaultNullKey(text, (value: Text): Text => value)",
+      'const bad = schemaDefaultKey(text, (value: Text): Text => value, { on: "null" })',
     expected: [
-      "type-mismatch/004 | the callback of `schemaDefaultNullKey` takes 0 parameters, but the function takes 1 | (value: Text): Text => value",
+      "type-mismatch/004 | the callback of `schemaDefaultKey` takes 0 parameters, but the function takes 1 | (value: Text): Text => value",
     ],
   },
   {
     name: "schema is optional",
-    tail: 'const bad = schemaDefaultNullKey(optionalText, (): Text => "a")',
+    tail:
+      'const bad = schemaDefaultKey(optionalText, (): Text => "a", { on: "null" })',
     expected: [
-      "type-mismatch/010 | `schemaDefaultNullKey` needs a Schema value | optionalText",
+      "type-mismatch/010 | `schemaDefaultKey` needs a Schema value | optionalText",
     ],
   },
   {
     name: "schema is optional and callback fails",
     tail:
-      "const bad = schemaDefaultNullKey(optionalText, (): Text fails Other => fail(Other({})))",
+      'const bad = schemaDefaultKey(optionalText, (): Text fails Other => fail(Other({})), { on: "null" })',
     expected: [
-      "type-mismatch/010 | `schemaDefaultNullKey` needs a Schema value | optionalText",
-      "type-mismatch/010 | schemaDefaultNullKey callback may fail only with SchemaIssue or SchemaError | (): Text fails Other => fail(Other({}))",
+      "type-mismatch/010 | `schemaDefaultKey` needs a Schema value | optionalText",
+      "type-mismatch/010 | schemaDefaultKey callback may fail only with SchemaIssue or SchemaError | (): Text fails Other => fail(Other({}))",
     ],
   },
   {
     name: "schema is not a Schema",
-    tail: 'const bad = schemaDefaultNullKey(1, (): Text => "a")',
+    tail: 'const bad = schemaDefaultKey(1, (): Text => "a", { on: "null" })',
     expected: [
-      "type-mismatch/010 | `schemaDefaultNullKey` needs a Schema value | 1",
+      "type-mismatch/010 | `schemaDefaultKey` needs a Schema value | 1",
     ],
   },
   {
     name: "options are accepted",
     tail:
-      'const bad = schemaDefaultNullKey(text, (): Text => "a", { encodingStrategy: "omit" })',
+      'const bad = schemaDefaultKey(text, (): Text => "a", { on: "null", encodingStrategy: "omit" })',
     expected: [],
   },
   {
     name: "options are not a record",
-    tail: 'const bad = schemaDefaultNullKey(text, (): Text => "a", 1)',
+    tail: 'const bad = schemaDefaultKey(text, (): Text => "a", 1)',
     expected: [
-      'type-mismatch/010 | schemaDefaultNullKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record with a literal strategy | 1',
+      'type-mismatch/010 | schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values | 1',
     ],
   },
   {
     name: "options use another strategy",
     tail:
-      'const bad = schemaDefaultNullKey(text, (): Text => "a", { encodingStrategy: "other" })',
+      'const bad = schemaDefaultKey(text, (): Text => "a", { on: "null", encodingStrategy: "other" })',
     expected: [
-      'type-mismatch/010 | schemaDefaultNullKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record with a literal strategy | { encodingStrategy: "other" }',
+      'type-mismatch/010 | schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values | { on: "null", encodingStrategy: "other" }',
       'type-mismatch/003 | the field `encodingStrategy` has type string, but "omit" | "passthrough" is expected | "other"',
     ],
   },
   {
     name: "options have an extra field",
     tail:
-      'const bad = schemaDefaultNullKey(text, (): Text => "a", { encodingStrategy: "omit", extra: true })',
+      'const bad = schemaDefaultKey(text, (): Text => "a", { on: "null", encodingStrategy: "omit", extra: true })',
     expected: [
-      'type-mismatch/010 | schemaDefaultNullKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record with a literal strategy | { encodingStrategy: "omit", extra: true }',
-      'type-mismatch/005 | the record type { encodingStrategy: "omit" | "passthrough" } has no field `extra` | extra',
+      'type-mismatch/010 | schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values | { on: "null", encodingStrategy: "omit", extra: true }',
+      'type-mismatch/005 | the record type { encodingStrategy?: "omit" | "passthrough", on?: "missing" | "null" | "encoded" } has no field `extra` | extra',
     ],
   },
   {
     name: "options and callback both wrong",
     tail:
-      'const bad = schemaDefaultNullKey(text, sample, { encodingStrategy: "x" })',
+      'const bad = schemaDefaultKey(text, sample, { on: "null", encodingStrategy: "x" })',
     expected: [
-      "type-mismatch/010 | schemaDefaultNullKey needs an inline default callback | sample",
-      'type-mismatch/010 | schemaDefaultNullKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record with a literal strategy | { encodingStrategy: "x" }',
+      "type-mismatch/010 | schemaDefaultKey needs an inline default callback | sample",
+      'type-mismatch/010 | schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values | { on: "null", encodingStrategy: "x" }',
       'type-mismatch/003 | the field `encodingStrategy` has type string, but "omit" | "passthrough" is expected | "x"',
     ],
   },
   {
     name: "no arguments",
-    tail: "const bad = schemaDefaultNullKey()",
+    tail: "const bad = schemaDefaultKey()",
     expected: [
-      "type-mismatch/004 | `schemaDefaultNullKey` takes 2 arguments, but 0 are given | schemaDefaultNullKey()",
+      "type-mismatch/004 | `schemaDefaultKey` takes 2 arguments, but 0 are given | schemaDefaultKey()",
     ],
   },
   {
     name: "one argument",
-    tail: "const bad = schemaDefaultNullKey(text)",
+    tail: "const bad = schemaDefaultKey(text)",
     expected: [
-      "type-mismatch/004 | `schemaDefaultNullKey` takes 2 arguments, but 1 is given | schemaDefaultNullKey(text)",
+      "type-mismatch/004 | `schemaDefaultKey` takes 2 arguments, but 1 is given | schemaDefaultKey(text)",
     ],
   },
   {
     name: "four arguments",
     tail:
-      'const bad = schemaDefaultNullKey(text, (): Text => "a", { encodingStrategy: "omit" }, 1)',
+      'const bad = schemaDefaultKey(text, (): Text => "a", { encodingStrategy: "omit" }, 1)',
     expected: [
-      'type-mismatch/004 | `schemaDefaultNullKey` takes 2 arguments, but 4 are given | schemaDefaultNullKey(text, (): Text => "a", { encodingStrategy: "omit" }, 1)',
+      'type-mismatch/004 | `schemaDefaultKey` takes 2 arguments, but 4 are given | schemaDefaultKey(text, (): Text => "a", { encodingStrategy: "omit" }, 1)',
     ],
   },
   {
     name: "inferred type",
-    tail: 'const shown: Int = schemaDefaultNullKey(text, (): Text => "a")',
+    tail:
+      'const shown: Int = schemaDefaultKey(text, (): Text => "a", { on: "null" })',
     expected: [
-      'type-mismatch/003 | the constant has type SchemaEncodedOptional<Text, null | Text, never, never>, but Int is expected | schemaDefaultNullKey(text, (): Text => "a")',
+      'type-mismatch/003 | the constant has type SchemaEncodedOptional<Text, null | Text, never, never>, but Int is expected | schemaDefaultKey(text, (): Text => "a", { on: "null" })',
     ],
   },
   {
     name: "inferred type with options",
     tail:
-      'const shown: Int = schemaDefaultNullKey(text, (): Text => "a", { encodingStrategy: "passthrough" })',
+      'const shown: Int = schemaDefaultKey(text, (): Text => "a", { on: "null", encodingStrategy: "passthrough" })',
     expected: [
-      'type-mismatch/003 | the constant has type SchemaEncodedOptional<Text, null | Text, never, never>, but Int is expected | schemaDefaultNullKey(text, (): Text => "a", { encodingStrategy: "passthrough" })',
+      'type-mismatch/003 | the constant has type SchemaEncodedOptional<Text, null | Text, never, never>, but Int is expected | schemaDefaultKey(text, (): Text => "a", { on: "null", encodingStrategy: "passthrough" })',
     ],
   },
   {
     name: "nullable schema is rejected",
-    tail: 'const bad = schemaDefaultNullKey(nullable, (): Text => "a")',
+    tail:
+      'const bad = schemaDefaultKey(nullable, (): Text => "a", { on: "null" })',
     expected: [
-      "type-mismatch/010 | schemaDefaultNullKey needs nonnullable decoded and encoded field types | nullable",
+      "type-mismatch/010 | schemaDefaultKey needs nonnullable decoded and encoded field types | nullable",
     ],
   },
   {
     name: "nullable schema with a wrong callback",
     tail:
-      "const bad = schemaDefaultNullKey(nullable, (): Int fails Other => fail(Other({})))",
+      'const bad = schemaDefaultKey(nullable, (): Int fails Other => fail(Other({})), { on: "null" })',
     expected: [
-      "type-mismatch/010 | schemaDefaultNullKey needs nonnullable decoded and encoded field types | nullable",
-      "type-mismatch/003 | schemaDefaultNullKey callback must return the decoded field type | (): Int fails Other => fail(Other({}))",
-      "type-mismatch/010 | schemaDefaultNullKey callback may fail only with SchemaIssue or SchemaError | (): Int fails Other => fail(Other({}))",
+      "type-mismatch/010 | schemaDefaultKey needs nonnullable decoded and encoded field types | nullable",
+      "type-mismatch/003 | schemaDefaultKey callback must return the decoded field type | (): Int fails Other => fail(Other({}))",
+      "type-mismatch/010 | schemaDefaultKey callback may fail only with SchemaIssue or SchemaError | (): Int fails Other => fail(Other({}))",
     ],
   },
 ];
 
-Deno.test("schemaDefaultNullKey diagnostics keep their lists and order", () => {
+Deno.test("schemaDefaultKey diagnostics keep their lists and order", () => {
   assertSchemaCases(SCHEMA_DEFAULT_NULL_KEY_CASES);
 });
 
 const SCHEMA_DEFAULT_ENCODED_KEY_CASES: readonly SchemaCase[] = [
   {
     name: "accepts a plain callback",
-    tail: 'const bad = schemaDefaultEncodedKey(text, (): Text => "a")',
+    tail:
+      'const bad = schemaDefaultKey(text, (): Text => "a", { on: "encoded" })',
     expected: [],
   },
   {
     name: "accepts SchemaIssue failure",
     tail:
-      'const bad = schemaDefaultEncodedKey(text, (): Text fails SchemaIssue => fail(schemaInvalid("x")))',
+      'const bad = schemaDefaultKey(text, (): Text fails SchemaIssue => fail(schemaInvalid("x")), { on: "encoded" })',
     expected: [],
   },
   {
     name: "accepts SchemaError failure",
     tail:
-      'const bad = schemaDefaultEncodedKey(text, (): Text fails SchemaError => schemaDecode(text, "x"))',
+      'const bad = schemaDefaultKey(text, (): Text fails SchemaError => schemaDecode(text, "x"), { on: "encoded" })',
     expected: [],
   },
   {
     name: "rejects SchemaIssue with SchemaError",
     tail:
-      'const bad = schemaDefaultEncodedKey(text, (): Text fails SchemaIssue | SchemaError => { const n = schemaDecode(text, "x")\n fail(schemaInvalid("x")) })',
+      'const bad = schemaDefaultKey(text, (): Text fails SchemaIssue | SchemaError => { const n = schemaDecode(text, "x")\n fail(schemaInvalid("x")) }, { on: "encoded" })',
     expected: [
-      'type-mismatch/010 | schemaDefaultEncodedKey callback may fail only with SchemaIssue or SchemaError | (): Text fails SchemaIssue | SchemaError => { const n = schemaDecode(text, "x")\n fail(schemaInvalid("x")) }',
+      'type-mismatch/010 | schemaDefaultKey callback may fail only with SchemaIssue or SchemaError | (): Text fails SchemaIssue | SchemaError => { const n = schemaDecode(text, "x")\n fail(schemaInvalid("x")) }',
     ],
   },
   {
     name: "rejects another failure",
     tail:
-      "const bad = schemaDefaultEncodedKey(text, (): Text fails Other => fail(Other({})))",
+      'const bad = schemaDefaultKey(text, (): Text fails Other => fail(Other({})), { on: "encoded" })',
     expected: [
-      "type-mismatch/010 | schemaDefaultEncodedKey callback may fail only with SchemaIssue or SchemaError | (): Text fails Other => fail(Other({}))",
+      "type-mismatch/010 | schemaDefaultKey callback may fail only with SchemaIssue or SchemaError | (): Text fails Other => fail(Other({}))",
     ],
   },
   {
     name: "rejects another failure with SchemaIssue",
     tail:
-      'const bad = schemaDefaultEncodedKey(text, (): Text fails SchemaIssue | Other => { fail(Other({}))\n fail(schemaInvalid("x")) })',
+      'const bad = schemaDefaultKey(text, (): Text fails SchemaIssue | Other => { fail(Other({}))\n fail(schemaInvalid("x")) }, { on: "encoded" })',
     expected: [
-      'type-mismatch/010 | schemaDefaultEncodedKey callback may fail only with SchemaIssue or SchemaError | (): Text fails SchemaIssue | Other => { fail(Other({}))\n fail(schemaInvalid("x")) }',
+      'type-mismatch/010 | schemaDefaultKey callback may fail only with SchemaIssue or SchemaError | (): Text fails SchemaIssue | Other => { fail(Other({}))\n fail(schemaInvalid("x")) }',
     ],
   },
   {
     name: "callback is not inline",
-    tail: "const bad = schemaDefaultEncodedKey(text, sample)",
+    tail: 'const bad = schemaDefaultKey(text, sample, { on: "encoded" })',
     expected: [
-      "type-mismatch/010 | schemaDefaultEncodedKey needs an inline default callback | sample",
+      "type-mismatch/010 | schemaDefaultKey needs an inline default callback | sample",
     ],
   },
   {
     name: "callback is not inline and fails",
-    tail: "const bad = schemaDefaultEncodedKey(text, failOther)",
+    tail: 'const bad = schemaDefaultKey(text, failOther, { on: "encoded" })',
     expected: [
-      "type-mismatch/010 | schemaDefaultEncodedKey callback may fail only with SchemaIssue or SchemaError | failOther",
-      "type-mismatch/010 | schemaDefaultEncodedKey needs an inline default callback | failOther",
+      "type-mismatch/010 | schemaDefaultKey callback may fail only with SchemaIssue or SchemaError | failOther",
+      "type-mismatch/010 | schemaDefaultKey needs an inline default callback | failOther",
     ],
   },
   {
     name: "callback is not a function",
-    tail: "const bad = schemaDefaultEncodedKey(text, 1)",
+    tail: 'const bad = schemaDefaultKey(text, 1, { on: "encoded" })',
     expected: [
-      "type-mismatch/010 | schemaDefaultEncodedKey needs an inline default callback | 1",
-      "type-mismatch/010 | the callback of `schemaDefaultEncodedKey` must be a function, but the value has type int | 1",
+      "type-mismatch/010 | schemaDefaultKey needs an inline default callback | 1",
+      "type-mismatch/010 | the callback of `schemaDefaultKey` must be a function, but the value has type int | 1",
     ],
   },
   {
     name: "callback returns the wrong type",
-    tail: "const bad = schemaDefaultEncodedKey(text, (): Int => 1)",
+    tail: 'const bad = schemaDefaultKey(text, (): Int => 1, { on: "encoded" })',
     expected: [
-      "type-mismatch/003 | schemaDefaultEncodedKey callback must return the encoded field type | (): Int => 1",
+      "type-mismatch/003 | schemaDefaultKey callback must return the encoded field type | (): Int => 1",
     ],
   },
   {
     name: "callback returns the wrong type and fails",
     tail:
-      "const bad = schemaDefaultEncodedKey(text, (): Int fails Other => fail(Other({})))",
+      'const bad = schemaDefaultKey(text, (): Int fails Other => fail(Other({})), { on: "encoded" })',
     expected: [
-      "type-mismatch/003 | schemaDefaultEncodedKey callback must return the encoded field type | (): Int fails Other => fail(Other({}))",
-      "type-mismatch/010 | schemaDefaultEncodedKey callback may fail only with SchemaIssue or SchemaError | (): Int fails Other => fail(Other({}))",
+      "type-mismatch/003 | schemaDefaultKey callback must return the encoded field type | (): Int fails Other => fail(Other({}))",
+      "type-mismatch/010 | schemaDefaultKey callback may fail only with SchemaIssue or SchemaError | (): Int fails Other => fail(Other({}))",
     ],
   },
   {
     name: "callback takes a parameter",
     tail:
-      "const bad = schemaDefaultEncodedKey(text, (value: Text): Text => value)",
+      'const bad = schemaDefaultKey(text, (value: Text): Text => value, { on: "encoded" })',
     expected: [
-      "type-mismatch/004 | the callback of `schemaDefaultEncodedKey` takes 0 parameters, but the function takes 1 | (value: Text): Text => value",
+      "type-mismatch/004 | the callback of `schemaDefaultKey` takes 0 parameters, but the function takes 1 | (value: Text): Text => value",
     ],
   },
   {
     name: "schema is optional",
-    tail: 'const bad = schemaDefaultEncodedKey(optionalText, (): Text => "a")',
+    tail:
+      'const bad = schemaDefaultKey(optionalText, (): Text => "a", { on: "encoded" })',
     expected: [
-      "type-mismatch/010 | `schemaDefaultEncodedKey` needs a Schema value | optionalText",
+      "type-mismatch/010 | `schemaDefaultKey` needs a Schema value | optionalText",
     ],
   },
   {
     name: "schema is optional and callback fails",
     tail:
-      "const bad = schemaDefaultEncodedKey(optionalText, (): Text fails Other => fail(Other({})))",
+      'const bad = schemaDefaultKey(optionalText, (): Text fails Other => fail(Other({})), { on: "encoded" })',
     expected: [
-      "type-mismatch/010 | `schemaDefaultEncodedKey` needs a Schema value | optionalText",
-      "type-mismatch/010 | schemaDefaultEncodedKey callback may fail only with SchemaIssue or SchemaError | (): Text fails Other => fail(Other({}))",
+      "type-mismatch/010 | `schemaDefaultKey` needs a Schema value | optionalText",
+      "type-mismatch/010 | schemaDefaultKey callback may fail only with SchemaIssue or SchemaError | (): Text fails Other => fail(Other({}))",
     ],
   },
   {
     name: "schema is not a Schema",
-    tail: 'const bad = schemaDefaultEncodedKey(1, (): Text => "a")',
+    tail: 'const bad = schemaDefaultKey(1, (): Text => "a", { on: "encoded" })',
     expected: [
-      "type-mismatch/010 | `schemaDefaultEncodedKey` needs a Schema value | 1",
+      "type-mismatch/010 | `schemaDefaultKey` needs a Schema value | 1",
     ],
   },
   {
     name: "options are accepted",
     tail:
-      'const bad = schemaDefaultEncodedKey(text, (): Text => "a", { encodingStrategy: "omit" })',
+      'const bad = schemaDefaultKey(text, (): Text => "a", { on: "encoded", encodingStrategy: "omit" })',
     expected: [],
   },
   {
     name: "options are not a record",
-    tail: 'const bad = schemaDefaultEncodedKey(text, (): Text => "a", 1)',
+    tail: 'const bad = schemaDefaultKey(text, (): Text => "a", 1)',
     expected: [
-      'type-mismatch/010 | schemaDefaultEncodedKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record with a literal strategy | 1',
+      'type-mismatch/010 | schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values | 1',
     ],
   },
   {
     name: "options use another strategy",
     tail:
-      'const bad = schemaDefaultEncodedKey(text, (): Text => "a", { encodingStrategy: "other" })',
+      'const bad = schemaDefaultKey(text, (): Text => "a", { on: "encoded", encodingStrategy: "other" })',
     expected: [
-      'type-mismatch/010 | schemaDefaultEncodedKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record with a literal strategy | { encodingStrategy: "other" }',
+      'type-mismatch/010 | schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values | { on: "encoded", encodingStrategy: "other" }',
       'type-mismatch/003 | the field `encodingStrategy` has type string, but "omit" | "passthrough" is expected | "other"',
     ],
   },
   {
     name: "options have an extra field",
     tail:
-      'const bad = schemaDefaultEncodedKey(text, (): Text => "a", { encodingStrategy: "omit", extra: true })',
+      'const bad = schemaDefaultKey(text, (): Text => "a", { on: "encoded", encodingStrategy: "omit", extra: true })',
     expected: [
-      'type-mismatch/010 | schemaDefaultEncodedKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record with a literal strategy | { encodingStrategy: "omit", extra: true }',
-      'type-mismatch/005 | the record type { encodingStrategy: "omit" | "passthrough" } has no field `extra` | extra',
+      'type-mismatch/010 | schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values | { on: "encoded", encodingStrategy: "omit", extra: true }',
+      'type-mismatch/005 | the record type { encodingStrategy?: "omit" | "passthrough", on?: "missing" | "null" | "encoded" } has no field `extra` | extra',
     ],
   },
   {
     name: "options and callback both wrong",
     tail:
-      'const bad = schemaDefaultEncodedKey(text, sample, { encodingStrategy: "x" })',
+      'const bad = schemaDefaultKey(text, sample, { on: "encoded", encodingStrategy: "x" })',
     expected: [
-      "type-mismatch/010 | schemaDefaultEncodedKey needs an inline default callback | sample",
-      'type-mismatch/010 | schemaDefaultEncodedKey options must be an inline { encodingStrategy: "omit" | "passthrough" } record with a literal strategy | { encodingStrategy: "x" }',
+      "type-mismatch/010 | schemaDefaultKey needs an inline default callback | sample",
+      'type-mismatch/010 | schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values | { on: "encoded", encodingStrategy: "x" }',
       'type-mismatch/003 | the field `encodingStrategy` has type string, but "omit" | "passthrough" is expected | "x"',
     ],
   },
   {
     name: "no arguments",
-    tail: "const bad = schemaDefaultEncodedKey()",
+    tail: "const bad = schemaDefaultKey()",
     expected: [
-      "type-mismatch/004 | `schemaDefaultEncodedKey` takes 2 arguments, but 0 are given | schemaDefaultEncodedKey()",
+      "type-mismatch/004 | `schemaDefaultKey` takes 2 arguments, but 0 are given | schemaDefaultKey()",
     ],
   },
   {
     name: "one argument",
-    tail: "const bad = schemaDefaultEncodedKey(text)",
+    tail: "const bad = schemaDefaultKey(text)",
     expected: [
-      "type-mismatch/004 | `schemaDefaultEncodedKey` takes 2 arguments, but 1 is given | schemaDefaultEncodedKey(text)",
+      "type-mismatch/004 | `schemaDefaultKey` takes 2 arguments, but 1 is given | schemaDefaultKey(text)",
     ],
   },
   {
     name: "four arguments",
     tail:
-      'const bad = schemaDefaultEncodedKey(text, (): Text => "a", { encodingStrategy: "omit" }, 1)',
+      'const bad = schemaDefaultKey(text, (): Text => "a", { encodingStrategy: "omit" }, 1)',
     expected: [
-      'type-mismatch/004 | `schemaDefaultEncodedKey` takes 2 arguments, but 4 are given | schemaDefaultEncodedKey(text, (): Text => "a", { encodingStrategy: "omit" }, 1)',
+      'type-mismatch/004 | `schemaDefaultKey` takes 2 arguments, but 4 are given | schemaDefaultKey(text, (): Text => "a", { encodingStrategy: "omit" }, 1)',
     ],
   },
   {
     name: "inferred type",
-    tail: 'const shown: Int = schemaDefaultEncodedKey(text, (): Text => "a")',
+    tail:
+      'const shown: Int = schemaDefaultKey(text, (): Text => "a", { on: "encoded" })',
     expected: [
-      'type-mismatch/003 | the constant has type SchemaEncodedOptional<Text, Text, never, never>, but Int is expected | schemaDefaultEncodedKey(text, (): Text => "a")',
+      'type-mismatch/003 | the constant has type SchemaEncodedOptional<Text, Text, never, never>, but Int is expected | schemaDefaultKey(text, (): Text => "a", { on: "encoded" })',
     ],
   },
   {
     name: "inferred type with options",
     tail:
-      'const shown: Int = schemaDefaultEncodedKey(text, (): Text => "a", { encodingStrategy: "passthrough" })',
+      'const shown: Int = schemaDefaultKey(text, (): Text => "a", { on: "encoded", encodingStrategy: "passthrough" })',
     expected: [
-      'type-mismatch/003 | the constant has type SchemaEncodedOptional<Text, Text, never, never>, but Int is expected | schemaDefaultEncodedKey(text, (): Text => "a", { encodingStrategy: "passthrough" })',
+      'type-mismatch/003 | the constant has type SchemaEncodedOptional<Text, Text, never, never>, but Int is expected | schemaDefaultKey(text, (): Text => "a", { on: "encoded", encodingStrategy: "passthrough" })',
     ],
   },
 ];
 
-Deno.test("schemaDefaultEncodedKey diagnostics keep their lists and order", () => {
+Deno.test("schemaDefaultKey diagnostics keep their lists and order", () => {
   assertSchemaCases(SCHEMA_DEFAULT_ENCODED_KEY_CASES);
 });
 
@@ -5142,35 +5148,6 @@ const ARITY_CASES: readonly SchemaCase[] = [
     ],
   },
   {
-    name: "schemaDefaultNullKey: schemaDefaultNullKey(text)",
-    tail: "const bad = schemaDefaultNullKey(text)",
-    expected: [
-      "type-mismatch/004 | `schemaDefaultNullKey` takes 2 arguments, but 1 is given | schemaDefaultNullKey(text)",
-    ],
-  },
-  {
-    name: "schemaDefaultNullKey: schemaDefaultNullKey(text, sample, {}, 1)",
-    tail: "const bad = schemaDefaultNullKey(text, sample, {}, 1)",
-    expected: [
-      "type-mismatch/004 | `schemaDefaultNullKey` takes 2 arguments, but 4 are given | schemaDefaultNullKey(text, sample, {}, 1)",
-    ],
-  },
-  {
-    name: "schemaDefaultEncodedKey: schemaDefaultEncodedKey(text)",
-    tail: "const bad = schemaDefaultEncodedKey(text)",
-    expected: [
-      "type-mismatch/004 | `schemaDefaultEncodedKey` takes 2 arguments, but 1 is given | schemaDefaultEncodedKey(text)",
-    ],
-  },
-  {
-    name:
-      "schemaDefaultEncodedKey: schemaDefaultEncodedKey(text, sample, {}, 1)",
-    tail: "const bad = schemaDefaultEncodedKey(text, sample, {}, 1)",
-    expected: [
-      "type-mismatch/004 | `schemaDefaultEncodedKey` takes 2 arguments, but 4 are given | schemaDefaultEncodedKey(text, sample, {}, 1)",
-    ],
-  },
-  {
     name: "schemaConstructorDefault: schemaConstructorDefault(text)",
     tail: "const bad = schemaConstructorDefault(text)",
     expected: [
@@ -5360,13 +5337,13 @@ const MAKE_INPUT_CASES: readonly SchemaCase[] = [
   {
     name: "default null key",
     tail:
-      "type Pair = { score: Int }\ntype PairMake = { score?: Int }\nconst pair: Schema<Pair, Pair, never, never, PairMake> = schemaStruct({ score: schemaConstructorDefault(integer, (): Int => 4) })\nconst bad = schemaDefaultNullKey(pair, (): Pair => ({ score: 1 }))",
+      'type Pair = { score: Int }\ntype PairMake = { score?: Int }\nconst pair: Schema<Pair, Pair, never, never, PairMake> = schemaStruct({ score: schemaConstructorDefault(integer, (): Int => 4) })\nconst bad = schemaDefaultKey(pair, (): Pair => ({ score: 1 }), { on: "null" })',
     expected: [],
   },
   {
     name: "default encoded key",
     tail:
-      "type Pair = { score: Int }\ntype PairMake = { score?: Int }\nconst pair: Schema<Pair, Pair, never, never, PairMake> = schemaStruct({ score: schemaConstructorDefault(integer, (): Int => 4) })\nconst bad = schemaDefaultEncodedKey(pair, (): Pair => ({ score: 1 }))",
+      'type Pair = { score: Int }\ntype PairMake = { score?: Int }\nconst pair: Schema<Pair, Pair, never, never, PairMake> = schemaStruct({ score: schemaConstructorDefault(integer, (): Int => 4) })\nconst bad = schemaDefaultKey(pair, (): Pair => ({ score: 1 }), { on: "encoded" })',
     expected: [],
   },
   {

@@ -29,10 +29,10 @@ export const decodedAfter: SchemaEncodedOptionalConstructorDefault<D,E,Read.pars
   schemaDefaultKey(sourceDefault, (): D uses Defaults.next => Defaults.next())
 export const decodedRecord: Schema<Required,OptionalWire,Read.parse | Defaults.next,Write.print,Input> = schemaStruct({ settings: decodedAfter })
 export const nullDefaultAfter: SchemaEncodedOptionalConstructorDefault<D,NullableE,Read.parse | Defaults.next,Write.print,M> =
-  schemaDefaultNullKey(sourceDefault, (): D uses Defaults.next => Defaults.next())
+  schemaDefaultKey(sourceDefault, (): D uses Defaults.next => Defaults.next(), { on: "null" })
 export const nullDefaultRecord: Schema<Required,NullableWire,Read.parse | Defaults.next,Write.print,Input> = schemaStruct({ settings: nullDefaultAfter })
 export const encodedAfter: SchemaEncodedOptionalConstructorDefault<D,E,Read.parse | Defaults.encoded,Write.print,M> =
-  schemaDefaultEncodedKey(sourceDefault, (): E uses Defaults.encoded => Defaults.encoded(), { encodingStrategy: "omit" })
+  schemaDefaultKey(sourceDefault, (): E uses Defaults.encoded => Defaults.encoded(), { on: "encoded", encodingStrategy: "omit" })
 export const encodedRecord: Schema<Required,OptionalWire,Read.parse | Defaults.encoded,Write.print,Input> = schemaStruct({ settings: encodedAfter })
 export const optionAfter: SchemaEncodedOptional<Option<D>,E,Read.parse,Write.print> = schemaOptionFromOptionalKey(sourceDefault)
 export const optionRecord: Schema<OptionRecord,OptionalWire,Read.parse,Write.print> = schemaStruct({ settings: optionAfter })

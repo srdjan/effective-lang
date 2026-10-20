@@ -146,8 +146,6 @@ const ARITY_ROWS: readonly ArityRow[] = [
   ...fixed("schemaOptionFromOptionalKey", 1),
   ...schemaWithOptions("schemaDefaultKey"),
   ...fixed("schemaConstructorDefault", 2),
-  ...schemaWithOptions("schemaDefaultNullKey"),
-  ...schemaWithOptions("schemaDefaultEncodedKey"),
   ...fixed("schemaOptionalTransform", 4),
   ...fixed("schemaOptionalFromRequired", 4),
   ...fixed("schemaUnion", 1),

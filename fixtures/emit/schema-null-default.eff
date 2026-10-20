@@ -19,22 +19,22 @@ const transformed: Schema<Int, Text, Read.parse, Write.print> = schemaTransform(
   (value: Int): Option<Text> uses Write.print => Some(Write.print(value))
 )
 export const field: SchemaEncodedOptional<Int, WireValue, Read.parse | Defaults.make, Write.print> =
-  schemaDefaultNullKey(transformed, (): Int fails SchemaIssue uses Defaults.make => Defaults.make())
+  schemaDefaultKey(transformed, (): Int fails SchemaIssue uses Defaults.make => Defaults.make(), { on: "null" })
 export const defaulted: Schema<Decoded, Encoded, Read.parse | Defaults.make, Write.print> =
   schemaStruct({ score: field })
 export const omitted: Schema<Decoded, Encoded, Read.parse | Defaults.make, Write.print> =
-  schemaStruct({ score: schemaDefaultNullKey(transformed,
+  schemaStruct({ score: schemaDefaultKey(transformed,
     (): Int fails SchemaIssue uses Defaults.make => Defaults.make(),
-    { encodingStrategy: "omit" }) })
+    { on: "null", encodingStrategy: "omit" }) })
 export const passed: Schema<Decoded, Encoded, Read.parse | Defaults.make, Write.print> =
-  schemaStruct({ score: schemaDefaultNullKey(transformed,
+  schemaStruct({ score: schemaDefaultKey(transformed,
     (): Int fails SchemaIssue uses Defaults.make => Defaults.make(),
-    { encodingStrategy: "passthrough" }) })
+    { on: "null", encodingStrategy: "passthrough" }) })
 export const errorDefault: Schema<Decoded, Encoded, Read.parse | Errors.make, Write.print> =
-  schemaStruct({ score: schemaDefaultNullKey(transformed,
-    (): Int fails SchemaError uses Errors.make => Errors.make()) })
+  schemaStruct({ score: schemaDefaultKey(transformed,
+    (): Int fails SchemaError uses Errors.make => Errors.make(), { on: "null" }) })
 export const pureDefault: Schema<Decoded, { score?: Int | Nil }> =
-  schemaStruct({ score: schemaDefaultNullKey(integer, (): Int => 7) })
+  schemaStruct({ score: schemaDefaultKey(integer, (): Int => 7, { on: "null" }) })
 
 
 export const readDefault = (input: unknown): Decoded fails SchemaError uses Read.parse | Defaults.make =>

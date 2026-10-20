@@ -633,6 +633,17 @@ The [composition contract](plans/2026-10-18-schedule-composition-contract.md)
 now adds binary `scheduleMax`, `scheduleMin`, and `scheduleConcat` when one
 source input type fits the other. Target probes and a compiled source witness
 cover delays, normal end, phase input, fresh state, and both failure channels.
+Update, 2026-10-20: `schemaDefaultNullKey` and `schemaDefaultEncodedKey` are
+merged into `schemaDefaultKey(schema, () => default, { on?, encodingStrategy? })`.
+The option `on` is `"missing"`, `"null"`, or `"encoded"` and defaults to
+`"missing"`, so a call without `on` keeps its meaning. The checker reads the
+`on` literal first and then applies the rules of the selected operation.
+Lowering maps `on` to the existing IR operation and drops the `on` field from
+the options record, so the IR, the validator, and the emitted text are
+unchanged. The two paragraphs above describe the removed names and stay as
+history. `schemaOptionalFromRequired`, `schemaNullToMissingKey`, and
+`schemaOptionFromOptionalKey` keep their own names.
+
 The remaining native Schedule boundary is general intersections for incomparable
 inputs. The selected Schema composition and guarded-recursion rule now has a
 compiled source witness and runtime regression. The

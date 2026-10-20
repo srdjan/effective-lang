@@ -1,5 +1,7 @@
 # Constructor inputs through optional Schema adapters
 
+Note, 2026-10-20: the names `schemaDefaultNullKey` and `schemaDefaultEncodedKey` no longer exist in the language. Write `schemaDefaultKey(schema, callback, { on: "null" })` and `schemaDefaultKey(schema, callback, { on: "encoded" })`. The option `on` is `"missing"` by default, so a call without `on` keeps its earlier meaning. The IR operations `default-null-key` and `default-encoded-key` are unchanged, and the rules below hold for the matching `on` value. Read each old name below as that `on` value.
+
 Date: 2026-10-19. Target: `effect@4.0.5`, Deno 2.9.7. Status: implemented.
 This extends the [constructor metadata contract](2026-10-19-schema-constructor-metadata-contract.md).
 The [pinned target probe](schema-adapter-probes/constructor-optional.ts) has three
