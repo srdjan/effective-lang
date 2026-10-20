@@ -62,6 +62,12 @@ import {
   type TypeRef,
   type TypeTable,
 } from "./types.ts";
+import {
+  declarationId,
+  type DeclarationPrefix,
+  isErrorId,
+  isTypeId,
+} from "./ids.ts";
 
 // ------------------------------------------------------------------ shapes
 
@@ -498,8 +504,8 @@ export class TypeLowerer {
           if (type.kind === "primitive" && type.name === "never") return;
           if (type.kind === "union") {
             type.members.forEach(collect);
-          } else if (type.kind === "named" && type.id.startsWith("error:")) {
-            failures.push(type.id as ErrorId);
+          } else if (type.kind === "named" && isErrorId(type.id)) {
+            failures.push(type.id);
           } else {
             this.report(
               "type-mismatch/001",
@@ -1083,7 +1089,7 @@ export function serviceOfCapability(
   if (hash < 0) return undefined;
   const dot = capability.indexOf(".", hash);
   if (dot < 0) return undefined;
-  return `service:${capability.slice(4, dot)}` as ServiceId;
+  return `service:${capability.slice(4, dot)}`;
 }
 
 // ------------------------------------------------------------------ the module checker
@@ -1127,8 +1133,11 @@ class ModuleChecker {
     this.lowerer = new TypeLowerer(env, this.sink);
   }
 
-  private id(prefix: string, name: string): string {
-    return `${prefix}:${this.env.module}#${name}`;
+  private id<P extends DeclarationPrefix>(
+    prefix: P,
+    name: string,
+  ): `${P}:${string}` {
+    return declarationId(prefix, this.env.module, name);
   }
 
   /** The first declaration of each name. Later ones are duplicates that the resolver reported. */
@@ -1158,7 +1167,7 @@ class ModuleChecker {
       const prefix = entry.kind === "const" || entry.kind === "provider"
         ? "value"
         : entry.kind;
-      this.exports.push(this.id(prefix, entry.name) as DeclarationId);
+      this.exports.push(this.id(prefix, entry.name));
     }
     this.exports.sort(compareText);
     return {
@@ -1243,7 +1252,7 @@ class ModuleChecker {
   }
 
   private checkType(entry: DeclEntry): void {
-    const id = this.id("type", entry.name) as TypeId;
+    const id = this.id("type", entry.name);
     const body = this.bodyOf(entry);
     const opaque = /^(?:export\s+)?opaque\s+type\b/.test(
       nodeText(this.tree, entry.node),
@@ -1303,7 +1312,7 @@ class ModuleChecker {
   }
 
   private checkError(entry: DeclEntry): void {
-    const id = this.id("error", entry.name) as ErrorId;
+    const id = this.id("error", entry.name);
     const record =
       this.lowerer.kidsOfKind(entry.node, SyntaxKind.RecordType)[0];
     const fields = record === undefined
@@ -1501,7 +1510,7 @@ class ModuleChecker {
   // -------------------------------------------------------------- services and providers
 
   private checkService(entry: DeclEntry): void {
-    const id = this.id("service", entry.name) as ServiceId;
+    const id = this.id("service", entry.name);
     const methods: MethodDecl[] = [];
     for (const method of entry.methodList) {
       if (entry.methods.get(method.name) !== method) continue;
@@ -1523,8 +1532,8 @@ class ModuleChecker {
           }
           const ref = this.table.node(this.table.unfold(parameter.type.ref));
           if (
-            ref.kind !== "named" || !ref.id.startsWith("type:") ||
-            !this.table.isOpaque(ref.id as TypeId)
+            ref.kind !== "named" || !isTypeId(ref.id) ||
+            !this.table.isOpaque(ref.id)
           ) {
             this.lowerer.report(
               "type-mismatch/010",
@@ -1551,8 +1560,8 @@ class ModuleChecker {
         failures,
         [],
       );
-      const capability =
-        `cap:${this.env.module}#${entry.name}.${method.name}` as CapabilityId;
+      const capability: CapabilityId =
+        `cap:${this.env.module}#${entry.name}.${method.name}`;
       this.methodTypes.set(capability, type.ref);
       methods.push({
         id: capability,
@@ -1576,7 +1585,7 @@ class ModuleChecker {
   }
 
   private checkProvider(entry: DeclEntry): void {
-    const id = this.id("value", entry.name) as ValueId;
+    const id = this.id("value", entry.name);
     const parts = this.lowerer.kids(entry.node);
     const provides: CapabilityId[] = [];
     for (
@@ -1639,7 +1648,7 @@ class ModuleChecker {
   }
 
   private checkConst(entry: DeclEntry): void {
-    const id = this.id("value", entry.name) as ValueId;
+    const id = this.id("value", entry.name);
     const rest = this.lowerer.kids(entry.node).filter((k) =>
       k !== entry.nameNode
     );

@@ -3,7 +3,39 @@
 // malformed identity, so the editor queries never throw. The emitter wraps these
 // helpers and turns undefined into an internal failure.
 
-import type { CapabilityId } from "./ir.ts";
+import type { CapabilityId, ErrorId, LocalId, TypeId, ValueId } from "./ir.ts";
+
+/** The prefixes of declaration identities. A provider has a value identity. */
+export type DeclarationPrefix = "type" | "error" | "service" | "value";
+
+/** The identity of a declaration, such as `type:users#User`. */
+export function declarationId<P extends DeclarationPrefix>(
+  prefix: P,
+  module: string,
+  name: string,
+): `${P}:${string}` {
+  return `${prefix}:${module}#${name}`;
+}
+
+/** True for an identity such as `type:users#User`. */
+export function isTypeId(id: string): id is TypeId {
+  return id.startsWith("type:");
+}
+
+/** True for an identity such as `error:users#NotFound`. */
+export function isErrorId(id: string): id is ErrorId {
+  return id.startsWith("error:");
+}
+
+/** True for an identity such as `value:users#find`. */
+export function isValueId(id: string): id is ValueId {
+  return id.startsWith("value:");
+}
+
+/** True for an identity such as `local:users#find/x`. */
+export function isLocalId(id: string): id is LocalId {
+  return id.startsWith("local:");
+}
 
 /** The module part of an identity such as `type:users#User`. */
 export function moduleOfId(id: string): string | undefined {

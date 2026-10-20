@@ -5,6 +5,7 @@
 
 import type { ErrorId, TypeId } from "./ir.ts";
 import type { TypeRef, TypeTable } from "./types.ts";
+import { isErrorId } from "./ids.ts";
 
 export type LiteralValue = string | number | boolean | null;
 
@@ -95,11 +96,11 @@ export function domainOf(table: TypeTable, subject: TypeRef): Domain {
 
   if (
     nodes.length > 0 &&
-    nodes.every((n) => n.kind === "named" && n.id.startsWith("error:"))
+    nodes.every((n) => n.kind === "named" && isErrorId(n.id))
   ) {
     const ids: ErrorId[] = [];
     for (const n of nodes) {
-      if (n.kind === "named") ids.push(n.id as ErrorId);
+      if (n.kind === "named" && isErrorId(n.id)) ids.push(n.id);
     }
     return { kind: "errors", ids: [...new Set(ids)].sort() };
   }

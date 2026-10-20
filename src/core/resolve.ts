@@ -17,11 +17,11 @@ import {
 } from "./diagnostics.ts";
 import {
   type DeclEntry,
-  type DeclKind,
   isTypeKind,
   type MethodEntry,
   nameTextOf,
 } from "./index.ts";
+import { declarationId, type DeclarationPrefix } from "./ids.ts";
 import type {
   CapabilityId,
   ErrorId,
@@ -332,14 +332,6 @@ const PATTERN_KINDS: ReadonlySet<SyntaxKind> = new Set([
   SyntaxKind.RecordPattern,
 ]);
 
-const DECL_PREFIX: Readonly<Record<DeclKind, string>> = {
-  type: "type",
-  error: "error",
-  service: "service",
-  provider: "value",
-  const: "value",
-};
-
 function describeKind(target: Target): string {
   switch (target.kind) {
     case "type":
@@ -556,22 +548,23 @@ class Resolver {
   }
 
   private bindingFor(module: string, decl: DeclEntry, span: Span): Binding {
-    const id = `${DECL_PREFIX[decl.kind]}:${module}#${decl.name}`;
+    const id = <P extends DeclarationPrefix>(prefix: P) =>
+      declarationId(prefix, module, decl.name);
     switch (decl.kind) {
       case "type":
-        return { target: { kind: "type", id: id as TypeId }, span };
+        return { target: { kind: "type", id: id("type") }, span };
       case "error":
-        return { target: { kind: "error", id: id as ErrorId }, span };
+        return { target: { kind: "error", id: id("error") }, span };
       case "service":
         return {
-          target: { kind: "service", id: id as ServiceId },
+          target: { kind: "service", id: id("service") },
           service: { module, entry: decl },
           span,
         };
       case "provider":
-        return { target: { kind: "provider", id: id as ValueId }, span };
+        return { target: { kind: "provider", id: id("value") }, span };
       case "const":
-        return { target: { kind: "value", id: id as ValueId }, span };
+        return { target: { kind: "value", id: id("value") }, span };
     }
   }
 
@@ -624,9 +617,9 @@ class Resolver {
     const key = `${this.fn}/${name}`;
     const count = (this.counters.get(key) ?? 0) + 1;
     this.counters.set(key, count);
-    const base = `local:${this.name}#${this.fn}/${name}`;
+    const base: LocalId = `local:${this.name}#${this.fn}/${name}`;
     const binding: LocalBinding = {
-      id: (count === 1 ? base : `${base}/${count}`) as LocalId,
+      id: count === 1 ? base : `${base}/${count}`,
       pending,
       span,
     };

@@ -30,7 +30,6 @@ import type {
   Declaration,
   DeclarationId,
   Effects,
-  ErrorId,
   Expr,
   FunctionType,
   Handler,
@@ -74,6 +73,7 @@ import {
   type TypeRef,
   type TypeTable,
 } from "./types.ts";
+import { isErrorId } from "./ids.ts";
 
 type FunctionNode = Extract<TypeNode, { readonly kind: "function" }>;
 
@@ -632,7 +632,7 @@ class BodyLowerer {
     while (this.ctx.identifiers.has(`$p${this.pipelines}`)) {
       this.pipelines += 1;
     }
-    return `local:${this.ctx.module}#${this.owner}/$p${this.pipelines}` as LocalId;
+    return `local:${this.ctx.module}#${this.owner}/$p${this.pipelines}`;
   }
 
   // -------------------------------------------------------------- expressions
@@ -1008,7 +1008,7 @@ class BodyLowerer {
   private specialize(name: string, type: FunctionType): ValueId {
     const json = canonicalJson(type);
     const hash = sha256Hex(json).slice(0, 12);
-    const id = `value:${this.ctx.module}#$builtin/${name}/${hash}` as ValueId;
+    const id: ValueId = `value:${this.ctx.module}#$builtin/${name}/${hash}`;
     const known = this.ctx.builtins.get(id);
     if (known === undefined) {
       this.ctx.builtins.set(id, { name, type });
@@ -1184,9 +1184,9 @@ class BodyLowerer {
       }
       case "fail": {
         const node = this.ctx.types.node(this.ctx.types.unfold(leftInfo.type));
-        if (node.kind === "named" && node.id.startsWith("error:")) {
+        if (node.kind === "named" && isErrorId(node.id)) {
           parts.push({
-            failures: [node.id as ErrorId],
+            failures: [node.id],
             requirements: [],
             mode: "effect",
           });

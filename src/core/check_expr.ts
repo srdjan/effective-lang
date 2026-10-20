@@ -76,6 +76,7 @@ import {
   type TypeRef,
   type TypeTable,
 } from "./types.ts";
+import { isErrorId, isTypeId } from "./ids.ts";
 
 // ------------------------------------------------------------------ environment
 
@@ -1244,8 +1245,8 @@ export class BodyChecker {
     let failure: ErrorId | undefined;
     if (rightCount) {
       const unfolded = this.table.node(this.table.unfold(infos[0].type));
-      if (unfolded.kind === "named" && unfolded.id.startsWith("error:")) {
-        failure = unfolded.id as ErrorId;
+      if (unfolded.kind === "named" && isErrorId(unfolded.id)) {
+        failure = unfolded.id;
       } else if (!this.isError(infos[0].type)) {
         this.report(
           "type-mismatch/010",
@@ -1272,8 +1273,8 @@ export class BodyChecker {
     if (rightCount) {
       const unfolded = this.table.node(this.table.unfold(infos[0].type));
       if (
-        unfolded.kind === "named" && unfolded.id.startsWith("type:") &&
-        this.table.isOpaque(unfolded.id as TypeId)
+        unfolded.kind === "named" && isTypeId(unfolded.id) &&
+        this.table.isOpaque(unfolded.id)
       ) {
         this.report(
           "type-mismatch/010",
@@ -3062,8 +3063,8 @@ export class BodyChecker {
 
   private opaqueHandle(ref: TypeRef): boolean {
     const type = this.table.node(this.table.unfold(ref));
-    return type.kind === "named" && type.id.startsWith("type:") &&
-      this.table.isOpaque(type.id as TypeId);
+    return type.kind === "named" && isTypeId(type.id) &&
+      this.table.isOpaque(type.id);
   }
 
   private scopedBorrowUses(body: NodeId, id: LocalId): void {
@@ -3090,11 +3091,9 @@ export class BodyChecker {
             ? -1
             : this.kids(parent).indexOf(node);
           const capability = method?.kind === "cap" ? method.id : undefined;
-          const serviceId = capability === undefined
+          const serviceId: ServiceId | undefined = capability === undefined
             ? undefined
-            : `service:${
-              capability.slice(4, capability.lastIndexOf("."))
-            }` as ServiceId;
+            : `service:${capability.slice(4, capability.lastIndexOf("."))}`;
           const signature = serviceId === undefined
             ? undefined
             : this.benv.env.services.get(serviceId)?.methods.find((m) =>
@@ -5895,8 +5894,8 @@ export class BodyChecker {
         : this.table.error,
       combine([jobs, wrapped.info, ...(option === undefined ? [] : [option]), {
         failures: wrapper.kind === "named" &&
-            wrapper.id.startsWith("error:")
-          ? [wrapper.id as ErrorId]
+            isErrorId(wrapper.id)
+          ? [wrapper.id]
           : [],
         requirements: member?.kind === "effect" ? member.requirements : [],
         mode: "effect",
@@ -6212,8 +6211,8 @@ export class BodyChecker {
     const unfolded = this.table.unfold(ref);
     const node = this.table.node(unfolded);
     if (node.kind === "record") return node.fields;
-    if (node.kind === "named" && node.id.startsWith("error:")) {
-      const record = this.table.errorRecordOf(node.id as ErrorId);
+    if (node.kind === "named" && isErrorId(node.id)) {
+      const record = this.table.errorRecordOf(node.id);
       const recordNode = record === undefined
         ? undefined
         : this.table.node(record);

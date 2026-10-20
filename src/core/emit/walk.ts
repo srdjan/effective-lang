@@ -10,6 +10,7 @@ import type {
   ValueId,
 } from "../ir.ts";
 import { childrenOf } from "./shape.ts";
+import { isValueId } from "../ids.ts";
 
 export function patternBinding(pattern: Pattern): Parameter | null {
   switch (pattern.kind) {
@@ -87,8 +88,8 @@ export function valueReferences(declaration: Declaration): ValueId[] {
   if (root === undefined) return [];
   const found = new Set<ValueId>();
   walkExpr(root, (e) => {
-    if (e.kind === "reference" && e.target.startsWith("value:")) {
-      found.add(e.target as ValueId);
+    if (e.kind === "reference" && isValueId(e.target)) {
+      found.add(e.target);
     }
   });
   return [...found];

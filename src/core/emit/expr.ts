@@ -10,7 +10,6 @@ import type {
   Field,
   FunctionType,
   Handler,
-  LocalId,
   Parameter,
   Pattern,
   Span,
@@ -63,6 +62,7 @@ import {
 } from "./calls.ts";
 import { evaluatedChildren, type ExprOf, isLeafExpr } from "./shape.ts";
 import { patternBinding } from "./walk.ts";
+import { isLocalId } from "../ids.ts";
 
 // ------------------------------------------------------------------ precedence
 
@@ -1815,8 +1815,8 @@ export class ExprEmitter {
   }
 
   private reference(target: string): Doc {
-    if (target.startsWith("local:")) {
-      const name = this.scope.locals.get(target as LocalId);
+    if (isLocalId(target)) {
+      const name = this.scope.locals.get(target);
       if (name === undefined) throw internal(`unbound local ${target}`);
       return name;
     }
@@ -1835,8 +1835,8 @@ export class ExprEmitter {
     expected: Type | undefined,
   ): Doc {
     if (
-      value.kind === "reference" && value.target.startsWith("local:") &&
-      this.scope.locals.get(value.target as LocalId) === name
+      value.kind === "reference" && isLocalId(value.target) &&
+      this.scope.locals.get(value.target) === name
     ) {
       return name;
     }

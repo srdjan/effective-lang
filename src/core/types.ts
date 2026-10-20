@@ -17,6 +17,7 @@ import type {
   TypeId,
 } from "./ir.ts";
 import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID } from "./ir.ts";
+import { isErrorId } from "./ids.ts";
 
 declare const typeRefBrand: unique symbol;
 
@@ -746,9 +747,9 @@ export class TypeTable {
 
   /** True when a definition for the id exists. */
   isDefined(id: TypeId | ErrorId): boolean {
-    return id.startsWith("error:")
-      ? this.errorRecords.has(id as ErrorId)
-      : this.aliases.has(id as TypeId) || this.brands.has(id as TypeId);
+    return isErrorId(id)
+      ? this.errorRecords.has(id)
+      : this.aliases.has(id) || this.brands.has(id);
   }
 
   /**
@@ -1501,9 +1502,9 @@ export function dataOnly(
         rejects.reserved &&
         (type.id === SCHEMA_ERROR_ID || type.id === SCHEMA_ISSUE_ID)
       ) return false;
-      const record = type.id.startsWith("error:")
-        ? table.errorRecordOf(type.id as ErrorId)
-        : table.brandBaseOf(type.id as TypeId);
+      const record = isErrorId(type.id)
+        ? table.errorRecordOf(type.id)
+        : table.brandBaseOf(type.id);
       return record !== undefined && nested(record);
     }
     case "error":
