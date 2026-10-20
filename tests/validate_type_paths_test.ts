@@ -10,6 +10,7 @@ import { assert, assertEquals } from "@std/assert";
 import { checkProject, lowerProject, memoryHost } from "../src/core/mod.ts";
 import type { Effects, ModuleIR, Span, Type } from "../src/core/ir.ts";
 import { Report } from "../src/core/validate/report.ts";
+import { typeChildren } from "../src/core/validate/type_children.ts";
 import {
   buildWorld,
   checkRecordFields,
@@ -292,4 +293,36 @@ Deno.test("checkTypeIds orders a kind's own check against its children", () => {
       `validation/001 ${ROOT}.effects.failures[0]: the failure error:m#Gone is not a declared error`,
     ],
   );
+});
+
+Deno.test("typeChildren gives each child slot once with its IR path suffix", () => {
+  for (const slot of SLOTS) {
+    const type = slot.build(MISSING);
+    const children = typeChildren(type);
+    assertEquals(
+      children.filter((c) => c.type === MISSING).map((c) => c.suffix),
+      [slot.suffix],
+      `${type.kind} ${slot.suffix}`,
+    );
+    // The filler children are the int types of the other slots.
+    assert(
+      children.every((c) => c.type === MISSING || c.type === INT),
+      `${type.kind} ${slot.suffix}`,
+    );
+  }
+});
+
+Deno.test("typeChildren gives no child for a leaf kind", () => {
+  const leaves: Type[] = [
+    INT,
+    { kind: "literal", value: "x" },
+    MISSING,
+    { kind: "closeable-scope" },
+    {
+      kind: "provider",
+      provides: [],
+      acquisition: { execution: "pure", effects: NONE },
+    },
+  ];
+  for (const type of leaves) assertEquals(typeChildren(type), [], type.kind);
 });

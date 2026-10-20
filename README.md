@@ -176,6 +176,7 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
     world.ts       Identities in scope, imports, declaration headers, recursive types.
     expr.ts        Bottom-up recomputation of types, sets, and modes of each body.
     typing.ts      Type compatibility, including the lift rule.
+    type_children.ts The child types of a type with their IR path suffixes: one descent for the type walkers.
     sets.ts        Sorted effect sets and the combine rule.
     serialization.ts Sorted sets, finite numbers, and spans against the source texts.
     report.ts      The eight area codes and the diagnostic collector.

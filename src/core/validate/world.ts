@@ -24,6 +24,7 @@ import {
   unfold,
 } from "./typing.ts";
 import { sameSet } from "./sets.ts";
+import { typeChildren } from "./type_children.ts";
 
 export const PRELUDE_MODULE = "effective:prelude";
 
@@ -173,10 +174,28 @@ export function checkTypeIds(
       report.addDepth(at, MAX_DEPTH, span);
       return;
     }
+    // A function checks its borrow flags before its children.
+    if (
+      t.kind === "function" && t.borrows !== undefined &&
+      t.borrows.length !== t.parameters.length
+    ) {
+      fail(at, "borrow flags must match function parameters");
+    }
+    for (const c of typeChildren(t)) {
+      walk(c.type, `${at}${c.suffix}`, depth + 1);
+    }
+    // Every other check of a kind follows its children.
     switch (t.kind) {
-      case "closeable-scope":
       case "primitive":
       case "literal":
+      case "closeable-scope":
+      case "record":
+      case "array":
+      case "option":
+      case "ref":
+      case "codec":
+      case "tuple":
+      case "union":
         return;
       case "named": {
         const found = t.id.startsWith("type:")
@@ -187,32 +206,12 @@ export function checkTypeIds(
         if (!found) fail(at, `the type ${t.id} is not declared`);
         return;
       }
-      case "record":
-        t.fields.forEach((f, i) =>
-          walk(f.type, `${at}.fields[${i}].type`, depth + 1)
-        );
-        return;
-      case "array":
-      case "option":
-      case "ref":
-        walk(t.element, `${at}.element`, depth + 1);
-        return;
       case "retry-schedule":
-        walk(t.error, `${at}.error`, depth + 1);
         if (t.error.kind !== "named" || !t.error.id.startsWith("error:")) {
           fail(at, "a retry schedule needs a nominal error type");
         }
         return;
-      case "codec":
-        walk(t.decoded, `${at}.decoded`, depth + 1);
-        walk(t.encoded, `${at}.encoded`, depth + 1);
-        return;
       case "schema":
-        walk(t.decoded, `${at}.decoded`, depth + 1);
-        walk(t.encoded, `${at}.encoded`, depth + 1);
-        if (t.makeInput !== undefined) {
-          walk(t.makeInput, `${at}.makeInput`, depth + 1);
-        }
         // The IR allows each flag to be absent or exactly true.
         for (
           const flag of [
@@ -249,48 +248,13 @@ export function checkTypeIds(
         });
         return;
       case "fiber":
-        walk(t.result, `${at}.result`, depth + 1);
         effects(`${at}.effects`, { failures: t.failures, requirements: [] });
         return;
       case "effect":
-        walk(t.result, `${at}.result`, depth + 1);
-        effects(`${at}.effects`, t.effects);
-        return;
       case "stream":
-        walk(t.element, `${at}.element`, depth + 1);
-        effects(`${at}.effects`, t.effects);
-        return;
       case "schedule":
-        walk(t.output, `${at}.output`, depth + 1);
-        walk(t.input, `${at}.input`, depth + 1);
-        effects(`${at}.effects`, t.effects);
-        return;
       case "sink":
-        walk(t.input, `${at}.input`, depth + 1);
-        walk(t.result, `${at}.result`, depth + 1);
-        if (t.leftover !== undefined) {
-          walk(t.leftover, `${at}.leftover`, depth + 1);
-        }
-        effects(`${at}.effects`, t.effects);
-        return;
-      case "tuple":
-        t.elements.forEach((e, i) =>
-          walk(e, `${at}.elements[${i}]`, depth + 1)
-        );
-        return;
-      case "union":
-        t.members.forEach((m, i) => walk(m, `${at}.members[${i}]`, depth + 1));
-        return;
       case "function":
-        if (
-          t.borrows !== undefined && t.borrows.length !== t.parameters.length
-        ) {
-          fail(at, "borrow flags must match function parameters");
-        }
-        t.parameters.forEach((p, i) =>
-          walk(p, `${at}.parameters[${i}]`, depth + 1)
-        );
-        walk(t.result, `${at}.result`, depth + 1);
         effects(`${at}.effects`, t.effects);
         return;
       case "provider":
@@ -304,6 +268,10 @@ export function checkTypeIds(
         });
         effects(`${at}.acquisition.effects`, t.acquisition.effects);
         return;
+      default: {
+        const unreachable: never = t;
+        return unreachable;
+      }
     }
   };
   walk(type, path, 0);
@@ -343,76 +311,11 @@ export function checkRecordFields(
       ctx.report.addDepth(at, MAX_DEPTH, span);
       return;
     }
-    switch (t.kind) {
-      case "record":
-        checkFieldNames(ctx, t.fields, `${at}.fields`, span);
-        t.fields.forEach((f, i) =>
-          walk(f.type, `${at}.fields[${i}].type`, depth + 1)
-        );
-        return;
-      case "array":
-      case "option":
-      case "ref":
-        walk(t.element, `${at}.element`, depth + 1);
-        return;
-      case "retry-schedule":
-        walk(t.error, `${at}.error`, depth + 1);
-        return;
-      case "codec":
-        walk(t.decoded, `${at}.decoded`, depth + 1);
-        walk(t.encoded, `${at}.encoded`, depth + 1);
-        return;
-      case "schema":
-        walk(t.decoded, `${at}.decoded`, depth + 1);
-        walk(t.encoded, `${at}.encoded`, depth + 1);
-        if (t.makeInput !== undefined) {
-          walk(t.makeInput, `${at}.makeInput`, depth + 1);
-        }
-        return;
-      case "fiber":
-        walk(t.result, `${at}.result`, depth + 1);
-        return;
-      case "effect":
-        walk(t.result, `${at}.result`, depth + 1);
-        return;
-      case "stream":
-        walk(t.element, `${at}.element`, depth + 1);
-        return;
-      case "schedule":
-        walk(t.output, `${at}.output`, depth + 1);
-        walk(t.input, `${at}.input`, depth + 1);
-        return;
-      case "sink":
-        walk(t.input, `${at}.input`, depth + 1);
-        walk(t.result, `${at}.result`, depth + 1);
-        if (t.leftover !== undefined) {
-          walk(t.leftover, `${at}.leftover`, depth + 1);
-        }
-        return;
-      case "tuple":
-        t.elements.forEach((e, i) =>
-          walk(e, `${at}.elements[${i}]`, depth + 1)
-        );
-        return;
-      case "union":
-        t.members.forEach((m, i) => walk(m, `${at}.members[${i}]`, depth + 1));
-        return;
-      case "function":
-        t.parameters.forEach((p, i) =>
-          walk(p, `${at}.parameters[${i}]`, depth + 1)
-        );
-        walk(t.result, `${at}.result`, depth + 1);
-        return;
-      case "primitive":
-      case "literal":
-      case "named":
-      case "closeable-scope":
-      case "provider":
-        return;
-      default: {
-        const unreachable: never = t;
-        return unreachable;
-      }
+    if (t.kind === "record") {
+      checkFieldNames(ctx, t.fields, `${at}.fields`, span);
+    }
+    for (const c of typeChildren(t)) {
+      walk(c.type, `${at}${c.suffix}`, depth + 1);
     }
   };
   walk(type, path, 0);
@@ -756,73 +659,12 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
       }
       return;
     }
-    switch (type.kind) {
-      case "named":
-        if (type.id === from && guarded.has(from)) return;
-        visit(type.id);
-        return;
-      case "record":
-        type.fields.forEach((f) => reaches(f.type, from, depth + 1));
-        return;
-      case "array":
-      case "option":
-      case "ref":
-        reaches(type.element, from, depth + 1);
-        return;
-      case "retry-schedule":
-        reaches(type.error, from, depth + 1);
-        return;
-      case "codec":
-        reaches(type.decoded, from, depth + 1);
-        reaches(type.encoded, from, depth + 1);
-        return;
-      case "schema":
-        reaches(type.decoded, from, depth + 1);
-        reaches(type.encoded, from, depth + 1);
-        if (type.makeInput !== undefined) {
-          reaches(type.makeInput, from, depth + 1);
-        }
-        return;
-      case "fiber":
-        reaches(type.result, from, depth + 1);
-        return;
-      case "effect":
-        reaches(type.result, from, depth + 1);
-        return;
-      case "stream":
-        reaches(type.element, from, depth + 1);
-        return;
-      case "schedule":
-        reaches(type.output, from, depth + 1);
-        reaches(type.input, from, depth + 1);
-        return;
-      case "sink":
-        reaches(type.input, from, depth + 1);
-        reaches(type.result, from, depth + 1);
-        if (type.leftover !== undefined) {
-          reaches(type.leftover, from, depth + 1);
-        }
-        return;
-      case "tuple":
-        type.elements.forEach((e) => reaches(e, from, depth + 1));
-        return;
-      case "union":
-        type.members.forEach((m) => reaches(m, from, depth + 1));
-        return;
-      case "function":
-        type.parameters.forEach((p) => reaches(p, from, depth + 1));
-        reaches(type.result, from, depth + 1);
-        return;
-      case "primitive":
-      case "literal":
-      case "closeable-scope":
-      case "provider":
-        return;
-      default: {
-        const unreachable: never = type;
-        return unreachable;
-      }
+    if (type.kind === "named") {
+      if (type.id === from && guarded.has(from)) return;
+      visit(type.id);
+      return;
     }
+    for (const c of typeChildren(type)) reaches(c.type, from, depth + 1);
   };
   const visit = (id: string): void => {
     const mark = state.get(id);
