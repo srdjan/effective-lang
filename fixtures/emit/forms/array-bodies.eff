@@ -1,0 +1,14 @@
+// Array and tuple literal bodies of arrows that are too wide for one line. The
+// literal stays on the line of the arrow, as `deno fmt` keeps it.
+
+type Text = string
+
+export type Wide = { firstVeryLongFieldName: Text, secondVeryLongFieldName: Text, thirdVeryLongFieldName: Text }
+
+export const records = (a: Text): Wide[] => [{ firstVeryLongFieldName: a, secondVeryLongFieldName: a, thirdVeryLongFieldName: a }]
+
+export const nested = (a: Text): Text[][] => [["aVeryLongStringLiteralNumberOneForTheTest", "aVeryLongStringLiteralNumberTwoForTheTest"]]
+
+export const pair = (a: Text): [Text, Text] => ["aVeryLongStringLiteralNumberOneForTheTest", "aVeryLongStringLiteralNumberTwoForTheTest"]
+
+export const narrow = (aVeryLongParameterNameNumberOne: Text, aVeryLongParameter: Text): Text[] => [aVeryLongParameter, aVeryLongParameter]

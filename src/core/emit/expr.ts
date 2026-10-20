@@ -118,6 +118,8 @@ export interface Emitted {
   readonly prec: number;
   /** The text starts with `{`, so a statement or an arrow body needs parentheses. */
   readonly brace: boolean;
+  /** An array or tuple literal: an arrow body stays on the line of the arrow. */
+  readonly bracket?: true;
   /** A function or object literal that a call can print after the other arguments. */
   readonly huggable: boolean;
   /** Present when the expression is an arrow function. */
@@ -141,6 +143,7 @@ function emitted(
   prec: number = PREC.member,
   flags: {
     readonly brace?: boolean;
+    readonly bracket?: true;
     readonly huggable?: boolean;
     readonly chain?: Chain;
     readonly run?: Run;
@@ -157,6 +160,7 @@ function emitted(
   };
   return {
     ...base,
+    ...(flags.bracket === undefined ? {} : { bracket: flags.bracket }),
     ...(flags.chain === undefined ? {} : { chain: flags.chain }),
     ...(flags.run === undefined ? {} : { run: flags.run }),
     ...(flags.flush === undefined ? {} : { flush: flags.flush }),
@@ -606,6 +610,8 @@ export class ExprEmitter {
     }
     // An object literal body stays on the line of the arrow: `=> ({`.
     if (body.brace) return [parameters, " => (", body.doc, ")"];
+    // So does an array or tuple literal body: `=> [`.
+    if (body.bracket) return [parameters, " => ", body.doc];
     return [
       parameters,
       " =>",
@@ -772,7 +778,7 @@ export class ExprEmitter {
         return emitted(
           bracketed("[", "]", e.elements.map((x) => flush(kid(x))), false),
           PREC.member,
-          { huggable: true },
+          { huggable: true, bracket: true },
         );
       case "get":
         return this.getField(e, kid);

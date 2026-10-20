@@ -1054,3 +1054,14 @@ export const make = (a: Text): { firstVeryLongFieldName: Text, secondVeryLongFie
     "  readonly secondVeryLongFieldName: Text;\n  readonly thirdVeryLongFieldName: Text;\n}",
   );
 });
+
+Deno.test("an array literal body that breaks over lines stays on the line of the arrow", () => {
+  const output = oneModule(`
+type Text = string
+export const pair = (a: Text): [Text, Text] => ["aVeryLongStringLiteralNumberOneForTheTest", "aVeryLongStringLiteralNumberTwoForTheTest"]
+`);
+  assertStringIncludes(
+    output,
+    'export const pair = (a: Text): readonly [Text, Text] => [\n  "aVeryLongStringLiteralNumberOneForTheTest",\n  "aVeryLongStringLiteralNumberTwoForTheTest",\n];',
+  );
+});
