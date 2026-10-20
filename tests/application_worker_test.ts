@@ -40,8 +40,9 @@ Deno.test("scheduled worker composes retry, repetition and resource lifetimes in
 });
 
 Deno.test("scheduled worker contracts reject lost channels and preserve the general Schedule boundary", () => {
-  const cases: readonly (readonly [string, readonly Expected[]])[] = [
+  const cases: readonly (readonly [string, string, readonly Expected[]])[] = [
     [
+      "lost JobFailure",
       files["worker.eff"].replace(
         "fails SchemaError | InvalidPolicy | JobFailure",
         "fails SchemaError | InvalidPolicy",
@@ -52,6 +53,7 @@ Deno.test("scheduled worker contracts reject lost channels and preserve the gene
       ]],
     ],
     [
+      "lost Clock.wait",
       files["worker.eff"].replace(
         "uses Jobs.open | Jobs.execute | Jobs.close | Clock.wait => {",
         "uses Jobs.open | Jobs.execute | Jobs.close => {",
@@ -62,6 +64,7 @@ Deno.test("scheduled worker contracts reject lost channels and preserve the gene
       ]],
     ],
     [
+      "wrong result type",
       files["worker.eff"].replace(
         "(input: unknown): Report",
         "(input: unknown): Int",
@@ -73,12 +76,12 @@ Deno.test("scheduled worker contracts reject lost channels and preserve the gene
       ]],
     ],
   ];
-  for (const [source, expected] of cases) {
+  for (const [label, source, expected] of cases) {
     assertDiagnostics(
       source,
       checked(source).diagnostics,
       expected,
-      source.slice(0, 40),
+      label,
     );
   }
   const probe = checked(
