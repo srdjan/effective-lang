@@ -3,7 +3,6 @@
 // in memory.
 
 import { assert, assertEquals } from "@std/assert";
-import { typeAt } from "../src/core/check_project.ts";
 import { Program, type Revision } from "../src/core/db.ts";
 import { definitionAt, documentSymbols, hoverAt } from "../src/core/editor.ts";
 import type { Span } from "../src/core/source.ts";
@@ -57,6 +56,12 @@ Deno.test("hover on a function name prints parameter types, failures, and requir
     "rename(id: UserId, name: Name): User fails StoreUnavailable | UserMissing uses Users.find | Users.save",
   );
   assertEquals(hover.span, spanOf(USERS, "rename"));
+  const getUser = hoverAt(examples, USERS, offsetOf(USERS_TEXT, "getUser", 1));
+  assert(getUser !== undefined);
+  assertEquals(
+    getUser.contract,
+    "getUser(id: UserId): User fails StoreUnavailable | UserMissing uses Users.find",
+  );
   const pure = hoverAt(
     examples,
     "collections.eff",
@@ -76,7 +81,7 @@ Deno.test("hover on a constant name prints name: type", () => {
   assertEquals(hover.backend, { tag: "type", text: "Int" });
 });
 
-Deno.test("hover on an expression prints what typeAt prints, and has no backend", () => {
+Deno.test("hover on an expression prints its type and sets, and has no backend", () => {
   const call = offsetOf(USERS_TEXT, "getUser(id)\n  const renamed");
   const callee = hoverAt(examples, USERS, call + 2);
   assert(callee !== undefined);
@@ -84,7 +89,6 @@ Deno.test("hover on an expression prints what typeAt prints, and has no backend"
     callee.contract,
     "(UserId) => User fails StoreUnavailable | UserMissing uses Users.find",
   );
-  assertEquals(callee.contract, typeAt(examples.checked, USERS, call + 2));
   assertEquals(callee.backend, undefined);
   assertEquals(callee.span, { source: USERS, start: call, end: call + 7 });
   const argument = hoverAt(examples, USERS, call + 9);
@@ -103,10 +107,8 @@ Deno.test("hover prints unknown (error) where the checker prints <error>", () =>
   assertEquals(hover.contract, "unknown (error)");
   assertEquals(hover.backend, undefined);
   // The checker text itself has the marker, so the replacement is what matters.
-  assertEquals(
-    typeAt(revision.checked, "m.eff", offsetOf(text, "nope", 1)),
-    "<error>",
-  );
+  const table = revision.checked.table;
+  assertEquals(table.show(table.error), "<error>");
 });
 
 Deno.test("the cursor just after a name selects that name", () => {

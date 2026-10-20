@@ -18,7 +18,7 @@ Part A2 adds the declaration index, the project loader, the module graph, and th
 
 Part A3a adds the declaration level of the checker. It adds the type intern table, the compatibility rules, function and provider signatures, and module interfaces with hashes. It adds the codes `type-mismatch/001`, `type-mismatch/002`, and `declaration/005` to `declaration/013`. Decision D21 added `declaration/012` on 2026-10-17. Decision D26 added `declaration/013` on 2026-10-17.
 
-Part A3b adds body checking. It checks every function and constant body, infers effects and execution modes, and checks contracts, patterns, `try` and `catch`, `retry`, and `provide`. It builds the module initialization graph and the `typeAt` query. It adds the codes `type-mismatch/003` to `type-mismatch/011`, `failure-contract/001` to `/003`, `requirement-contract/001`, `execution-mode/001` to `/004`, `pattern/001` to `/004`, and `module/004`.
+Part A3b adds body checking. It checks every function and constant body, infers effects and execution modes, and checks contracts, patterns, `try` and `catch`, `retry`, and `provide`. It builds the module initialization graph and the hover query. It adds the codes `type-mismatch/003` to `type-mismatch/011`, `failure-contract/001` to `/003`, `requirement-contract/001`, `execution-mode/001` to `/004`, `pattern/001` to `/004`, and `module/004`.
 
 Collection literals use brackets: `[1, 2]` infers an array, while an expected tuple type checks each position. `[]` needs an expected array or tuple type. An uncontextualized heterogeneous list gives `type-mismatch/012`.
 
@@ -159,7 +159,7 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
   types.ts       Interned types, compatibility, IR conversion, canonical JSON.
   check.ts       Declaration checker: type lowering, signatures, providers.
   check_expr.ts  Body checker: expressions, calls, patterns, contracts.
-  check_project.ts Project driver: bodies, modes, interfaces, and typeAt.
+  check_project.ts Project driver: bodies, modes, interfaces, and effectText.
   tables.ts      Side tables of a body: node info and lowering facts.
   patterns.ts    Pattern domains of match subjects.
   modes.ts       Strongly connected components and the mode fixed point.
@@ -303,7 +303,7 @@ A field read and a record update see through a brand of a record type, and an up
 
 A module constant needs a pure initializer with empty sets. The `initialization` value lists the constants in a safe order. It also lists the dependencies of each constant and every dependency cycle.
 
-`typeAt(check, path, offset)` returns text for the innermost checked node at an offset. A function name gives its signature, for example `getUser(id): User fails StoreUnavailable | UserMissing uses Users.find`. Any other node gives its type and its sets. Sets print in sorted identity order.
+`hoverAt(revision, path, offset)` returns text for the innermost checked node at an offset. A function name gives its signature, for example `getUser(id: UserId): User fails StoreUnavailable | UserMissing uses Users.find`. Any other node gives its type and its sets. Sets print in sorted identity order.
 
 A declaration with a syntax error is checked, but its body diagnostics are not published. The parser has reported the syntax error already. This rule prevents cascades from a half-parsed body.
 

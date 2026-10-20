@@ -1,13 +1,14 @@
 // Tests for part A3b: expression checking, effects, modes, contracts, patterns,
-// the initialization graph, and typeAt. Each test runs through the public entry
+// the initialization graph, and the hover text of a checked node. Each test runs through the public entry
 // `checkProject`.
 
 import { assert, assertEquals } from "@std/assert";
 import {
   type CheckedProject,
   checkProject,
-  typeAt,
 } from "../src/core/check_project.ts";
+import { Program } from "../src/core/db.ts";
+import { hoverAt } from "../src/core/editor.ts";
 import {
   buildInterface,
   buildTypeGraph,
@@ -38,6 +39,15 @@ function checkFiles(
 /** Checks one module `m.eff` with an empty project file. */
 function checkText(text: string): CheckedProject {
   return checkFiles({ "effective.json": "{}", "m.eff": text }, ["m.eff"]);
+}
+
+/** The hover contract of `m.eff` at an offset, through the public editor query. */
+function hoverContract(text: string, offset: number): string | undefined {
+  const result = new Program("").update({
+    set: { "effective.json": "{}", "m.eff": text },
+  });
+  assert(result.ok, JSON.stringify(result));
+  return hoverAt(result.value, "m.eff", offset)?.contract;
 }
 
 function examples(): CheckedProject {
@@ -2094,40 +2104,6 @@ Deno.test("field reads and block bindings are recorded", () => {
   assertEquals(bindings.length, 2);
 });
 
-// ------------------------------------------------------------------ typeAt
-
-Deno.test("typeAt on a function name prints its signature", () => {
-  const project = examples();
-  const text = project.modules.get("users")!.tree.text;
-  const at = text.indexOf("rename") + 2;
-  assertEquals(
-    typeAt(project, "users.eff", at),
-    "rename(id, name): User fails StoreUnavailable | UserMissing uses Users.find | Users.save",
-  );
-  const getUser = text.indexOf("getUser") + 1;
-  assertEquals(
-    typeAt(project, "users.eff", getUser),
-    "getUser(id): User fails StoreUnavailable | UserMissing uses Users.find",
-  );
-});
-
-Deno.test("typeAt on an expression prints the type and the sets of the innermost node", () => {
-  const project = examples();
-  const text = project.modules.get("users")!.tree.text;
-  // The `user` in `const user = getUser(id)` of rename.
-  const call = text.indexOf("getUser(id)\n  const renamed");
-  assertEquals(
-    typeAt(project, "users.eff", call + 9),
-    "UserId",
-  );
-  assertEquals(
-    typeAt(project, "users.eff", call + 2),
-    "(UserId) => User fails StoreUnavailable | UserMissing uses Users.find",
-  );
-  assertEquals(typeAt(project, "users.eff", 0), undefined);
-  assertEquals(typeAt(project, "nowhere.eff", 0), undefined);
-});
-
 // ------------------------------------------------------------------ contracts
 
 const USERS_BROKEN = `${exampleFiles()["users.eff"]}
@@ -2510,7 +2486,7 @@ type Bool = boolean
 });
 
 Deno.test("two values of one numeric brand compare, add, and subtract", () => {
-  const project = checkText(`
+  const source = `
 type Count = Brand<int>
 type Price = Brand<number>
 const sum = (a: Count, b: Count): Count => a + b
@@ -2525,15 +2501,14 @@ type Int = int
 type Num = number
 type Text = string
 type Bool = boolean
-`);
-  assertEquals(messages(project), []);
-  const text = project.modules.get("m")!.tree.text;
-  const plus = text.indexOf("a + b") + 2;
-  assertEquals(typeAt(project, "m.eff", plus), "Count");
-  const minus = text.indexOf("a - b") + 2;
-  assertEquals(typeAt(project, "m.eff", minus), "Count");
-  const priceMinus = text.indexOf("a - b", minus + 1) + 2;
-  assertEquals(typeAt(project, "m.eff", priceMinus), "Price");
+`;
+  assertEquals(messages(checkText(source)), []);
+  const plus = source.indexOf("a + b") + 2;
+  assertEquals(hoverContract(source, plus), "Count");
+  const minus = source.indexOf("a - b") + 2;
+  assertEquals(hoverContract(source, minus), "Count");
+  const priceMinus = source.indexOf("a - b", minus + 1) + 2;
+  assertEquals(hoverContract(source, priceMinus), "Price");
 });
 
 Deno.test("a brand operator rejects multiplication, division, a plain number, another brand, and a string brand", () => {

@@ -514,9 +514,9 @@ export function checkProject(
   return { ok: true, value: checkAnalysis(analysis.value) };
 }
 
-// ------------------------------------------------------------------ typeAt
+// ------------------------------------------------------------------ effect text
 
-/** The ` fails ...` and ` uses ...` text of two sets, as `typeAt` prints it. */
+/** The ` fails ...` and ` uses ...` text of two sets, as the hover contract prints it. */
 export function effectText(
   failures: readonly string[],
   requirements: readonly string[],
@@ -528,65 +528,4 @@ export function effectText(
     ? ""
     : ` uses ${requirements.map(shortName).join(" | ")}`;
   return fails + uses;
-}
-
-/**
- * The innermost checked node at a source offset, as text. A function name gives
- * its signature, as in `getUser(id): User fails UserMissing uses Users.find`.
- * Any other node gives its type and its failure and requirement sets. The sets
- * print in sorted identity order. Returns undefined when no checked node covers
- * the offset.
- */
-export function typeAt(
-  check: CheckedProject,
-  path: string,
-  offset: number,
-): string | undefined {
-  let module: CheckedModule | undefined;
-  for (const candidate of check.modules.values()) {
-    if (candidate.path === path) module = candidate;
-  }
-  if (module === undefined) return undefined;
-  const table = check.table;
-  const inName = (span: { start: number; end: number }): boolean =>
-    offset >= span.start && offset < span.end;
-
-  for (const fn of module.functions.values()) {
-    const signature = fn.signature;
-    if (!inName(signature.nameSpan)) continue;
-    const parameters = signature.parameters.map((p) => p.name).join(", ");
-    return `${signature.name}(${parameters}): ${table.show(fn.result)}${
-      effectText(fn.failures, fn.requirements)
-    }`;
-  }
-  for (const constant of module.constants.values()) {
-    if (inName(constant.signature.nameSpan)) {
-      return `${constant.signature.name}: ${table.show(constant.type)}`;
-    }
-  }
-
-  const tree = module.tree;
-  const hit: { node: NodeId; info: NodeInfo; width: number }[] = [];
-  const consider = (body: BodyTable): void => {
-    for (const [node, info] of body.info) {
-      const start = tree.starts[node];
-      const end = tree.ends[node];
-      if (offset < start || offset >= end) continue;
-      const width = end - start;
-      const best = hit[0];
-      if (
-        best === undefined || width < best.width ||
-        (width === best.width && node < best.node)
-      ) {
-        hit[0] = { node, info, width };
-      }
-    }
-  };
-  for (const fn of module.functions.values()) consider(fn.table);
-  for (const constant of module.constants.values()) consider(constant.table);
-  const found = hit[0];
-  if (found === undefined) return undefined;
-  return `${table.show(found.info.type)}${
-    effectText(found.info.failures, found.info.requirements)
-  }`;
 }
