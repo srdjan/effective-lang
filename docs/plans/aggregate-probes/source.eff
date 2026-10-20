@@ -1,6 +1,0 @@
-type Int = int
-type Pairs = Sink<Int, Int[], never, never, Int>
-
-const pairs: Pairs = takeSink(2)
-export const batches = (source: Stream<Int>): Stream<Int[]> =>
-  aggregateStream(source, pairs)

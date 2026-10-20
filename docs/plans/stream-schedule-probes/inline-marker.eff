@@ -1,8 +1,0 @@
-// Regression: the emitted Some payload retains its checked tuple shape.
-type Int = int
-type Bool = boolean
-type Event = { kind: "Value" | "End", value: Int }
-
-export const source: Stream<Event> =
-  unfold(false, (done): Option<[Event, Bool]> =>
-    if (done) { None } else { Some([{ kind: "End", value: 0 }, true]) })

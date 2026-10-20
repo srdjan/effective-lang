@@ -25,9 +25,9 @@ the separate release acceptance checks.
 
 | Application | Required behavior | Status |
 | --- | --- | --- |
-| Service workflow | Validate input, call services, retry a transient failure, and use a scoped transaction adapter. Check the successful result, rejected input, exhausted retries, rollback after failure or cancellation, and completed release. | Complete: [service workflow witness](2026-10-19-service-workflow-application.md). |
-| Scheduled worker | Run repeated work under a policy, handle selected transient failures, and shut down while work or a delay is pending. Check policy completion, terminal failure, fresh state on another execution, and completed cleanup after cancellation. | Complete: [worker witness](2026-10-19-scheduled-worker-application.md). |
-| Stream processor | Transform and batch a live input under backpressure, with explicit recovery behavior. Check ordered results where promised, partial batches, failure propagation, cancellation of pending work, and completed upstream and consumer cleanup. | Complete: [stream processor witness](2026-10-19-stream-processor-application.md). |
+| Service workflow | Validate input, call services, retry a transient failure, and use a scoped transaction adapter. Check the successful result, rejected input, exhausted retries, rollback after failure or cancellation, and completed release. | Complete: [service workflow witness](../archive/plans/2026-10-19-service-workflow-application.md). |
+| Scheduled worker | Run repeated work under a policy, handle selected transient failures, and shut down while work or a delay is pending. Check policy completion, terminal failure, fresh state on another execution, and completed cleanup after cancellation. | Complete: [worker witness](../archive/plans/2026-10-19-scheduled-worker-application.md). |
+| Stream processor | Transform and batch a live input under backpressure, with explicit recovery behavior. Check ordered results where promised, partial batches, failure propagation, cancellation of pending work, and completed upstream and consumer cleanup. | Complete: [stream processor witness](../archive/plans/2026-10-19-stream-processor-application.md). |
 
 Each witness must pass source checking, independent IR validation, and strict
 checking of emitted TypeScript against the pinned target. Negative source

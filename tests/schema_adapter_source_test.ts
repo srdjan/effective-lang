@@ -1,7 +1,8 @@
 // Checker contracts for the Schema adapters that tests/ did not cover before:
 // schemaOptionalFromRequired, schemaOptionalTransform, schemaDefaultKey
 // failure rules, general schemaUnion, and the authored issue forms. The
-// evidence probes in docs/plans/schema-adapter-probes/ stay as documentation.
+// evidence probes in docs/plans/schema-adapter-probes/ are in git history at
+// commit 27cd655, before their deletion.
 // Each negative case pins the diagnostic code, a message fragment, and the
 // source text of the offending node.
 

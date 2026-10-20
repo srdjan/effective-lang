@@ -1,8 +1,0 @@
-{
-  "host": {
-    "adapter": {
-      "interface": "./host.effi",
-      "module": "./adapter.ts"
-    }
-  }
-}
