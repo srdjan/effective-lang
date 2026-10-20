@@ -2,8 +2,8 @@
 
 import type { Result } from "../core/mod.ts";
 
-export type Command =
-  | { readonly kind: "help" }
+/** A command that works on a project directory. */
+export type ProjectCommand =
   | { readonly kind: "check"; readonly root: string }
   | {
     readonly kind: "build";
@@ -12,6 +12,8 @@ export type Command =
     readonly validate: boolean;
   }
   | { readonly kind: "watch"; readonly root: string; readonly tsc: boolean };
+
+export type Command = { readonly kind: "help" } | ProjectCommand;
 
 export const USAGE = [
   "usage: effective <command> [root] [flags]",

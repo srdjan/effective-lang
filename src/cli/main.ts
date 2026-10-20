@@ -10,7 +10,7 @@
 // error is an unexpected throw. It gets its own code so that it never reads as
 // a diagnostic.
 
-import { type Command, parseArgs, USAGE } from "./args.ts";
+import { parseArgs, type ProjectCommand, USAGE } from "./args.ts";
 import type { BuildOptions, BuildOutcome } from "./build.ts";
 import { denoIo } from "../host/deno_io.ts";
 import type { CliIo } from "../host/io.ts";
@@ -22,14 +22,13 @@ const EXIT_DIAGNOSTICS = 1;
 const EXIT_USAGE = 2;
 const EXIT_INTERNAL = 3;
 
-function optionsOf(command: Command): BuildOptions {
+function optionsOf(command: ProjectCommand): BuildOptions {
   switch (command.kind) {
     case "build":
       return { write: true, validate: command.validate, tsc: command.tsc };
     case "watch":
       return { write: true, validate: false, tsc: command.tsc };
     case "check":
-    case "help":
       return { write: false, validate: false, tsc: false };
   }
 }
@@ -81,6 +80,16 @@ async function watchLoop(
   }
 }
 
+type SyncFailure = Extract<
+  SyncResult,
+  { readonly tag: "read-error" | "config-error" }
+>;
+
+/** True when the project cannot start: a file is unreadable or the project file is bad. */
+function isSyncFailure(synced: SyncResult): synced is SyncFailure {
+  return synced.tag === "read-error" || synced.tag === "config-error";
+}
+
 export async function main(
   args: readonly string[],
   io: CliIo,
@@ -119,7 +128,7 @@ async function execute(
   if (command.kind === "watch") {
     // A project that cannot start is a configuration error. A later break only prints.
     const first = session.sync();
-    if (first.tag === "read-error" || first.tag === "config-error") {
+    if (isSyncFailure(first)) {
       io.stderr(`effective: ${first.message}\n`);
       return EXIT_USAGE;
     }
@@ -128,7 +137,7 @@ async function execute(
   }
 
   const synced = session.sync();
-  if (synced.tag === "read-error" || synced.tag === "config-error") {
+  if (isSyncFailure(synced)) {
     io.stderr(`effective: ${synced.message}\n`);
     return EXIT_USAGE;
   }
