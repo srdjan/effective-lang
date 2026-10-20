@@ -35,6 +35,7 @@ import {
   SyntaxKind,
   type SyntaxTree,
   TYPE_WORDS,
+  type TypeSlotKind,
 } from "./syntax.ts";
 
 export interface ParseResult {
@@ -997,56 +998,17 @@ class Parser {
         );
         const word = TYPE_WORDS.get(name);
         if (word !== undefined && this.kinds[this.pos + 1] === TokenKind.Lt) {
-          const isSchema = word.schema !== undefined;
           this.begin();
           this.tok();
           const group = this.open("free");
-          if (name === "Layer") {
-            this.begin();
-            this.parseNameSet(true);
-            this.end(SyntaxKind.ProvidesClause);
-          } else this.parseType();
-          if (name === "Sink") {
-            if (this.kind() === TokenKind.Comma) this.tok();
-            else this.missing("`,`");
-            this.parseType();
-          } else if (name === "Schedule" && this.kind() === TokenKind.Comma) {
-            this.tok();
-            this.parseType();
-          } else if (isSchema && this.kind() === TokenKind.Comma) {
-            this.tok();
-            this.parseType();
-          }
-          if (isSchema && this.kind() === TokenKind.Comma) {
-            this.tok();
-            this.begin();
-            this.parseNameSet(true);
-            this.end(SyntaxKind.UsesClause);
-            if (this.kind() === TokenKind.Comma) {
-              this.tok();
-              this.begin();
-              this.parseNameSet(true);
-              this.end(SyntaxKind.UsesClause);
-              if (this.kind() === TokenKind.Comma) {
-                this.tok();
-                this.parseType();
-              }
+          for (let index = 0; index < word.slots.length; index++) {
+            const slot = word.slots[index];
+            if (index > 0) {
+              if (this.kind() === TokenKind.Comma) this.tok();
+              else if (slot.required) this.missing("`,`");
+              else break;
             }
-          } else if (!isSchema && this.kind() === TokenKind.Comma) {
-            this.tok();
-            this.begin();
-            this.parseNameSet(false);
-            this.end(SyntaxKind.FailsClause);
-            if (this.kind() === TokenKind.Comma) {
-              this.tok();
-              this.begin();
-              this.parseNameSet(true);
-              this.end(SyntaxKind.UsesClause);
-              if (name === "Sink" && this.kind() === TokenKind.Comma) {
-                this.tok();
-                this.parseType();
-              }
-            }
+            this.parseSlot(slot.kind);
           }
           this.close(group, TokenKind.Gt, "`>`");
           this.end(word.kind);
@@ -1109,6 +1071,33 @@ class Parser {
       default:
         this.missing("a type");
     }
+  }
+
+  private parseSlot(kind: TypeSlotKind): void {
+    switch (kind) {
+      case "type":
+        this.parseType();
+        return;
+      case "provides":
+        this.parseNameSetClause(SyntaxKind.ProvidesClause, true);
+        return;
+      case "fails":
+        this.parseNameSetClause(SyntaxKind.FailsClause, false);
+        return;
+      case "uses":
+        this.parseNameSetClause(SyntaxKind.UsesClause, true);
+        return;
+      default: {
+        const unreachable: never = kind;
+        return unreachable;
+      }
+    }
+  }
+
+  private parseNameSetClause(clause: SyntaxKind, qualified: boolean): void {
+    this.begin();
+    this.parseNameSet(qualified);
+    this.end(clause);
   }
 
   private parseRecordType(): void {

@@ -95,11 +95,47 @@ interface SchemaFlags {
   readonly constructorDefault: boolean;
 }
 
-/** A type word that takes `<...>` arguments: its node kind and, for Schema words, its flags. */
+/**
+ * What one argument position of a type word holds: a type, a `provides` name
+ * set, a `fails` name set, or a `uses` name set.
+ */
+export type TypeSlotKind = "type" | "provides" | "fails" | "uses";
+
+/** One argument position of a type word. A required slot reports a missing comma before it. */
+interface TypeSlot {
+  readonly kind: TypeSlotKind;
+  readonly required: boolean;
+}
+
+const slot = (kind: TypeSlotKind, required = false): TypeSlot => ({
+  kind,
+  required,
+});
+
+/**
+ * A type word that takes `<...>` arguments: its node kind, its argument slots in
+ * order, and, for Schema words, its flags. The parser reads slots from the first
+ * and stops at the first slot without a comma before it, unless the slot is required.
+ */
 interface TypeWord {
   readonly kind: SyntaxKind;
+  readonly slots: readonly TypeSlot[];
   readonly schema?: SchemaFlags;
 }
+
+const EFFECT_SLOTS: readonly TypeSlot[] = [
+  slot("type"),
+  slot("fails"),
+  slot("uses"),
+];
+
+const SCHEMA_SLOTS: readonly TypeSlot[] = [
+  slot("type"),
+  slot("type"),
+  slot("uses"),
+  slot("uses"),
+  slot("type"),
+];
 
 function schemaWord(
   optionalKey: boolean,
@@ -109,6 +145,7 @@ function schemaWord(
 ): TypeWord {
   return {
     kind: SyntaxKind.SchemaType,
+    slots: SCHEMA_SLOTS,
     schema: {
       optionalKey,
       encodedOptionalKey,
@@ -120,11 +157,35 @@ function schemaWord(
 
 /** Every type word that the parser reads as `Word<...>`. */
 export const TYPE_WORDS: ReadonlyMap<string, TypeWord> = new Map([
-  ["Effect", { kind: SyntaxKind.EffectType }],
-  ["Stream", { kind: SyntaxKind.StreamType }],
-  ["Sink", { kind: SyntaxKind.SinkType }],
-  ["Schedule", { kind: SyntaxKind.ScheduleType }],
-  ["Layer", { kind: SyntaxKind.LayerType }],
+  ["Effect", { kind: SyntaxKind.EffectType, slots: EFFECT_SLOTS }],
+  ["Stream", { kind: SyntaxKind.StreamType, slots: EFFECT_SLOTS }],
+  [
+    "Sink",
+    {
+      kind: SyntaxKind.SinkType,
+      slots: [
+        slot("type"),
+        slot("type", true),
+        slot("fails"),
+        slot("uses"),
+        slot("type"),
+      ],
+    },
+  ],
+  [
+    "Schedule",
+    {
+      kind: SyntaxKind.ScheduleType,
+      slots: [slot("type"), slot("type"), slot("fails"), slot("uses")],
+    },
+  ],
+  [
+    "Layer",
+    {
+      kind: SyntaxKind.LayerType,
+      slots: [slot("provides"), slot("fails"), slot("uses")],
+    },
+  ],
   ["Schema", schemaWord(false, false, false, false)],
   ["SchemaOptional", schemaWord(true, false, false, false)],
   ["SchemaEncodedOptional", schemaWord(false, true, false, false)],
