@@ -1706,18 +1706,25 @@ export class BodyChecker {
       return this.finish(node, issue, combine(infos));
     }
     if (op === "identity" || op === "recursive") {
-      const hint = expected === undefined ? undefined : asSchema({
+      const hintKind = expected === undefined
+        ? undefined
+        : this.table.node(this.table.unfold(expected)).kind;
+      const hintable = hintKind === "schema" || hintKind === "error";
+      const hint = expected === undefined || !hintable ? undefined : asSchema({
         type: expected,
         failures: [],
         requirements: [],
         mode: "pure",
       }, node);
       if (hint === undefined) {
-        this.report(
-          "type-mismatch/010",
-          `\`${name}\` needs an expected Schema type`,
-          node,
-        );
+        // `asSchema` has already reported a rejected flag or a poisoned hint.
+        if (!hintable) {
+          this.report(
+            "type-mismatch/010",
+            `\`${name}\` needs an expected Schema type`,
+            node,
+          );
+        }
         return this.finish(
           node,
           this.table.error,

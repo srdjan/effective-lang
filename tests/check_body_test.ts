@@ -5596,9 +5596,18 @@ const ISSUE_AND_HINT_CASES: readonly SchemaCase[] = [
     name: "schema with a non-Schema expected type",
     tail: "const bad: Int = schema()",
     expected: [
-      "type-mismatch/010 | `schema` needs a Schema value | schema()",
       "type-mismatch/010 | `schema` needs an expected Schema type | schema()",
     ],
+  },
+  {
+    name: "schema with an unknown expected type",
+    tail: "const bad: Missing = schema()",
+    expected: ["unknown-name/001 | unknown type `Missing` | Missing"],
+  },
+  {
+    name: "schema with a Schema of an unknown type",
+    tail: "const bad: Schema<Missing> = schema()",
+    expected: ["unknown-name/001 | unknown type `Missing` | Missing"],
   },
   {
     name: "schema with a service identity",
@@ -5619,7 +5628,6 @@ const ISSUE_AND_HINT_CASES: readonly SchemaCase[] = [
     tail: "const bad: SchemaOptional<Text> = schema()",
     expected: [
       "type-mismatch/010 | `schema` needs a Schema value | schema()",
-      "type-mismatch/010 | `schema` needs an expected Schema type | schema()",
     ],
   },
   {
@@ -5633,9 +5641,13 @@ const ISSUE_AND_HINT_CASES: readonly SchemaCase[] = [
     name: "recursive with a non-Schema expected type",
     tail: "const bad: Int = schemaRecursive((self: Schema<Text>) => text)",
     expected: [
-      "type-mismatch/010 | `schemaRecursive` needs a Schema value | schemaRecursive((self: Schema<Text>) => text)",
       "type-mismatch/010 | `schemaRecursive` needs an expected Schema type | schemaRecursive((self: Schema<Text>) => text)",
     ],
+  },
+  {
+    name: "recursive with an unknown expected type",
+    tail: "const bad: Missing = schemaRecursive((self: Schema<Text>) => text)",
+    expected: ["unknown-name/001 | unknown type `Missing` | Missing"],
   },
   {
     name: "recursive callback is not guarded",
