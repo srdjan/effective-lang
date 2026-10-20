@@ -232,6 +232,159 @@ function describeChar(text: string, index: number): string {
   return `'${String.fromCodePoint(cp)}'`;
 }
 
+type Report = (
+  code: Parameters<typeof makeDiagnostic>[0],
+  message: string,
+  s: number,
+  e: number,
+) => void;
+
+/** Token kind + 1 of each one-character token, by char code. 0 means none. */
+const SINGLE = new Uint8Array(128);
+for (
+  const [ch, kind] of [
+    ["(", TokenKind.LParen],
+    [")", TokenKind.RParen],
+    ["{", TokenKind.LBrace],
+    ["}", TokenKind.RBrace],
+    ["[", TokenKind.LBracket],
+    ["]", TokenKind.RBracket],
+    [",", TokenKind.Comma],
+    [":", TokenKind.Colon],
+    [";", TokenKind.Semicolon],
+    ["?", TokenKind.Question],
+    ["+", TokenKind.Plus],
+    ["-", TokenKind.Minus],
+    ["*", TokenKind.Star],
+  ] as const
+) SINGLE[ch.charCodeAt(0)] = kind + 1;
+
+/** Scans a number that starts at `i`. Returns its end. */
+function scanNumber(text: string, i: number, report: Report): number {
+  const n = text.length;
+  let j = i + 1;
+  while (j < n && isDigit(text.charCodeAt(j))) j++;
+  const intEnd = j;
+  let malformed: string | undefined;
+  if (text.charCodeAt(i) === 0x30 && intEnd - i > 1) {
+    malformed = "a number cannot have a leading zero";
+  }
+  if (
+    j + 1 < n && text.charCodeAt(j) === 0x2e &&
+    isDigit(text.charCodeAt(j + 1))
+  ) {
+    j++;
+    while (j < n && isDigit(text.charCodeAt(j))) j++;
+  }
+  const ec = j < n ? text.charCodeAt(j) : 0;
+  if (ec === 0x65 || ec === 0x45) {
+    let k = j + 1;
+    if (
+      k < n && (text.charCodeAt(k) === 0x2b || text.charCodeAt(k) === 0x2d)
+    ) k++;
+    if (k < n && isDigit(text.charCodeAt(k))) {
+      while (k < n && isDigit(text.charCodeAt(k))) k++;
+      j = k;
+    } else {
+      malformed = malformed ?? "the exponent has no digits";
+      j = k;
+    }
+  }
+  if (j < n && isIdentPart(text.charCodeAt(j))) {
+    malformed = malformed ?? "a number cannot be followed by letters";
+    while (j < n && isIdentPart(text.charCodeAt(j))) j++;
+  }
+  if (malformed !== undefined) {
+    report("syntax/006", `malformed number: ${malformed}`, i, j);
+  } else if (!Number.isFinite(Number(text.slice(i, j)))) {
+    report("syntax/005", "number literal is not a finite value", i, j);
+  }
+  return j;
+}
+
+/** Scans the escape at `j` (a backslash) inside a string. Returns the next index. */
+function scanEscape(text: string, j: number, report: Report): number {
+  const n = text.length;
+  const e = j + 1 < n ? text.charCodeAt(j + 1) : -1;
+  if (
+    e === 0x22 || e === 0x5c || e === 0x2f || e === 0x62 ||
+    e === 0x66 || e === 0x6e ||
+    e === 0x72 || e === 0x74
+  ) {
+    return j + 2;
+  }
+  if (e === 0x75) {
+    let k = j + 2;
+    let digits = 0;
+    while (digits < 4 && k < n && isHexDigit(text.charCodeAt(k))) {
+      k++;
+      digits++;
+    }
+    if (digits < 4) {
+      report(
+        "syntax/003",
+        "invalid escape sequence: \\u needs four hex digits",
+        j,
+        k,
+      );
+    }
+    return k;
+  }
+  if (e === -1 || e === 0x0a || e === 0x0d) {
+    report(
+      "syntax/003",
+      "invalid escape sequence: backslash at end of line",
+      j,
+      j + 1,
+    );
+    return j + 1;
+  }
+  const width = (text.codePointAt(j + 1) ?? 0) > 0xffff ? 2 : 1;
+  report(
+    "syntax/003",
+    `invalid escape sequence: \\${text.slice(j + 1, j + 1 + width)}`,
+    j,
+    j + 1 + width,
+  );
+  return j + 1 + width;
+}
+
+/** Scans a string that starts at `i`. Returns its end. */
+function scanString(text: string, i: number, report: Report): number {
+  const n = text.length;
+  let j = i + 1;
+  while (j < n) {
+    const d = text.charCodeAt(j);
+    if (d === 0x22) return j + 1;
+    if (d === 0x0a || d === 0x0d) break;
+    if (d < 0x20 || d === 0x7f) {
+      report(
+        "syntax/003",
+        `string literal contains the control character ${
+          describeChar(text, j)
+        }; use an escape sequence`,
+        j,
+        j + 1,
+      );
+      j++;
+    } else if (d === 0x5c) {
+      j = scanEscape(text, j, report);
+    } else {
+      j++;
+    }
+  }
+  report("syntax/002", "string literal has no closing quote", i, j);
+  return j;
+}
+
+/** Scans a block comment that starts at `i`. Returns its end. */
+function scanBlockComment(text: string, i: number, report: Report): number {
+  const close = text.indexOf("*/", i + 2);
+  if (close >= 0) return close + 2;
+  report("syntax/004", "block comment has no closing `*/`", i, text.length);
+  return text.length;
+}
+
 /** Scans the whole text. Never throws. */
 export function lex(source: string, text: string): Lexed {
   const n = text.length;
@@ -244,12 +397,7 @@ export function lex(source: string, text: string): Lexed {
   const triviaEnd: number[] = [];
   const diagnostics: Diagnostic[] = [];
 
-  const report = (
-    code: Parameters<typeof makeDiagnostic>[0],
-    message: string,
-    s: number,
-    e: number,
-  ) => {
+  const report: Report = (code, message, s, e) => {
     diagnostics.push(
       makeDiagnostic(code, message, { source, start: s, end: e }),
     );
@@ -265,6 +413,20 @@ export function lex(source: string, text: string): Lexed {
     triviaStarts.push(s);
     triviaEnds.push(e);
   };
+  /** Pushes `two` when the next char is `second`, else `one`. Returns the next index. */
+  const pair = (
+    i: number,
+    second: number,
+    two: TokenKind,
+    one: TokenKind,
+  ): number => {
+    if (text.charCodeAt(i + 1) === second) {
+      push(two, i, i + 2);
+      return i + 2;
+    }
+    push(one, i, i + 1);
+    return i + 1;
+  };
 
   let i = 0;
   if (n > 0 && text.charCodeAt(0) === 0xfeff) {
@@ -274,6 +436,12 @@ export function lex(source: string, text: string): Lexed {
 
   while (i < n) {
     const c = text.charCodeAt(i);
+    const single = c < 128 ? SINGLE[c] : 0;
+    if (single !== 0) {
+      push(single - 1, i, i + 1);
+      i++;
+      continue;
+    }
 
     // Whitespace
     if (c === 0x20 || c === 0x09) {
@@ -324,125 +492,15 @@ export function lex(source: string, text: string): Lexed {
       continue;
     }
 
-    // Number
     if (isDigit(c)) {
-      let j = i + 1;
-      while (j < n && isDigit(text.charCodeAt(j))) j++;
-      const intEnd = j;
-      let malformed: string | undefined;
-      if (
-        text.charCodeAt(i) === 0x30 && intEnd - i > 1
-      ) {
-        malformed = "a number cannot have a leading zero";
-      }
-      if (
-        j + 1 < n && text.charCodeAt(j) === 0x2e &&
-        isDigit(text.charCodeAt(j + 1))
-      ) {
-        j++;
-        while (j < n && isDigit(text.charCodeAt(j))) j++;
-      }
-      const ec = j < n ? text.charCodeAt(j) : 0;
-      if (ec === 0x65 || ec === 0x45) {
-        let k = j + 1;
-        if (
-          k < n && (text.charCodeAt(k) === 0x2b || text.charCodeAt(k) === 0x2d)
-        ) k++;
-        if (k < n && isDigit(text.charCodeAt(k))) {
-          while (k < n && isDigit(text.charCodeAt(k))) k++;
-          j = k;
-        } else {
-          malformed = malformed ?? "the exponent has no digits";
-          j = k;
-        }
-      }
-      if (j < n && isIdentPart(text.charCodeAt(j))) {
-        malformed = malformed ?? "a number cannot be followed by letters";
-        while (j < n && isIdentPart(text.charCodeAt(j))) j++;
-      }
-      if (malformed !== undefined) {
-        report("syntax/006", `malformed number: ${malformed}`, i, j);
-      } else if (!Number.isFinite(Number(text.slice(i, j)))) {
-        report("syntax/005", "number literal is not a finite value", i, j);
-      }
+      const j = scanNumber(text, i, report);
       push(TokenKind.Number, i, j);
       i = j;
       continue;
     }
 
-    // String
     if (c === 0x22) {
-      let j = i + 1;
-      let terminated = false;
-      while (j < n) {
-        const d = text.charCodeAt(j);
-        if (d === 0x22) {
-          j++;
-          terminated = true;
-          break;
-        }
-        if (d === 0x0a || d === 0x0d) break;
-        if (d < 0x20 || d === 0x7f) {
-          report(
-            "syntax/003",
-            `string literal contains the control character ${
-              describeChar(text, j)
-            }; use an escape sequence`,
-            j,
-            j + 1,
-          );
-          j++;
-          continue;
-        }
-        if (d === 0x5c) {
-          const e = j + 1 < n ? text.charCodeAt(j + 1) : -1;
-          if (
-            e === 0x22 || e === 0x5c || e === 0x2f || e === 0x62 ||
-            e === 0x66 || e === 0x6e ||
-            e === 0x72 || e === 0x74
-          ) {
-            j += 2;
-          } else if (e === 0x75) {
-            let k = j + 2;
-            let digits = 0;
-            while (digits < 4 && k < n && isHexDigit(text.charCodeAt(k))) {
-              k++;
-              digits++;
-            }
-            if (digits < 4) {
-              report(
-                "syntax/003",
-                "invalid escape sequence: \\u needs four hex digits",
-                j,
-                k,
-              );
-            }
-            j = k;
-          } else if (e === -1 || e === 0x0a || e === 0x0d) {
-            report(
-              "syntax/003",
-              "invalid escape sequence: backslash at end of line",
-              j,
-              j + 1,
-            );
-            j += 1;
-          } else {
-            const width = (text.codePointAt(j + 1) ?? 0) > 0xffff ? 2 : 1;
-            report(
-              "syntax/003",
-              `invalid escape sequence: \\${text.slice(j + 1, j + 1 + width)}`,
-              j,
-              j + 1 + width,
-            );
-            j += 1 + width;
-          }
-          continue;
-        }
-        j++;
-      }
-      if (!terminated) {
-        report("syntax/002", "string literal has no closing quote", i, j);
-      }
+      const j = scanString(text, i, report);
       push(TokenKind.String, i, j);
       i = j;
       continue;
@@ -463,23 +521,7 @@ export function lex(source: string, text: string): Lexed {
           pushTrivia(TriviaKind.LineComment, i, j);
           i = j;
         } else if (next === 0x2a) {
-          let j = i + 2;
-          let closed = false;
-          while (j < n) {
-            if (
-              text.charCodeAt(j) === 0x2a && j + 1 < n &&
-              text.charCodeAt(j + 1) === 0x2f
-            ) {
-              j += 2;
-              closed = true;
-              break;
-            }
-            j++;
-          }
-          if (!closed) {
-            report("syntax/004", "block comment has no closing `*/`", i, n);
-            j = n;
-          }
+          const j = scanBlockComment(text, i, report);
           pushTrivia(TriviaKind.BlockComment, i, j);
           i = j;
         } else {
@@ -488,16 +530,10 @@ export function lex(source: string, text: string): Lexed {
         }
         continue;
       case 0x7c: // |
-        if (next === 0x3e) {
-          push(TokenKind.PipeGt, i, i + 2);
-          i += 2;
-        } else if (next === 0x7c) {
+        if (next === 0x7c) {
           push(TokenKind.PipePipe, i, i + 2);
           i += 2;
-        } else {
-          push(TokenKind.Pipe, i, i + 1);
-          i++;
-        }
+        } else i = pair(i, 0x3e, TokenKind.PipeGt, TokenKind.Pipe);
         continue;
       case 0x26: // &
         if (next === 0x26) {
@@ -527,13 +563,7 @@ export function lex(source: string, text: string): Lexed {
           );
           push(TokenKind.Unknown, i, i + 2);
           i += 2;
-        } else if (next === 0x3e) {
-          push(TokenKind.Arrow, i, i + 2);
-          i += 2;
-        } else {
-          push(TokenKind.Eq, i, i + 1);
-          i++;
-        }
+        } else i = pair(i, 0x3e, TokenKind.Arrow, TokenKind.Eq);
         continue;
       case 0x21: // !
         if (next === 0x3d && next2 === 0x3d) {
@@ -554,22 +584,10 @@ export function lex(source: string, text: string): Lexed {
         }
         continue;
       case 0x3c: // <
-        if (next === 0x3d) {
-          push(TokenKind.LtEq, i, i + 2);
-          i += 2;
-        } else {
-          push(TokenKind.Lt, i, i + 1);
-          i++;
-        }
+        i = pair(i, 0x3d, TokenKind.LtEq, TokenKind.Lt);
         continue;
       case 0x3e: // >
-        if (next === 0x3d) {
-          push(TokenKind.GtEq, i, i + 2);
-          i += 2;
-        } else {
-          push(TokenKind.Gt, i, i + 1);
-          i++;
-        }
+        i = pair(i, 0x3d, TokenKind.GtEq, TokenKind.Gt);
         continue;
       case 0x2e: // .
         if (next === 0x2e && next2 === 0x2e) {
@@ -579,58 +597,6 @@ export function lex(source: string, text: string): Lexed {
           push(TokenKind.Dot, i, i + 1);
           i++;
         }
-        continue;
-      case 0x28:
-        push(TokenKind.LParen, i, i + 1);
-        i++;
-        continue;
-      case 0x29:
-        push(TokenKind.RParen, i, i + 1);
-        i++;
-        continue;
-      case 0x7b:
-        push(TokenKind.LBrace, i, i + 1);
-        i++;
-        continue;
-      case 0x7d:
-        push(TokenKind.RBrace, i, i + 1);
-        i++;
-        continue;
-      case 0x5b:
-        push(TokenKind.LBracket, i, i + 1);
-        i++;
-        continue;
-      case 0x5d:
-        push(TokenKind.RBracket, i, i + 1);
-        i++;
-        continue;
-      case 0x2c:
-        push(TokenKind.Comma, i, i + 1);
-        i++;
-        continue;
-      case 0x3a:
-        push(TokenKind.Colon, i, i + 1);
-        i++;
-        continue;
-      case 0x3b:
-        push(TokenKind.Semicolon, i, i + 1);
-        i++;
-        continue;
-      case 0x3f:
-        push(TokenKind.Question, i, i + 1);
-        i++;
-        continue;
-      case 0x2b:
-        push(TokenKind.Plus, i, i + 1);
-        i++;
-        continue;
-      case 0x2d:
-        push(TokenKind.Minus, i, i + 1);
-        i++;
-        continue;
-      case 0x2a:
-        push(TokenKind.Star, i, i + 1);
-        i++;
         continue;
       default: {
         const width = (text.codePointAt(i) ?? 0) > 0xffff ? 2 : 1;
