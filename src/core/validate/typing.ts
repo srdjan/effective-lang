@@ -1,6 +1,6 @@
 // Type compatibility for the validator. The rules come from the spec ("Data
 // and types", "Execution order and mode", "Retry and providers") and from the
-// lift rule in docs/phase-a-rules.md. This file does not use the checker.
+// lift rule in docs/language-rules.md. This file does not use the checker.
 //
 //   - A type alias unfolds structurally. A brand and an error are nominal.
 //   - int fits number. A literal fits its primitive. never fits every type.

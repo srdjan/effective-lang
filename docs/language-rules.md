@@ -1,0 +1,930 @@
+# Language rules
+
+The canonical specification governs the language: `../effective/public/effective-spec.html` in the sibling repository. This file records the implemented subset and the choices that the implementation made where the specification is silent. The spec owner can override each rule. When the specification and this file disagree, the specification wins, and this file needs a correction.
+
+Each row gives one rule and one evidence link. The link goes to the plan or contract that chose the rule. The plan files are history, and their line references point at old revisions. The policy for a silent specification: the implementer picks the stricter rule and records it here.
+
+The sections follow the language topics: core forms, modules and exports, effects and contracts, collections, scopes and resources, streams and sinks, schedules, Schema, diagnostics, and the rules of the lowering, emission, and tooling stages.
+
+
+## Core forms
+
+### Lexer and parser
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Raw control characters in strings | Rejected (`syntax/003`), because JSON rejects them | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Leading zeros in numbers | `01` is rejected (`syntax/006`) | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Union continuation | A newline before `\|` does not continue a type; a newline after `\|` does. Inside parentheses a newline is not significant, so `(int` newline `\| string)` continues | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| `fails` and `uses` on a new line | Continue a clause only when an identifier follows | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| `Some(_)` | Accepted; `_` is the binding name | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Nesting depth | 512 levels of expressions and types; a parenthesis counts two levels. Deeper input is `syntax/009`, and the parser skips only the one group at the limit | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Array and tuple literals | Brackets form a list expression. An expected tuple type checks each position and length; otherwise an expected array checks its elements. Without context, a nonempty homogeneous list infers an array, while `[]` and heterogeneous lists get `type-mismatch/012`. Trailing commas are accepted | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Parenthesized types | `(A \| B)[]` and the empty tuple type are accepted | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+
+### Declarations and types
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| `Brand<T>` position | Only as the whole body of a `type` declaration | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| `unknown` | Not a top type: only `unknown`, `never`, and the error type fit it | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Private parameters | A module function parameter needs an annotation when nothing supplies its type (`declaration/011`) | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Function types in type syntax | Execution defaults to `effect` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Provider compatibility | Equal `provides`, compatible execution, acquisition sets as subsets | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Effect value compatibility | `Effect<A, E, R>` checks `A` covariantly and requires the source's deferred failure and requirement sets to be subsets of the target's sets. Omitted sets and `never` mean empty sets | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Interface hash | Ignores spans, so comments do not change it. A body edit changes it only when it flips the mode of an exported function, because the payload holds each exported function type with its mode | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Interface payload | Also carries the declarations of other modules that the exports reach, so the hash covers them | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Primitive positions | R1, `declaration/013`, decisions D26 to D31: a type node that resolves to `string`, `int`, `number`, or `boolean`, and every literal type node, can occur only inside the body of a `type` or `error` declaration. The rule covers parameters, results, service methods, constant annotations, local annotations, function types, and type arguments, in `.eff` and `.effi` files. `void`, `never`, `unknown`, and other type forms are legal. The pass skips parser error regions, because the parser reported them, and it checks a broken declaration, because its annotations parsed | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Type depth | A type declaration deeper than 128 levels, counting aliases, is `declaration/012`, and the alias becomes the error type. The comparison caps are 1536 | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+
+### Expressions, modes, and contracts
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Contract diagnostics | One diagnostic for each contract kind of a function: `failure-contract/001` lists every extra error, and `requirement-contract/001` lists every extra capability | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Literal widening | Unannotated bindings, branch joins, inferred results, and the `fold` accumulator widen literals to primitives | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Branch joins | Without an expected type, one branch type must accept the other; no union is formed | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Contextual record unions | Known literal field values select among shape-compatible record members before the checker applies contextual field types. Ambiguous candidates keep their existing order | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Tagged record coverage | A record match needs a wildcard when a member lacks the chosen field or has an optional or open discriminator. A tagged binding retains every member whose field can equal the literal at runtime, including optional fields, erased brand bases and unknown values. Generated tests guard property access when another member lacks the field | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Local recursion | A block-level function cannot call itself (`execution-mode/003`) | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Mode fixed point | Round cap 32 (`execution-mode/004`) | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Equality | Compares string, numeric, boolean, or one primitive brand; records and options are rejected | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Record brand | A field read and a record update see through a brand whose base is a record, after aliases. The update keeps the brand type. A record literal does not fit a record brand; the program calls the brand. A brand whose base is a union has no fields. A match with a record pattern on a record brand, and a record brand as a `withResource` operation record, stay unsupported | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Brand operators | D32: `<`, `<=`, `>`, `>=`, `+`, and `-` accept two values of one numeric brand. `+` and `-` give the brand. The emitter prints `<Brand>.make(...)`, with `$int` inside for a brand of `int`. The spec gives `+` and `-` numeric operands only and names brands only for equality, so this row extends the spec | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| `retry` form | The second argument must be the literal record `{ times: N }` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| `traverse` | `traverse(items, callback)` invokes the callback sequentially. An optional literal `{ concurrency: N }` with positive safe integer N runs at most N callbacks simultaneously, preserves input order, interrupts active siblings after a typed failure, and waits for scoped finalizers. Callback invocation failures and requirements remain active. `map`, `filter`, and `fold` keep their pure-callback rule | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| `defer` and `run` | `defer(job)` stores the invocation of a zero-argument function without running it. Constructing the value carries only effects of evaluating the job expression. Each `run(value)` executes the stored Effect and activates its deferred failures and requirements, even when both sets are empty | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| `withResource` | Three inline callbacks acquire, use, and release a scoped operation record or opaque host handle. Acquisition takes no arguments. Use returns data only and release returns `void`. A record may only receive direct operation calls. An opaque handle may pass directly to a borrow-qualified host method or source helper. Borrowed source parameters cannot escape their function bodies. Callback invocation channels combine and the backend uses `Effect.acquireUseRelease` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Scoped fibers | `withFiber(effect, use)` starts a supervised child. The inline use callback may pass its borrowed handle only to `joinFiber` or `interruptFiber`. Child requirements activate on start; typed failures enter the caller when joined. The child is interrupted when use exits | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| References and races | `Ref<A>` is invariant; `updateRef` requires a pure callback. `race` combines deferred channels of two compatible Effect values and waits for loser cleanup | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Buffered streams | `bufferStream` requires a positive safe integer capacity and suspending backpressure. `mergeStreams` combines deferred channels and preserves each producer's own order | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Retry schedules | `RetrySchedule<E>` uses a pure callback from nominal error and one-based attempt to `Option<int>` milliseconds. `retry(job, { schedule: policy })` preserves job channels; negative delays are runtime defects | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Pure codecs | `Codec<Decoded,Encoded>` holds two pure transformations over schema-capable data. `decode` and `encode` return `Option` after validating input and output with derived schemas | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Source Layers | `layer(Service, acquire)` checks exact method shape and acquisition channels. `mergeLayers` requires disjoint services; `provide` accepts source Layer expressions | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Streams and sinks | `Stream<A,E,R>` and `Sink<I,O,E,R>` carry deferred channels. Direct calls to `unfold`, `mapEffect`, and `sinkForEach` use inline arrows; the consumer arrow needs an annotated input. `unfold` callback returns `Option<[Element, State]>`, `mapEffect` combines deferred channels, and `runStream` activates stream and sink channels. Default sequential pull demand has no prefetch; each sink completion permits the next pull. Draft 0.28 adds literal bounded or unbounded concurrency options to `mapEffect` and `flatMapStreams`; these may pull ahead within the runtime buffer policy | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Broken declarations | Checked for side tables; their body diagnostics are suppressed until the syntax is fixed | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Effect type order | Sorted identity order everywhere, including `typeAt` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+
+## Modules and exports
+
+### Projects and names
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Namespace | One namespace per module for types, errors, services, providers, constants, and imports | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Prelude names | Neither modules nor locals may declare them, except `run`: an existing binding with that name shadows the Effect execution builtin. Modules also may not declare builtin type names. `Effect<...>` is parsed as a type application without reserving `Effect` as a value name | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Target names | Neither modules nor locals may declare `undefined`, `Number`, `RangeError`, `ReadonlyArray`, `any`, `bigint`, `object`, or `symbol` (`declaration/002`), because the generated TypeScript needs them. Fields and service methods may use them. Decision 1 of 2026-10-17 | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Shared scopes | A block after a parameter list, pattern, or handler shares its scope, so a redeclaration is `declaration/001` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Early outer use | A block that uses an outer name and later binds the same name is `declaration/004` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Own initializer | `const x = x` is `unknown-name/001` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Module paths | Only letters, digits, `_`, `.`, `-`, and `/` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+
+## Effects and contracts
+
+### Collections and traversal
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Collection literals | Brackets write a list. `[1, 2]` infers an array. An expected tuple type checks each position and the length. `[]` needs an expected array or tuple type. A heterogeneous list without context gives `type-mismatch/012` | [2026-10-17-spec-amendment-collections.md](archive/plans/2026-10-17-spec-amendment-collections.md) |
+| `traverse` | `traverse(items, callback)` maps an array with an effectful callback. It runs the callbacks one after another and returns the results in input order. Callback failures and service requirements enter the enclosing contract | [2026-10-17-bounded-traversal-design.md](archive/plans/2026-10-17-bounded-traversal-design.md) |
+| `traverse` concurrency | A literal `{ concurrency: N }` runs at most N callbacks at the same time. N is a positive safe integer. `{ concurrency: "unbounded" }` starts the callbacks without a limit. Both forms keep input order and wait for scoped finalizers after a failure or an interruption | [2026-10-17-bounded-traversal-design.md](archive/plans/2026-10-17-bounded-traversal-design.md) |
+| Pure callbacks | `map`, `filter`, and `fold` require pure callbacks | [2026-10-17-bounded-traversal-design.md](archive/plans/2026-10-17-bounded-traversal-design.md) |
+
+### Effect values
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| `Effect<A, E, R>` | An Effect value stores a computation. `A` is the result type, `E` the typed failures, and `R` the service method requirements. An empty channel may be omitted or written as `never` | [2026-10-17-effect-value-design.md](archive/plans/2026-10-17-effect-value-design.md) |
+| `defer` | `defer(() => job())` builds an Effect value without running the job | [2026-10-17-effect-value-design.md](archive/plans/2026-10-17-effect-value-design.md) |
+| `run` | `run(value)` executes an Effect value. It adds the failures and requirements of the value to the caller's contract. A source binding named `run` shadows the prelude operation | [2026-10-17-effect-value-design.md](archive/plans/2026-10-17-effect-value-design.md) |
+| `all` | `all(effects, options?)` runs a tuple, a record, or an array of Effect values. The result keeps the shape of the input. The failures and requirements of the Effect values join the contract. The optional literal concurrency record accepts a positive safe integer or `"unbounded"`. A heterogeneous bracket literal needs a contextual tuple type, such as a typed binding | [2026-10-17-effect-value-design.md](archive/plans/2026-10-17-effect-value-design.md) |
+| `partitionAll` | `partitionAll(jobs, options?)` runs a homogeneous array of Effect values. It returns `[successes, failures]` and keeps input order inside each array. Typed failures become values, so these jobs add no failure channel to the enclosing contract. Service requirements still enter the contract. It takes the same concurrency options as `all` | [2026-10-17-effect-value-design.md](archive/plans/2026-10-17-effect-value-design.md) |
+| `validateAll` | `validateAll(jobs, onErrors, options?)` runs every job. It returns all successes when no job fails. Otherwise a pure callback wraps the collected typed errors in a nominal error for the enclosing `fails` contract. The callback receives a nonempty array at runtime. Its type is an ordinary array in core 1. It takes the same concurrency options as `all` | [2026-10-17-effect-value-design.md](archive/plans/2026-10-17-effect-value-design.md) |
+| `allResults` | `allResults(effects, options?)` runs every Effect value in a tuple, a record, or a homogeneous array and keeps the input shape. Each position is a tagged record. A success is `{ _tag: "Success", success }`. A failure is `{ _tag: "Failure", failure }`. Typed job failures become values. The combined service requirements still enter the contract. It takes the same concurrency options as `all` | [2026-10-17-effect-value-design.md](archive/plans/2026-10-17-effect-value-design.md) |
+| Core 1 value forms | Core 1 also has `Ref<A>` state, `race` of Effect values, supervised `withFiber` with direct `joinFiber` and `interruptFiber`, pure `Codec<Decoded,Encoded>` transformations, four-channel `Schema` values, `RetrySchedule<E>`, general `Schedule<O,I,E,R>` policies, and source-defined `Layer<Services,E,R>` values. General Effect operators, general stream operators, and ecosystem packages still need host adapters | [2026-10-17-effect-value-design.md](archive/plans/2026-10-17-effect-value-design.md) |
+
+## Collections
+
+The rules for collection literals and `traverse` are in the section on effects and contracts, under "Collections and traversal". The rows for `map`, `filter`, and `fold` are under "Expressions, modes, and contracts".
+
+## Scopes and resources
+
+### Scoped child fibers
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| forkScoped | `forkScoped(job)` starts an Effect value in the current scope and discards its Fiber handle. It returns `void` in source. The runtime registers child interruption with that scope. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| forkScoped job channels | The job of `forkScoped` must have no typed failures. The checker rejects a job with typed failures. The language has no join handle and no child-result channel. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| scoped | `scoped(job)` provides a local scope. The runtime closes that scope after the job completes. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Child lifetime | A child that `forkScoped` starts can outlive its spawning fiber. It lives until its scope closes. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Reserved Scope requirement | A job can have the reserved requirement `cap:effect/Scope`. The program must provide it through `scoped` or `provideScope`. `CloseableScope` is a different type from this requirement. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+
+### CloseableScope value
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| CloseableScope type | `CloseableScope` takes no type arguments. It is an abstract runtime handle with shared close authority. It exposes no fields or methods. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Builtin signatures | These are builtin contracts, not user-defined generic functions: `makeScope(): CloseableScope`, `provideScope(owner: CloseableScope, job: Effect<A,E,R>): A`, `addScopeFinalizer(owner: CloseableScope, job: Effect<void,never,R>): void`, `closeScope(owner: CloseableScope): void`. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Effect mode and shadowing | All four builtins force effect mode. Builtin names follow the existing shadowing rules. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Value transfer | A program may assign, return, pass, or capture a `CloseableScope`. It may also store it in arrays, tuples, records, Options, Effects, and Refs. These operations share one identity. They do not clone the scope or reset its state. Earlier aliases stay usable. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| No equality or Schema | `CloseableScope` supports no equality and no ordering. It has no derived Schema and is not data only, also when nested in another type. A type alias can name it without a Schema. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Codec and callback-result checks | The checker rejects `CloseableScope` in Codec schema checks and in the data-only callback-result checks for resources and Fibers. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Not supported | The language has no getter for the current lexical scope. It has no cast from an ordinary or borrowed handle to `CloseableScope`. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Host signatures | `CloseableScope` can appear in `.effi` signatures with the same shared-authority meaning. Strict host assertions distinguish the wrapper from a raw target `Scope.Closeable`. The host implementation is a trusted boundary. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+
+### Creation and provision
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| makeScope | `makeScope()` creates an independent sequential scope with a fresh shared close state. It needs no ambient Scope and joins none. It has no failures and no requirements. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Explicit cleanup | The runtime does not close a scope when its creating fiber ends, fails, or is interrupted. Dropping every alias does not run finalizers. The caller must close the scope explicitly. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Returned live scope | The owner can survive its creating root execution. A later root execution can close it through an alias. Cleanup completes before `closeScope` returns. | [owner.eff](../fixtures/emit/scopes/owner.eff) |
+| provideScope | `provideScope(owner, job)` runs the job with only the selected scope capability. It returns the job success type `A`. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| provideScope does not close | `provideScope` does not close the owner when the job returns. It does not interrupt ordinary work when the owner closes. Only a child that `forkScoped` starts gets interrupted. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Provision after close | After close, `provideScope` still runs ordinary work. A newly scoped child cannot stay live in the closed scope. The handle does not prove open or closed state. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Provider lifetime | A scope does not extend the lifetime of a service provider. A child that must outlive the creating root must acquire its resource-backed Layer inside the child Effect. The provider then lives until close interrupts the child. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+
+### Finalizer registration
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| addScopeFinalizer job type | The job of `addScopeFinalizer` must have result `void` and no typed failures. It must not require the reserved Scope capability. The caller handles a typed failure before registration. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Service capture | `addScopeFinalizer` evaluates owner and job once, from left to right. It captures the current service bindings at registration. Ordinary service requirements are allowed. Close needs no service requirement from earlier jobs. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Captured services | The captured context keeps service references. It does not own their provider resources. Registration does not extend the lifetime of a scoped Layer. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Registration on open scope | Registration on an open scope does not run the finalizer. The runtime stores it. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Late registration | If the scope is already closed, registration runs the finalizer at once and waits for its cleanup. Earlier or concurrent closes are not barriers for it. Its defect does not change the cached close outcome. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Finalizer order | Finalizers registered before close begins run in reverse order of registration. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+
+### Close completion and interruption
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| closeScope result | `closeScope(owner)` returns `void`. The first slice closes with `Exit.void`. It accepts no supplied Exit, no success value, and no exit-aware finalizer callback. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| One physical close | The first caller claims close atomically and runs the finalizers once. Every later or concurrent call waits for the same completion. A successful `closeScope` always waits for the original close to finish. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Cached outcome | The runtime caches the close outcome as `Exit<void,never>`. Every later `closeScope` on any alias observes that outcome. Close consumes no alias. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Uninterruptible close | Closing and waiting are uninterruptible. Interrupting the first caller or an alias cannot leave the shared completion pending. The runtime reports caller interruption after the uninterruptible region. It does not replace the cached outcome. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Defects | `closeScope` has no typed failure channel. The runtime attempts all earlier finalizers in sequence. A defect stays a defect, and the cached outcome replays it to later callers. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Pending close | A finalizer that never finishes keeps close pending. There is no cleanup timeout. A finalizer that waits for `closeScope` on its own owner also stays pending. The language has no static cycle detection. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| Not supported | The slice does not support arbitrary Exits, exit-aware finalizer callbacks, parallel finalizer strategies, scope trees, mandatory cleanup, or static leak prevention. It is not full raw Scope parity. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+
+### Scope channel equations
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| makeScope channels | `makeScope()` has result `CloseableScope`, no failures, and no requirements. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| provideScope channels | Active failures are the argument failures plus the latent job failures. Active requirements are the argument requirements plus the latent job requirements minus `cap:effect/Scope`. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| provideScope removal | `provideScope` removes the reserved capability only from the execution of the job. It does not remove requirements from evaluating the owner or job expressions. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| addScopeFinalizer channels | The result is `void`. Active failures are the argument failures. Active requirements are the argument requirements plus the latent job requirements. Active argument construction may still fail. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| closeScope channels | The result is `void`. Active failures and requirements are those of the owner expression. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+
+### Borrowed resources and Fibers
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Borrow rules unchanged | Borrow qualifiers still apply to opaque resource parameters. `CloseableScope` is not a borrowed opaque resource type. Its parameter contract permits retention. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+| No borrowed escape through a scope | A registered finalizer cannot capture a `withResource` handle or a borrowed Fiber. A program cannot store them through the owner or return them in an aggregate with it. A new host method cannot receive them through a forbidden path. | [2026-10-18-scope-ownership-contract.md](archive/plans/2026-10-18-scope-ownership-contract.md) |
+
+### withResource
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Signature | `withResource(acquire, use, release)` composes a scoped resource through three inline callbacks. Acquisition takes no arguments. Use and release each take the acquired handle. | [2026-10-17-scoped-resource-design.md](archive/plans/2026-10-17-scoped-resource-design.md) |
+| Handle kinds | Acquisition returns an operation record or an opaque host handle. An operation record has only required function fields. Each field has data-only parameters and a data-only result. | [2026-10-17-scoped-resource-design.md](archive/plans/2026-10-17-scoped-resource-design.md) |
+| Operation record use | The program may use an operation record only as the direct receiver of a field call, such as `file.read()`. It cannot read a field as a value. | [2026-10-17-scoped-resource-design.md](archive/plans/2026-10-17-scoped-resource-design.md) |
+| Opaque handle use | An opaque handle may pass directly to a borrow-qualified host method or to a checked source helper. | [2026-10-17-scoped-resource-design.md](archive/plans/2026-10-17-scoped-resource-design.md) |
+| Handle escape | The checker rejects a handle that is returned, assigned, put in a record or array, captured by another closure, or passed as an argument outside the permitted forms. | [2026-10-17-scoped-resource-design.md](archive/plans/2026-10-17-scoped-resource-design.md) |
+| Data-only results | The use result and every operation result must be data only. Data only means no function, Effect, provider, `unknown`, or nested operation record, also inside records, arrays, tuples, options, unions, errors, and brands. The release result must be `void`. | [2026-10-17-scoped-resource-design.md](archive/plans/2026-10-17-scoped-resource-design.md) |
+| Release timing | The generated Effect runs release after success, typed failure, defect, or interruption. | [2026-10-17-scoped-resource-design.md](archive/plans/2026-10-17-scoped-resource-design.md) |
+| withResource channels | The result forces effect mode. Failures and requirements are the union of the acquire, use, and release invocation failures and requirements. A release failure keeps its own typed channel. | [2026-10-17-scoped-resource-design.md](archive/plans/2026-10-17-scoped-resource-design.md) |
+
+## Streams and sinks
+
+### Stream construction and demand
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Stream type | `Stream<A, E, R>` holds a deferred producer. Omitted `E` and `R` default to `never`. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| Deferred production | Construction of a Stream does not run production. Production starts at consumption. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| unfold | `unfold(seed, callback)` creates a pull stream. The inline callback returns an Option of a pair of element and next state. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| mapEffect without options | A pure callback without options compiles to the pure `Stream.map`. The result element type may differ from the source element type. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| mapEffect concurrency | `mapEffect(stream, callback, options?)` accepts `{ concurrency: N }` or `{ concurrency: "unbounded" }`. Any `concurrency` option keeps `Stream.mapEffect`. Output order stays the input order. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| bufferStream | `bufferStream(stream, { capacity: N })` adds suspending backpressure. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| mergeStreams | `mergeStreams(left, right)` combines two producers. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+
+### Per-element operators
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| takeStream | `takeStream(stream, count)` keeps up to the first `count` elements. The `Int` count must be pure and may be dynamic. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| takeStream empty and channels | A zero or negative count gives an empty stream without a source pull. The stream keeps its deferred failures and requirements. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| dropStream | `dropStream(stream, count)` consumes and discards the first `count` elements, then emits the rest. The `Int` count must be pure and may be dynamic. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| dropStream edge cases | A zero or negative count leaves the stream unchanged. Failures in discarded elements still propagate. Deferred channels stay in the stream type. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| Effectful predicates | `filterEffectStream`, `takeWhileEffectStream`, `takeUntilEffectStream`, and `dropWhileEffectStream` take an inline boolean predicate. The predicate may be pure, may fail, or may call services. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| filterEffectStream | `filterEffectStream` tests every element and emits accepted elements in source order. The runtime still pulls rejected elements, so upstream failures propagate. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| takeWhileEffectStream | `takeWhileEffectStream` keeps the longest accepted prefix. It consumes but omits the first rejected element, then stops pulling. The runtime closes upstream work when the prefix ends. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| takeUntilEffectStream | `takeUntilEffectStream` emits through the first accepted element, including that element, then stops pulling. With no match it emits the whole stream. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| dropWhileEffectStream | `dropWhileEffectStream` discards the initial accepted elements. It then emits the first rejected element and every later element without testing the predicate again. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| Pure predicate lowering | A pure predicate with empty failure and requirement sets compiles to `Stream.filter`, `Stream.takeWhile`, `Stream.takeUntil`, or `Stream.dropWhile`. The stream type stays unchanged, so a stream alias survives. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| Effectful predicate channels | Otherwise the stream type combines source and predicate channels. The operation tests elements sequentially at consumption. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| scanStream | `scanStream(stream, seed, update)` emits the pure seed before it pulls. It then emits each state from an inline pure `(state, element)` callback. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| scanStream state and channels | Each consumption starts with fresh state. Source failures and requirements stay deferred in the stream type. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| mapAccumStream | `mapAccumStream(stream, seed, update)` threads a pure state through the source. The inline pure callback declares a `[State, Output[]]` result and emits zero or more outputs per input. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| mapAccumStream seed and state | The runtime does not emit the seed. Each consumption starts with fresh state and keeps the source's deferred channels. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+
+### Combining streams
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| zipStreams | `zipStreams(left, right)` pairs two streams in source order. The element types may differ. The result ends with the shorter input. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| zipStreams channels and shadowing | `zipStreams` combines the deferred failure and service channels of both streams. A source binding named `zipStreams` shadows the prelude operation. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| concatStreams | `concatStreams(left, right)` emits the whole left stream before it starts the right stream. The result element type is the union of both element types. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| concatStreams failure | `concatStreams` combines deferred channels. If the left stream fails, the runtime skips the right stream. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| flatMapStreams callback | `flatMapStreams(source, callback, options?)` takes an inline pure callback. The callback returns a Stream for each source element. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| flatMapStreams order and concurrency | Without options, the runtime exhausts each inner stream in source order. `{ concurrency: N }` or `{ concurrency: "unbounded" }` runs inner streams together. It merges their outputs as they arrive. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| flatMapStreams channels and cleanup | The result combines the outer and inner deferred channels. Failure and interruption close active inner streams. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| switchMapStreams | `switchMapStreams(source, callback)` takes an inline pure callback that returns an inner Stream for each source element. A new source element interrupts the previous inner stream and starts the latest one. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| switchMapStreams output and channels | Values already emitted remain. Source and inner failures and requirements stay deferred until consumption. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+
+### Error handling and retry
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| catchStream | `catchStream(source, recover)` takes an inline pure callback. The callback maps a typed source error to a replacement Stream. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| catchStream semantics | Earlier source values remain. The operation handles the source typed failures. The replacement's failures and requirements stay deferred. Defects and interruption pass through. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| retryStream | `retryStream(source, policy)` retries a Stream under a compatible `RetrySchedule<E>`. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| retryStream restart | After a typed failure, the runtime restarts the entire source. Values emitted before the failure can appear again. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| retryStream channels and reset | The failure and service channels stay deferred. The schedule resets after the first element of a new attempt. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+
+### Time operators
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| debounceStream | `debounceStream(source, delayMs)` keeps the latest element after a quiet interval. The setting is a literal millisecond value. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| throttleStream | `throttleStream(source, { units, durationMs, strategy })` applies a per-element token bucket. The settings are literal. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| throttleStream strategy | Strategy `"shape"` waits for capacity. Strategy `"enforce"` drops excess elements. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| Time operator channels | `debounceStream` and `throttleStream` keep the source channels deferred. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| aggregateWithinStream | `aggregateWithinStream(source, sink, schedule)` uses a Schedule to flush a partial Sink result or to stop upstream. The schedule must accept `Option<SinkOutput>`. Its failures and services stay deferred. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateWithinStream lowering | `aggregateWithinStream` emits the target `Stream.aggregateWithin` operation with the schedule's channels. A fixed-duration shortcut is not part of the rule. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateWithinStream schedule stepping | The runtime steps the schedule at most once per aggregation, after its first element. The input is the previous aggregation result. A leftover-only Sink completion may skip a step. The schedule clock excludes time between aggregations. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateWithinStream schedule effects | `Schedule.spaced` flushes a pending partial `take(2)` Sink after its delay. `Schedule.recurs(0)` emits the current partial value and stops upstream after one element. `Schedule.fixed` and `Schedule.upTo` do not serve as idle flush timers. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+
+### Terminal consumers
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| foldStream | `foldStream(stream, seed, update)` consumes a stream into one final state. The update callback is inline and pure. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| foldStream seed and channels | The runtime evaluates the pure seed when the effect runs. An empty stream returns the seed. Source failures and requirements enter the active effect contract. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| foldEffectStream | `foldEffectStream(stream, seed, update)` returns one final state. The inline update callback may fail or use services. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| foldEffectStream failure | Source and callback failures and requirements combine in the active effect contract. A callback failure stops later pulls and closes started upstream work. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| collectStream | `collectStream(stream)` consumes a finite stream into an array in source order. An empty source returns `[]`. The result is a new array on each execution. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| collectStream channels | Source failures and requirements move into the active effect contract. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| headStream | `headStream(stream)` consumes only the first element and returns `Option<A>`. An empty source returns `None`. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| headStream cleanup | The runtime closes started upstream work after the first element. Each execution starts a fresh consumption. Source failures and requirements become active. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| lastStream | `lastStream(stream)` consumes the stream to completion and returns its final element as `Option<A>`. An empty source returns `None`. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| lastStream failure | A source failure propagates without a partial result. Source failures and requirements become active. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| drainStream | `drainStream(stream)` runs a stream to completion and discards its values. It returns `void`. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| drainStream effects | `drainStream` still executes source effects, propagates failures, and closes started upstream work. Source failures and requirements become active. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| sinkForEach and runStream | `sinkForEach(callback)` consumes values. `runStream(stream, sink)` executes the pipeline. | [2026-10-17-stream-design.md](archive/plans/2026-10-17-stream-design.md) |
+| runStream signature | `runStream(source: Stream<A,E1,R1>, sink: Sink<I,O,E2,R2,L>): O`. The checker requires `A` assignable to `I`. It imposes no leftover and input compatibility constraint. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| runStream execution | `runStream` performs one sink run, discards leftover values, and closes the producer without running its remaining continuation. It exposes no resumable stream or continuation handle. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| runStream call-only | `runStream` is call-only and has no pipeline stage. A source binding can shadow it. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| runStream channels | `runStream` activates both deferred channel sets together with the construction effects. It always runs in effect mode. Leftovers add a value type, not a failure or requirement. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+
+### Sinks and leftovers
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Sink type | `Sink<Input, Output, Errors = never, Requirements = never, Leftover = never>`. The leftover type is the fifth argument. All existing argument positions and defaults keep their meaning. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| Sink annotation | `Sink<Int, Int[]>` means no leftovers and cannot annotate a constructor that produces leftovers. To write a fifth argument, write both channel placeholders explicitly. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| Sink aliases | Sink aliases are runtime-only and have no derived Schema. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| Sink variance | Sink compatibility is contravariant in input. It is covariant in output, failures, requirements, and leftovers. A no-leftover sink fits a type that permits leftovers. The reverse is invalid. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| Sink target mapping | Source `Sink<I,O,E,R,L>` maps to target `Sink.Sink<O,I,L,E,R>`. Host assertions must preserve all five positions. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| Sink value restrictions | Sink values keep the existing value transport and borrow restrictions. Returning or storing a Sink does not authorize capture of a borrowed resource or Fiber. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| takeSink signature | `takeSink(count): Sink<I, I[], never, never, I>`. It is a builtin rule, not a user-defined generic function. It collects `count` elements per run. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| takeSink count | `count` must be a positive safe integer literal. The checker rejects zero, negative, fractional, dynamic, and non-finite counts. The source adds no runtime count error. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| takeSink input type | The input type `I` comes from an expected Sink type: a binding annotation, a function result, or a parameter position. An inline `transduceStream`, `aggregateStream`, or `aggregateWithinStream` call also supplies its source element type as an input hint. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| takeSink without context | An uncontextualized `const pairs = takeSink(2)` needs a type annotation. The source has no explicit generic call syntax. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| takeSink independent sink | The input hint does not force an independently typed sink to have exactly that input or an array output. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| takeSink call syntax | `takeSink` uses ordinary call syntax. A source binding can shadow it. It has no pipeline stage. It is pure with empty active channels. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| takeSink run state | `takeSink` allocates a fresh array for each sink invocation. Runs do not share a partially filled array. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| Leftover replay | A sink can read a chunk beyond its stopping point. The leftovers it returns become the first input to the next sink invocation, before a new upstream pull. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| Sink construction | Construction evaluates the source and sink expressions once, left to right. It does not pull the source, run a sink transform, or acquire required services. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| Zero-progress host sinks | A typed host sink can finish without consuming input or can return all input as leftovers. Types do not guarantee progress or termination. The compiler adds no progress check, typed error, or output dropping. The host sink and its caller bound the consumption. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+
+### Synchronous transduction
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| transduceStream signature | `transduceStream(source: Stream<A,E1,R1>, sink: Sink<I,O,E2,R2,L>): Stream<O,E1\|E2,R1\|R2>`. The output `O` can differ from both input types. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| transduceStream typing | The checker requires `A` assignable to `I`. It also requires `L` assignable to `I`, because each leftover is an input to another sink run. `L` need not be assignable to `A`. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| transduceStream syntax | `transduceStream` uses ordinary call syntax. A source binding can shadow it. It has no pipeline stage. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| transduceStream demand | Each terminal consumption creates fresh upstream state. Each requested output invokes the reusable sink transform anew. The same sink value works across separate consumptions. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| transduceStream concurrency | Synchronous transduction adds no producer fiber, queue, or read-ahead task. It imposes no new chunking on the source. Upstream operations can still buffer or run concurrently. It adds no memory bound. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| transduceStream completion with takeSink(2) | Source `[1,2,3,4,5]` gives `[[1,2],[3,4],[5]]`. Source `[1,2,3,4]` gives `[[1,2],[3,4],[]]`. Source `[]` gives `[[]]`. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| transduceStream final empty result | Exact-sized input can need a fresh sink run to find upstream completion. That run emits an empty result. The consumer does not filter it. An arbitrary sink decides its own completion result. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| transduceStream channels | `transduceStream` keeps construction effects active. The resulting Stream stores the source and sink failure and requirement unions as deferred. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| transduceStream services | Service requirements stay deferred until consumption. They use the bindings of that execution. The runtime does not capture them when it constructs the Sink or Stream. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| transduceStream failure | Results already emitted stay observable before a later typed failure. After a typed source failure, the sink finishes, and the runtime then exposes the pending failure on the next demand. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| transduceStream failure example | With `takeSink(2)`, a source that yields `1,2,3` and then fails emits `[1,2]`, then `[3]`, then the source failure. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| transduceStream sink failure and defects | A sink failure emits no invented result for its incomplete run. A defect emits no incomplete batch. Defects and interruption stay distinct from typed failures. Interruption does not force a final partial batch. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| transduceStream sink finish failure | A sink can fail while it finishes. The runtime keeps the target behavior and does not combine every cause. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| transduceStream resource scope | The runtime passes its enclosing consumption scope into each sink transform. Finalizers registered there stay until the whole consumption ends. A sink that needs release before its own result must bracket that resource inside its transform. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| transduceStream resource limits | Repeated scope registrations can retain resources through a long-lived stream. The source type does not promise bounded retention. Downstream failure and interruption wait for yielding sink finalizers and for cleanup of an active upstream pull. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+
+### Aggregation
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| aggregateStream signature | `aggregateStream(source: Stream<A,E1,R1>, sink: Sink<I,O,E2,R2,L>): Stream<O, E1 \| E2, R1 \| R2>`. It is a call-only prelude builtin. A source binding can shadow it. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream typing | The checker requires both `A` and `L` assignable to `I`. The result element type is the Sink output type. The checker reports incompatible inputs and leftovers with the `type-mismatch/010` family. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream operands | `aggregateStream` needs exactly two arguments: a Stream, then a Sink. It has no capacity parameter and no pipeline spelling. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream channels | Failures and requirements are the union of the source and Sink channels. They stay deferred, without eager provider capture. Construction stays deferred. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream lowering | The emitter lowers to typed `Stream.aggregate(source, sink)` and does not cast away Sink channels. It does not change `runStream` or the default `Sink<I,O>` meaning. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream construction | Construction evaluates the two source expressions once, left to right. No source pull or Sink transform runs at construction. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream fresh state | Each terminal consumption allocates fresh producer, queue, Sink-run, and scope state. The same Stream can run again under different providers. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream demand | The target hands non-empty upstream chunks through a capacity-zero queue. When the Sink asks for a chunk, a latch permits one producer pull and one queue offer. The runtime replays Sink leftovers before another upstream pull. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream read-ahead | With `takeSink(1)`, a consumer blocked on its first result leaves one source pull. A positive-capacity buffered transduction pulls more. The rule does not limit the work of an arbitrary upstream operator. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream completion with takeSink(2) | For one `Stream.fromArray` chunk: `[1,2,3,4,5]` gives `[[1,2],[3,4],[5]]`. `[1,2,3,4]` gives `[[1,2],[3,4]]`. `[]` gives `[]`. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream chunk boundaries | The `Schedule.forever` handoff of the target can flush a partial sink between chunks. Rechunking the input can change aggregation boundaries. Repeated consumption still starts fresh state. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream end of input | After upstream completion with no leftovers, aggregation suppresses a new Sink run. After a source failure, it still emits a partial Sink result where the Sink can finish. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream failure example | A source that yields `[1,2,3]` and then fails with `source-stop` gives `[1,2]`, then `[3]`, then the failure. The failure does not become a successful stream end. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream sink failure and services | A Sink failure emits no invented batch for its incomplete run. The runtime looks up Sink services on each consumption. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream zero-progress sinks | An arbitrary host Sink can complete without consuming input. The target then emits that result repeatedly: `aggregate(Stream.never, Sink.succeed(7))` gives `[7,7,7]` under `take(3)`. The compiler adds no progress check and drops no output. Callers bound their own consumption. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream producer lifetime | The producer fiber belongs to the terminal consumption scope. A Sink failure closes a scoped source resource, including yielding cleanup, before the terminal failure returns. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream interruption and early stop | Interruption during a pending upstream pull runs and awaits the release of that pull. With `takeSink(1)`, taking the first result stops before the next source pull. The runtime does not create a partial result on interruption. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream causes | Typed failure, defects, and interruption stay separate causes. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| aggregateStream memory | The operation gives no general bounded-memory guarantee for arbitrary upstream chunks or Sinks. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+| Aggregation versus transduction | `aggregateStream` uses a separate producer and Sink handoff, so partial flushes can change chunk boundaries. `transduceStream` is synchronous and has no producer fiber. Both replay leftovers and keep deferred channels. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+
+### Keyed groups
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| mapGroups signature | `mapGroups(source: Stream<A,E1,R1>, key: (A) => K, use: (K, Stream<A>) => B fails E2 uses R2, { bufferSize: N }): Stream<B, E1\|E2, R1\|(R2 minus Scope)>`. It is a builtin, not a user-defined generic function. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups callbacks | `key` and `use` must be inline callbacks. Their parameter types come from the source and classifier. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups classifier | The classifier is pure. It adds no typed failure or requirement. The `use` callback may fail, require services, and perform effects. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups result type | The `use` result must satisfy the recursive data-only predicate. Records, arrays, tuples, Options, unions, brands, and error records with data-only contents are allowed. Streams, Effects, Refs, Fibers, scopes, functions, and opaque handles are rejected. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups options | The final argument is a required literal record that contains only `bufferSize`. `N` must be a positive safe integer literal. The checker rejects dynamic, zero, negative, fractional, and non-finite capacities. There is no default capacity. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups call syntax | `mapGroups` uses ordinary call syntax. A source binding can shadow the prelude name. It has no pipeline stage. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups routing | One producer routes the source to live keyed groups. It runs one `use` callback per key concurrently and emits each result when ready. The runtime never restarts the producer per key. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| Key classes | Allowed keys are `string`, `boolean`, and `int`, their aliases, homogeneous literal unions, and one primitive brand with such a base. Numeric literals must be safe integers. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| Key union checking | The checker flattens unions and aliases first. Every member must have the same primitive class or the same brand identity. It rejects `never`, mixed classes, unions of different brands, and unions of a brand with its unbranded base. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| Rejected key types | The checker rejects general `number`, records, tuples, arrays, Options, opaque values, and user-defined equality or hash. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| Key equality | Keys use primitive value equality. String comparison is exact and case sensitive. `0` and `-0` share a group. Brands keep nominal checking and use their primitive at runtime. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| Group count | Each execution runs one callback per distinct key. Empty input starts none. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| Group ordering | Classification observes source element order. Each group receives its values in that order. Callback start, effect interleaving, and result order have no ordering guarantee. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| Result merging | The runtime merges results as they are ready. An earlier live group cannot hold back a later completed group. There is no cross-group fairness guarantee. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| Borrowed group binding | The second `use` parameter is a special borrowed local of type `Stream<A>`. Its deferred failure and requirement channels are empty. Source and producer failures stay on the outer stream. An ordinary Stream annotation does not remove its restrictions. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| Group reference count | The callback may contain zero or one syntactic reference to the group binding. Two references in mutually exclusive branches are rejected. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| Group terminal use | A reference must be the direct first operand of one terminal builtin: `collectStream`, `runStream`, `foldStream`, `foldEffectStream`, `headStream`, `lastStream`, or `drainStream`. The checker resolves the actual builtin. A shadowing function with the same spelling does not qualify. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| Group escape | The checker rejects aliases, assignments, aggregates, Refs, returned group values, host arguments, ordinary helper calls, stream transformations, and captures in nested closures, deferred effects, or fibers. A sink or fold callback can process values under the existing capture rules. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| Group non-escape enforcement | The checker and the validator both enforce the reference rule and the data-only result rule. Ordinary captures of borrowed resources and Fibers keep their current restrictions. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| Group pull scope | Before it calls `use`, the runtime acquires a group pull in a fresh callback-owned Scope. Acquiring the pull installs queue shutdown, even if the callback never references the group. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| Group scope close | The scope closes when the callback succeeds, fails, or is interrupted, including after an early terminal result. A successful result becomes available only after its callback cleanup. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| Closed group keys | A finished callback closes its key for the execution. The runtime discards later values for that key. The key does not reopen or start another callback. Closing an unused or partly consumed group lets later keys proceed. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups construction | Construction evaluates the source and options once, in source order. It does no pulls, classification, callback work, or service acquisition. Each terminal execution creates fresh routing, queues, callbacks, and scopes. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups concurrency and capacity | Group callbacks run with unbounded concurrency. `bufferSize` bounds the stored elements of each live key queue. It does not bound the number of groups. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups backpressure | If a live callback pauses and its queue fills, the next producer offer waits. This delays other keys behind that offer. Completion or shutdown of that group releases the offer. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups memory limits | There is no total memory bound. There is no maximum key count, idle timeout, eviction, reopening policy, or bound on active resources. The merged result queue has capacity one. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups completion | Normal source completion ends live group inputs and waits for all callbacks. A callback that stays live can keep the result stream live. The API does not infer termination from a finite capacity. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups failure | A source or callback failure fails the outer stream and interrupts peers and the producer. It does not wait for a callback to finish normally. Downstream early stop, downstream failure, and external interruption also close the routing lifetime. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups cleanup and causes | Terminal completion waits for yielding callback and source finalizers. Uninterruptible user work can delay cleanup. Delivered results stay observable. The runtime creates no results for interrupted callbacks. Defects and interruption stay distinct from typed failures. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups channels | Active construction channels come from the evaluated arguments and stay active. Only deferred source and `use` channels enter the Stream. The error channel is `E1 \| E2`. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups Scope requirement | The requirements are `R1 \| (R2 minus Scope)`. The owned callback scope supplies the callback-local Scope. The checker does not discharge a Scope requirement of the source or of active construction. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups services | Other callback services stay deferred and resolve under the bindings of each terminal execution. A derived Stream reused under different providers invokes the matching services each time. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups lowering | The emitter lowers to `Stream.groupByKey` with `{ bufferSize: N }`, then `Stream.flatMap` with concurrency `"unbounded"` and bufferSize 1. Each group runs in `Effect.scoped`. The lowering through `Stream.mapEffect` is rejected. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups IR | The `map-groups` IR node holds the source, inline key and use closures, the positive capacity, and the borrowed group `LocalId`. The group identifier must be the second `use` parameter and unique in the closure's bindings. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups validation | The independent validator rederives parameter, key class, data-only, reference, capture, capacity, execution mode, and channel checks. It does not trust checker side tables or a forged group identifier. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+| mapGroups out of scope | The slice has no general ownership type, keyed eviction, effectful classifier, total memory bound, custom equality, unrestricted `Stream<[K, Stream<A>]>`, or bounded callback count. | [2026-10-18-keyed-group-contract.md](archive/plans/2026-10-18-keyed-group-contract.md) |
+
+### Sink and aggregation IR
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Sink IR leftover field | The IR Sink type has an optional `leftover: Type` field. Absence means `never`. Default no-leftover payloads omit it. The IR wire version stays 2. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| Sink IR normalization | Interning, compatibility, independent validation, and emission treat an absent leftover field the same as `never`. Input, output, and leftover types all take part in graph walks, depth checks, serialization, and printing. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| take-sink and transduce-stream nodes | The `take-sink` node carries the checked positive literal count. The `transduce-stream` node has explicit stream and sink operands. Closed annotations give the constructor input type. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| Sink validator | The independent validator checks count, result and leftover shape, input and replay compatibility, execution mode, and channel equations. It rejects omitted or forged leftover annotations on a producing constructor. `sink-for-each` keeps leftover `never`. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| Sink emission | The emitter uses `Sink.take<I>(count)` and explicit `Stream.transduce` type arguments that keep the sink's wider input `I`. Construction keeps argument order. `runStream` accepts any leftover channel and does not erase its operand's target type. | [2026-10-18-sink-leftover-contract.md](archive/plans/2026-10-18-sink-leftover-contract.md) |
+| aggregate-stream IR | The `aggregate-stream` IR node stores both operands and its output and channel result. The independent validator rederives compatibility and effects. | [2026-10-18-async-aggregation-contract.md](archive/plans/2026-10-18-async-aggregation-contract.md) |
+
+## Schedules
+
+### Schedule value and typing
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Schedule type | `Schedule<O, I = unknown, E = never, R = never>` is a deferred, reusable policy with output, input, typed failure, and service channels. The omitted `I`, `E`, and `R` default to `unknown`, `never`, and `never`. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| Schedule variance | `O`, `E`, and `R` are covariant. `I` is contravariant. The output channel includes the value that normal completion carries. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| Schedule and RetrySchedule | `RetrySchedule<E>` stays the small pure retry policy. The compiler does not convert it to or from a general Schedule. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| Schedule input of unknown | A Schedule input of `unknown` accepts any supplied input. This exception applies only to the contravariant Schedule input slot. Ordinary source `unknown` assignment does not change. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| Schedule construction | Construction does not run a state factory, a service, or a step. The runtime allocates a fresh Schedule execution for each consumption. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| Schedule state | Schedule state is private to one execution. Two consumers of one Schedule value do not share a counter. A policy reused under another provider resolves its services during that consumption. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+
+### Schedule constructors
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| scheduleFromStep signature | `scheduleFromStep(initial, decide)` is the general constructor. `initial` is an inline nullary callback that creates state `S` for each execution. `decide` is an inline callback from `(S, ScheduleInput<I>)` to `ScheduleDecision<S,O>`. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| ScheduleDecision shape | The decision is a structural tagged value: `{ kind: "Continue", state: S, output: O, delayMillis: number }` or `{ kind: "Done", output: O }`. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| ScheduleInput shape | `ScheduleInput<I>` is `{ input: I, attempt: int, start: number, now: number, elapsed: number, elapsedSincePrevious: number }`. In `scheduleFromStep`, `attempt` starts at one for each execution. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| Continue and Done steps | A `Continue` step updates private state, emits `output`, and waits `delayMillis` before the next recurrence. A `Done` step ends normally with `output`. It emits no recurrence and does not wait. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| scheduleFromStep channels | Both callbacks may declare typed failures and service requirements. The resulting Schedule unions their failure and requirement channels. A callback failure or defect keeps its original cause. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| scheduleFromStep isolation | Source callbacks cannot see or mutate the target step function. The target Cause does not appear in source types. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| scheduleRecurs and scheduleSpaced | `scheduleRecurs(times)` and `scheduleSpaced(delayMillis)` emit zero-based attempt numbers and accept `unknown` input. Their numeric arguments follow the target `recurs` and `spaced(Duration.millis(...))` semantics, with no added rounding or clamping. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+
+### Schedule map
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| scheduleMap signature | `scheduleMap(schedule, callback)` transforms outputs with an effectful callback. The callback receives `ScheduleMetadata<O,I>`, which adds `output` and `durationMillis` to the input metadata. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| scheduleMap channels | `scheduleMap` keeps the input channel and the delay. It changes the output channel. It unions the callback failure and requirements into the Schedule channels. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| scheduleMap timing | The callback runs on each continuing step and on normal completion. On normal completion, `durationMillis` is zero. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+
+### Schedule composition
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Composition forms | `scheduleMax(left, right)`, `scheduleMin(left, right)`, and `scheduleConcat(left, right)` are call-only and shadowable. They combine two Schedule values. Pipeline syntax is not accepted. | [2026-10-18-schedule-composition-contract.md](archive/plans/2026-10-18-schedule-composition-contract.md) |
+| Composition operands | Each operand must be a four-channel Schedule. `RetrySchedule` is not an operand. The compiler does not convert it implicitly. The checker rejects non-Schedules and wrong arity. | [2026-10-18-schedule-composition-contract.md](archive/plans/2026-10-18-schedule-composition-contract.md) |
+| Composition input rule | For inputs `I1` and `I2`, the checker chooses `I1` if every `I1` value fits `I2`. Otherwise it chooses `I2` if every `I2` value fits `I1`. Otherwise it rejects the call. | [2026-10-18-schedule-composition-contract.md](archive/plans/2026-10-18-schedule-composition-contract.md) |
+| Composition input limit | Composition requires comparable input types. The source language has no general intersection type. Incomparable inputs are rejected, for example distinct record field sets. Source `int` fits `number`. | [2026-10-18-schedule-composition-contract.md](archive/plans/2026-10-18-schedule-composition-contract.md) |
+| scheduleConcat type | `scheduleConcat` returns `Schedule<O1 \| O2, I, E1 \| E2, R1 \| R2>`. It unions the outputs of both policies. | [2026-10-18-schedule-composition-contract.md](archive/plans/2026-10-18-schedule-composition-contract.md) |
+| scheduleMax and scheduleMin type | `scheduleMax` and `scheduleMin` return `Schedule<number, I, E1 \| E2, R1 \| R2>`. The output is the selected delay in milliseconds. It is zero on normal completion. It differs from the operand outputs. | [2026-10-18-schedule-composition-contract.md](archive/plans/2026-10-18-schedule-composition-contract.md) |
+| Composition evaluation | The runtime evaluates all arguments once, left to right. Their construction effects stay active. Stepping, failures, and services stay deferred. | [2026-10-18-schedule-composition-contract.md](archive/plans/2026-10-18-schedule-composition-contract.md) |
+
+### Schedule composition runtime
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| scheduleMax semantics | `scheduleMax` steps both policies for an input. It recurs only if both recur. It uses the longer delay. | [2026-10-18-schedule-composition-contract.md](archive/plans/2026-10-18-schedule-composition-contract.md) |
+| scheduleMin semantics | `scheduleMin` recurs while either policy recurs. It uses the shorter delay among the active policies. | [2026-10-18-schedule-composition-contract.md](archive/plans/2026-10-18-schedule-composition-contract.md) |
+| scheduleConcat semantics | `scheduleConcat` finishes the left policy before it starts the right policy. The input that completes the left policy goes to the first right step. Recurrence outputs come from either phase. It completes with the Done output of the right policy. | [2026-10-18-schedule-composition-contract.md](archive/plans/2026-10-18-schedule-composition-contract.md) |
+| Composition state and failure | Each execution creates fresh child Schedule state. A typed failure from either child fails the composed Schedule. Defects and interruption keep their target causes. | [2026-10-18-schedule-composition-contract.md](archive/plans/2026-10-18-schedule-composition-contract.md) |
+| Composition scope | The composition forms add no separate scope or fiber. A consumer owns the execution. It awaits upstream cleanup on failure or interruption. | [2026-10-18-schedule-composition-contract.md](archive/plans/2026-10-18-schedule-composition-contract.md) |
+| Composition nesting | The binary forms can nest for more policies. | [2026-10-18-schedule-composition-contract.md](archive/plans/2026-10-18-schedule-composition-contract.md) |
+| Composition out of scope | The language does not support general intersections, heterogeneous arrays of policies, `concatResult`, manual stepping, or other Schedule consumers. The first slice does not expose `Schedule.toStep`, general `Effect.repeat`, or `Effect.retry`. | [2026-10-18-schedule-composition-contract.md](archive/plans/2026-10-18-schedule-composition-contract.md) |
+
+### Timed aggregation
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| aggregateWithinStream signature | `aggregateWithinStream(source: Stream<A,E1,R1>, sink: Sink<I,O,E2,R2,L>, schedule: Schedule<C,J,E3,R3>)` returns `Stream<O, E1 \| E2 \| E3, R1 \| R2 \| R3>`. It is a call-only prelude builtin and shadowable, like `aggregateStream`. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| aggregateWithinStream input rules | The checker requires `A` and `L` assignable to `I`, and `Option<O>` assignable to `J`. The target supplies the previous Sink result, which starts as `None`. A string-input Schedule is invalid for a Sink that produces `number[]`. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| aggregateWithinStream output | The Schedule output `C` is not a Stream element. The Sink output `O` is the Stream element. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| aggregateWithinStream use of the policy | The policy flushes partial Sink results or stops upstream. Failures and services of the Schedule stay deferred until the Stream runs. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| aggregateWithinStream evaluation | The runtime evaluates source, Sink, and Schedule expressions once, in source order, when it constructs the Stream. It does not run their deferred work then. Each terminal consumption allocates a fresh Schedule execution, producer, queue, Sink runs, and scope. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| Schedule stepping in aggregation | The runtime steps the Schedule at most once per aggregation, after the first element arrives, with the preceding `Option<O>` result. An immediate Sink completion from leftovers may skip a step. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| Timed flush | A successful Schedule step races with Sink completion. The step delay can flush a partial Sink. Time between aggregations is excluded from the policy clock, so `scheduleSpaced` acts as a flush timer. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| Schedule end in aggregation | On normal Schedule end, the runtime emits the current result and leftovers. Then the Stream stops with no further upstream pull. The end is not a typed failure. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| Schedule failure in aggregation | A typed Schedule failure fails the Stream. A defect stays a defect. The terminal scope owns and awaits source, Sink, and Schedule cleanup on failure or interruption. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| Aggregation emission | The emitter uses a typed `Stream.aggregateWithin(source, sink, schedule)` call. No cast erases the Schedule channels. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+
+### Stream retry
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| retryStream signature | `retryStream(source, policy)` retries a Stream under a compatible `RetrySchedule<E>`. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| retryStream restart | After a typed failure, `retryStream` restarts the entire source. Values emitted before the failure may appear again. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+| retryStream channels and reset | The failure and service channels of `retryStream` stay deferred. The schedule resets after the first element of a new attempt. | [2026-10-18-general-schedule-contract.md](archive/plans/2026-10-18-general-schedule-contract.md) |
+
+## Schema
+
+### Schema type and runners
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Schema type | `Schema<D, E = D, RD = never, RE = never, M = D>` is a reusable, deferred Schema value. D is the decoded type, E the encoded type, RD the decode services, RE the encode services, and M the make input. Existing four-argument Schemas keep M = D. | [2026-10-19-schema-constructor-metadata-contract.md](archive/plans/2026-10-19-schema-constructor-metadata-contract.md) |
+| No typed parse failure | Neither direction has a typed failure parameter. Parsing fails with the reserved nominal `SchemaError`. Source code can catch it and read its message. Source cannot construct a `SchemaError`. | [2026-10-18-schema-composition-recursion-contract.md](archive/plans/2026-10-18-schema-composition-recursion-contract.md) |
+| Data-only Schema | A Schema value cannot hold functions, providers, scopes, or other deferred source values as decoded or encoded data. M must also be data-only. | [2026-10-18-schema-composition-recursion-contract.md](archive/plans/2026-10-18-schema-composition-recursion-contract.md) |
+| Runner signatures | `schemaDecode(schema: Schema<D,E,RD,RE>, input: unknown): D fails SchemaError uses RD` and `schemaEncode(schema: Schema<D,E,RD,RE>, value: D): E fails SchemaError uses RE`. `schemaEncode` checks that the value fits D. Each runner keeps its own service channel. | [2026-10-18-schema-composition-recursion-contract.md](archive/plans/2026-10-18-schema-composition-recursion-contract.md) |
+| Deferred execution | A runner parses only when its Effect runs. Constructing a Schema runs no callback and resolves no service. A runner keeps the effects of its arguments. Repeated runs reuse the Schema value and share no mutable parse state. | [2026-10-18-schema-composition-recursion-contract.md](archive/plans/2026-10-18-schema-composition-recursion-contract.md) |
+| Failure and defects | Validation failures, `None` from a transformation, and transformation issues are typed `SchemaError` failures with the issue tree intact. A defect stays a defect. Interruption stays interruption. | [2026-10-18-schema-composition-recursion-contract.md](archive/plans/2026-10-18-schema-composition-recursion-contract.md) |
+| Call-only forms | The Schema constructors are call-only, shadowable prelude forms. The pure `Codec<Decoded,Encoded>` and its Option-returning operations stay unchanged. | [2026-10-18-schema-composition-recursion-contract.md](archive/plans/2026-10-18-schema-composition-recursion-contract.md) |
+
+### Schema composition
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| schema() | `schema(): Schema<T,T>` needs an expected `Schema<T,T>` type and derives an identity Schema from a data-only type. The checker rejects an empty call without an expected type. `schema()` also rejects a changed make input. | [2026-10-18-schema-composition-recursion-contract.md](archive/plans/2026-10-18-schema-composition-recursion-contract.md) |
+| schemaArray | `schemaArray(Schema<A,B,RD,RE>): Schema<A[],B[],RD,RE>` keeps both directions and their requirements. | [2026-10-18-schema-composition-recursion-contract.md](archive/plans/2026-10-18-schema-composition-recursion-contract.md) |
+| schemaStruct | `schemaStruct({ field: Schema<A,B,RD,RE>, ... })` builds a record Schema. It evaluates each field expression once, in source order. It unions the requirements of each direction separately. | [2026-10-18-schema-composition-recursion-contract.md](archive/plans/2026-10-18-schema-composition-recursion-contract.md) |
+| schemaTransform types | `schemaTransform(source, target, decode, encode)` takes `Schema<A,E,RD1,RE1>` and `Schema<B,C,RD2,RE2>`. The result is `Schema<B,E,RD1 \| RD2 \| RD3,RE1 \| RE2 \| RE3>`. RD3 and RE3 are the requirements of the callbacks. | [2026-10-18-schema-composition-recursion-contract.md](archive/plans/2026-10-18-schema-composition-recursion-contract.md) |
+| schemaTransform callbacks | The decode callback is inline, takes `A`, and returns `Option<C>`. The encode callback is inline, takes `C`, and returns `Option<A>`. Callbacks can run effects and use services. The target validates the intermediate value against `C` on decode and against `A` on encode. | [2026-10-18-schema-composition-recursion-contract.md](archive/plans/2026-10-18-schema-composition-recursion-contract.md) |
+| schemaTransform rejection | `None` becomes `SchemaIssue.InvalidValue` with a fixed message. `Some` proceeds. Per direction, a callback can instead return `T fails SchemaIssue`. The runner then passes that exact issue tree to the target. No other typed callback failure converts to a Schema issue. | [2026-10-18-schema-optional-union-issues-contract.md](archive/plans/2026-10-18-schema-optional-union-issues-contract.md) |
+| Out of scope | The first slice excludes user generics, mutual recursion, arbitrary `SchemaIssue` construction, arbitrary package imports, and ecosystem object builders. It also excludes arbitrary Schema AST construction and package builder interoperability. | [2026-10-18-schema-composition-recursion-contract.md](archive/plans/2026-10-18-schema-composition-recursion-contract.md) |
+
+### Optional keys and field descriptors
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| schemaOptionalKey | `schemaOptionalKey(Schema<D,E,RD,RE>): SchemaOptional<D,E,RD,RE>`. In `schemaStruct` it gives `{ optional?: D }` decoded and `{ optional?: E }` encoded. The field expression runs once, in source order. | [2026-10-18-schema-optional-union-issues-contract.md](archive/plans/2026-10-18-schema-optional-union-issues-contract.md) |
+| Exact optionality | A missing property stays missing in both directions. It is not `None`, `null`, or `undefined`. A present property runs the field Schema and must validate, also when its value is explicit `undefined`. A required `Option<T>` field stays distinct from an optional key. | [2026-10-18-schema-optional-union-issues-contract.md](archive/plans/2026-10-18-schema-optional-union-issues-contract.md) |
+| Descriptor use | `SchemaOptional` works only as a `schemaStruct` field. It is not a runnable Schema and not decoded or encoded data. | [2026-10-18-schema-optional-union-issues-contract.md](archive/plans/2026-10-18-schema-optional-union-issues-contract.md) |
+| Descriptor meanings | `SchemaOptional` describes a field optional in both directions. `SchemaEncodedOptional` describes a required decoded field with an exact optional encoded key. `SchemaDecodedOptional` describes an exact optional decoded field with a required encoded key. | [2026-10-19-schema-constructor-fields-contract.md](archive/plans/2026-10-19-schema-constructor-fields-contract.md) |
+| Optional getters | An optional getter may be effectful. It uses separate decode and encode services. It can fail with an authored `SchemaIssue` tree built with `schemaInvalid`, `schemaAt`, and `schemaBoth`. | [schema-effectful-optional.eff](../fixtures/emit/schema-effectful-optional.eff) |
+
+### Tagged unions
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| schemaUnion (tagged) | `schemaUnion([branch1, branch2, ...])` takes at least two branches. Each branch has the same required discriminant key with one string literal, equal in D and E and different from every other branch. The result is the union of D, E, RD, and RE. A later extension admits untagged and overlapping branches. | [2026-10-18-schema-optional-union-issues-contract.md](archive/plans/2026-10-18-schema-optional-union-issues-contract.md) |
+| Tag dispatch | The runtime selects the branch by the tag before it runs any field transformation. A missing or unknown tag fails with `SchemaError`. A failure inside the selected branch stays that failure, and no other branch runs. | [2026-10-18-schema-optional-union-issues-contract.md](archive/plans/2026-10-18-schema-optional-union-issues-contract.md) |
+| Union construction | Construction evaluates the branch expressions once, in source order. It runs no decode and resolves no service. The emitted union keeps the source branch order. | [2026-10-18-schema-optional-union-issues-contract.md](archive/plans/2026-10-18-schema-optional-union-issues-contract.md) |
+| Union rejections | The validator rejects unions with duplicate or mismatched tags, fewer than two branches, or nonrecord members. | [2026-10-18-schema-optional-union-issues-contract.md](archive/plans/2026-10-18-schema-optional-union-issues-contract.md) |
+| Plain data unions | The `schema()` form stays available for identity Schemas of existing data-only unions. | [2026-10-18-schema-optional-union-issues-contract.md](archive/plans/2026-10-18-schema-optional-union-issues-contract.md) |
+
+### Authored Schema issues
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| SchemaIssue type | `SchemaIssue` is an opaque, nominal source failure type that maps to the target `SchemaIssue.Issue`. It differs from `SchemaError`. A callback may fail with `SchemaIssue`. A runner fails with `SchemaError`. | [2026-10-18-schema-optional-union-issues-contract.md](archive/plans/2026-10-18-schema-optional-union-issues-contract.md) |
+| schemaInvalid | `schemaInvalid(message: string): SchemaIssue` builds an `InvalidValue` node with a message and no reported input. | [2026-10-18-schema-optional-union-issues-contract.md](archive/plans/2026-10-18-schema-optional-union-issues-contract.md) |
+| schemaAt | `schemaAt(key: string \| int, issue: SchemaIssue): SchemaIssue` builds a one-step `Pointer`. Nested calls build longer paths. | [2026-10-18-schema-optional-union-issues-contract.md](archive/plans/2026-10-18-schema-optional-union-issues-contract.md) |
+| schemaBoth | `schemaBoth(subject: Schema<D,E,RD,RE>, left: SchemaIssue, right: SchemaIssue): SchemaIssue` builds a two-child `Composite` with the AST of the Schema. The Schema argument needs no decode or encode service. | [2026-10-18-schema-optional-union-issues-contract.md](archive/plans/2026-10-18-schema-optional-union-issues-contract.md) |
+| Issue restrictions | The three issue constructors are call-only, shadowable, and pure. They expose no arbitrary AST nodes and no input-reporting options. `SchemaIssue` cannot be a Schema data type, a host declaration, or a catchable runner error. | [2026-10-18-schema-optional-union-issues-contract.md](archive/plans/2026-10-18-schema-optional-union-issues-contract.md) |
+| SchemaIssue matching | A catch or match on `SchemaIssue` uses `SchemaIssue.isIssue`, because the target issue family has several runtime tags. A mixed catch handler dispatches only the original failure. Errors raised by a handler are not caught by another handler in that clause. | [2026-10-19-schema-constructor-contract.md](archive/plans/2026-10-19-schema-constructor-contract.md) |
+
+### Self-recursive data aliases and schemaRecursive
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Array guard | The checker accepts a single local alias that refers to itself only beneath an array inside a data-only record, such as `type Tree = { value: Int, children: Tree[] }`. The empty array is the finite base case. | [2026-10-18-schema-composition-recursion-contract.md](archive/plans/2026-10-18-schema-composition-recursion-contract.md) |
+| Optional and tagged guards | A self reference beneath an optional record field is also accepted, as in `type Node = { next?: Node }`. A self reference beneath one tagged union variant is accepted when another variant has no self reference. Unions beneath an established guard keep it. | [2026-10-18-schema-optional-union-issues-contract.md](archive/plans/2026-10-18-schema-optional-union-issues-contract.md) |
+| Rejected cycles | The checker rejects `type Loop = Loop`, required direct fields such as `type Loop = { next: Loop }`, mutually recursive aliases, recursive brands or errors, aliases through functions or deferred types, and unions with no terminal variant. It reports `declaration/007`. | [2026-10-18-schema-composition-recursion-contract.md](archive/plans/2026-10-18-schema-composition-recursion-contract.md) |
+| Recursive comparison | The checker compares a recursive alias by its declared identity. Nonrecursive aliases keep their compatibility rules. The guard covers finite data only. It does not cover cyclic JavaScript object graphs or give a stack bound. | [2026-10-18-schema-composition-recursion-contract.md](archive/plans/2026-10-18-schema-composition-recursion-contract.md) |
+| schemaRecursive | `schemaRecursive((self: Schema<T,T,RD,RE>) => Schema<T,T,RD,RE>)` takes a pure inline callback. The `self` parameter is a lazy reference, not an execution. The body runs once. Each parse follows `self` only where it reaches a guard. | [2026-10-18-schema-composition-recursion-contract.md](archive/plans/2026-10-18-schema-composition-recursion-contract.md) |
+| schemaRecursive body | The body is a `schemaStruct` with an optional self field, a `schemaUnion` with a terminal tagged branch, or an array-guarded composition. The checker rejects a self reference as the immediate result or as a required direct field. | [2026-10-18-schema-optional-union-issues-contract.md](archive/plans/2026-10-18-schema-optional-union-issues-contract.md) |
+| Recursive limits | Recursive Option data and arbitrary self-bearing transformations are outside this subset. Default and getter callbacks cannot capture `self`. Null-as-missing supplies an optional-key guard. | [schema-recursive-adapters.eff](../fixtures/emit/schema-recursive-adapters.eff) |
+
+### Type-side constructor schemaMake
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| schemaMake signature | `schemaMake(Schema<D,E,RD,RE,M>, M) : D fails SchemaIssue` is a shadowable, call-only builtin. It validates the type side and returns the structured `SchemaIssue` directly. | [2026-10-19-schema-constructor-contract.md](archive/plans/2026-10-19-schema-constructor-contract.md) |
+| schemaMake inputs | The checker rejects field descriptors, unknown inputs, encoded values that do not fit D, incomplete records, and extra options. Make options, skipped validation, and the synchronous throwing and Option constructor methods are not exposed. | [2026-10-19-schema-constructor-contract.md](archive/plans/2026-10-19-schema-constructor-contract.md) |
+| schemaMake services | `schemaMake` runs neither the wire decoder nor the encoder. It needs neither RD nor RE. Active failures and services of its two arguments still propagate. The Schema and the input evaluate once each, in source order. | [2026-10-19-schema-constructor-contract.md](archive/plans/2026-10-19-schema-constructor-contract.md) |
+| schemaMake defects | A defect stays a defect. `schemaMake` does not turn it into `SchemaIssue`. | [2026-10-19-schema-constructor-contract.md](archive/plans/2026-10-19-schema-constructor-contract.md) |
+| Source factory defaults | An ordinary source factory supplies explicit defaults and then calls `schemaMake`. Present values skip the default. Exact source input types reject explicit undefined. Null stays present and is validated against D. Source optional reads keep null and map undefined to `None`. | [2026-10-19-schema-constructor-contract.md](archive/plans/2026-10-19-schema-constructor-contract.md) |
+| Nested factory path | A child factory failure gets its parent path only when source code catches `SchemaIssue` and rethrows `schemaAt("settings", issue)`. Native nested constructor metadata adds the path automatically. | [2026-10-19-schema-constructor-contract.md](archive/plans/2026-10-19-schema-constructor-contract.md) |
+
+### Constructor defaults and make input M
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| schemaConstructorDefault | `schemaConstructorDefault(Schema<D,E,RD,RE,M>, () -> M [fails SchemaIssue]) : SchemaConstructorDefault<D,E,RD,RE,M>` is shadowable and call-only. The callback is inline with zero arguments. It may be pure or effectful, uses no services, and fails with nothing or exactly `SchemaIssue`. | [2026-10-19-schema-constructor-metadata-contract.md](archive/plans/2026-10-19-schema-constructor-metadata-contract.md) |
+| M type | M is the make input, distinct from D and E. M compatibility is invariant, so assignment to a four-argument Schema annotation cannot discard a changed M. Equivalent aliases for M and D stay compatible. The constructor-default flag is also invariant. | [2026-10-19-schema-constructor-metadata-contract.md](archive/plans/2026-10-19-schema-constructor-metadata-contract.md) |
+| Default callback result | A nested default can return an incomplete make-input record such as `{}`. The callback can capture a `Ref` or an Effect with no service requirements. It runs fresh at each use. | [2026-10-19-schema-constructor-metadata-contract.md](archive/plans/2026-10-19-schema-constructor-metadata-contract.md) |
+| Default runtime | A missing or raw undefined input runs the callback, then constructs and validates its M. A present value skips the default. Null stays present. Defaults run only during construction, never during wire decoding or encoding. Nested validation attaches full field paths. | [2026-10-19-schema-constructor-metadata-contract.md](archive/plans/2026-10-19-schema-constructor-metadata-contract.md) |
+| Default descriptor use | The default descriptor works only as a struct field. It leaves D, E, and both service directions unchanged. It lets the struct make input omit the field. It cannot run as a Schema, be a union or array member, or be wrapped twice. | [2026-10-19-schema-constructor-metadata-contract.md](archive/plans/2026-10-19-schema-constructor-metadata-contract.md) |
+| Failure and cleanup | Defects and interruption keep their channels. Interruption waits for cleanup of running defaults. | [2026-10-19-schema-constructor-metadata-contract.md](archive/plans/2026-10-19-schema-constructor-metadata-contract.md) |
+| Argument evaluation | The Schema argument of `schemaConstructorDefault` evaluates once at construction. Each default use runs the deferred callback. | [2026-10-19-schema-constructor-metadata-contract.md](archive/plans/2026-10-19-schema-constructor-metadata-contract.md) |
+| Host replay | Host calls to `makeEffect` of an emitted Schema keep native replay identity: repeating one raw constructor effect may update its earlier result object. Source functions get no new object-identity guarantee. | [2026-10-19-schema-constructor-metadata-contract.md](archive/plans/2026-10-19-schema-constructor-metadata-contract.md) |
+
+### Make input propagation through composition
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| schemaStruct M | The struct M holds each field M. Constructor-default fields and decoded-optional fields may be absent. An ordinary field stays required in M even if its nested M has defaults. Wrapping the whole nested Schema with `schemaConstructorDefault` makes the outer field optional. | [2026-10-19-schema-constructor-metadata-contract.md](archive/plans/2026-10-19-schema-constructor-metadata-contract.md) |
+| schemaArray and schemaUnion M | `schemaArray` gives an array of the element M. `schemaUnion` gives the union of the branch M types in native branch order. | [2026-10-19-schema-constructor-metadata-contract.md](archive/plans/2026-10-19-schema-constructor-metadata-contract.md) |
+| schemaOptionalKey M | `schemaOptionalKey` keeps the wrapped M. The containing struct makes the field optional. | [2026-10-19-schema-constructor-metadata-contract.md](archive/plans/2026-10-19-schema-constructor-metadata-contract.md) |
+| schemaTransform M | `schemaTransform` takes the M of the target Schema. Source wire transformations do not run during make. | [2026-10-19-schema-constructor-metadata-contract.md](archive/plans/2026-10-19-schema-constructor-metadata-contract.md) |
+| Runner services | `schemaDecode` and `schemaEncode` keep D, E, and their original service requirements. | [2026-10-19-schema-constructor-metadata-contract.md](archive/plans/2026-10-19-schema-constructor-metadata-contract.md) |
+| Metadata limits | Constructor options and arbitrary AST access are outside this slice. | [2026-10-19-schema-constructor-metadata-contract.md](archive/plans/2026-10-19-schema-constructor-metadata-contract.md) |
+
+### Optional adapter extension
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Adapter inputs | The optional adapters accept ordinary Schemas with a distinct M. The three field descriptor types accept M as a fifth argument. D, E, presence flags, directional services, callback contracts, and encoding strategies keep their meanings. | [2026-10-19-schema-constructor-optional-contract.md](archive/plans/2026-10-19-schema-constructor-optional-contract.md) |
+| Wrapped M adapters | `schemaNullToMissingKey` keeps the wrapped M and is optional in the struct M. `schemaDefaultKey` with any `on` value keeps the wrapped M and is required in the struct M. | [2026-10-19-schema-constructor-optional-contract.md](archive/plans/2026-10-19-schema-constructor-optional-contract.md) |
+| Transformation adapters M | `schemaOptionalTransform` and `schemaOptionalFromRequired` take the M of the decoded target and are optional in the struct M. The M of the source does not enter the result. A required encoded field can stay optional during construction when the decoded target is optional. | [2026-10-19-schema-constructor-optional-contract.md](archive/plans/2026-10-19-schema-constructor-optional-contract.md) |
+| Option adapter M | `schemaOptionFromOptionalKey` needs `None` or `Some` with complete D, so its make input is `Option<D>` and required. It validates the contents without running nested constructor defaults. Encoded optionality does not let make input omit the field. | [2026-10-19-schema-constructor-optional-contract.md](archive/plans/2026-10-19-schema-constructor-optional-contract.md) |
+| Wire defaults in make | A wire default never supplies a missing constructor field. A present partial nested M still runs its nested defaults. No wire default or optional getter runs during `schemaMake`. Make needs neither decode nor encode services. | [2026-10-19-schema-constructor-optional-contract.md](archive/plans/2026-10-19-schema-constructor-optional-contract.md) |
+| Default callback types | A decoding-default callback returns complete D. An encoded-default callback returns complete E. Neither accepts a partial M. | [2026-10-19-schema-constructor-optional-contract.md](archive/plans/2026-10-19-schema-constructor-optional-contract.md) |
+| Null as missing | Null-as-missing is a wire policy. The constructor rejects null when the wrapped M excludes null. | [2026-10-19-schema-constructor-optional-contract.md](archive/plans/2026-10-19-schema-constructor-optional-contract.md) |
+
+### Recursive constructor rule
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Recursive signature | `schemaRecursive((self: Schema<D,D,RD,RE,M>): Schema<D,D,RD,RE,M> => body) : Schema<D,D,RD,RE,M>`. Every self reference carries the same M. M defaults to D. All Schema axes stay invariant, so omitting M from `self` cannot erase a changed input shape. | [2026-10-19-schema-constructor-recursive-contract.md](archive/plans/2026-10-19-schema-constructor-recursive-contract.md) |
+| Recursive M alias | A separate recursive M is an ordinary data alias with its own array, optional-key, or tagged terminal guard. D and M may differ in field presence. A required `children` array in D may be optional in M when the body supplies a default of `[]`. | [2026-10-19-schema-constructor-recursive-contract.md](archive/plans/2026-10-19-schema-constructor-recursive-contract.md) |
+| Recursive body | The callback is pure and inline. Its root is `schemaStruct` or `schemaUnion`. Self-bearing paths use `schemaStruct`, `schemaUnion`, `schemaArray`, `schemaOptionalKey`, and `schemaConstructorDefault`. The body must fit the full expected Schema. | [2026-10-19-schema-constructor-recursive-contract.md](archive/plans/2026-10-19-schema-constructor-recursive-contract.md) |
+| Recursive guards | Arrays and optional keys guard self references. A distinctly tagged union with a self-free terminal branch also guards them. A constructor-default wrapper keeps a guard but does not create one. | [2026-10-19-schema-constructor-recursive-contract.md](archive/plans/2026-10-19-schema-constructor-recursive-contract.md) |
+| Self in defaults | A default callback may return finite partial M and capture other values or effects. It cannot capture or invoke `self`. The check uses binding identities, so a separate local named `self` is valid. Expressions without `self` stay ordinary checked leaves. | [2026-10-19-schema-constructor-recursive-contract.md](archive/plans/2026-10-19-schema-constructor-recursive-contract.md) |
+| Recursive runtime | `schemaMake` fills defaults freshly at each absent field and skips them for present values. Wire decode and encode need complete D and keep their directional services. Make needs no wire service. Failures keep `SchemaIssue` paths of field names and array indices. | [2026-10-19-schema-constructor-recursive-contract.md](archive/plans/2026-10-19-schema-constructor-recursive-contract.md) |
+| Recursive limits | A finite data guard does not prove that user default effects end. It also does not cover defaults that keep generating constructor input. Cyclic runtime objects, mutual recursion, constructor options, and arbitrary AST access are outside the contract. | [2026-10-19-schema-constructor-recursive-contract.md](archive/plans/2026-10-19-schema-constructor-recursive-contract.md) |
+
+### Field-default extension
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Accepted inputs | `schemaConstructorDefault` accepts an ordinary Schema or one existing field descriptor that has no constructor default. It keeps the decoded and encoded presence flags, D, E, M, and directional services. | [2026-10-19-schema-constructor-fields-contract.md](archive/plans/2026-10-19-schema-constructor-fields-contract.md) |
+| Result types | Schema gives `SchemaConstructorDefault`. `SchemaOptional` gives `SchemaOptionalConstructorDefault`. `SchemaEncodedOptional` gives `SchemaEncodedOptionalConstructorDefault`. `SchemaDecodedOptional` gives `SchemaDecodedOptionalConstructorDefault`. All four take `<D,E=D,RD=never,RE=never,M=D>`. | [2026-10-19-schema-constructor-fields-contract.md](archive/plans/2026-10-19-schema-constructor-fields-contract.md) |
+| Invariance | All flags and D, E, and M are invariant. A constructor-default flag cannot be discarded, even when the field was already optional during construction. The three presence flags stay mutually exclusive. | [2026-10-19-schema-constructor-fields-contract.md](archive/plans/2026-10-19-schema-constructor-fields-contract.md) |
+| Default callback | The callback stays inline with zero arguments and returns the wrapped M. It uses no services and fails with nothing or `SchemaIssue`. It can be pure or effectful. Nested defaults may return partial M. | [2026-10-19-schema-constructor-fields-contract.md](archive/plans/2026-10-19-schema-constructor-fields-contract.md) |
+| Struct presence | The containing struct makes the field optional in its M. D and E keep their field presence. An optional decoded field stays optional in D. A required decoded field with a decoding default stays required in D, while its encoded key and make key can both be optional. | [2026-10-19-schema-constructor-fields-contract.md](archive/plans/2026-10-19-schema-constructor-fields-contract.md) |
+| Separate defaults | Construction skips decoding defaults and wire getters. Decoding and encoding skip constructor defaults. For a field with both, a missing make input gives the constructor default and a missing wire field gives the decoding default. | [2026-10-19-schema-constructor-fields-contract.md](archive/plans/2026-10-19-schema-constructor-fields-contract.md) |
+| Present and null input | Present make input skips the outer default and constructs its M. A missing or raw undefined input runs a fresh callback. Exact source types reject explicit undefined. Null stays present during make, also when a wire adapter treats null as missing. | [2026-10-19-schema-constructor-fields-contract.md](archive/plans/2026-10-19-schema-constructor-fields-contract.md) |
+| Field-default limits | The Option adapter still needs complete `Option<D>` contents, and a default does not make it `Option<M>`. Descriptor runners and duplicate defaults are errors. The recursive guard can pass through the wrapper and its argument, but default callbacks cannot capture `self`. Constructor options and arbitrary AST access are outside this slice. | [2026-10-19-schema-constructor-fields-contract.md](archive/plans/2026-10-19-schema-constructor-fields-contract.md) |
+
+### Adapter-order rule
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Unary adapters after defaults | The unary field builders accept `SchemaConstructorDefault` as well as ordinary Schemas. They still reject a descriptor that already has an optionality flag. | [2026-10-19-schema-constructor-order-contract.md](archive/plans/2026-10-19-schema-constructor-order-contract.md) |
+| Bridge inputs | The optional bridges also accept `SchemaOptionalConstructorDefault` in either existing optional position. The required source of `schemaOptionalFromRequired` may be a `SchemaConstructorDefault`. Every result keeps its D, E, presence, service, and make-input rules. | [2026-10-19-schema-constructor-order-contract.md](archive/plans/2026-10-19-schema-constructor-order-contract.md) |
+| Retained defaults | `schemaOptionalKey`, `schemaNullToMissingKey`, and `schemaDefaultKey` with any `on` value keep the constructor default of the input. The combined descriptor names express it. | [2026-10-19-schema-constructor-order-contract.md](archive/plans/2026-10-19-schema-constructor-order-contract.md) |
+| Bridge target defaults | `schemaOptionalTransform` and `schemaOptionalFromRequired` take the constructor default only from the target. The root default of the source does not become a default of the result. If only the source has a default, a missing make input stays absent when the target is optional. | [2026-10-19-schema-constructor-order-contract.md](archive/plans/2026-10-19-schema-constructor-order-contract.md) |
+| Option adapter reset | `schemaOptionFromOptionalKey` gives required `Option<D>` make input and no root default. A missing field fails construction, even if the source had a default. `Some` must hold complete D. A new default may be attached after this reset. | [2026-10-19-schema-constructor-order-contract.md](archive/plans/2026-10-19-schema-constructor-order-contract.md) |
+| Order independence | With a constructor default and a wire default, both orders give the same wire-default behavior. A missing make input gives the constructor default, and a missing wire field gives the wire default. Wire and constructor defaults stay independent. | [2026-10-19-schema-constructor-order-contract.md](archive/plans/2026-10-19-schema-constructor-order-contract.md) |
+| Adapter-order errors | Assignment stays invariant in all flags and D, E, and M. An annotation cannot silently discard a default. The checker rejects a second default when the preceding adapter retains the original, and rejects incompatible input presence and descriptor runners. | [2026-10-19-schema-constructor-order-contract.md](archive/plans/2026-10-19-schema-constructor-order-contract.md) |
+| Order runtime | Construction needs no wire service direction. Authored issues keep field paths, defects stay defects, and interruption waits for cleanup of retained defaults. Further descriptor presence rewrites are outside this slice. | [2026-10-19-schema-constructor-order-contract.md](archive/plans/2026-10-19-schema-constructor-order-contract.md) |
+
+### Schema defaults: missing key (schemaDefaultKey)
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| schemaDefaultKey signature | `schemaDefaultKey(Schema<D,E,RD,RE>, () -> D [fails SchemaIssue \| SchemaError] [uses RDefault], { on?, encodingStrategy? }?) : SchemaEncodedOptional<D,E,RD \| RDefault,RE>`. The brackets show optional clauses, not source syntax. | [2026-10-19-schema-default-encoding-contract.md](archive/plans/2026-10-19-schema-default-encoding-contract.md) |
+| Constructor form | The constructor is call-only and shadowable. The callback is inline and takes no arguments. The result is a struct-only field descriptor, not a runnable Schema. | [2026-10-19-schema-optional-transform-defaults-contract.md](archive/plans/2026-10-19-schema-optional-transform-defaults-contract.md) |
+| Field presence | The decoded field stays required. The encoded key is exact optional. The checker tracks decoded and encoded optionality separately. | [2026-10-19-schema-optional-transform-defaults-contract.md](archive/plans/2026-10-19-schema-optional-transform-defaults-contract.md) |
+| Default `on` value | The option `on` is `"missing"` by default. A call without `on` defaults only an absent key. The values `"null"` and `"encoded"` select the variants below. The old names `schemaDefaultNullKey` and `schemaDefaultEncodedKey` no longer exist. | [2026-10-19-schema-encoded-default-contract.md](archive/plans/2026-10-19-schema-encoded-default-contract.md) |
+| Missing-key decode | The runtime calls the default callback once for each decode where the key is absent. A present value never calls it. Present `undefined` fails. | [2026-10-19-schema-optional-transform-defaults-contract.md](archive/plans/2026-10-19-schema-optional-transform-defaults-contract.md) |
+| Default value type | The callback returns the decoded type D and bypasses the wrapped decoding transform. Default services join only RD. | [2026-10-19-schema-default-encoding-contract.md](archive/plans/2026-10-19-schema-default-encoding-contract.md) |
+| Failure channel of a default | The callback declares no typed failure, exactly `SchemaIssue`, or exactly `SchemaError`. The checker rejects a callback that declares both. The runner converts `SchemaIssue` to `SchemaError` with the field path. An existing `SchemaError` passes unchanged. | [2026-10-19-schema-effectful-optional-contract.md](archive/plans/2026-10-19-schema-effectful-optional-contract.md) |
+| Fresh default per decode | The runtime defers the callback with `Effect.sync` or `Effect.suspend`. Each decode gets a fresh invocation, also when the same effect runs again. | [2026-10-19-schema-effectful-optional-contract.md](archive/plans/2026-10-19-schema-effectful-optional-contract.md) |
+| Defects and interruption in defaults | Defects keep their channel. Interruption waits for the cleanup of the callback. Neither becomes a typed `SchemaError`. | [2026-10-19-schema-effectful-optional-contract.md](archive/plans/2026-10-19-schema-effectful-optional-contract.md) |
+| Old pure forms | A pure callback with no failure and no services stays valid. The two-argument form stays valid. | [2026-10-19-schema-effectful-optional-contract.md](archive/plans/2026-10-19-schema-effectful-optional-contract.md) |
+
+### Default options and encoding strategy
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Options record | The options argument is an inline record. Allowed fields are `on` and `encodingStrategy`. Each value is a string literal. The checker rejects named records, dynamic values, spreads, shorthand fields, duplicate keys, and extra fields. | [2026-10-19-schema-default-encoding-contract.md](archive/plans/2026-10-19-schema-default-encoding-contract.md) |
+| `encodingStrategy` values | `encodingStrategy` is `"passthrough"` or `"omit"`. The two-argument form (no options) selects passthrough. | [2026-10-19-schema-default-encoding-contract.md](archive/plans/2026-10-19-schema-default-encoding-contract.md) |
+| Passthrough encoding | The encoder runs the wrapped encoder and writes its E value. This includes values equal to the default and `null` where D admits `null`. | [2026-10-19-schema-default-encoding-contract.md](archive/plans/2026-10-19-schema-default-encoding-contract.md) |
+| Omit encoding | The encoder omits every valid decoded value, not only the default. It does not evaluate the default and does not compare values. It skips the wrapped encoder and its services. | [2026-10-19-schema-default-encoding-contract.md](archive/plans/2026-10-19-schema-default-encoding-contract.md) |
+| Static RE under omit | The static RE requirement stays in the type under omit, although the runtime skips the encoder. | [2026-10-19-schema-default-encoding-contract.md](archive/plans/2026-10-19-schema-default-encoding-contract.md) |
+| Validation before omit | A present invalid decoded value fails validation at the field path before omission. Source `schemaEncode` always requires the full decoded record. | [2026-10-19-schema-default-encoding-contract.md](archive/plans/2026-10-19-schema-default-encoding-contract.md) |
+| Decoding is strategy-independent | The encoding strategy does not change decoding. The default never runs during encoding. | [2026-10-19-schema-default-encoding-contract.md](archive/plans/2026-10-19-schema-default-encoding-contract.md) |
+
+### Defaults for a missing or null key (on: "null")
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Signature | `schemaDefaultKey(Schema<D,E,RD,RE>, () -> D [fails ...] [uses RDefault], { on: "null", encodingStrategy? }) : SchemaEncodedOptional<D,E \| null,RD \| RDefault,RE>`. The encoded type gains `null`. | [2026-10-19-schema-null-default-contract.md](archive/plans/2026-10-19-schema-null-default-contract.md) |
+| Nonnullable types | Both D and E must exclude `null`. The checker rejects a wrapped Schema with a nullable channel. | [2026-10-19-schema-null-default-contract.md](archive/plans/2026-10-19-schema-null-default-contract.md) |
+| Field presence | The decoded field is required and excludes `null`. The encoded field is exact optional and admits `null`. | [2026-10-19-schema-null-default-contract.md](archive/plans/2026-10-19-schema-null-default-contract.md) |
+| Decode cases | An absent key or a present `null` runs a fresh default. A present valid E runs the wrapped decoder and skips the default. Present `undefined` or invalid E fails with `SchemaError` and skips the default. | [2026-10-19-schema-null-default-contract.md](archive/plans/2026-10-19-schema-null-default-contract.md) |
+| Default value and services | The default is a decoded value. It bypasses the wrapped transformation and validates against D. Default services join only RD. A missing or null key skips the wrapped decoder at runtime but keeps its static RD. | [2026-10-19-schema-null-default-contract.md](archive/plans/2026-10-19-schema-null-default-contract.md) |
+| Encoding | Passthrough encoding runs the wrapped encoder and writes E. Omit encoding drops every valid decoded value and skips the wrapped encoder. Encoding never writes `null`. | [2026-10-19-schema-null-default-contract.md](archive/plans/2026-10-19-schema-null-default-contract.md) |
+| Plain default does not treat null as missing | `schemaDefaultKey(nullable, callback)` without `on` calls its default only for a missing key. A present `null` bypasses the callback. Passthrough encoding of `null` writes the key. | [2026-10-19-schema-nullable-optional-contract.md](archive/plans/2026-10-19-schema-nullable-optional-contract.md) |
+
+### Defaults for an encoded value (on: "encoded")
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Signature | `schemaDefaultKey(Schema<D,E,RD,RE>, () -> E [fails SchemaIssue \| SchemaError] [uses RDefault], { on: "encoded", encodingStrategy? }) : SchemaEncodedOptional<D,E,RD \| RDefault,RE>`. The callback returns the encoded type E. | [2026-10-19-schema-encoded-default-contract.md](archive/plans/2026-10-19-schema-encoded-default-contract.md) |
+| Callback rules | The callback is inline, takes no arguments, and may be pure or effectful. It declares no typed failure, exactly `SchemaIssue`, or exactly `SchemaError`. The checker rejects both failure types together. | [2026-10-19-schema-encoded-default-contract.md](archive/plans/2026-10-19-schema-encoded-default-contract.md) |
+| Decode | A missing key runs a fresh callback, validates the E result, and runs the wrapped decoder to produce D. A present valid E skips the default and runs the same decoder. | [2026-10-19-schema-encoded-default-contract.md](archive/plans/2026-10-19-schema-encoded-default-contract.md) |
+| Present invalid input | Present invalid E and explicit `undefined` fail without calling the default. Present `null` skips the default. It decodes if E admits `null` and fails otherwise. | [2026-10-19-schema-encoded-default-contract.md](archive/plans/2026-10-19-schema-encoded-default-contract.md) |
+| Services and failures | Default services join RD with the wrapped decoder services. Default and decoder issues become `SchemaError` at the field path. Defects keep their channel. Cancellation waits for cleanup in either stage. | [2026-10-19-schema-encoded-default-contract.md](archive/plans/2026-10-19-schema-encoded-default-contract.md) |
+| Encoding | Encoding requires only RE and never evaluates the default. Passthrough runs the wrapped encoder, validates E, and writes the field. | [2026-10-19-schema-encoded-default-contract.md](archive/plans/2026-10-19-schema-encoded-default-contract.md) |
+| Omit keeps encoder work | Omit runs the wrapped encoder and validates its E, then discards the result and omits the field. Encoder calls, services, typed failures, defects, and interruption stay observable. This differs from `on: "missing"` and `on: "null"`. | [2026-10-19-schema-encoded-default-contract.md](archive/plans/2026-10-19-schema-encoded-default-contract.md) |
+
+### Optional field bridges
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Field descriptors | `SchemaOptional` is optional in both directions. `SchemaEncodedOptional` has a required decoded field and an exact optional encoded key. `SchemaDecodedOptional` has an exact optional decoded key and a required encoded key. Descriptors are valid only inside `schemaStruct`. | [2026-10-19-schema-optional-transform-defaults-contract.md](archive/plans/2026-10-19-schema-optional-transform-defaults-contract.md) |
+| schemaOptionFromOptionalKey | `schemaOptionFromOptionalKey(Schema<D,E,RD,RE>) : SchemaEncodedOptional<Option<D>,E,RD,RE>`. A missing encoded key becomes a present `None`. A present valid value becomes `Some(decoded)`. | [2026-10-19-schema-optional-transform-defaults-contract.md](archive/plans/2026-10-19-schema-optional-transform-defaults-contract.md) |
+| Option encoding | Encoding `None` omits the key. Encoding `Some` runs the field encoding Schema. Present `undefined` fails unless the wrapped Schema accepts it. | [2026-10-19-schema-optional-transform-defaults-contract.md](archive/plans/2026-10-19-schema-optional-transform-defaults-contract.md) |
+| Skipped transformation | A missing key and `None` skip the wrapped transformation and its services. The static type keeps the decode and encode requirements. | [2026-10-19-schema-optional-transform-defaults-contract.md](archive/plans/2026-10-19-schema-optional-transform-defaults-contract.md) |
+| Nullable with Option | `schemaOptionFromOptionalKey(nullable)` maps a missing key to a required `None`. A present `null` becomes `Some(null)`. Encoding reverses this distinction. | [2026-10-19-schema-nullable-optional-contract.md](archive/plans/2026-10-19-schema-nullable-optional-contract.md) |
+| Constructor form | `schemaOptionFromOptionalKey`, `schemaOptionalTransform`, and `schemaOptionalFromRequired` are call-only and shadowable. A descriptor cannot be used as a Schema runner. | [2026-10-19-schema-optional-transform-defaults-contract.md](archive/plans/2026-10-19-schema-optional-transform-defaults-contract.md) |
+
+### Optional transformations and effectful getters
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| schemaOptionalTransform signature | `schemaOptionalTransform(SchemaOptional<S,E,RSD,RSE>, SchemaOptional<T,U,RTD,RTE>, (Option<S>) -> Option<U> [fails SchemaIssue] [uses RDec], (Option<U>) -> Option<S> [fails SchemaIssue] [uses REnc]) : SchemaOptional<T,E,RSD \| RTD \| RDec,RSE \| RTE \| REnc>`. | [2026-10-19-schema-effectful-optional-contract.md](archive/plans/2026-10-19-schema-effectful-optional-contract.md) |
+| Operand rules | Both Schema operands are exact optional descriptors. Both callbacks are inline. The checker rejects forged descriptors, callback types, and failure channels. | [2026-10-19-schema-optional-transform-defaults-contract.md](archive/plans/2026-10-19-schema-optional-transform-defaults-contract.md) |
+| Getter calls | `None` means a missing key. A callback runs for both missing and present keys. The source field Schema checks a present key before the decode callback. | [2026-10-19-schema-effectful-optional-contract.md](archive/plans/2026-10-19-schema-effectful-optional-contract.md) |
+| Getter results | The decode callback returns `None` to omit the decoded key or `Some(U)` to validate and emit the target field. Encoding applies the inverse callback from `Option<U>` to `Option<S>`. | [2026-10-19-schema-optional-transform-defaults-contract.md](archive/plans/2026-10-19-schema-optional-transform-defaults-contract.md) |
+| Directional services | Getter callbacks may be effectful. Decode and encode callbacks add requirements only to their own direction. Source and target field Schemas add their own directional requirements. | [2026-10-19-schema-effectful-optional-contract.md](archive/plans/2026-10-19-schema-effectful-optional-contract.md) |
+| Getter failures | A getter declares no typed failure or exactly `SchemaIssue`. The checker rejects mixed, unrelated, or forged failures. The runner wraps an authored issue as `SchemaError` with the field path. Defects and interruption keep their causes. | [2026-10-19-schema-effectful-optional-contract.md](archive/plans/2026-10-19-schema-effectful-optional-contract.md) |
+| Authoring issues | Authored `SchemaIssue` trees use `schemaInvalid`, `schemaAt`, and `schemaBoth`. | [2026-10-19-schema-effectful-optional-contract.md](archive/plans/2026-10-19-schema-effectful-optional-contract.md) |
+| Present undefined | A present `undefined` fails before the callback when the source field Schema rejects it. | [2026-10-19-schema-optional-transform-defaults-contract.md](archive/plans/2026-10-19-schema-optional-transform-defaults-contract.md) |
+| Outside this slice | Constructor defaults for these builders and other typed failures are not supported. The runner does not translate other typed callback failures. | [2026-10-19-schema-effectful-optional-contract.md](archive/plans/2026-10-19-schema-effectful-optional-contract.md) |
+
+### Required encoded to optional decoded (schemaOptionalFromRequired)
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Signature | `schemaOptionalFromRequired(Schema<S,E,RSD,RSE>, SchemaOptional<T,U,RTD,RTE>, (S) -> Option<U> [fails SchemaIssue] [uses RDec], (Option<U>) -> S [fails SchemaIssue] [uses REnc]) : SchemaDecodedOptional<T,E,RSD \| RTD \| RDec,RSE \| RTE \| REnc>`. | [2026-10-19-schema-required-optional-contract.md](archive/plans/2026-10-19-schema-required-optional-contract.md) |
+| Descriptor | The result is a struct-field descriptor with an exact optional decoded key and a required encoded key. It is not valid as an array element, Schema runner, or Schema value. | [2026-10-19-schema-required-optional-contract.md](archive/plans/2026-10-19-schema-required-optional-contract.md) |
+| Missing encoded key | Decoding fails with `SchemaIssue.InvalidValue` if the encoded key is absent. The runner reports `SchemaError` at the field path. The callback and its services do not run. | [2026-10-19-schema-required-optional-contract.md](archive/plans/2026-10-19-schema-required-optional-contract.md) |
+| Decode | The source Schema validates a present key first. The callback gets decoded S. It returns `Some(U)` to emit the decoded field or `None` to omit it. Present `undefined` stays invalid when the source Schema rejects it. | [2026-10-19-schema-required-optional-contract.md](archive/plans/2026-10-19-schema-required-optional-contract.md) |
+| Encode | The callback gets `None` for a missing decoded key and `Some(U)` for a present key. It returns a required S. Encoding always writes the key on success. | [2026-10-19-schema-required-optional-contract.md](archive/plans/2026-10-19-schema-required-optional-contract.md) |
+| Callbacks | Callbacks are inline, pure or effectful, with no typed failure or exactly `SchemaIssue`. Authored issues keep their paths. Defects and interruption keep their causes. Services join only their own direction. | [2026-10-19-schema-required-optional-contract.md](archive/plans/2026-10-19-schema-required-optional-contract.md) |
+| Construction | Constructing the descriptor does no decoding and no service work. A guarded builder is required: the checker does not accept an unguarded required-to-optional builder with a required encoded type. | [2026-10-19-schema-required-optional-contract.md](archive/plans/2026-10-19-schema-required-optional-contract.md) |
+| Permissive form | `schemaOptionalTransform(schemaOptionalKey(source), target, ...)` expresses the form that accepts a missing key, with an exact optional encoded type. | [2026-10-19-schema-required-optional-contract.md](archive/plans/2026-10-19-schema-required-optional-contract.md) |
+
+### The null singleton and nullable fields
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| null singleton | `null` is a data literal and a singleton type. It fits itself and unions that contain itself. It does not fit strings, numbers, booleans, or `void`. | [2026-10-19-schema-nullable-optional-contract.md](archive/plans/2026-10-19-schema-nullable-optional-contract.md) |
+| null stays distinct | Source `null` emits JavaScript `null`. It stays distinct from unit and from explicit `undefined`. Source `undefined` values and undefined-tolerant field types are not supported. | [2026-10-19-schema-nullable-optional-contract.md](archive/plans/2026-10-19-schema-nullable-optional-contract.md) |
+| null in annotations | Write `type Nil = null`, then use `Nil` in annotations outside type or error declarations. A declaration such as `type NullableName = string \| null` needs no new type constructor. | [2026-10-19-schema-nullable-optional-contract.md](archive/plans/2026-10-19-schema-nullable-optional-contract.md) |
+| null in matches and equality | Finite literal matches may include `null`. Equality with a singleton `null` operand accepts a nullable opposite operand in either order. There is no flow narrowing. | [2026-10-19-schema-nullable-optional-contract.md](archive/plans/2026-10-19-schema-nullable-optional-contract.md) |
+| null inference limits | `null` does not become numeric in stream-state or Ref inference. `null` is not a valid grouping key. | [2026-10-19-schema-nullable-optional-contract.md](archive/plans/2026-10-19-schema-nullable-optional-contract.md) |
+| Exact optional nullable field | `schemaStruct({ name: schemaOptionalKey(schemaUnion([text, nil])) })` retains `null`. A missing key stays missing. A present `null` stays `null` and skips the wrapped transformation. Present valid text decodes. Present `undefined` fails with `SchemaError` at the field path. | [2026-10-19-schema-nullable-optional-contract.md](archive/plans/2026-10-19-schema-nullable-optional-contract.md) |
+| schemaNullToMissingKey | `schemaNullToMissingKey(Schema<D,E,RD,RE>) : SchemaOptional<D,E \| null,RD,RE>`. Both D and E must exclude `null`. The constructor is call-only and shadowable. The result is a struct-only descriptor. | [2026-10-19-schema-nullable-optional-contract.md](archive/plans/2026-10-19-schema-nullable-optional-contract.md) |
+| Null-to-missing behavior | A missing or null encoded key decodes to an absent key. A present E decodes through the wrapped Schema. Encoding an absent key omits it. Encoding a present D runs the wrapped encoder and never writes `null`. Explicit `undefined` fails. | [2026-10-19-schema-nullable-optional-contract.md](archive/plans/2026-10-19-schema-nullable-optional-contract.md) |
+| Services under null | Decode and encode services stay separate. They include the wrapped branch even when a missing or null value skips it. | [2026-10-19-schema-nullable-optional-contract.md](archive/plans/2026-10-19-schema-nullable-optional-contract.md) |
+
+### General unions
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| schemaUnion form | `schemaUnion([branch1, branch2, ...])` accepts an inline list of at least two ordinary Schema values. The constructor is call-only and shadowable. | [2026-10-19-schema-general-union-contract.md](archive/plans/2026-10-19-schema-general-union-contract.md) |
+| Branch types | Branches may have unlike data types, overlapping record shapes, duplicate types, or transformed data. A struct-only field descriptor is not a valid branch. The tagged-record union is a special case. | [2026-10-19-schema-general-union-contract.md](archive/plans/2026-10-19-schema-general-union-contract.md) |
+| Result type | The result is `Schema<D_1 \| ... \| D_n,E_1 \| ... \| E_n,union RD_i,union RE_i>`. The static requirements include every branch, even if a run stops early. | [2026-10-19-schema-general-union-contract.md](archive/plans/2026-10-19-schema-general-union-contract.md) |
+| Rejected forms | The checker rejects fewer than two branches, a non-list argument, non-Schema branches, field descriptors, and forged union annotations. | [2026-10-19-schema-general-union-contract.md](archive/plans/2026-10-19-schema-general-union-contract.md) |
+| Evaluation order | Branch expressions evaluate once, in source order. Construction does not decode, encode, or resolve a service. | [2026-10-19-schema-general-union-contract.md](archive/plans/2026-10-19-schema-general-union-contract.md) |
+| Ordered backtracking | For untagged branches, the runtime tries candidates in source order. It returns the first successful decode or encode. A typed `SchemaIssue` from one candidate lets a later candidate succeed. If none succeeds, the runner fails with `SchemaError`. | [2026-10-19-schema-general-union-contract.md](archive/plans/2026-10-19-schema-general-union-contract.md) |
+| Overlapping records | Branch order is observable. A shorter record Schema can drop fields before a later, longer record Schema runs. | [2026-10-19-schema-general-union-contract.md](archive/plans/2026-10-19-schema-general-union-contract.md) |
+| Tagged branches | A tagged branch may use discriminant dispatch. An issue inside the selected branch stays a failure. The runtime does not try an unrelated tag. | [2026-10-19-schema-general-union-contract.md](archive/plans/2026-10-19-schema-general-union-contract.md) |
+| Defects and interruption | Defects and interruption are not candidate failures. No other branch recovers them. | [2026-10-19-schema-general-union-contract.md](archive/plans/2026-10-19-schema-general-union-contract.md) |
+| Pure Codec | Pure `Codec` keeps its Option-returning behavior. | [2026-10-19-schema-general-union-contract.md](archive/plans/2026-10-19-schema-general-union-contract.md) |
+
+### Recursive Schema with separate wire types
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| schemaRecursive signature | `schemaRecursive((self: Schema<D,E,RD,RE,M>): Schema<D,E,RD,RE,M> => body) : Schema<D,E,RD,RE,M>`. The builder is pure and inline. | [2026-10-19-schema-recursive-wire-contract.md](archive/plans/2026-10-19-schema-recursive-wire-contract.md) |
+| Separate D, E, and M | D and E may be distinct data aliases. M keeps its own data-only shape and defaults to D. The body must fit the expected Schema on all axes. A four-argument or abbreviated annotation cannot replace E or M. | [2026-10-19-schema-recursive-wire-contract.md](archive/plans/2026-10-19-schema-recursive-wire-contract.md) |
+| Self reference | Every self reference carries the same full signature: D, E, M, and directional services. | [2026-10-19-schema-recursive-wire-contract.md](archive/plans/2026-10-19-schema-recursive-wire-contract.md) |
+| Identity schema() | Identity `schema()` still requires D equal to E and no services. The checker rejects identity derivation for distinct D and E. | [2026-10-19-schema-recursive-wire-contract.md](archive/plans/2026-10-19-schema-recursive-wire-contract.md) |
+| Finite guard | A self-recursive data alias needs an array, an optional key, or a tagged union with a terminal branch. Each of D, E, and M obeys the guard independently. | [2026-10-19-schema-recursive-wire-contract.md](archive/plans/2026-10-19-schema-recursive-wire-contract.md) |
+| Tagged guard | The tagged guard needs the same distinct literal discriminator on decoded and encoded branches, plus a self-free terminal branch. Transformed or renamed discriminators are not supported. | [2026-10-19-schema-recursive-wire-contract.md](archive/plans/2026-10-19-schema-recursive-wire-contract.md) |
+| Untagged union guard | An untagged union does not supply a guard. Trying the self Schema as an immediate member would recurse without consuming input. The checker rejects it. | [2026-10-19-schema-general-union-contract.md](archive/plans/2026-10-19-schema-general-union-contract.md) |
+| Self-use restrictions | The body root is a struct or tagged union. Self-bearing paths use structural builders and constructor-default wrappers. Defaults cannot capture self. Constructor wrappers do not create a guard. Self-free leaf transformations stay allowed. | [2026-10-19-schema-recursive-wire-contract.md](archive/plans/2026-10-19-schema-recursive-wire-contract.md) |
+| Runners | `schemaDecode` returns D with `SchemaError` and requires RD only. `schemaEncode` returns E with `SchemaError` and requires RE only. `schemaMake` consumes M, returns D with `SchemaIssue`, and needs no wire service direction. | [2026-10-19-schema-recursive-wire-contract.md](archive/plans/2026-10-19-schema-recursive-wire-contract.md) |
+| Wire behavior | Wire decoding needs the complete E shape unless a wire adapter supplies a default. Constructors consume M and run no wire transformation. Nested issues keep field and array-index paths. Defects stay defects. Interruption waits for nested cleanup. | [2026-10-19-schema-recursive-wire-contract.md](archive/plans/2026-10-19-schema-recursive-wire-contract.md) |
+| Wire presence | Exact optional wire presence may differ from decoded presence. A wire default (`schemaDefaultKey`) does not make the field optional in the constructor input M. | [2026-10-19-schema-recursive-wire-contract.md](archive/plans/2026-10-19-schema-recursive-wire-contract.md) |
+
+### Recursive field adapters
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Adapter paths | Self may occur in these wrapped Schema arguments: `schemaNullToMissingKey`, `schemaDefaultKey` (all `on` values), `schemaOptionalTransform` (source and target), and `schemaOptionalFromRequired` (source and target). These add to the array, optional-key, struct, union, and constructor-default paths. | [2026-10-19-schema-recursive-adapters-contract.md](archive/plans/2026-10-19-schema-recursive-adapters-contract.md) |
+| Guards from adapters | Only `schemaNullToMissingKey` supplies a guard (an optional key on both sides). The other adapters supply none. | [2026-10-19-schema-recursive-adapters-contract.md](archive/plans/2026-10-19-schema-recursive-adapters-contract.md) |
+| No self capture | Default, getter, and option callbacks cannot capture self, also in a discarded local or nested closure. Binding identity decides a capture, so an unrelated local named `self` is allowed. | [2026-10-19-schema-recursive-adapters-contract.md](archive/plans/2026-10-19-schema-recursive-adapters-contract.md) |
+| Builtin calls only | Source calls must resolve to the builtin. A shadowed function name gives no structural proof. Constructor-default wrappers stay transparent and their callbacks stay self-free. | [2026-10-19-schema-recursive-adapters-contract.md](archive/plans/2026-10-19-schema-recursive-adapters-contract.md) |
+| Unions beneath a guard | A union beneath an existing array, optional-key, or terminal-tagged guard carries that guard through every member. An exact optional wire field such as `next?: WireNode \| null` is valid. An unguarded nested union is invalid. | [2026-10-19-schema-recursive-adapters-contract.md](archive/plans/2026-10-19-schema-recursive-adapters-contract.md) |
+| Adapter strategies | Encoding keeps each adapter's strategy. Encoded-value defaults still run the wrapped encoder before omission. Decoded defaults keep their skip behavior. Optional bridges build the target M and skip their wire getters during make. | [2026-10-19-schema-recursive-adapters-contract.md](archive/plans/2026-10-19-schema-recursive-adapters-contract.md) |
+| Wire defaults in recursion | Wire decoding may omit a defaulted field and uses wire defaults. It still requires each key without a default. Construction from nested partial M uses constructor defaults and no wire services. | [2026-10-19-schema-recursive-adapters-contract.md](archive/plans/2026-10-19-schema-recursive-adapters-contract.md) |
+| Outside the subset | Not supported: recursive Option data, bare nullable recursive aliases, mutual recursion, callbacks as recursive guards, and arbitrary self-bearing transformations. Ordinary self-bearing `schemaTransform` is excluded. | [2026-10-19-schema-recursive-adapters-contract.md](archive/plans/2026-10-19-schema-recursive-adapters-contract.md) |
+| Other limits | Not supported: constructor options and arbitrary Schema AST access. Equality-based omission is not supported. | [2026-10-19-schema-recursive-wire-contract.md](archive/plans/2026-10-19-schema-recursive-wire-contract.md) |
+
+### Removed names
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Old default names | The names `schemaDefaultNullKey` and `schemaDefaultEncodedKey` no longer exist in the language. Write `schemaDefaultKey(schema, callback, { on: "null" })` or `{ on: "encoded" }`. | [2026-10-19-schema-null-default-contract.md](archive/plans/2026-10-19-schema-null-default-contract.md) |
+
+## Diagnostics
+
+### Diagnostic codes by phase
+
+The registry in `src/core/diagnostics.ts` describes every code. This table lists which part of the implementation added each group of codes.
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Parser codes | The lexer and the parser report the `syntax` codes. The parser reads `.eff` source files and `.effi` host interface files | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Name and module codes | The declaration index, project loader, module graph, and name resolver report `unknown-name`, `module`, and `declaration` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Declaration checker codes | The declaration checker reports `type-mismatch/001`, `type-mismatch/002`, and `declaration/005` to `declaration/013`. Decision D21 added `declaration/012` on 2026-10-17. Decision D26 added `declaration/013` on 2026-10-17 | [2026-10-17-d21-d23.md](archive/plans/2026-10-17-d21-d23.md) |
+| Body checker codes | The body checker reports `type-mismatch/003` to `type-mismatch/011`, `failure-contract/001` to `/003`, `requirement-contract/001`, `execution-mode/001` to `/004`, `pattern/001` to `/004`, and `module/004` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Host boundary code | The `deno check` mapping reports `host-boundary/001` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Validator codes | The independent IR validator reports the category `validation` with the codes `validation/001` to `validation/008`. See the next section for the area of each code | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Validation areas | `validation/001` is Identity, `002` Types, `003` Contracts, `004` Execution, `005` Recovery, `006` Control, `007` Initialization, and `008` Serialization | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+
+### Independent validator
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| One fault, one diagnostic | After a disagreement the validator continues with the recomputed value; for an unknown identity it continues with the recorded value | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Exact nodes | The recorded type equals the recomputed type for a reference, get, update, error, brand, unbrand, call, perform, fail, retry, provide, binary, and block | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Contextual nodes | For a literal, `None`, `Some`, record, array, tuple, closure, `if`, `match`, and `catch`, the parts must fit the recorded type | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Type equality | Mutual assignability, so aliases are transparent and union order does not matter | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Record fields | Field order does not matter; the checker compares fields in order | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Effect sets | Comparison ignores order and duplicates; an unsorted or duplicated set gives only `validation/008`. This includes Schema decode and encode requirement sets | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Closures | The type sets contain the body sets; the mode is effect when a set is nonempty or the body is effect | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Function contracts | An inferred contract equals the body sets; an explicit contract contains them | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Identities | `<kind>:<module>#<name>` for declarations and `cap:<module>#<Service>.<method>` for capabilities | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Builtins | A builtin reference is valid only as a callee; the prelude import has a fixed shape | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Area of a branch fault | A `catch` branch is Recovery; an `if` or `match` branch is Types | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Not checked | Match exhaustiveness, unreachable arms, and constant initialization order stay with the checker | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Payload spans | A span in an import payload is checked only when the caller supplies its source text | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Unexpected shape | An exception inside a check gives `validation/008` and does not stop the run | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+
+## Lowering, emission, and tooling
+
+These rules concern the stages after checking. They do not change what a program means.
+
+### Lowering
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Error construction | The argument must be a record literal without a spread (`type-mismatch/010`), because the IR `error` node lists its fields | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Pipeline stage sets | A stage call carries its arguments and its invocation only; the left value's sets sit on its `$p` binding | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Control pipeline stages | `retry`, `provide`, `defer`, and `run` record their own active effects locally; the left value's evaluation stays on its binding | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Pipeline binding names | `$p<n>` skips every `<n>` whose name an identifier of the module uses, so a source local `$p1` is not captured | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Prelude value names | `$builtin/<name>/<hash>`, the text after `#` in the id | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Declaration order in IR | Source order by span start | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+
+### Emission
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Pure-to-effect lift | A pure function fits an effect function type only directly in a value position; the emitter wraps it there. Nested in a record, array, option, tuple, union, Effect value, result, or parameter, the execution must match | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Pure job of `retry`, `provide`, or `defer` | The emitter lifts it as in a value position: `Effect.suspend(() => Effect.succeed(x))` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Hoisting | Trivial children stay inline: literals, references, `None`, closures, and a record, array, tuple, error, update, field read, brand, unbrand, or `Some` whose parts are trivial | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Service method parameters | Named `a`, `b`, `c` in emitted service shapes, because the IR has no parameter names | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Reached declarations | Declarations that an exported signature reaches are exported in TypeScript, even when the source keeps them private | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Generated header | Each file starts with a comment that names its `.eff` source | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+
+### Spans and formatting
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Position outside every record | Not mapped. The header, the imports, the helpers, the host assertions, and the blank lines lie outside every record. A position inside a declaration maps to that declaration at worst | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Nested records | The innermost record wins. Of two records with one range, the record that closed first (the inner one) wins. Empty records are dropped | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Positions in the API | `mapGenerated` takes a one-based line and column in UTF-16 units, as `tsc` and the diagnostic format do. `mapOffset` takes a zero-based offset | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Source map targets | A generated position maps to the start of the source span of its innermost record, not to a range | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Source map segments | One segment at each record start, each record end, and each generated line start. Consecutive segments with one target merge. An unmapped part after a mapped part gets a one-field segment | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Source map fields | `names` is empty. `sources` are paths relative to the map. `sourcesContent` is optional. A missing source text is an error value | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Source map comment | The emitted text ends with the line `//# sourceMappingURL=<file>.map`, for example `users.ts.map`. Part A7 added it, so that the written `.ts.map` files take effect | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Import span of a host assertion | The IR has no import span. The span is the imported name in the `.eff` import, for example `UsersLive`. `hostImportSpans(project)` reads it from the project index | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Host assertion range | The emitter records the whole statement of each assertion constant. A `tsc` error anywhere in it is `host-boundary/001` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Other `tsc` errors | No code is registered. The mapper returns `source` (the innermost source span, probably an emitter defect) or `generated` (no span table and no host module, or outside every record). Part A7 prints both as `TS<number>` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Output of `deno check` | The parser keeps the first line of each message and the first location of each diagnostic. It drops notes about related declarations | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Wrong host module | A host layer of the declared service tag that lacks a method fails inside the host module. The mapper returns `host-module`, and part A7 prints it as `host-boundary/001` at that position | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Own service class in a host module | `tsc` accepts a layer of a host-defined service class with fewer methods, because `Layer` is contravariant in its service. The fixture therefore changes the type of `find` as well | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Layout of an arrow chain | One line when it fits. Else the heads stay on the first line and the body moves down. Else the chain moves below `=` and the body moves down again | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Layout of a selector call | When the body of the selector arrow moves down, the arguments of the call get one more indent level | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Layout of a conditional chain | A match with several arms prints `a ? x : b ? y : z` with every `?` and `:` at one indent level | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Function type parameters | A broken parameter list of a function type ends with a comma | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Layout of a binary run | A chain of one precedence level, such as `a && b && c` or `a + b + c`, is one unit. The operator ends the line. A break comes only where the next operand with its operator does not fit | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Indent of a binary run | The lines after the first sit one level deeper. The body of an arrow and an element of an array add no level. A parenthesized operand breaks one level deeper than the line where it starts | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Binary run in a conditional test | The lines of a broken test sit two levels deeper than the line of the test, so one level deeper than `?`. As the body of an arrow they sit one level deeper | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Int arithmetic | Each `$int` call has one argument. The argument list breaks first. The operation inside the argument breaks after that | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Layout of an else-if chain | A conditional in the else branch joins the chain. Every `?` and `:` of the chain sits at one indent level. The test of a later link sits two levels deeper than its `:` line | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Last arrow argument with a moved body | When the body of the last argument arrow moves down, the closing parenthesis moves down with it | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Heads of a chain that do not fit | When the heads do not fit after `const name =` on one line, the chain moves below the `=`. When they do not fit there, each head gets a line of its own | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Head with a broken parameter list | When a head cannot fit on a line, each head after the first starts a line at the indent of the chain. The first head stays after the `=`. The body stays on the last head line when it fits, else it moves down one level | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Chain as a call argument | The call hugs a chain only when the heads fit on the line of the call. Else the arguments break, and the heads align as in a declaration | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Long names and strings | Seven forms reach the fixed point when a name, a module path, or a string is long. A selector test of a match arm that is longer than 80 columns breaks after `===`, and the string sits two levels deeper than the test. When a test after the first does not fit on its own line, `deno fmt` joins the earlier links and the left side of the test on the first line. It does so only when that line fits in 80 columns. The printer joins at most one test, and not after a link with a hard line. An `if` chain follows the same rule for a comparison of two operands. A `&&` run does not join. When the first test of a flush `if` breaks, a comparison puts its right side two levels deeper, and a `&&` run one level. `Schema.Literal(` and `Schema.brand(` put a long string on a line of its own. A schema type alias moves `typeof X.Type` one level down. A service class breaks before `extends` as an error class does, and its tag string breaks like an argument. The body of a `Service.use` arrow moves down with the closing parenthesis. A `catchTags` handler moves below its key when the head `"key": (e) =>` does not fit | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Extreme identifiers | `TaggedError` and service type arguments wrap when their heads do not fit. Initializers and arrows move below `=` when their openings do not fit. A broken field or parameter list can move a value below its label. Member calls break before a dot when their heads do not fit; qualified Schema calls can also break at the earlier dot. Optional reads use the ordinary call-argument layout. The regression checks 274 generated modules at wrapping boundaries, strict target types, runtime results, evaluation once and mapped source tokens. Identifier lengths alone do not determine the breaks; indentation, export prefixes and surrounding expressions also count | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Not at a fixed point | A chain as the last of several arguments, when its second head fits on a line. `deno fmt` breaks that head, but Effective source cannot produce this form, because function types have the effect mode. | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+
+### Program and CLI
+
+| Rule | Choice | Evidence |
+| --- | --- | --- |
+| Check memo key | The key holds the module text, its path, the project configuration, the analysis diagnostics of its file, and the interface hash of each reached module | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Lowering key | The hash of the full interface payload of each reached module, spans included. IR imports carry the spans of foreign declarations | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Span-only change | When only the lowering key changes, the module is not checked again. The program builds its interface again from the reused declarations, and it lowers the module again | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Signature without an interface | A module whose interface is an error value uses its own key as signature | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Reached module not yet checked | In an import cycle, a reached module that comes later in the order counts as absent, as in `checkAnalysis` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Project configuration in the key | Every key holds the configuration, so a change of the host registry rechecks all modules | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Intern table | One `TypeTable` for the life of the program. It only grows. The memory growth is measurement M4 | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Rechecked list | It names every module that was checked again, in topological order, and it includes `.effi` modules | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Lazy queries | IR, emitted text, span table, and source map are computed on first use and stored on the memo entry | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Config error in the program | `update` returns the error value and starts no revision. The files stay changed, and a later fix returns to the old memo | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Modules of a project | Every `.eff` file under the root. The walk skips directories that start with `.` and `node_modules`. `.effi` files come from `effective.json` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Exit codes | 0 without diagnostics, 1 with a diagnostic or a failed build step, 2 for a usage or configuration error. A missing `effective.json` is a configuration error | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Help | `--help` prints the usage on stdout and exits 0 | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Output line | `path:line:column: error code: message`. A message with several lines prints as one line. Related spans are not printed | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Sort order | Path, then line, then column, then code, then message | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Summary line | The tool prints `N modules, M diagnostics` to stderr. N counts `.eff` modules. A build adds the number of files that it wrote | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Written files | The tool writes a file only when its text differs from the file on disk | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Validation failure | A module with a `validation` diagnostic is not written | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Lowering or emit failure | A failure that is not a diagnostic of the module prints `error: ...` on stderr and gives exit code 1 | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| `--tsc` after an error | The tool skips `deno check` when the build has a diagnostic or a failure, because the set of written files is incomplete | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| `--tsc` files | The files that this build produced, plus the host modules of `effective.json` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| `--tsc` configuration | A temporary directory with `deno.json`, removed after the run. The command has `--no-lock`. The project directory gets no new file | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| `--tsc` without a parsed diagnostic | If `deno check` exits nonzero and prints no diagnostic, the tool prints a note and exits 1 | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Permissions of the task | `--allow-read --allow-write --allow-run=deno`. The tool needs no environment access | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Task directory | `deno task` runs in the repository root, so the default root `.` is the repository. Users pass a root | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Watch events | The real source debounces events for 100 ms and keeps only `.eff`, `.effi`, and `effective.json` paths | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Watch rebuild | Each batch rereads the root and gives the program the files that changed. A batch with no change prints nothing | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Watch output | `rechecked: <modules>` and the summary go to stderr. Diagnostics go to stdout. Only a changed file starts a build | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Internal error | An unexpected throw prints `effective: internal error: <message>` on stderr and gives exit code 3 | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Watch errors | A broken project file at start gives exit code 2. A broken project file later prints an error and the loop goes on | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Watch and `--tsc` | `watch --tsc` runs `deno check` after each build without errors | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Public API | `mod.ts` re-exports the IR types with `export type *`. The explicit `Diagnostic` of the core wins over the one in `ir.ts` | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
+| Error path in messages | A malformed `effective.json` is named `effective.json`, as `parseConfig` reports it. A missing one is named with the root | [2026-10-16-phase-a.md](archive/plans/2026-10-16-phase-a.md) |
