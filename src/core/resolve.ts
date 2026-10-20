@@ -266,8 +266,18 @@ export function targetText(target: Target): string {
     case "field":
     case "unresolved":
       return `${target.kind}:${target.name}`;
-    default:
+    case "type":
+    case "error":
+    case "service":
+    case "provider":
+    case "value":
+    case "cap":
+    case "local":
       return target.id;
+    default: {
+      const unreachable: never = target;
+      return unreachable;
+    }
   }
 }
 
@@ -721,12 +731,22 @@ class Resolver {
           );
         }
         return;
-      default:
+      case "service":
+      case "cap":
+      case "local":
+      case "builtin":
+      case "builtin-type":
+      case "field":
         this.wrongKind(
           node,
           name,
           `\`${name}\` is ${describeKind(target)}, not a value`,
         );
+        return;
+      default: {
+        const unreachable: never = target;
+        return unreachable;
+      }
     }
   }
 

@@ -1200,14 +1200,31 @@ class ModuleChecker {
     if (nameNode === undefined) return false;
     const target = this.env.targets.get(nameNode);
     if (target?.kind !== "builtin-type") return false;
-    switch (target.name) {
+    const name = target.name;
+    switch (name) {
       case "string":
       case "int":
       case "number":
       case "boolean":
         return true;
-      default:
+      case "void":
+      case "never":
+      case "unknown":
+      case "Option":
+      case "Brand":
+      case "Ref":
+      case "RetrySchedule":
+      case "ScheduleInput":
+      case "ScheduleMetadata":
+      case "ScheduleDecision":
+      case "Codec":
+      case "Fiber":
+      case "CloseableScope":
         return false;
+      default: {
+        const unreachable: never = name;
+        return unreachable;
+      }
     }
   }
 

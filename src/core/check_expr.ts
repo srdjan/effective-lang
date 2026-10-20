@@ -749,8 +749,18 @@ export class BodyChecker {
       case "builtin":
         if (target.name === "None") return this.none(node, expected);
         return this.errorInfo(node);
-      default:
+      case "type":
+      case "error":
+      case "service":
+      case "cap":
+      case "builtin-type":
+      case "field":
+      case "unresolved":
         return this.errorInfo(node);
+      default: {
+        const unreachable: never = target;
+        return unreachable;
+      }
     }
   }
 
@@ -817,8 +827,15 @@ export class BodyChecker {
           this.referenceInfo(callee, target, undefined),
           args,
         );
-      default:
+      case "service":
+      case "builtin-type":
+      case "field":
+      case "unresolved":
         return this.unresolvedCall(node, args);
+      default: {
+        const unreachable: never = target;
+        return unreachable;
+      }
     }
   }
 
@@ -6654,7 +6671,10 @@ export class BodyChecker {
         }
         return this.finish(node, table.boolean, eff);
       }
-      default: {
+      case "+":
+      case "-":
+      case "*":
+      case "/": {
         // An error operand hides whether the result is int or number.
         if (either) return this.finish(node, table.error, eff);
         if (operator === "+" || operator === "-") {
@@ -6677,6 +6697,10 @@ export class BodyChecker {
         }
         mismatch();
         return this.finish(node, table.error, eff);
+      }
+      default: {
+        const unreachable: never = operator;
+        return unreachable;
       }
     }
   }

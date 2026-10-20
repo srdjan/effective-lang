@@ -55,8 +55,26 @@ export function guardedRecord(
         return part.fields.some((field) => containsSelf(field.type));
       case "union":
         return part.members.some(containsSelf);
-      default:
+      case "primitive":
+      case "literal":
+      case "tuple":
+      case "ref":
+      case "closeable-scope":
+      case "retry-schedule":
+      case "codec":
+      case "schema":
+      case "fiber":
+      case "effect":
+      case "stream":
+      case "schedule":
+      case "sink":
+      case "function":
+      case "provider":
         return false;
+      default: {
+        const unreachable: never = part;
+        return unreachable;
+      }
     }
   };
   const tagged = type.kind === "union" && type.members.length >= 2 &&
@@ -100,8 +118,25 @@ export function guardedRecord(
       case "primitive":
       case "literal":
         return true;
-      default:
+      case "tuple":
+      case "option":
+      case "ref":
+      case "closeable-scope":
+      case "retry-schedule":
+      case "codec":
+      case "schema":
+      case "fiber":
+      case "effect":
+      case "stream":
+      case "schedule":
+      case "sink":
+      case "function":
+      case "provider":
         return false;
+      default: {
+        const unreachable: never = part;
+        return unreachable;
+      }
     }
   };
   return visit(type, false) && found;
@@ -1524,8 +1559,23 @@ export function dataOnly(
     }
     case "error":
       return acceptPoisoned;
-    default:
+    case "closeable-scope":
+    case "retry-schedule":
+    case "ref":
+    case "codec":
+    case "schema":
+    case "fiber":
+    case "effect":
+    case "stream":
+    case "schedule":
+    case "sink":
+    case "function":
+    case "provider":
       return false;
+    default: {
+      const unreachable: never = type;
+      return unreachable;
+    }
   }
 }
 
