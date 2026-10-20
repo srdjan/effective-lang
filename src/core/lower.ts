@@ -1006,9 +1006,16 @@ class BodyLowerer {
 
   /** The identity of a closed builtin instance. Equal types share one identity. */
   private specialize(name: string, type: FunctionType): ValueId {
-    const hash = sha256Hex(canonicalJson(type)).slice(0, 12);
+    const json = canonicalJson(type);
+    const hash = sha256Hex(json).slice(0, 12);
     const id = `value:${this.ctx.module}#$builtin/${name}/${hash}` as ValueId;
-    if (!this.ctx.builtins.has(id)) this.ctx.builtins.set(id, { name, type });
+    const known = this.ctx.builtins.get(id);
+    if (known === undefined) {
+      this.ctx.builtins.set(id, { name, type });
+    } else if (canonicalJson(known.type) !== json) {
+      // The 12-digit hash is a truncation, so two types could share an id.
+      throw internal(`two builtin instance types share the id ${id}`);
+    }
     return id;
   }
 
