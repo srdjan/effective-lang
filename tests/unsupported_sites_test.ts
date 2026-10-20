@@ -1,8 +1,8 @@
 // Tests for the failure results of lowering and emission. Thirteen sites throw
-// `unsupported`. A source program reaches two of them (`lower.ts` error
-// construction by a pipeline, and `emit/expr.ts` `fit`). The checker or the
-// parser excludes the other eleven, so these tests forge the input: a changed
-// CheckedProject for `lowerModule`, and changed IR for `emitModule`.
+// `unsupported`. A source program reaches one of them (`emit/expr.ts` `fit`).
+// The checker or the parser excludes the other twelve, so these tests forge the
+// input: a changed CheckedProject for `lowerModule`, and changed IR for
+// `emitModule`.
 // The same file tests the other results of the two entry points: `no-interface`,
 // `internal`, and the rethrow of a foreign error.
 
@@ -102,27 +102,40 @@ const FUNCTION: Type = {
   effects: { failures: [], requirements: [] },
 };
 
-// ------------------------------------------------------------------ lowering: reachable from source
+// ------------------------------------------------------------------ checker: error construction by a pipeline
 
-Deno.test("a pipeline into an error constructor lowers to an unsupported error", () => {
-  // Reachable: check_expr.ts:944 requires a record literal only for the
-  // direct form `Stop({ ... })`. The pipeline form passes the checker.
+Deno.test("a pipeline into an error constructor is a checker error", () => {
+  // The direct form `Stop({ ... })` needs a record literal (check_expr.ts
+  // errorConstruction). A pipeline stage has no record literal of its own, so
+  // both stage forms get type-mismatch/010 on the stage, whatever the piped value is.
+  const message =
+    "the error `Stop` needs a record literal such as Stop({ field: value })";
+  const head = "error Stop = { code: int }\ntype R = { code: int }\n" +
+    "const r: R = { code: 1 }\n";
+  const cases: readonly (readonly [string, string])[] = [
+    ["({ code: 1 }) |> Stop()", "Stop()"],
+    ["({ code: 1 }) |> Stop", "Stop"],
+    ["r |> Stop()", "Stop()"],
+    ["r |> Stop", "Stop"],
+  ];
+  for (const [expression, stage] of cases) {
+    const text = `${head}const mk = (): Stop => ${expression}\n`;
+    const checked = check({ "main.eff": text });
+    const found = checked.diagnostics.filter((d) =>
+      d.code === "type-mismatch/010"
+    );
+    assertEquals(found.length, 1, expression);
+    assertEquals(found[0].message, message, expression);
+    assertEquals(text.slice(found[0].span.start, found[0].span.end), stage);
+    assertEquals(checked.diagnostics.length, 1, expression);
+  }
+});
+
+Deno.test("a wrong-arity pipeline into an error constructor keeps its arity diagnostic", () => {
   const text = "error Stop = { code: int }\n" +
-    "const mk = (): Stop => ({ code: 1 }) |> Stop()\n";
+    "const mk = (): Stop => ({ code: 1 }) |> Stop({ code: 2 })\n";
   const checked = check({ "main.eff": text });
-  assertEquals(checked.diagnostics, []);
-  const result = lowerModule(checked, "main");
-  assert(!result.ok);
-  assert(result.error.tag === "unsupported");
-  assertEquals(result.error.module, "main");
-  assertEquals(
-    result.error.message,
-    "an error is constructed from a record literal; this argument is not one",
-  );
-  assertEquals(
-    text.slice(result.error.span.start, result.error.span.end),
-    "Stop()",
-  );
+  assertEquals(checked.diagnostics.map((d) => d.code), ["type-mismatch/004"]);
 });
 
 // ------------------------------------------------------------------ lowering: forged CheckedProject
@@ -148,6 +161,27 @@ Deno.test("a record spread after a field lowers to an unsupported error when the
     text.slice(forged.error.span.start, forged.error.span.end).includes(
       "...base",
     ),
+  );
+});
+
+Deno.test("a pipeline into an error constructor lowers to an unsupported error when the diagnostics are forged away", () => {
+  // The checker rejects the program (type-mismatch/010). Removing the
+  // diagnostics reaches the lowering of the error construction.
+  const text = "error Stop = { code: int }\n" +
+    "const mk = (): Stop => ({ code: 1 }) |> Stop()\n";
+  const checked = check({ "main.eff": text });
+  assert(checked.diagnostics.length > 0);
+  assert(!lowerModule(checked, "main").ok);
+  const forged = lowerModule(withoutDiagnostics(checked), "main");
+  assert(!forged.ok);
+  assert(forged.error.tag === "unsupported", JSON.stringify(forged.error));
+  assertEquals(
+    forged.error.message,
+    "an error is constructed from a record literal; this argument is not one",
+  );
+  assertEquals(
+    text.slice(forged.error.span.start, forged.error.span.end),
+    "Stop()",
   );
 });
 

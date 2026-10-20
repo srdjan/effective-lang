@@ -939,17 +939,19 @@ export class BodyChecker {
           `the argument of ${shortName(id)}`,
         );
         // The IR error node lists its fields, so the argument must be a record
-        // literal without a spread.
+        // literal without a spread. A pipeline stage with one piped value has no
+        // record literal of its own, so the stage is the error.
+        const piped = arg.pre !== undefined && args.length === 1;
         if (
-          fits && !this.isError(info.type) &&
-          !this.isPlainRecordLiteral(arg.node)
+          piped || (fits && !this.isError(info.type) &&
+            !this.isPlainRecordLiteral(arg.node))
         ) {
           this.report(
             "type-mismatch/010",
             `the error \`${shortName(id)}\` needs a record literal such as ${
               shortName(id)
             }({ field: value })`,
-            arg.node,
+            piped ? node : arg.node,
           );
         }
       }
