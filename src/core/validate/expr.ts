@@ -291,6 +291,34 @@ export function exprChildren(e: Expr): readonly Expr[] {
   }
 }
 
+/**
+ * Visits `body` and every expression below it, parents first. The visitor
+ * gets the node, its parent, its grandparent, and whether a closure lies
+ * between the node and `body`. The closure itself is not nested.
+ */
+function walkExprs(
+  body: Expr,
+  visit: (
+    e: Expr,
+    parent: Expr | undefined,
+    grandparent: Expr | undefined,
+    nested: boolean,
+  ) => void,
+): void {
+  const go = (
+    e: Expr,
+    parent: Expr | undefined,
+    grandparent: Expr | undefined,
+    nested: boolean,
+  ): void => {
+    visit(e, parent, grandparent, nested);
+    for (const child of exprChildren(e)) {
+      go(child, e, parent, nested || e.kind === "closure");
+    }
+  };
+  go(body, undefined, undefined, false);
+}
+
 export class BodyValidator {
   private readonly scope = new Map<string, Type>();
   private readonly declared = new Set<string>();
@@ -2456,16 +2484,9 @@ export class BodyValidator {
       (callback.body.op !== "struct" && callback.body.op !== "union")
     ) return false;
     const self = callback.parameters[0].id;
-    const containsSelf = (value: unknown): boolean => {
-      if (Array.isArray(value)) return value.some(containsSelf);
-      if (value === null || typeof value !== "object") return false;
-      const fields = value as Record<string, unknown>;
-      if (fields.kind === "reference" && fields.target === self) return true;
-      return Object.entries(fields).some(([key, child]) =>
-        key !== "type" && key !== "effects" && key !== "span" &&
-        containsSelf(child)
-      );
-    };
+    const containsSelf = (value: Expr): boolean =>
+      (value.kind === "reference" && value.target === self) ||
+      exprChildren(value).some(containsSelf);
     const branches = callback.body.op === "union" &&
         callback.body.arguments[0]?.kind === "tuple"
       ? callback.body.arguments[0].elements
@@ -2742,23 +2763,8 @@ export class BodyValidator {
   }
 
   private fiberReferences(body: Expr, id: string, path: string): void {
-    const visit = (
-      value: unknown,
-      parent: Expr | undefined,
-      nested: boolean,
-    ): void => {
-      if (Array.isArray(value)) {
-        value.forEach((item) => visit(item, parent, nested));
-        return;
-      }
-      if (value === null || typeof value !== "object") return;
-      const fields = value as Record<string, unknown>;
-      const expr =
-        "kind" in fields && "type" in fields && "effects" in fields &&
-          "span" in fields
-          ? value as Expr
-          : undefined;
-      if (expr?.kind === "reference" && expr.target === id) {
+    walkExprs(body, (expr, parent, _grandparent, nested) => {
+      if (expr.kind === "reference" && expr.target === id) {
         if (
           nested ||
           (parent?.kind !== "join-fiber" &&
@@ -2773,12 +2779,7 @@ export class BodyValidator {
           );
         }
       }
-      for (const [key, child] of Object.entries(fields)) {
-        if (key === "type" || key === "effects" || key === "span") continue;
-        visit(child, expr ?? parent, nested || expr?.kind === "closure");
-      }
-    };
-    visit(body, undefined, false);
+    });
   }
 
   private defer(e: Extract<Expr, { kind: "defer" }>, path: string): Comp {
@@ -3170,12 +3171,7 @@ export class BodyValidator {
   }
 
   private scopedReferences(body: Expr, id: string, path: string): void {
-    const visit = (
-      e: Expr,
-      parent: Expr | undefined,
-      grandparent: Expr | undefined,
-      nested: boolean,
-    ): void => {
+    walkExprs(body, (e, parent, grandparent, nested) => {
       if (e.kind === "reference" && e.target === id) {
         if (
           nested || parent?.kind !== "get" || parent.record !== e ||
@@ -3189,12 +3185,7 @@ export class BodyValidator {
           );
         }
       }
-      const children = exprChildren(e);
-      for (const child of children) {
-        visit(child, e, parent, nested || e.kind === "closure");
-      }
-    };
-    visit(body, undefined, undefined, false);
+    });
   }
 
   private withResource(
@@ -3302,23 +3293,8 @@ export class BodyValidator {
   }
 
   private borrowedReferences(body: Expr, id: string, path: string): void {
-    const visit = (
-      value: unknown,
-      parent: Expr | undefined,
-      nested: boolean,
-    ): void => {
-      if (Array.isArray(value)) {
-        value.forEach((item) => visit(item, parent, nested));
-        return;
-      }
-      if (value === null || typeof value !== "object") return;
-      const fields = value as Record<string, unknown>;
-      const expr =
-        "kind" in fields && "type" in fields && "effects" in fields &&
-          "span" in fields
-          ? value as Expr
-          : undefined;
-      if (expr?.kind === "reference" && expr.target === id) {
+    walkExprs(body, (expr, parent, _grandparent, nested) => {
+      if (expr.kind === "reference" && expr.target === id) {
         const index = parent?.kind === "perform" || parent?.kind === "call"
           ? parent.arguments.indexOf(expr)
           : -1;
@@ -3341,12 +3317,7 @@ export class BodyValidator {
           );
         }
       }
-      for (const [key, child] of Object.entries(fields)) {
-        if (key === "type" || key === "effects" || key === "span") continue;
-        visit(child, expr ?? parent, nested || expr?.kind === "closure");
-      }
-    };
-    visit(body, undefined, false);
+    });
   }
 
   private streamState(type: Type): Type {
@@ -4585,23 +4556,8 @@ export class BodyValidator {
 
   private groupReferences(body: Expr, id: string, path: string): void {
     let references = 0;
-    const visit = (
-      value: unknown,
-      parent: Expr | undefined,
-      nested: boolean,
-    ): void => {
-      if (Array.isArray(value)) {
-        value.forEach((item) => visit(item, parent, nested));
-        return;
-      }
-      if (value === null || typeof value !== "object") return;
-      const fields = value as Record<string, unknown>;
-      const expr =
-        "kind" in fields && "type" in fields && "effects" in fields &&
-          "span" in fields
-          ? value as Expr
-          : undefined;
-      if (expr?.kind === "reference" && expr.target === id) {
+    walkExprs(body, (expr, parent, _grandparent, nested) => {
+      if (expr.kind === "reference" && expr.target === id) {
         references++;
         const terminal = parent?.kind === "collect-stream" ||
           parent?.kind === "run-stream" ||
@@ -4618,12 +4574,7 @@ export class BodyValidator {
           );
         }
       }
-      for (const [key, child] of Object.entries(fields)) {
-        if (key === "type" || key === "effects" || key === "span") continue;
-        visit(child, expr ?? parent, nested || expr?.kind === "closure");
-      }
-    };
-    visit(body, undefined, false);
+    });
   }
 
   private transduceStream(
