@@ -118,3 +118,40 @@ Deno.test("two captures of the same program give equal records of every kind", a
     Deno.removeSync(dir, { recursive: true });
   }
 });
+
+Deno.test("two different clean programs give different check, program, and validate records", async () => {
+  const dir = Deno.makeTempDirSync({ prefix: "effective-capture-input-" });
+  try {
+    const records = `${dir}/capture.records`;
+    writeInstrumentedTree(dir, records);
+    const core: Core = await import(
+      new URL(`file://${dir}/src/core/mod.ts`).href
+    );
+    const captureOf = (text: string): Map<string, string> => {
+      Deno.writeTextFileSync(records, "");
+      const files = { "effective.json": "{}", "m.eff": text };
+      const checked = core.checkProject(core.memoryHost(files), "", ["m.eff"]);
+      assert(checked.ok);
+      assertEquals(checked.value.diagnostics, []);
+      core.validateProject(
+        checked.value.analysis.project,
+        core.lowerProject(checked.value),
+      );
+      assert(new core.Program("").update({ set: files }).ok);
+      const byKind = new Map<string, string>();
+      for (const line of Deno.readTextFileSync(records).split("\n")) {
+        if (line !== "") byKind.set(line.split(" ", 1)[0], line);
+      }
+      return byKind;
+    };
+    const first = captureOf("export const f = (): Int => 1\ntype Int = int\n");
+    const second = captureOf("export const g = (): Int => 2\ntype Int = int\n");
+    for (const kind of ["check", "program", "validate"]) {
+      const a = first.get(kind);
+      assert(a !== undefined, `no ${kind} record`);
+      assert(a !== second.get(kind), `${kind} records are equal: ${a}`);
+    }
+  } finally {
+    Deno.removeSync(dir, { recursive: true });
+  }
+});

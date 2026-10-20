@@ -10,6 +10,12 @@
 //   emit-error     the `EmitError` of every failed `emitModule`
 //   validate       the result of every `validateModule` call
 //
+// A `check`, `program`, or `validate` record also holds a hash of its input:
+// the module paths and source texts, or the IR and its sources. Without it,
+// every clean result gives the same record, and a new test with a clean program
+// hides a program that gains a diagnostic. The other kinds write `-`, because
+// their results already name their input.
+//
 // Run `deno task behavior:capture <base-rev> <head-rev>` before a refactor is
 // merged. The script exports each revision into a temporary tree, adds the
 // recording hooks there, runs the tests, and compares the two sorted record
@@ -44,10 +50,11 @@ function hash(text: string): string {
   }
   return a.toString(16).padStart(8, "0") + b.toString(16).padStart(8, "0");
 }
-export function capture(kind: string, value: unknown): void {
+export function capture(kind: string, value: unknown, input?: unknown): void {
   try {
     const text = JSON.stringify(value);
-    Deno.writeTextFileSync(RECORDS, \`\${kind} \${hash(text)} \${text.length}\\n\`, { append: true });
+    const from = input === undefined ? "-" : hash(JSON.stringify(input));
+    Deno.writeTextFileSync(RECORDS, \`\${kind} \${from} \${hash(text)} \${text.length}\\n\`, { append: true });
   } catch { /* a process without write permission records nothing */ }
 }
 `;
@@ -86,7 +93,14 @@ function emitModuleInner(`,
   ...args: Parameters<typeof checkAnalysisInner>
 ): ReturnType<typeof checkAnalysisInner> {
   const result = checkAnalysisInner(...args);
-  capture("check", result.diagnostics);
+  const [analysis] = args;
+  capture(
+    "check",
+    result.diagnostics,
+    [...analysis.project.modules.values()]
+      .map((m) => [m.path, m.tree.text])
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)),
+  );
   return result;
 }
 
@@ -117,7 +131,10 @@ function lowerModuleInner(`,
     ...args: Parameters<Program["updateInner"]>
   ): ReturnType<Program["updateInner"]> {
     const result = this.updateInner(...args);
-    if (result.ok) capture("program", result.value.diagnostics);
+    const input = [...this.files].sort((a, b) =>
+      a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0
+    );
+    if (result.ok) capture("program", result.value.diagnostics, input);
     else capture("program-error", result.error);
     return result;
   }
@@ -133,7 +150,11 @@ function lowerModuleInner(`,
   ...args: Parameters<typeof validateModuleInner>
 ): ReturnType<typeof validateModuleInner> {
   const result = validateModuleInner(...args);
-  capture("validate", result);
+  const [ir, sources] = args;
+  capture("validate", result, [
+    ir,
+    [...sources].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)),
+  ]);
   return result;
 }
 
