@@ -118,12 +118,14 @@ function parentOf(dir: string): string {
   return slash <= 0 ? "/" : dir.slice(0, slash);
 }
 
-/** The root-relative path of `absolute` under `root`, or undefined. */
-function relativeTo(root: string, absolute: string): string | undefined {
+/** The root-relative path of the source file `absolute` under `root`, or undefined. */
+function sourcePathUnder(root: string, absolute: string): string | undefined {
   const prefix = root === "/" ? "/" : `${root}/`;
-  return absolute.startsWith(prefix) && absolute.length > prefix.length
-    ? absolute.slice(prefix.length)
-    : undefined;
+  if (!absolute.startsWith(prefix) || absolute.length <= prefix.length) {
+    return undefined;
+  }
+  const path = absolute.slice(prefix.length);
+  return isSourcePath(path) ? path : undefined;
 }
 
 /**
@@ -202,8 +204,8 @@ export class ProjectSet {
     if (absolute === undefined) return undefined;
     let best: DocumentRef | undefined;
     for (const project of this.#projects.values()) {
-      const path = relativeTo(project.root, absolute);
-      if (path === undefined || !isSourcePath(path)) continue;
+      const path = sourcePathUnder(project.root, absolute);
+      if (path === undefined) continue;
       if (
         best === undefined || project.root.length > best.project.root.length
       ) {
@@ -320,8 +322,8 @@ export class ProjectSet {
       const absolute = uriToPath(event.uri);
       if (absolute === undefined) continue;
       for (const project of this.#projects.values()) {
-        const path = relativeTo(project.root, absolute);
-        if (path === undefined || !isSourcePath(path)) continue;
+        const path = sourcePathUnder(project.root, absolute);
+        if (path === undefined) continue;
         if (project.open.has(path)) continue;
         if (event.type === 3) {
           const disk = new Map(project.disk);
@@ -348,8 +350,8 @@ export class ProjectSet {
       if (dir === "/" || dir === "") return undefined;
       dir = parentOf(dir);
     }
-    const path = relativeTo(dir, absolute);
-    if (path === undefined || !isSourcePath(path)) return undefined;
+    const path = sourcePathUnder(dir, absolute);
+    if (path === undefined) return undefined;
     let project = this.#projects.get(dir);
     if (project === undefined) {
       project = new ProjectState(dir);
