@@ -267,6 +267,7 @@ export function typeDoc(scope: Scope, type: Type): Doc {
       return group([
         "{",
         indent([line, join([";", line], fields)]),
+        ifBreak(";"),
         line,
         "}",
       ]);

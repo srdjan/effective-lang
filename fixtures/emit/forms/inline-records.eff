@@ -1,0 +1,11 @@
+// Inline record types that are too wide for one line. The emitter breaks them
+// over several lines, and the last field must end with a semicolon so that the
+// text is a fixed point of the formatter.
+
+type Text = string
+
+export const make = (a: Text): { firstVeryLongFieldName: Text, secondVeryLongFieldName: Text, thirdVeryLongFieldName: Text } => ({ firstVeryLongFieldName: a, secondVeryLongFieldName: a, thirdVeryLongFieldName: a })
+
+export const read = (value: { firstVeryLongFieldName: Text, secondVeryLongFieldName: Text, thirdVeryLongFieldName: Text }): Text => value.firstVeryLongFieldName
+
+export const empty = (): { firstVeryLongFieldName: Text, secondVeryLongFieldName: Text, thirdVeryLongFieldName: Text }[] => []

@@ -1043,3 +1043,14 @@ Deno.test("the emitted module lists the range of each host assertion", () => {
   );
   assertEquals(emitExamples().get("users")?.hostAssertions, []);
 });
+
+Deno.test("a record type that breaks over lines ends its last field with a semicolon", () => {
+  const output = oneModule(`
+type Text = string
+export const make = (a: Text): { firstVeryLongFieldName: Text, secondVeryLongFieldName: Text, thirdVeryLongFieldName: Text } => ({ firstVeryLongFieldName: a, secondVeryLongFieldName: a, thirdVeryLongFieldName: a })
+`);
+  assertStringIncludes(
+    output,
+    "  readonly secondVeryLongFieldName: Text;\n  readonly thirdVeryLongFieldName: Text;\n}",
+  );
+});
