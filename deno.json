@@ -13,6 +13,7 @@
     "bench": "deno run --no-lock --allow-read --allow-write --allow-run=deno --allow-env bench/main.ts",
     "golden:update": "deno run --allow-read --allow-write scripts/golden_update.ts",
     "validate:update": "deno run --allow-read --allow-write scripts/validate_fixtures.ts",
+    "lex:update": "deno run --allow-read --allow-write scripts/lex_snapshot.ts",
     "behavior:capture": "deno run --allow-all scripts/behavior_capture.ts",
     "measure": "deno run --allow-read --allow-env scripts/measure.ts",
     "measure:functions": "deno run --allow-read --allow-env scripts/measure_functions.ts",
