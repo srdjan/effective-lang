@@ -1,12 +1,22 @@
-// Records the observable compiler behavior of a git revision: a hash of every
-// emitted module, every checker diagnostic list, and every validator result
-// that the fast and slow test suites produce, including inline test sources.
+// Records the observable compiler behavior of a git revision. Each hook records
+// a hash of one result that the fast and slow test suites produce, including
+// inline test sources and the results of subprocesses:
+//   check          the diagnostic list of every `checkAnalysis` call
+//   program        the diagnostic list of every successful `Program.update`
+//   program-error  the `ConfigError` of every failed `Program.update`
+//   lower          `serializeModule` of every `lowerModule` result
+//   lower-error    the `LowerError` of every failed `lowerModule`
+//   emit           the module of every `emitModule` success
+//   emit-error     the `EmitError` of every failed `emitModule`
+//   validate       the result of every `validateModule` call
 //
 // Run `deno task behavior:capture <base-rev> <head-rev>` before a refactor is
-// merged. The script exports each revision into a temporary tree, adds a
-// recording hook there, runs the tests, and compares the two sorted record sets.
-// A base record that is missing from the head means a behavior change; new head
-// records come from added tests. With one revision, it prints the record set.
+// merged. The script exports each revision into a temporary tree, adds the
+// recording hooks there, runs the tests, and compares the two sorted record
+// sets. A base record that is missing from the head means a behavior change;
+// new head records come from added tests. With one revision, it prints the
+// record set. The tree does not run the capture tests: they would run the
+// capture again.
 
 import type { Result } from "../src/core/mod.ts";
 
@@ -18,8 +28,13 @@ interface Hook {
   readonly replacement: string;
 }
 
-const HOOK_MODULE =
-  `// Behavior capture hook: written only into a temporary tree.
+/**
+ * The text of the hook module. The records path is a string literal, so a
+ * process that has write permission records without environment permission.
+ */
+function hookModule(records: string): string {
+  return `// Behavior capture hook: written only into a temporary tree.
+const RECORDS = ${JSON.stringify(records)};
 function hash(text: string): string {
   let a = 0x811c9dc5, b = 0x01000193;
   for (let i = 0; i < text.length; i++) {
@@ -30,38 +45,99 @@ function hash(text: string): string {
   return a.toString(16).padStart(8, "0") + b.toString(16).padStart(8, "0");
 }
 export function capture(kind: string, value: unknown): void {
-  let file: string | undefined;
-  try { file = Deno.env.get("EFFECTIVE_CAPTURE"); } catch { return; }
-  if (file === undefined) return;
   try {
     const text = JSON.stringify(value);
-    Deno.writeTextFileSync(file, \`\${kind} \${hash(text)} \${text.length}\\n\`, { append: true });
+    Deno.writeTextFileSync(RECORDS, \`\${kind} \${hash(text)} \${text.length}\\n\`, { append: true });
   } catch { /* a process without write permission records nothing */ }
 }
 `;
+}
 
+// A function hook replaces the text `export function name(` with a wrapper of
+// the same name, and renames the original to `nameInner`. The wrapper takes the
+// parameters and the result type of the original by type, so a change of the
+// signature does not break the hook. The doc comment of the original stays
+// above the wrapper. A method cannot be wrapped from outside, and a private
+// method cannot be named in a type. So the method hook inserts a wrapper named
+// `update` before the original, and renames the original to the public method
+// `updateInner`. The anchor is only the method name at its indent. Each anchor
+// must occur exactly once, and a missing anchor fails the capture.
 const HOOKS: readonly Hook[] = [
   {
     path: "src/core/emit/emit.ts",
     importLine: 'import { capture } from "../capture_hook.ts";\n',
-    anchor: "    return { ok: true, value: build(ir, context) };",
-    replacement:
-      '    const value = build(ir, context);\n    capture("emit", value);\n    return { ok: true, value };',
+    anchor: "export function emitModule(",
+    replacement: `export function emitModule(
+  ...args: Parameters<typeof emitModuleInner>
+): ReturnType<typeof emitModuleInner> {
+  const result = emitModuleInner(...args);
+  if (result.ok) capture("emit", result.value);
+  else capture("emit-error", result.error);
+  return result;
+}
+
+function emitModuleInner(`,
   },
   {
     path: "src/core/check_project.ts",
     importLine: 'import { capture } from "./capture_hook.ts";\n',
-    anchor: "  return { ok: true, value: checkAnalysis(analysis.value) };",
-    replacement:
-      '  const value = checkAnalysis(analysis.value);\n  capture("check", value.diagnostics);\n  return { ok: true, value };',
+    anchor: "export function checkAnalysis(",
+    replacement: `export function checkAnalysis(
+  ...args: Parameters<typeof checkAnalysisInner>
+): ReturnType<typeof checkAnalysisInner> {
+  const result = checkAnalysisInner(...args);
+  capture("check", result.diagnostics);
+  return result;
+}
+
+function checkAnalysisInner(`,
+  },
+  {
+    path: "src/core/lower.ts",
+    importLine:
+      'import { capture } from "./capture_hook.ts";\nimport { serializeModule as captureSerialize } from "./serialize.ts";\n',
+    anchor: "export function lowerModule(",
+    replacement: `export function lowerModule(
+  ...args: Parameters<typeof lowerModuleInner>
+): ReturnType<typeof lowerModuleInner> {
+  const result = lowerModuleInner(...args);
+  if (result.ok) capture("lower", captureSerialize(result.value));
+  else capture("lower-error", result.error);
+  return result;
+}
+
+function lowerModuleInner(`,
+  },
+  {
+    path: "src/core/db.ts",
+    importLine: 'import { capture } from "./capture_hook.ts";\n',
+    anchor: "\n  update(",
+    replacement: `
+  update(
+    ...args: Parameters<Program["updateInner"]>
+  ): ReturnType<Program["updateInner"]> {
+    const result = this.updateInner(...args);
+    if (result.ok) capture("program", result.value.diagnostics);
+    else capture("program-error", result.error);
+    return result;
+  }
+
+  updateInner(`,
   },
   {
     // The validator imports only its own files, so it gets its own hook copy.
     path: "src/core/validate/index.ts",
     importLine: 'import { capture } from "./capture_hook.ts";\n',
     anchor: "export function validateModule(",
-    replacement:
-      'export function validateModule(...args: Parameters<typeof validateModuleInner>): ReturnType<typeof validateModuleInner> {\n  const result = validateModuleInner(...args);\n  capture("validate", result);\n  return result;\n}\n\nfunction validateModuleInner(',
+    replacement: `export function validateModule(
+  ...args: Parameters<typeof validateModuleInner>
+): ReturnType<typeof validateModuleInner> {
+  const result = validateModuleInner(...args);
+  capture("validate", result);
+  return result;
+}
+
+function validateModuleInner(`,
   },
 ];
 
@@ -74,10 +150,12 @@ export const HOOK_PATHS: readonly string[] = [
 /**
  * The instrumented texts of the hooked source files and the hook modules. An
  * error names each hook whose anchor no longer occurs exactly once, so a change
- * of an entry point shows here and not as a silent empty capture.
+ * of an entry point shows here and not as a silent empty capture. `records` is
+ * the file that the hooks append to.
  */
 export function instrumentSources(
   read: (path: string) => string,
+  records: string,
 ): Result<ReadonlyMap<string, string>, readonly string[]> {
   const files = new Map<string, string>();
   const missing: string[] = [];
@@ -89,26 +167,46 @@ export function instrumentSources(
     }
     files.set(
       hook.path,
-      hook.importLine + text.replace(hook.anchor, hook.replacement),
+      hook.importLine + text.replace(hook.anchor, () => hook.replacement),
     );
   }
   if (missing.length > 0) return { ok: false, error: missing };
-  for (const path of HOOK_PATHS) files.set(path, HOOK_MODULE);
+  const module = hookModule(records);
+  for (const path of HOOK_PATHS) files.set(path, module);
   return { ok: true, value: files };
 }
 
 const ROOT = new URL("..", import.meta.url).pathname;
 
+/**
+ * The test runs of a capture. The runs leave out the capture tests: they read
+ * the hook anchors, which the instrumented tree no longer has, and they would
+ * run the capture again.
+ */
+const CAPTURE_TESTS: readonly (readonly string[])[] = [
+  [
+    "test",
+    "--allow-all",
+    "--ignore=**/*_slow_test.ts,tests/behavior_capture*_test.ts",
+    "tests/",
+  ],
+  [
+    "test",
+    "--allow-all",
+    "--permit-no-files",
+    "--ignore=tests/behavior_capture*_test.ts",
+    "tests/**/*_slow_test.ts",
+  ],
+];
+
 async function run(
   command: string,
   args: readonly string[],
   cwd: string,
-  env: Record<string, string> = {},
 ): Promise<boolean> {
   const result = await new Deno.Command(command, {
     args: [...args],
     cwd,
-    env,
     stdout: "piped",
     stderr: "piped",
   }).output();
@@ -133,8 +231,10 @@ async function captureRevision(
       !await run("tar", ["-xf", archive, "-C", tree], ROOT)
     ) return { ok: false, error: `cannot export revision ${revision}` };
     Deno.removeSync(archive);
-    const files = instrumentSources((path) =>
-      Deno.readTextFileSync(`${tree}/${path}`)
+    const records = `${tree}/capture.records`;
+    const files = instrumentSources(
+      (path) => Deno.readTextFileSync(`${tree}/${path}`),
+      records,
     );
     if (!files.ok) {
       return {
@@ -145,22 +245,9 @@ async function captureRevision(
     for (const [path, text] of files.value) {
       Deno.writeTextFileSync(`${tree}/${path}`, text);
     }
-    const records = `${tree}/capture.records`;
-    const env = { EFFECTIVE_CAPTURE: records };
     const deno = Deno.execPath();
-    // The capture's own test reads the hook anchors, which the tree no longer has.
-    for (
-      const args of [
-        [
-          "test",
-          "--allow-all",
-          "--ignore=**/*_slow_test.ts,tests/behavior_capture_test.ts",
-          "tests/",
-        ],
-        ["test", "--allow-all", "--permit-no-files", "tests/**/*_slow_test.ts"],
-      ]
-    ) {
-      if (!await run(deno, args, tree, env)) {
+    for (const args of CAPTURE_TESTS) {
+      if (!await run(deno, args, tree)) {
         return {
           ok: false,
           error: `tests failed at ${revision}: deno ${args.join(" ")}`,
@@ -177,7 +264,7 @@ async function captureRevision(
   }
 }
 
-/** Counts records by kind: `emit`, `check`, and `validate`. */
+/** Counts records by kind, such as `emit`, `check`, and `lower`. */
 function summary(records: readonly string[]): string {
   const counts = new Map<string, number>();
   for (const record of records) {
