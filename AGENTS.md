@@ -20,6 +20,8 @@ Tests use `Deno.test` and `@std/assert`. A fast test runs in under one second. A
 
 The history uses one commit for each complete unit of work on local `main`. Use a short, imperative subject that explains the change, and a body that gives the reason. Pull requests should summarize the purpose, list the commands used to verify the change, and link related issues when available. Include screenshots for visible interface changes, and call out any setup or configuration changes reviewers need to reproduce.
 
+Each ledger or plan uses its own ID prefix. A new document must not reuse a prefix that another live document uses for different items. The live prefixes are R, P0, and D in `docs/plans/2026-10-20-rederive-review.md`, and H, P, S, T, W, and Q in `docs/plans/2026-10-20-hardening-pruning.md`. Pick a new prefix, and add it to this list.
+
 ## Feature Selection & Completion
 
 Follow the accepted [application acceptance rule](docs/plans/2026-10-19-application-acceptance-rule.md) when selecting gap work. The stopping rule requires three complete applications with precise contracts and passing failure, cancellation, and cleanup checks. Keep application orchestration in `.eff`; typed host adapters may supply drivers and the runtime entry point. Add features only for demonstrated application blockers after checking existing source compositions.
