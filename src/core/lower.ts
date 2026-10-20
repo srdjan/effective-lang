@@ -980,10 +980,20 @@ class BodyLowerer {
           right: arg(1),
           ...annotation,
         };
-      default:
+      case "none":
+      case "list":
+      case "field":
+      case "arrow":
+      case "binding":
+      case "pattern":
+      case "handler":
         throw internal(
           `the fact ${fact.kind} is no call at ${this.describe(node)}`,
         );
+      default: {
+        const unreachable: never = fact;
+        return unreachable;
+      }
     }
   }
 
@@ -1286,8 +1296,84 @@ class BodyLowerer {
           EFFECT_ONLY,
         ]);
       }
-      default:
+      case "error-construction":
+      case "brand-construction":
+      case "unbrand":
+      case "some":
+      case "none":
+      case "scoped":
+      case "fork-scoped":
+      case "make-scope":
+      case "with-resource":
+      case "unfold":
+      case "map-effect":
+      case "map-stream":
+      case "scan-stream":
+      case "map-accum-stream":
+      case "fold-stream":
+      case "fold-effect-stream":
+      case "collect-stream":
+      case "head-stream":
+      case "last-stream":
+      case "drain-stream":
+      case "flat-map-streams":
+      case "switch-map-streams":
+      case "catch-stream":
+      case "retry-stream":
+      case "debounce-stream":
+      case "throttle-stream":
+      case "take-stream":
+      case "drop-stream":
+      case "drop-while-stream":
+      case "filter-stream":
+      case "filter-effect-stream":
+      case "take-while-effect-stream":
+      case "take-until-effect-stream":
+      case "drop-while-effect-stream":
+      case "take-while-stream":
+      case "take-until-stream":
+      case "partition-all":
+      case "validate-all":
+      case "all-results":
+      case "sink-for-each":
+      case "take-sink":
+      case "transduce-stream":
+      case "aggregate-stream":
+      case "aggregate-within-stream":
+      case "schedule-from-step":
+      case "schedule-recurs":
+      case "schedule-spaced":
+      case "schedule-map":
+      case "schedule-max":
+      case "schedule-min":
+      case "schedule-concat":
+      case "map-groups":
+      case "run-stream":
+      case "buffer-stream":
+      case "merge-streams":
+      case "zip-streams":
+      case "concat-streams":
+      case "race":
+      case "make-ref":
+      case "get-ref":
+      case "set-ref":
+      case "update-ref":
+      case "layer":
+      case "merge-layers":
+      case "with-fiber":
+      case "join-fiber":
+      case "interrupt-fiber":
+      case "list":
+      case "field":
+      case "arrow":
+      case "binding":
+      case "pattern":
+      case "handler":
         break;
+      default: {
+        const unreachable: never = fact;
+        return unreachable;
+      }
     }
     return combine(parts);
   }

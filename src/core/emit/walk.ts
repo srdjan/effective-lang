@@ -190,6 +190,10 @@ export function patternBinding(pattern: Pattern): Parameter | null {
     case "literal":
     case "none":
       return null;
+    default: {
+      const unreachable: never = pattern;
+      return unreachable;
+    }
   }
 }
 

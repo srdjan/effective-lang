@@ -54,6 +54,7 @@ import {
   typeArguments,
   typeDoc,
 } from "./types.ts";
+import { patternBinding } from "./walk.ts";
 
 // ------------------------------------------------------------------ precedence
 
@@ -2363,18 +2364,12 @@ export class ExprEmitter {
   }
 
   private armBinding(pattern: Pattern): Parameter | null {
-    switch (pattern.kind) {
-      case "error":
-        return pattern.binding;
-      case "tag":
-        return pattern.binding;
-      case "some":
-        throw unsupported(
-          "a Some pattern in a match that is not an option match",
-        );
-      default:
-        return null;
+    if (pattern.kind === "some") {
+      throw unsupported(
+        "a Some pattern in a match that is not an option match",
+      );
     }
+    return patternBinding(pattern);
   }
 
   private armTest(pattern: Pattern, selector: string): ArmTest | undefined {
