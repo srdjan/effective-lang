@@ -20,8 +20,9 @@
 //    stored on the memo entry of the module.
 //
 // The program checks the modules in the order and with the inputs of
-// `checkAnalysis`, and it calls the same per-module steps, so the result of a
-// revision equals the result of a check from scratch. One test compares both.
+// `checkAnalysis`, and it calls the same per-module step, `checkModuleStep`, so
+// the result of a revision equals the result of a check from scratch. One test
+// compares both.
 //
 // One `TypeTable` lives as long as the program, so that the type references in a
 // reused module stay valid. Its interned nodes only grow. Its memory growth over a long
@@ -37,15 +38,12 @@
 // then carries the new spans.
 
 import { type Analysis, analyzeProject } from "./analyze.ts";
-import {
-  checkModuleDeclarations,
-  type ModeMap,
-  type TypeGraph,
-} from "./check.ts";
+import type { ModeMap, TypeGraph } from "./check.ts";
 import {
   type CheckedModule,
   type CheckedProject,
-  checkModuleBodies,
+  checkModuleStep,
+  reachedModules,
 } from "./check_project.ts";
 import { type Diagnostic, normalizeDiagnostics } from "./diagnostics.ts";
 import {
@@ -64,12 +62,7 @@ import {
   type SpanTable,
 } from "./emit/spans.ts";
 import { fnv1a64 } from "./hash.ts";
-import {
-  buildInterface,
-  buildTypeGraph,
-  type ModuleInterface,
-  reachableModules,
-} from "./interface.ts";
+import { buildInterface, type ModuleInterface } from "./interface.ts";
 import type { ModuleIR } from "./ir.ts";
 import { type LowerError, lowerModule } from "./lower.ts";
 import {
@@ -339,7 +332,7 @@ export class Program {
     };
   }
 
-  /** The same steps and order as `checkAnalysis`, with the memo around each module. */
+  /** The same per-module step and order as `checkAnalysis`, with the memo around each module. */
   private check(analysis: Analysis): Revision {
     const { project } = analysis;
     const config = configKey(project.config);
@@ -357,15 +350,8 @@ export class Program {
       const info = project.modules.get(name);
       if (info === undefined) continue;
       texts.set(info.path, info.tree.text);
-      const reached = reachableModules(analysis, name);
-      const importedGraphs = new Map<string, TypeGraph>();
-      const visible = new Map<string, ModuleInterface>();
-      for (const other of reached) {
-        const graph = graphs.get(other);
-        if (graph !== undefined) importedGraphs.set(other, graph);
-        const iface = interfaces.get(other);
-        if (iface !== undefined) visible.set(other, iface);
-      }
+      const seen = reachedModules(analysis, name, graphs, interfaces);
+      const { reached } = seen;
       const rest = JSON.stringify([
         info.path,
         config,
@@ -381,29 +367,16 @@ export class Program {
         entry === undefined || entry.text !== info.tree.text ||
         entry.rest !== rest
       ) {
-        const declarations = checkModuleDeclarations(
+        const { checked, graph } = checkModuleStep(
           analysis,
+          info,
           name,
           this.table,
-          importedGraphs,
+          seen,
         );
-        const graph = buildTypeGraph(declarations);
-        const bodies = checkModuleBodies({
-          analysis,
-          module: name,
-          declarations,
-          interfaces: visible,
-        });
-        const built = buildInterface(
-          declarations,
-          bodies.modes,
-          importedGraphs,
-        );
-        const moduleDiagnostics = normalizeDiagnostics([
-          ...declarations.diagnostics,
-          ...bodies.diagnostics,
-        ]);
-        const iface = built.ok ? built.value : undefined;
+        const iface = checked.interface.ok
+          ? checked.interface.value
+          : undefined;
         const signature = iface === undefined
           ? `key:${fnv1a64(rest)}:${fnv1a64(info.tree.text)}`
           : iface.hash;
@@ -417,19 +390,7 @@ export class Program {
             ? signature
             : fnv1a64(canonicalJson(iface.payload)),
           lowerKey,
-          checked: {
-            module: name,
-            path: info.path,
-            tree: info.tree,
-            declarations,
-            functions: bodies.functions,
-            constants: bodies.constants,
-            modes: bodies.modes,
-            initialization: bodies.initialization,
-            interface: built,
-            hash: iface?.hash,
-            diagnostics: moduleDiagnostics,
-          },
+          checked,
         };
         rechecked.push(name);
         this.counters.checks++;
@@ -439,7 +400,7 @@ export class Program {
         const built = buildInterface(
           entry.checked.declarations,
           entry.checked.modes,
-          importedGraphs,
+          seen.graphs,
         );
         const iface = built.ok ? built.value : undefined;
         entry = {

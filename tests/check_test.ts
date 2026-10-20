@@ -7,17 +7,24 @@ import {
   executionOf,
   type FunctionSignature,
   type ModeMap,
+  type ModuleDeclarations,
   signatureType,
+  type TypeGraph,
 } from "../src/core/check.ts";
+import {
+  type Diagnostic,
+  normalizeDiagnostics,
+} from "../src/core/diagnostics.ts";
 import type { Execution, ValueId } from "../src/core/ir.ts";
 import {
   buildInterface,
-  checkDeclarations,
+  buildTypeGraph,
+  type InterfaceError,
   type ModuleInterface,
-  type ProjectCheck,
+  reachableModules,
 } from "../src/core/interface.ts";
 import { checkAnalysis, checkProject } from "../src/core/check_project.ts";
-import { memoryHost } from "../src/core/source.ts";
+import { memoryHost, type Result } from "../src/core/source.ts";
 import { stripSpans } from "../src/core/interface.ts";
 import { TypeTable } from "../src/core/types.ts";
 import {
@@ -34,6 +41,57 @@ function analyzeFiles(
   const result = analyzeProject(memoryHost(files), "", entries);
   assert(result.ok, JSON.stringify(result));
   return result.value;
+}
+
+interface ModuleCheck {
+  readonly module: string;
+  readonly declarations: ModuleDeclarations;
+  /** An error value when the mode map lacks an entry that the hash needs. */
+  readonly interface: Result<ModuleInterface, InterfaceError>;
+  readonly diagnostics: readonly Diagnostic[];
+}
+
+interface ProjectCheck {
+  readonly table: TypeTable;
+  readonly modules: ReadonlyMap<string, ModuleCheck>;
+  readonly diagnostics: readonly Diagnostic[];
+}
+
+/**
+ * Checks the declarations of every module in topological order with a mode map
+ * that the test supplies. The project drivers take their modes from the body
+ * checker, so only this driver can test a missing or a forced mode entry.
+ */
+function checkDeclarations(
+  analysis: Analysis,
+  modes: ModeMap = new Map(),
+): ProjectCheck {
+  const table = new TypeTable();
+  const graphs = new Map<string, TypeGraph>();
+  const modules = new Map<string, ModuleCheck>();
+  const diagnostics: Diagnostic[] = [...analysis.diagnostics];
+  for (const name of analysis.project.order) {
+    const imported = new Map<string, TypeGraph>();
+    for (const other of reachableModules(analysis, name)) {
+      const graph = graphs.get(other);
+      if (graph !== undefined) imported.set(other, graph);
+    }
+    const declarations = checkModuleDeclarations(
+      analysis,
+      name,
+      table,
+      imported,
+    );
+    graphs.set(name, buildTypeGraph(declarations));
+    modules.set(name, {
+      module: name,
+      declarations,
+      interface: buildInterface(declarations, modes, imported),
+      diagnostics: declarations.diagnostics,
+    });
+    diagnostics.push(...declarations.diagnostics);
+  }
+  return { table, modules, diagnostics: normalizeDiagnostics(diagnostics) };
 }
 
 /** The modes that the body checker computes for every function of the project. */

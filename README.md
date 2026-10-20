@@ -159,12 +159,12 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
   types.ts       Interned types, compatibility, IR conversion, canonical JSON.
   check.ts       Declaration checker: type lowering, signatures, providers.
   check_expr.ts  Body checker: expressions, calls, patterns, contracts.
-  check_project.ts Project driver: bodies, modes, interfaces, and effectText.
+  check_project.ts Project driver: bodies, modes, interfaces, the shared per-module step, and effectText.
   tables.ts      Side tables of a body: node info and lowering facts.
   patterns.ts    Pattern domains of match subjects.
   modes.ts       Strongly connected components and the mode fixed point.
   initialization.ts Eager dependency graph of module constants.
-  interface.ts   Module interfaces, their hashes, and the declaration driver.
+  interface.ts   Module interfaces, their hashes, and the reachable modules.
   analyze.ts     Public entry: load a project, resolve it, collect diagnostics.
   db.ts          Program: revisions, parse memo, check memo with module cutoff, lazy IR, text, and maps.
   editor.ts      hoverAt, definitionAt, and documentSymbols over a revision.
@@ -279,11 +279,11 @@ A diagnostic span names its file by the root-relative path, for example `users.e
 
 ## Using the declaration checker
 
-`checkDeclarations(analysis, modes)` checks the declarations of every module in topological order. The `analysis` value comes from `analyzeProject`. The `modes` value maps a `ValueId` to `"pure"` or `"effect"`. It is optional.
+`checkModuleDeclarations(analysis, module, table, imported)` checks the declarations of one module. The `analysis` value comes from `analyzeProject`. The `table` value is the shared type table. The `imported` value maps each reached module to its type graph. The project drivers `checkProject` and `Program` call it for each module in topological order, through `checkModuleStep` in `src/core/check_project.ts`.
 
-The result holds one shared type table and one entry for each module. A module entry holds the declarations, the signatures, the interface, and the sorted declaration diagnostics. The result also holds all diagnostics of the project, sorted and without duplicates.
+The result holds the declarations, the signatures, and the sorted declaration diagnostics of the module. `checkProject` returns one shared type table and one entry for each module. Each entry holds the declarations, the interface, and the sorted diagnostics of the module.
 
-A function with a nonempty `fails` or `uses` set always has effect mode. A function with empty sets needs an entry in `modes`, because its body decides the mode. Without the entry, the `interface` field of the module is an error value. The diagnostics do not depend on `modes`.
+A function with a nonempty `fails` or `uses` set always has effect mode. A function with empty sets needs an entry in the mode map, because its body decides the mode. The body checker supplies the map. Without an entry, `buildInterface` gives an error value. The declaration diagnostics do not depend on the map.
 
 Rule R1: a primitive type can occur only inside a type or error declaration. Each `string`, `int`, `number`, `boolean`, or literal type node elsewhere gives `declaration/013`, in `.eff` and `.effi` files.
 

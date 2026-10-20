@@ -9,13 +9,12 @@
 // body edit that moves a declaration does not change it. The hash is FNV-1a 64
 // over canonical JSON. A later part may switch to SHA-256.
 //
-// The project driver `checkDeclarations` also lives here. It runs the module
-// checker in topological order and gives each module the type graphs of the
-// modules that it reaches.
+// `reachableModules` also lives here. The project drivers in `check_project.ts`
+// and `db.ts` use it to give each module the type graphs of the modules that it
+// reaches.
 
 import type { Analysis } from "./analyze.ts";
 import {
-  checkModuleDeclarations,
   effectIds,
   type FunctionSignature,
   isPendingMode,
@@ -25,7 +24,6 @@ import {
   signatureType,
   type TypeGraph,
 } from "./check.ts";
-import { type Diagnostic, normalizeDiagnostics } from "./diagnostics.ts";
 import { fnv1a64 } from "./hash.ts";
 import type {
   DeclarationId,
@@ -37,7 +35,7 @@ import type {
   ValueId,
 } from "./ir.ts";
 import type { Result } from "./source.ts";
-import { canonicalJson, TypeTable } from "./types.ts";
+import { canonicalJson } from "./types.ts";
 
 /** The `Import` payload without `module` and `bindings`. */
 type InterfacePayload = Pick<
@@ -312,25 +310,7 @@ export function buildInterface(
   };
 }
 
-// ------------------------------------------------------------------ the project driver
-
-interface ModuleCheck {
-  readonly module: string;
-  readonly declarations: ModuleDeclarations;
-  /** An error value when the mode map lacks an entry that the hash needs. */
-  readonly interface: Result<ModuleInterface, InterfaceError>;
-  /** Declaration diagnostics of this module, sorted. */
-  readonly diagnostics: readonly Diagnostic[];
-}
-
-export interface ProjectCheck {
-  /** The one intern table of the project. */
-  readonly table: TypeTable;
-  /** Per module, in topological order. */
-  readonly modules: ReadonlyMap<string, ModuleCheck>;
-  /** The diagnostics of the analysis and of every declaration check, sorted without duplicates. */
-  readonly diagnostics: readonly Diagnostic[];
-}
+// ------------------------------------------------------------------ reachability
 
 /** The names of the modules that `module` reaches through imports, directly or not. */
 export function reachableModules(analysis: Analysis, module: string): string[] {
@@ -343,43 +323,4 @@ export function reachableModules(analysis: Analysis, module: string): string[] {
   }
   seen.delete(module);
   return [...seen].sort(compareText);
-}
-
-/**
- * Checks the declarations of every module in topological order. A module sees
- * the type graphs of the modules that it reaches, not their syntax. The mode map
- * supplies the execution mode of functions whose sets are empty; without an
- * entry, the interface of the module is an error value. The diagnostics do not
- * depend on the mode map.
- */
-export function checkDeclarations(
-  analysis: Analysis,
-  modes: ModeMap = new Map(),
-): ProjectCheck {
-  const table = new TypeTable();
-  const graphs = new Map<string, TypeGraph>();
-  const modules = new Map<string, ModuleCheck>();
-  const diagnostics: Diagnostic[] = [...analysis.diagnostics];
-  for (const name of analysis.project.order) {
-    const imported = new Map<string, TypeGraph>();
-    for (const other of reachableModules(analysis, name)) {
-      const graph = graphs.get(other);
-      if (graph !== undefined) imported.set(other, graph);
-    }
-    const declarations = checkModuleDeclarations(
-      analysis,
-      name,
-      table,
-      imported,
-    );
-    graphs.set(name, buildTypeGraph(declarations));
-    modules.set(name, {
-      module: name,
-      declarations,
-      interface: buildInterface(declarations, modes, imported),
-      diagnostics: declarations.diagnostics,
-    });
-    diagnostics.push(...declarations.diagnostics);
-  }
-  return { table, modules, diagnostics: normalizeDiagnostics(diagnostics) };
 }

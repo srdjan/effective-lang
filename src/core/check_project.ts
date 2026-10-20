@@ -51,7 +51,7 @@ import {
 } from "./interface.ts";
 import type { CapabilityId, ErrorId, Execution, ValueId } from "./ir.ts";
 import { solveModeGroup, stronglyConnectedComponents } from "./modes.ts";
-import type { ConfigError } from "./project.ts";
+import type { ConfigError, ModuleInfo } from "./project.ts";
 import type { Result, SourceHost } from "./source.ts";
 import {
   kindOf,
@@ -440,6 +440,85 @@ export function checkModuleBodies(args: CheckArguments): ModuleBodies {
 
 // ------------------------------------------------------------------ the project
 
+/** What a module sees of the modules that it reaches, among those that are checked so far. */
+export interface ReachedModules {
+  readonly reached: readonly string[];
+  readonly graphs: ReadonlyMap<string, TypeGraph>;
+  readonly interfaces: ReadonlyMap<string, ModuleInterface>;
+}
+
+/** The reached modules of `name`, with the type graphs and the interfaces that exist for them. */
+export function reachedModules(
+  analysis: Analysis,
+  name: string,
+  graphs: ReadonlyMap<string, TypeGraph>,
+  interfaces: ReadonlyMap<string, ModuleInterface>,
+): ReachedModules {
+  const reached = reachableModules(analysis, name);
+  const importedGraphs = new Map<string, TypeGraph>();
+  const visible = new Map<string, ModuleInterface>();
+  for (const other of reached) {
+    const graph = graphs.get(other);
+    if (graph !== undefined) importedGraphs.set(other, graph);
+    const iface = interfaces.get(other);
+    if (iface !== undefined) visible.set(other, iface);
+  }
+  return { reached, graphs: importedGraphs, interfaces: visible };
+}
+
+/** The result of the check of one module: its checked form and its type graph. */
+export interface ModuleStep {
+  readonly checked: CheckedModule;
+  readonly graph: TypeGraph;
+}
+
+/**
+ * Checks one module: its declarations, its type graph, its bodies, and its
+ * interface. `checkAnalysis` and `Program` both call this step, so a check from
+ * scratch and a revision of the program give the same result.
+ */
+export function checkModuleStep(
+  analysis: Analysis,
+  info: ModuleInfo,
+  name: string,
+  table: TypeTable,
+  seen: ReachedModules,
+): ModuleStep {
+  const declarations = checkModuleDeclarations(
+    analysis,
+    name,
+    table,
+    seen.graphs,
+  );
+  const graph = buildTypeGraph(declarations);
+  const bodies = checkModuleBodies({
+    analysis,
+    module: name,
+    declarations,
+    interfaces: seen.interfaces,
+  });
+  const built = buildInterface(declarations, bodies.modes, seen.graphs);
+  return {
+    graph,
+    checked: {
+      module: name,
+      path: info.path,
+      tree: info.tree,
+      declarations,
+      functions: bodies.functions,
+      constants: bodies.constants,
+      modes: bodies.modes,
+      initialization: bodies.initialization,
+      interface: built,
+      hash: built.ok ? built.value.hash : undefined,
+      diagnostics: normalizeDiagnostics([
+        ...declarations.diagnostics,
+        ...bodies.diagnostics,
+      ]),
+    },
+  };
+}
+
 /**
  * Checks every module of an analyzed project in topological order. A module sees
  * the finished interfaces of the modules that it reaches, with their modes.
@@ -453,48 +532,19 @@ export function checkAnalysis(analysis: Analysis): CheckedProject {
   for (const name of analysis.project.order) {
     const info = analysis.project.modules.get(name);
     if (info === undefined) continue;
-    const reached = reachableModules(analysis, name);
-    const importedGraphs = new Map<string, TypeGraph>();
-    const visible = new Map<string, ModuleInterface>();
-    for (const other of reached) {
-      const graph = graphs.get(other);
-      if (graph !== undefined) importedGraphs.set(other, graph);
-      const iface = interfaces.get(other);
-      if (iface !== undefined) visible.set(other, iface);
-    }
-    const declarations = checkModuleDeclarations(
+    const step = checkModuleStep(
       analysis,
+      info,
       name,
       table,
-      importedGraphs,
+      reachedModules(analysis, name, graphs, interfaces),
     );
-    graphs.set(name, buildTypeGraph(declarations));
-    const bodies = checkModuleBodies({
-      analysis,
-      module: name,
-      declarations,
-      interfaces: visible,
-    });
-    const built = buildInterface(declarations, bodies.modes, importedGraphs);
-    if (built.ok) interfaces.set(name, built.value);
-    const moduleDiagnostics = normalizeDiagnostics([
-      ...declarations.diagnostics,
-      ...bodies.diagnostics,
-    ]);
-    diagnostics.push(...moduleDiagnostics);
-    modules.set(name, {
-      module: name,
-      path: info.path,
-      tree: info.tree,
-      declarations,
-      functions: bodies.functions,
-      constants: bodies.constants,
-      modes: bodies.modes,
-      initialization: bodies.initialization,
-      interface: built,
-      hash: built.ok ? built.value.hash : undefined,
-      diagnostics: moduleDiagnostics,
-    });
+    graphs.set(name, step.graph);
+    if (step.checked.interface.ok) {
+      interfaces.set(name, step.checked.interface.value);
+    }
+    diagnostics.push(...step.checked.diagnostics);
+    modules.set(name, step.checked);
   }
   return {
     analysis,
