@@ -78,7 +78,7 @@ withConstructorDefault, without casts or private APIs.
 
 The [fixture](../../fixtures/emit/schema-constructor-fields.eff),
 [source and IR boundaries](../../tests/schema_constructor_fields_test.ts), and
-[compiled witness](../../tests/schema_constructor_fields_slow_test.ts) cover
+[compiled witness](../../tests/strict_target_slow_test.ts) cover
 all three presence forms and every selected field adapter, imported descriptors,
 nested partial M, unchanged D/E, fresh callbacks, separate wire defaults and
 services, encoder omission, Option contents, failures, defects, and awaited

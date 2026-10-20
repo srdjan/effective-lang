@@ -91,7 +91,7 @@ contains source contracts, registered host declarations, a source workflow,
 the native SQL adapter, recording drivers, an entry point and fourteen runtime checks.
 Two [source checks](../../tests/application_service_workflow_test.ts) validate
 linked IR and reject erased result, failure and retained service contracts.
-The [compiled application harness](../../tests/application_service_workflow_slow_test.ts)
+The [compiled application harness](../../tests/application_slow_test.ts)
 checks emitted TypeScript and the registered adapter strictly, runs all fourteen
 runtime cases and executes the standalone entry point.
 
@@ -130,7 +130,7 @@ The stream processor baseline is next. Gap item 9 stays deferred.
 ## Reproduce
 
 ```sh
-deno test --allow-all tests/application_service_workflow_test.ts tests/application_service_workflow_slow_test.ts
+deno test --allow-all tests/application_service_workflow_test.ts tests/application_slow_test.ts
 deno task check
 ```
 

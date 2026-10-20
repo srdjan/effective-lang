@@ -94,7 +94,7 @@ contains source contracts, source pipeline, primitive recording drivers, an
 entry point and thirteen compiled runtime cases. Two
 [source checks](../../tests/application_stream_processor_test.ts) validate
 linked IR and independently reject each erased failure, service and result contract.
-The [compiled harness](../../tests/application_stream_processor_slow_test.ts)
+The [compiled harness](../../tests/application_slow_test.ts)
 checks emitted TypeScript, runs all application cases and executes main.ts.
 
 The success trace writes item identifiers [1,2], [3,4] and [5]. Empty input
@@ -134,7 +134,7 @@ API parity and other release acceptance checks remain separate. Item 9 stays def
 ## Reproduce
 
 ```sh
-deno test --allow-all tests/application_stream_processor_test.ts tests/application_stream_processor_slow_test.ts
+deno test --allow-all tests/application_stream_processor_test.ts tests/application_slow_test.ts
 deno task check
 ```
 

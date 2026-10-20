@@ -62,7 +62,7 @@ services. Callback compatibility, data-only checks, and guards remain enforced.
 
 The [source fixture](../../fixtures/emit/schema-recursive-wire.eff),
 [source and IR checks](../../tests/schema_recursive_wire_test.ts), and
-[compiled witness](../../tests/schema_recursive_wire_slow_test.ts) cover all
+[compiled witness](../../tests/strict_target_slow_test.ts) cover all
 three guards, separate recursive aliases, optional wire fields, constructor
 defaults, imported arrays, directional services, repeated roundtrips, wire and
 make type separation, nested failures, defects, and awaited cleanup in both wire

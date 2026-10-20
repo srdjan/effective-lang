@@ -4,7 +4,7 @@ Date: 2026-10-19. Target: `effect@4.0.5`, Deno 2.9.7. Status: bounded source
 slice implemented. The [pinned target probe](schema-adapter-probes/required-optional.ts)
 has three passing tests. The
 [source boundary probe](schema-adapter-probes/required-optional-source_slow_test.ts)
-and [compiled runtime witness](../../tests/schema_required_optional_slow_test.ts)
+and [compiled runtime witness](../../tests/strict_target_slow_test.ts)
 exercise the selected source rule.
 
 ## Boundary and decision

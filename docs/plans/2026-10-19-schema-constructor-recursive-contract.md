@@ -70,7 +70,7 @@ and default callback captures, including references hidden inside a block.
 
 The [fixture](../../fixtures/emit/schema-constructor-recursive.eff),
 [source and IR tests](../../tests/schema_constructor_recursive_test.ts), and
-[compiled witness](../../tests/schema_constructor_recursive_slow_test.ts) cover
+[compiled witness](../../tests/strict_target_slow_test.ts) cover
 all three guards, partial inputs at nested levels, imported recursive Schemas,
 outer defaults, separate wire services, fresh callbacks, complete wire data,
 nested failures, defects, and awaited cleanup. Boundaries reject M erasure,

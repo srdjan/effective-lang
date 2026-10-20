@@ -63,7 +63,7 @@ a native reference, and nine compiled runtime checks. The
 [source boundary checks](../../tests/application_worker_test.ts) verify result,
 failure and service contracts. They retain separate diagnostics for opaque
 Schedule retry and repetition consumers. The
-[compiled application test](../../tests/application_worker_slow_test.ts) validates
+[compiled application test](../../tests/application_slow_test.ts) validates
 linked IR, checks emitted TypeScript strictly, runs all nine runtime cases, and
 executes the standalone entry point.
 
@@ -100,7 +100,7 @@ The service workflow baseline is next. Gap item 9 stays deferred.
 ## Reproduce
 
 ```sh
-deno test --allow-all tests/application_worker_test.ts tests/application_worker_slow_test.ts
+deno test --allow-all tests/application_worker_test.ts tests/application_slow_test.ts
 deno task check
 ```
 

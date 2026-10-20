@@ -3,7 +3,7 @@
 Date: 2026-10-19. Target: `effect@4.0.5`, Deno 2.9.7. Status: implemented. The
 [target probe](schema-adapter-probes/null-default.ts) has five passing tests.
 The [source fixture](../../fixtures/emit/schema-null-default.eff),
-[compiled runtime witness](../../tests/schema_null_default_slow_test.ts), and
+[compiled runtime witness](../../tests/strict_target_slow_test.ts), and
 [source and IR boundaries](../../tests/schema_null_default_test.ts) cover the
 selected rule. The target composition follows the official
 [missing-or-null default example](https://effect.website/docs/v4/schema/advanced-usage#default-for-a-missing-or-null-key),

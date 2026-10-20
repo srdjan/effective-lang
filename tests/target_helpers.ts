@@ -1,11 +1,51 @@
 // Runs emitted TypeScript against the strict target configuration.
 
 import { assert, assertEquals } from "@std/assert";
-import type {
-  EmitProjectError,
-  EmittedModule,
-  Result,
+import {
+  checkProject,
+  emitProject,
+  type EmitProjectError,
+  type EmittedModule,
+  lowerProject,
+  memoryHost,
+  type Result,
+  validateProject,
 } from "../src/core/mod.ts";
+
+/**
+ * Checks the source project `files` with the entries `entries`, lowers it,
+ * and validates it, then runs `runStrictTarget` on the result. The project must
+ * have no diagnostic. Returns the standard output of the run.
+ */
+export function compileStrictTarget(
+  files: Readonly<Record<string, string>>,
+  entries: readonly string[],
+  run: string,
+  prefix: string,
+): Promise<string> {
+  const project = checkProject(
+    memoryHost({ "effective.json": "{}", ...files }),
+    "",
+    entries,
+  );
+  assert(project.ok, JSON.stringify(project));
+  assertEquals(project.value.diagnostics, []);
+  const lowered = lowerProject(project.value);
+  for (const result of lowered.values()) {
+    assert(result.ok, JSON.stringify(result));
+  }
+  for (
+    const diagnostics of validateProject(
+      project.value.analysis.project,
+      lowered,
+    ).values()
+  ) assertEquals(diagnostics, []);
+  return runStrictTarget(
+    emitProject(lowered, { config: project.value.analysis.project.config }),
+    run,
+    prefix,
+  );
+}
 
 /**
  * Writes the emitted modules and `run` as `run.ts` into a temporary directory

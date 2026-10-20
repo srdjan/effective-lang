@@ -78,7 +78,7 @@ const sink = this.argInfo(args[1], this.takeSinkHint(stream.type, args[1]));
 Tests: `tests/run_stream_sink_hint_test.ts` covers the inline `takeSink`, a
 named sink with nonempty channels, `if` and `match` over named sinks for all
 four builtins, and `takeSink` calls inside `if` and `match` branches.
-`tests/run_stream_sink_hint_slow_test.ts` runs the emitted program under
+`tests/strict_target_slow_test.ts` runs the emitted program under
 strict TypeScript.
 
 ## Why This Works

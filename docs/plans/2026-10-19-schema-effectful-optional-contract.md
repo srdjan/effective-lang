@@ -4,7 +4,7 @@ Date: 2026-10-19. Target: `effect@4.0.5`, Deno 2.9.7. Status: bounded source
 slice implemented. The
 [target probe](schema-adapter-probes/effectful-optional.ts) has five passing
 tests; the
-[compiled runtime witness](../../tests/schema_effectful_optional_slow_test.ts)
+[compiled runtime witness](../../tests/strict_target_slow_test.ts)
 checks strict emission and independent validation. This extends the
 [optional-field contract](2026-10-19-schema-optional-transform-defaults-contract.md)
 without adding a new source constructor or IR operation.

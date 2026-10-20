@@ -79,7 +79,7 @@ evaluates each Schema argument once. The AST retains native callback timing.
 
 The [fixture](../../fixtures/emit/schema-constructor-order.eff),
 [source and linked IR checks](../../tests/schema_constructor_order_test.ts),
-and [compiled witness](../../tests/schema_constructor_order_slow_test.ts) cover
+and [compiled witness](../../tests/strict_target_slow_test.ts) cover
 every selected adapter, an imported target default, nested partial M, precise
 public flags, independent wire services and callbacks, omission, Option reset
 and reattachment, source-only defaults, fresh callbacks, failures, defects and

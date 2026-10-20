@@ -4,7 +4,7 @@ Date: 2026-10-19. Target: `effect@4.0.5`, Deno 2.9.7. Status: bounded runner
 implemented; the [nonrecursive constructor metadata extension](2026-10-19-schema-constructor-metadata-contract.md) now adds separate make-input types. The
 [target probe](schema-adapter-probes/constructor-default.ts) has six passing
 tests. The [source fixture](../../fixtures/emit/schema-constructor.eff),
-[compiled runtime witness](../../tests/schema_constructor_slow_test.ts), and
+[compiled runtime witness](../../tests/strict_target_slow_test.ts), and
 [source and IR boundaries](../../tests/schema_constructor_test.ts) cover the
 selected rule. Effect's
 [default constructor documentation](https://effect.website/docs/v4/schema/default-constructors)

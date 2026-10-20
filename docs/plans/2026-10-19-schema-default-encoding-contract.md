@@ -4,7 +4,7 @@ Date: 2026-10-19. Target: `effect@4.0.5`, Deno 2.9.7. Status: implemented. The
 [pinned target probe](schema-adapter-probes/default-encoding.ts) has four
 passing tests. The
 [source fixture](../../fixtures/emit/schema-default-encoding.eff),
-[compiled runtime witness](../../tests/schema_default_encoding_slow_test.ts),
+[compiled runtime witness](../../tests/strict_target_slow_test.ts),
 and [source boundary tests](../../tests/schema_default_encoding_test.ts) cover
 the selected rule. The target API's `DecodingDefaultOptions` and
 `withDecodingDefaultTypeKey` implementation are pinned to Effect 4.0.5; the

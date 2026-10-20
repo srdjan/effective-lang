@@ -5,7 +5,7 @@ composition implemented. The
 [target probe](schema-adapter-probes/constructor-metadata.ts) has four passing
 tests. The
 [source fixture](../../fixtures/emit/schema-constructor-metadata.eff),
-[compiled runtime witness](../../tests/schema_constructor_metadata_slow_test.ts),
+[compiled runtime witness](../../tests/strict_target_slow_test.ts),
 and [source and IR boundaries](../../tests/schema_constructor_metadata_test.ts)
 cover the rule. This extends the
 [type-side constructor](2026-10-19-schema-constructor-contract.md). The official

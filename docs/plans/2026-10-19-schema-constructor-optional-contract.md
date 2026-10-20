@@ -53,7 +53,7 @@ view with public Schema.make over the composed AST, as for other composites;
 it uses no casts or private APIs.
 
 The [source fixture](../../fixtures/emit/schema-constructor-optional.eff) and
-[compiled witness](../../tests/schema_constructor_optional_slow_test.ts) cover
+[compiled witness](../../tests/strict_target_slow_test.ts) cover
 all adapters, complete D/E versus partial M, imported field descriptors, target
 selection, nested validation paths, and wire-effect traces. The
 [source and IR tests](../../tests/schema_constructor_optional_test.ts) reject

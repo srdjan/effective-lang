@@ -7,7 +7,7 @@ passing tests. The
 [source boundary probe](schema-adapter-probes/optional-union-source_slow_test.ts)
 checks accepted forms and rejection boundaries. The
 [compiled fixture](../../fixtures/emit/schema-optional-union.eff) and
-[runtime tests](../../tests/schema_optional_slow_test.ts) establish source
+[runtime tests](../../tests/strict_target_slow_test.ts) establish source
 support, strict emission, and independent validation.
 
 ## Decision and evidence
@@ -182,6 +182,6 @@ deferred by user instruction.
 ```sh
 deno test --no-lock docs/plans/schema-adapter-probes/optional-union-issues.ts
 deno test --no-lock --allow-all docs/plans/schema-adapter-probes/optional-union-source_slow_test.ts
-deno test --no-lock --allow-all tests/schema_optional_slow_test.ts
+deno test --no-lock --allow-all tests/strict_target_slow_test.ts
 deno task check
 ```

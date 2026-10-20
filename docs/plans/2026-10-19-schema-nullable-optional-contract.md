@@ -5,7 +5,7 @@ the selected source data and Schema subset. The
 [pinned target probe](schema-adapter-probes/nullable-optional.ts) has four
 passing tests. The
 [source fixture](../../fixtures/emit/schema-nullable-optional.eff) and
-[compiled runtime witness](../../tests/schema_nullable_optional_slow_test.ts)
+[compiled runtime witness](../../tests/strict_target_slow_test.ts)
 check both directions, strict TypeScript, and independent IR validation. The
 [source boundary tests](../../tests/null_test.ts) cover inference, finite
 matches, equality, and rejected operations.

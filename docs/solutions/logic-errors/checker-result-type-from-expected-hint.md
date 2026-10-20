@@ -81,7 +81,7 @@ const output = outputs.length > 0
 
 Tests: `tests/schedule_check_test.ts` covers the widened program, an
 inferred-output control, and a mismatch that must report `type-mismatch/003`.
-`tests/schedule_output_slow_test.ts` builds the widened program with the
+`tests/strict_target_slow_test.ts` builds the widened program with the
 validator and strict TypeScript.
 
 ## Why This Works

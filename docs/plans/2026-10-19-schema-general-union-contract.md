@@ -4,7 +4,7 @@ Date: 2026-10-19. Target: `effect@4.0.5`, Deno 2.9.7. Status: implemented within
 the selected source Schema subset. The
 [pinned target probe](schema-adapter-probes/general-union.ts) has four passing
 tests. The
-[compiled source witness](../../tests/schema_general_union_slow_test.ts) uses
+[compiled source witness](../../tests/strict_target_slow_test.ts) uses
 the [fixture](../../fixtures/emit/schema-general-union.eff) and checks strict
 TypeScript, runtime behavior, and independent IR validation. Effect's
 [union documentation](https://effect.website/docs/v4/schema/basic-usage#unions)

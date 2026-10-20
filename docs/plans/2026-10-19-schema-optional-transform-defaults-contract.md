@@ -7,7 +7,7 @@ seven passing tests. The
 [source boundary probe](schema-adapter-probes/optional-transform-source_slow_test.ts)
 now checks accepted forms and rejection boundaries. The
 [compiled fixture](../../fixtures/emit/schema-optional-transform.eff) and
-[runtime test](../../tests/schema_optional_transform_slow_test.ts) cover strict
+[runtime test](../../tests/strict_target_slow_test.ts) cover strict
 emission, behavior, and independent validation.
 This contract pins the pure baseline. The
 [effectful callback extension](2026-10-19-schema-effectful-optional-contract.md)
@@ -141,6 +141,6 @@ canonical site's 11 tests and 30 strict illustrative units.
 ```sh
 deno test --no-lock docs/plans/schema-adapter-probes/optional-transform-defaults.ts
 deno test --no-lock --allow-all docs/plans/schema-adapter-probes/optional-transform-source_slow_test.ts
-deno test --no-lock --allow-all tests/schema_optional_transform_slow_test.ts
+deno test --no-lock --allow-all tests/strict_target_slow_test.ts
 deno task check
 ```
