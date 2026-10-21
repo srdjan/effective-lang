@@ -1,13 +1,14 @@
 // The oracle for the lexer. It lexes a fixed corpus and writes one hash of the
 // lexer output for each input into fixtures/lex/snapshot.json. The corpus is
 // 20,000 random strings from a fixed seed over the lexer alphabet, plus every
-// .eff and .effi file of the repository. tests/lex_snapshot_test.ts regenerates
+// .eff and .effi file that git tracks. Untracked files, such as the ignored
+// probe folders under docs/plans/, stay out, so every checkout writes the same
+// snapshot. tests/lex_snapshot_test.ts regenerates
 // the corpus and compares the hashes, so a change of the lexer output for any
 // input shows as a failure.
 //
 // The snapshot records the lexer of the revision that wrote it. Run
-// `deno run --allow-read --allow-write scripts/lex_snapshot.ts` only after a
-// deliberate change of the lexer output. A refactor of the lexer must not run it.
+// `deno task lex:update` only after a deliberate change of the lexer output. A refactor of the lexer must not run it.
 
 import { compareText } from "../src/core/mod.ts";
 import { lex, type Lexed } from "../src/core/lex.ts";
@@ -150,11 +151,25 @@ export function buildSnapshot(
   };
 }
 
+/** The root-relative paths of the .eff and .effi files that git tracks. */
+async function trackedSources(root: URL): Promise<Set<string>> {
+  const output = await new Deno.Command("git", {
+    args: ["ls-files", "-z", "--", "*.eff", "*.effi"],
+    cwd: root,
+    stdout: "piped",
+  }).output();
+  if (!output.success) throw new Error("git ls-files failed");
+  const listed = new TextDecoder().decode(output.stdout).split("\0");
+  return new Set(listed.filter((path) => path !== ""));
+}
+
 if (import.meta.main) {
   const root = new URL("../", import.meta.url);
+  const tracked = await trackedSources(root);
+  const files = await repositoryInputs(root);
   const snapshot = buildSnapshot(
     randomInputs(),
-    await repositoryInputs(root),
+    new Map([...files].filter(([path]) => tracked.has(path))),
   );
   const target = new URL("fixtures/lex/snapshot.json", root);
   await Deno.mkdir(new URL("./", target), { recursive: true });

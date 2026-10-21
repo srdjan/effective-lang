@@ -87,7 +87,7 @@ playground/    The browser playground. See "Playground". The page is in src/, th
 scripts/       Scripts that the tasks run. golden_update.ts writes the golden files.
                validate_fixtures.ts writes the mutation fixtures.
                behavior_capture.ts records the hashed compiler behavior of a git revision.
-               lex_snapshot.ts writes the lexer snapshot in fixtures/lex.
+               lex_snapshot.ts writes the lexer snapshot of the tracked .eff and .effi files in fixtures/lex.
                measure.ts counts branches and cyclomatic complexity of the files given.
                measure_functions.ts counts the same for each function.
                measure_kernel.ts holds the counting rules that both measure scripts share.
