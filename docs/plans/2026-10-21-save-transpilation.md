@@ -1,7 +1,7 @@
 # Transpilation on every save (SV)
 
-Proposed plan based on `cd1b899`. It is not accepted. Decisions SV-D1 to SV-D4
-are open. Codex astra validated the first draft. Section 7 records each finding
+Accepted plan based on `cd1b899`. On 2026-10-21 the user accepted option (a)
+of decisions SV-D1 to SV-D4. Codex astra validated the first draft. Section 7 records each finding
 and its resolution.
 
 ## 1. Current state
@@ -189,6 +189,8 @@ commit. SV5 also runs `deno task bench --full m1 m4 m7`.
 | A disk read sees a partial write from another tool. | One round emits from a broken text. | The broken module gets diagnostics and is held. The next round repairs the outputs. |
 
 ## 6. Decisions
+
+The user accepted option (a) of each decision on 2026-10-21.
 
 **SV-D1. Which modules does a save round write?**
 (a) Every writable module of the project, so that Part 1 equals `build`.
