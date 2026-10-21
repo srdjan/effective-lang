@@ -24,6 +24,15 @@ export function isSourcePath(path: string): boolean {
     (directories.length === 0 && name === CONFIG_FILE);
 }
 
+/** The real path of a directory, or undefined when it cannot be resolved. */
+function realPath(fs: CliFs, path: string): string | undefined {
+  try {
+    return fs.absolute(path);
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Reads the files of the project. The result maps each root-relative path to
  * its text. A file that disappears between the listing and the read is skipped.
@@ -35,9 +44,22 @@ export function readWorkspace(
 ): Result<ReadonlyMap<string, string>, string> {
   const files = new Map<string, string>();
   let failure: string | undefined;
+  const realRoot = realPath(fs, root);
+  if (realRoot === undefined) {
+    return { ok: false, error: `${root}: cannot be resolved` };
+  }
+  const rootPrefix = realRoot.endsWith("/") ? realRoot : `${realRoot}/`;
+  const visited = new Set<string>();
   const visit = (relative: string): void => {
     if (failure !== undefined) return;
-    const listed = fs.list(relative === "" ? root : joinPath(root, relative));
+    const path = relative === "" ? root : joinPath(root, relative);
+    // Every directory goes through this check, because a listing does not say
+    // which entry is a link.
+    const real = relative === "" ? realRoot : realPath(fs, path);
+    if (real === undefined || visited.has(real)) return;
+    if (relative !== "" && !real.startsWith(rootPrefix)) return;
+    visited.add(real);
+    const listed = fs.list(path);
     if (!listed.ok) {
       failure = listed.error.message;
       return;

@@ -97,7 +97,8 @@ export function memoryIo(
           })),
         };
       },
-      absolute: (path) => path === "." ? "/mem" : path,
+      absolute: (path) =>
+        path === "." ? "/mem" : path.startsWith("/") ? path : `/mem/${path}`,
     },
     denoCheck(request): Promise<Result<DenoCheckRun, FileFailure>> {
       state.checks.push(request);
