@@ -2163,14 +2163,13 @@ class BodyChecker {
   ): SchemaNode | undefined {
     const { name, builtin, op } = call;
     const type = this.table.node(this.table.unfold(info.type));
-    if (
-      (type.kind !== "schema" ||
-        (op !== "constructor-default" && (type.optionalKey === true ||
-          type.encodedOptionalKey === true ||
-          type.decodedOptionalKey === true)) ||
-        (!builtin.acceptsDefault && type.constructorDefault === true)) &&
-      !this.isError(info.type)
-    ) {
+    const accepted = type.kind === "schema" &&
+      (op === "constructor-default" ||
+        (type.optionalKey !== true &&
+          type.encodedOptionalKey !== true &&
+          type.decodedOptionalKey !== true)) &&
+      (builtin.acceptsDefault || type.constructorDefault !== true);
+    if (!accepted && !this.isError(info.type)) {
       this.report(
         "type-mismatch/010",
         `\`${name}\` needs a Schema value`,
@@ -2187,14 +2186,7 @@ class BodyChecker {
         at,
       );
     }
-    return type.kind === "schema" &&
-        (op === "constructor-default" ||
-          (type.optionalKey !== true &&
-            type.encodedOptionalKey !== true &&
-            type.decodedOptionalKey !== true)) &&
-        (builtin.acceptsDefault || type.constructorDefault !== true)
-      ? type
-      : undefined;
+    return accepted ? type : undefined;
   }
 
   /** The SchemaOptional type of a checked argument, or undefined after a report. */
