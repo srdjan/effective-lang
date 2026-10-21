@@ -84,6 +84,7 @@ import {
 import { isErrorId, isTypeId, serviceOfCapability, shortName } from "./ids.ts";
 import type { Arg, BuiltinContext } from "./check_builtins/context.ts";
 import { codecCall, codecOperation } from "./check_builtins/codec.ts";
+import { refCall } from "./check_builtins/ref.ts";
 import {
   scheduleComposeCall,
   scheduleFromStepCall,
@@ -1316,10 +1317,10 @@ class BodyChecker implements BuiltinContext {
     zipStreams: (c, node, name, args) => c.streamPairCall(node, name, args),
     concatStreams: (c, node, name, args) => c.streamPairCall(node, name, args),
     race: (c, node, _name, args) => c.raceCall(node, args),
-    makeRef: (c, node, name, args) => c.refCall(node, name, args),
-    getRef: (c, node, name, args) => c.refCall(node, name, args),
-    setRef: (c, node, name, args) => c.refCall(node, name, args),
-    updateRef: (c, node, name, args) => c.refCall(node, name, args),
+    makeRef: (c, node, name, args) => refCall(c, node, name, args),
+    getRef: (c, node, name, args) => refCall(c, node, name, args),
+    setRef: (c, node, name, args) => refCall(c, node, name, args),
+    updateRef: (c, node, name, args) => refCall(c, node, name, args),
     layer: (c, node, _name, args) => c.layerCall(node, args),
     mergeLayers: (c, node, _name, args) => c.mergeLayersCall(node, args),
     unbrand: (c, node, _name, args) => c.unbrandCall(node, args),
@@ -4588,49 +4589,6 @@ class BodyChecker implements BuiltinContext {
       [...a.requirements, ...b.requirements],
     );
     return this.finish(node, type, combine([left, right]));
-  }
-
-  private refCall(
-    node: NodeId,
-    name: "makeRef" | "getRef" | "setRef" | "updateRef",
-    args: readonly Arg[],
-  ): NodeInfo {
-    const first = this.argInfo(args[0]);
-    if (name === "makeRef") {
-      return this.finish(
-        node,
-        this.table.ref(this.widen(first.type)),
-        combine([first, EFFECT_ONLY]),
-      );
-    }
-    const ref = this.table.node(this.table.unfold(first.type));
-    if (ref.kind !== "ref" && !this.isError(first.type)) {
-      this.report(
-        "type-mismatch/010",
-        `\`${name}\` needs a Ref value`,
-        args[0].node,
-      );
-    }
-    const element = ref.kind === "ref" ? ref.element : this.table.error;
-    if (name === "getRef") {
-      return this.finish(node, element, combine([first, EFFECT_ONLY]));
-    }
-    if (name === "setRef") {
-      const value = this.argInfo(args[1], element);
-      this.fits(args[1].node, value.type, element, "the new Ref value");
-      return this.finish(
-        node,
-        this.table.unit,
-        combine([first, value, EFFECT_ONLY]),
-      );
-    }
-    const transform = this.callback(name, args[1], [element], element);
-    this.fits(args[1].node, transform.result, element, "the updated Ref value");
-    return this.finish(
-      node,
-      this.table.unit,
-      combine([first, transform.info, EFFECT_ONLY]),
-    );
   }
 
   private provideCall(node: NodeId, args: readonly Arg[]): NodeInfo {

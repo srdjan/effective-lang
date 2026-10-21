@@ -22,7 +22,7 @@ confirm the resolver identity and specialization that lowering needs.
 | Stage | Inspect | Preserve or verify |
 | --- | --- | --- |
 | Recognition | `src/core/resolve.ts`: `PRELUDE`, derived prelude sets and shadowing flag. Type syntax also involves `TYPE_WORDS` in `syntax.ts`, builtin type names in `resolve.ts` and `TypeLowerer` in `check.ts`. | Legal names, local shadowing and existing grammar. Ordinary builtin calls need no parser change. |
-| Source checking | `src/core/check_expr.ts`: `PRELUDE_PROLOGUES`, `PRELUDE_HANDLERS` and the family handler. General Schedule and Codec handlers live in `src/core/check_builtins/schedule.ts` and `codec.ts`, using the narrow `BuiltinContext` in `context.ts`. Schema operations also use `SCHEMA_BUILTINS` and `SCHEMA_HANDLERS`. | Arity and pipeline rejection order, expected types, sorted effects, callback invocation and lifetime rules. New table keys must remain exhaustive. |
+| Source checking | `src/core/check_expr.ts`: `PRELUDE_PROLOGUES`, `PRELUDE_HANDLERS` and the family handler. General Schedule, Codec and Ref handlers live in `src/core/check_builtins/schedule.ts`, `codec.ts` and `ref.ts`, using the narrow `BuiltinContext` in `context.ts`. Schema operations also use `SCHEMA_BUILTINS` and `SCHEMA_HANDLERS`. | Arity and pipeline rejection order, expected types, sorted effects, callback invocation and lifetime rules. New table keys must remain exhaustive. |
 | Checking facts | `src/core/tables.ts`: `NodeInfo`, `NodeFact` and callback/pattern facts. | The checked type, mode and sets, plus the facts lowering cannot recover from syntax alone. |
 | Lowering | `src/core/lower.ts`: fact dispatch, structural builders and builtin specialization. | Operands, deferred callbacks, specialization identity, source spans and pipeline effects after moving the left value. |
 | Independent validation | `src/core/validate/expr.ts`, `world.ts` and `typing.ts`. | Independently recompute types, effects and modes. Reject forged payloads with the existing diagnostic code, path and message. Never import checker policy or handler code. |
@@ -30,7 +30,8 @@ confirm the resolver identity and specialization that lowering needs.
 | User-facing queries and docs | `docs/language-rules.md`, `docs/api.md`, editor queries and the sibling website/spec when source forms or status change. | Contracts and completion/classification derived from the current prelude and checked types. Update the owning reference rather than adding another feature list. |
 
 For example, `getRef` is recognized in `resolve.ts`; its prologue records a
-`get-ref` fact and effect mode, and its handler checks the Ref element type.
+`get-ref` fact and effect mode, and its handler in `check_builtins/ref.ts`
+checks the Ref element type.
 `tables.ts` declares that fact. `lower.ts` builds its operand, the independent
 validator recomputes the element and effects, `emit/shape.ts` records its child,
 and `emit/calls.ts` selects `Ref.get`. Arity and wrong-input regressions live in
