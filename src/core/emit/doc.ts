@@ -333,14 +333,12 @@ function makeHardCheck(): (doc: Doc) => boolean {
   return check;
 }
 
-const sharedHardCheck = makeHardCheck();
-
 /**
  * True when `doc` holds a hard line, or a group that must break, outside an
  * `alt`. A fit test of an `alt` option stops at such a line.
  */
 export function hasHardLine(doc: Doc): boolean {
-  return sharedHardCheck(doc);
+  return makeHardCheck()(doc);
 }
 
 /** Lays out `doc` at `width` columns. */
