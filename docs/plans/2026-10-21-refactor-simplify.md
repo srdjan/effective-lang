@@ -107,5 +107,6 @@ Status on 2026-10-21: all 25 items are done on `main`. Three Sonnet implementers
 
 Found during the pass, not fixed (outside refactor scope):
 
-- `deno task lex:update` reads the gitignored probe directories under `docs/plans/`. Their content has changed since the committed snapshot was made, so the task now rewrites `fixtures/lex/snapshot.json` in the main checkout, and a fresh worktree gives yet another result. The base and new scripts give the same output, so this drift existed before the pass. The snapshot input set needs a decision.
-- The probable short write in `src/host/deno_io.ts` (section 4) is still open.
+- `deno task lex:update` read the gitignored probe directories under `docs/plans/`, so each checkout wrote a different snapshot. The base and new scripts gave the same output, so this drift existed before the pass. Decided on 2026-10-21 (D2, restrict to tracked files): `4ffe6cc` keeps only the files that `git ls-files` lists. The regenerated snapshot keeps the random hashes and the output hash of all 124 unchanged files (M).
+- The probable short write in `src/host/deno_io.ts` (section 4). Decided on 2026-10-21 (D3, confirm first): not reproduced (M). An 8,000,000-byte write through `denoIo().stdout` arrived complete in three cases: a shell pipe with a reader that starts 2 s late, a `Deno.Command` parent that waits 2 s before it reads, and a Node parent that pauses the stream for 2 s. On this machine and Deno 2.9.7, `writeSync` on stdout writes all bytes in one call. No code change. The `writeAll` loop in `src/lsp/main.ts` stays as a guard.
+- The three lane branches were deleted on 2026-10-21 (D1). Their former tips are `34a5309`, `b6c350b`, and `d986483`.
