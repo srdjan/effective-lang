@@ -25,6 +25,7 @@ import {
   joinPath,
   lineStarts,
   Program,
+  type Result,
   type Revision,
   type RevisionDelta,
   revisionDelta,
@@ -53,6 +54,20 @@ interface OpenDocument {
   text: string;
 }
 
+interface CompletedProject {
+  readonly revision: Revision;
+  readonly delta: RevisionDelta;
+}
+
+type ProjectPhase =
+  | { readonly kind: "new" }
+  | { readonly kind: "ready"; readonly last: CompletedProject }
+  | {
+    readonly kind: "failed";
+    readonly error: ConfigError;
+    readonly last: CompletedProject | undefined;
+  };
+
 /** The state of one project. The set owns it. Other code reads it. */
 export class ProjectState {
   /** The disk texts, by root-relative path. */
@@ -63,14 +78,7 @@ export class ProjectState {
   current: ReadonlyMap<string, string> = new Map();
   /** True when the wanted texts may differ from `current`. */
   dirty = false;
-  /** True after the first `Program.update`. */
-  started = false;
-  /** The newest revision that `update` returned. */
-  lastGood: Revision | undefined;
-  /** `revisionDelta(previous good, last good)` of the newest good update. */
-  lastDelta: RevisionDelta | undefined;
-  /** The error of the newest update, or undefined when it succeeded. */
-  configError: ConfigError | undefined;
+  private phase: ProjectPhase = { kind: "new" };
   /** The serialized list last published per path. A path never published counts as `[]`. */
   readonly published = new Map<string, string>();
   /** The version of each open document at its last publish. */
@@ -92,6 +100,41 @@ export class ProjectState {
 
   constructor(readonly root: string) {
     this.program = new Program(root);
+  }
+
+  private get last(): CompletedProject | undefined {
+    return this.phase.kind === "new" ? undefined : this.phase.last;
+  }
+
+  /** True after the first `Program.update`, including a failed update. */
+  get started(): boolean {
+    return this.phase.kind !== "new";
+  }
+
+  get lastGood(): Revision | undefined {
+    return this.last?.revision;
+  }
+
+  get lastDelta(): RevisionDelta | undefined {
+    return this.last?.delta;
+  }
+
+  get configError(): ConfigError | undefined {
+    return this.phase.kind === "failed" ? this.phase.error : undefined;
+  }
+
+  /** Publishes a complete update state, retaining the last good pair on failure. */
+  recordUpdate(updated: Result<Revision, ConfigError>): void {
+    const previous = this.last;
+    this.phase = updated.ok
+      ? {
+        kind: "ready",
+        last: {
+          revision: updated.value,
+          delta: revisionDelta(previous?.revision, updated.value),
+        },
+      }
+      : { kind: "failed", error: updated.error, last: previous };
   }
 
   /** The disk texts with the open documents laid over them. */
@@ -522,17 +565,9 @@ export class ProjectSet {
       this.#publish(project, wanted);
       return;
     }
-    project.started = true;
     const updated = project.program.update({ set, remove });
     project.current = wanted;
-    if (updated.ok) {
-      const delta = revisionDelta(project.lastGood, updated.value);
-      project.lastDelta = delta;
-      project.lastGood = updated.value;
-      project.configError = undefined;
-    } else {
-      project.configError = updated.error;
-    }
+    project.recordUpdate(updated);
     this.#publish(project, wanted);
     if (updated.ok) this.ports.flushed(project, updated.value);
   }
