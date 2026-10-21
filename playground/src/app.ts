@@ -7,7 +7,7 @@
 
 import { EditorState } from "@codemirror/state";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
-import { errorMessage } from "../../src/core/mod.ts";
+import { CONFIG_FILE, errorMessage } from "../../src/core/mod.ts";
 import {
   createPlayground,
   type PlaygroundError,
@@ -27,9 +27,6 @@ import {
   tabCounts,
   tabFromHash,
 } from "./model.ts";
-
-/** The file that holds the project configuration. It is not a tab. */
-const CONFIG_FILE = "effective.json";
 
 /** The pause before the cursor line changes, in milliseconds. */
 const CURSOR_PAUSE_MS = 300;
