@@ -161,16 +161,24 @@ export function fieldHelperDeclarations(scope: Scope): Doc[] {
   if (record !== undefined) {
     helpers.push(
       `// Source checking establishes T; this boundary supplies JavaScript own-field semantics.
-const ${record} = <T>(value: unknown, adapt?: (value: unknown) => unknown): T =>
-  (adapt === undefined ? globalThis.Object.assign(globalThis.Object.create(null), value) : adapt(value)) as T;`,
+const ${record} = <T>(value: unknown, adapt?: (value: unknown) => unknown): T => {
+let output: unknown;
+if (adapt !== undefined) output = adapt(value);
+else {
+  const descriptors = globalThis.Object.getOwnPropertyDescriptors(value);
+  for (const key of globalThis.Reflect.ownKeys(descriptors)) globalThis.Reflect.get(descriptors, key).configurable = true;
+  output = globalThis.Object.defineProperties(globalThis.Object.create(null), descriptors);
+}
+return output as T;
+};`,
     );
   }
   if (optional !== undefined) {
     const option = scope.effect("Option");
     helpers.push(
-      `const ${optional} = <T extends object, K extends keyof T>(value: T, key: K): ${option}.Option<Exclude<T[K], undefined>> => {
+      `const ${optional} = <T>(value: object, key: string): ${option}.Option<T> => {
 const supplied: unknown = globalThis.Reflect.get(value, ${presence});
-return ${option}.fromUndefinedOr(globalThis.Object.hasOwn(value, key) && (!(supplied instanceof globalThis.Set) || supplied.has(String(key))) ? value[key] : undefined);
+return globalThis.Object.hasOwn(value, key) && (!(supplied instanceof globalThis.Set) || supplied.has(key)) ? ${option}.some<T>(globalThis.Reflect.get(value, key)) : ${option}.none();
 };`,
     );
   }

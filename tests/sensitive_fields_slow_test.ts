@@ -94,6 +94,7 @@ Deno.test("sensitive records preserve absence, updates, nesting and one receiver
       "m.eff": `
 type Text = string
 export type R = { __proto__?: Text, constructor?: Text, toString?: Text, valueOf?: Text, hasOwnProperty?: Text }
+type Exclude = string
 export const $record = (): Text => "collision"
 export const $optionalField = (): Text => "collision"
 export const Object = (): Text => "collision"
@@ -149,9 +150,10 @@ import { Effect, Option } from "effect";
 import { readSchema, writeSchema, make, decodeTree, encodeTree, roundtrip } from "./m.ts";
 const present = JSON.parse('{"__proto__":"p","constructor":"c","toString":"t"}');
 if (Option.isNone(roundtrip.decode({})) || Option.isNone(roundtrip.encode(await Effect.runPromise(make())))) throw new Error("codec absence");
-const absent = await Effect.runPromise(readSchema({}));
+const extra = Object.defineProperty({}, "ignored", { enumerable: true, get() { throw new Error("ignored field was evaluated"); } });
+const absent = await Effect.runPromise(readSchema(extra));
 const value = await Effect.runPromise(readSchema(present));
-const tree = await Effect.runPromise(decodeTree({data: {}, kids: [{data: present, kids: []}]}));
+const tree = await Effect.runPromise(decodeTree(Object.freeze({data: Object.freeze({}), kids: Object.freeze([{data: Object.freeze(present), kids: []}])})));
 console.log(JSON.stringify([absent, value, await Effect.runPromise(writeSchema(value)), await Effect.runPromise(make()), await Effect.runPromise(encodeTree(tree))]));
 `,
     "effective-sensitive-schema-",
@@ -199,4 +201,24 @@ console.log(JSON.stringify({missing: read(missing).map(Option.getOrNull), presen
     encoded: [null, null, null],
     recovered: [null, null, null],
   });
+});
+
+Deno.test("present optional sensitive unknown fields retain undefined", async () => {
+  const result = await compileStrictTarget(
+    {
+      "m.eff": `type Value = unknown
+ type R = { __proto__?: unknown }
+ export const empty = (): R => ({})
+ export const full = (value: Value): R => ({__proto__: value})
+ export const read = (value: R): Option<Value> => value.__proto__
+ `,
+    },
+    ["m.eff"],
+    `import { Option } from "effect";
+ import { empty, full, read } from "./m.ts";
+ console.log(JSON.stringify([Option.isNone(read(empty())), Option.isSome(read(full(undefined)))]));
+ `,
+    "effective-sensitive-undefined-",
+  );
+  assertEquals(JSON.parse(result), [true, true]);
 });

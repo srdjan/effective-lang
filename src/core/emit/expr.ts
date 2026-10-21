@@ -1961,8 +1961,15 @@ export class ExprEmitter {
           callArguments([emitted(access)]),
         ]);
       }
+      const resultType = this.scope.resolve(e.type);
+      if (resultType.kind !== "option") {
+        throw internal("optional read has a non-option type");
+      }
       return emitted([
         this.scope.fieldHelper("optionalField"),
+        "<",
+        typeDoc(this.scope, resultType.element),
+        ">",
         callArguments([record, emitted(JSON.stringify(e.field))]),
       ]);
     }

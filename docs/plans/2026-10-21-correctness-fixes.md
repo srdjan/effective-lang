@@ -53,3 +53,15 @@ an imported helper's TypeScript error updates diagnostics without an Effective
 edit, an Effective recheck, or a generated-output change. The combined Plan A
 gate passed 1,763 fast and 171 slow tests before the final configuration-name
 coverage addition; the commit gate repeats the full suite with that addition.
+
+## FX2 boundary follow-up
+
+Final release review added regressions for an undeclared throwing getter and
+an own optional `unknown` field whose host-supplied value is `undefined`.
+The first exposed eager reads of ignored fields; the second exposed the
+undefined-based optional read. Adapters now copy property descriptors without
+reading extra values, then adapt only declared child shapes. Copied descriptors
+are configurable so frozen nested host values remain usable. Sensitive optional
+reads use own presence to choose Some/None and retain a present undefined value.
+The helper no longer depends on a potentially shadowed `Exclude` type name.
+No source form or checker rule changed: void record fields remain illegal.
