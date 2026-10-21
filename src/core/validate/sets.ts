@@ -1,7 +1,7 @@
 // Effect sets as sorted lists of unique identities. The order is the order of
 // JavaScript string comparison, as in the serializer.
 
-import type { CapabilityId, ErrorId, Execution } from "../ir.ts";
+import type { CapabilityId, Effects, ErrorId, Execution } from "../ir.ts";
 
 export function sortedUnique<T extends string>(items: readonly T[]): T[] {
   return [...new Set(items)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
@@ -39,6 +39,32 @@ export const QUIET: Active = {
   requirements: [],
   execution: "pure",
 };
+
+/** True when the evaluation is pure and its failure and requirement sets are empty. */
+export function isQuiet(active: Active): boolean {
+  return active.execution === "pure" && active.failures.length === 0 &&
+    active.requirements.length === 0;
+}
+
+/** The active effects of calling a function of the given type. */
+export function invocationOf(fn: {
+  readonly execution: Execution;
+  readonly effects: Effects;
+}): Active {
+  return {
+    failures: fn.effects.failures,
+    requirements: fn.effects.requirements,
+    execution: fn.execution,
+  };
+}
+
+/** The sorted union of the failure sets and of the requirement sets of the parts. */
+export function unionEffects(...parts: readonly Effects[]): Effects {
+  return {
+    failures: sortedUnique(parts.flatMap((part) => [...part.failures])),
+    requirements: sortedUnique(parts.flatMap((part) => [...part.requirements])),
+  };
+}
 
 /**
  * The union of several evaluations. The mode is effect when any part is

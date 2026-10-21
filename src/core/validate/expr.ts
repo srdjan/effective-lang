@@ -26,12 +26,15 @@ import { AREA } from "./report.ts";
 import {
   type Active,
   combine,
+  invocationOf,
+  isQuiet,
   isSubset,
   list,
   minus,
   QUIET,
   sameSet,
   sortedUnique,
+  unionEffects,
 } from "./sets.ts";
 import {
   asFunction,
@@ -147,18 +150,10 @@ const PURE_STREAM_PREDICATES: Record<PureStreamPredicate["kind"], string> = {
   "take-until-stream": "takeUntilStream",
 };
 
-function invocationOf(fn: {
-  readonly execution: Active["execution"];
-  readonly effects: {
-    readonly failures: Active["failures"];
-    readonly requirements: Active["requirements"];
-  };
-}): Active {
-  return {
-    failures: fn.effects.failures,
-    requirements: fn.effects.requirements,
-    execution: fn.execution,
-  };
+/** A concurrency limit is `unbounded` or a positive safe integer. Undefined selects the default. */
+function validConcurrency(value: number | "unbounded" | undefined): boolean {
+  return value === undefined || value === "unbounded" ||
+    (Number.isSafeInteger(value) && value > 0);
 }
 
 function validSchemaCallback(
@@ -607,8 +602,7 @@ export class BodyValidator {
     }
     const v = d.value;
     if (
-      v.execution !== "pure" || v.effects.failures.length > 0 ||
-      v.effects.requirements.length > 0
+      !isQuiet(invocationOf(v))
     ) {
       this.add(
         AREA.initialization,
@@ -689,6 +683,24 @@ export class BodyValidator {
 
   private poison(): Comp {
     return { type: undefined, match: "exact", active: QUIET, poisoned: true };
+  }
+
+  /** Reports a concurrency limit that is neither `unbounded` nor a positive safe integer. */
+  private checkConcurrency(
+    e: {
+      readonly concurrency: number | "unbounded" | undefined;
+      readonly span: Span;
+    },
+    path: string,
+    name: string,
+  ): void {
+    if (validConcurrency(e.concurrency)) return;
+    this.add(
+      AREA.control,
+      `${path}.concurrency`,
+      `${name} concurrency must be a positive safe integer or unbounded`,
+      e.span,
+    );
   }
 
   private compute(e: Expr, path: string, callee: boolean): Comp {
@@ -1368,8 +1380,7 @@ export class BodyValidator {
         const fn = asFunction(this.env, o.type);
         if (
           fn !== undefined &&
-          (fn.execution !== "pure" || fn.effects.failures.length > 0 ||
-            fn.effects.requirements.length > 0)
+          !isQuiet(invocationOf(fn))
         ) {
           this.add(
             AREA.execution,
@@ -1866,8 +1877,7 @@ export class BodyValidator {
       );
     }
     if (
-      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
-      fn.effects.requirements.length > 0
+      !isQuiet(invocationOf(fn))
     ) {
       this.add(
         AREA.control,
@@ -1941,9 +1951,7 @@ export class BodyValidator {
       return this.poison();
     }
     if (
-      d.execution !== "pure" || en.execution !== "pure" ||
-      d.effects.failures.length || d.effects.requirements.length ||
-      en.effects.failures.length || en.effects.requirements.length
+      !isQuiet(invocationOf(d)) || !isQuiet(invocationOf(en))
     ) {
       this.add(
         AREA.control,
@@ -2467,8 +2475,7 @@ export class BodyValidator {
         args.length !== 1 || hint === undefined || fn === undefined ||
         fn.parameters.length !== 1 ||
         !same(this.env, fn.parameters[0], hint) ||
-        !fits(this.env, fn.result, hint) || fn.execution !== "pure" ||
-        fn.effects.failures.length || fn.effects.requirements.length ||
+        !fits(this.env, fn.result, hint) || !isQuiet(invocationOf(fn)) ||
         !dataOnly(this.env, hint.decoded, "value") ||
         !dataOnly(this.env, hint.encoded, "value") ||
         !dataOnly(this.env, hint.makeInput ?? hint.decoded, "value") ||
@@ -2904,17 +2911,7 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    if (
-      e.concurrency !== undefined && e.concurrency !== "unbounded" &&
-      !(Number.isSafeInteger(e.concurrency) && e.concurrency > 0)
-    ) {
-      this.add(
-        AREA.control,
-        `${path}.concurrency`,
-        "partitionAll concurrency must be a positive safe integer or unbounded",
-        e.span,
-      );
-    }
+    this.checkConcurrency(e, path, "partitionAll");
     const errors = unionOf(
       this.env,
       job.effects.failures.map((id) => ({ kind: "named", id })),
@@ -2964,8 +2961,7 @@ export class BodyValidator {
         { kind: "array", element: errors },
         wrapper.parameters[0],
       ) ||
-      wrapper.execution !== "pure" || wrapper.effects.failures.length > 0 ||
-      wrapper.effects.requirements.length > 0 || failure?.kind !== "named" ||
+      !isQuiet(invocationOf(wrapper)) || failure?.kind !== "named" ||
       !this.env.errors.has(failure.id)
     ) {
       this.add(
@@ -2976,17 +2972,7 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    if (
-      e.concurrency !== undefined && e.concurrency !== "unbounded" &&
-      !(Number.isSafeInteger(e.concurrency) && e.concurrency > 0)
-    ) {
-      this.add(
-        AREA.control,
-        `${path}.concurrency`,
-        "validateAll concurrency must be a positive safe integer or unbounded",
-        e.span,
-      );
-    }
+    this.checkConcurrency(e, path, "validateAll");
     return {
       type: { kind: "array", element: job.result },
       match: "exact",
@@ -3066,17 +3052,7 @@ export class BodyValidator {
       ]));
       requirements.push(...member.effects.requirements);
     }
-    if (
-      e.concurrency !== undefined && e.concurrency !== "unbounded" &&
-      !(Number.isSafeInteger(e.concurrency) && e.concurrency > 0)
-    ) {
-      this.add(
-        AREA.control,
-        `${path}.concurrency`,
-        "allResults concurrency must be a positive safe integer or unbounded",
-        e.span,
-      );
-    }
+    this.checkConcurrency(e, path, "allResults");
     const result: Type = shape.kind === "tuple"
       ? { kind: "tuple", elements: outcomes }
       : shape.kind === "record"
@@ -3452,17 +3428,7 @@ export class BodyValidator {
     e: Extract<Expr, { kind: "map-effect" }>,
     path: string,
   ): Comp {
-    if (
-      e.concurrency !== undefined && e.concurrency !== "unbounded" &&
-      !(Number.isSafeInteger(e.concurrency) && e.concurrency > 0)
-    ) {
-      this.add(
-        AREA.control,
-        `${path}.concurrency`,
-        "mapEffect concurrency must be a positive safe integer or unbounded",
-        e.span,
-      );
-    }
+    this.checkConcurrency(e, path, "mapEffect");
     const stream = this.check(e.stream, `${path}.stream`);
     const transform = this.check(e.transform, `${path}.transform`);
     const source = unfold(this.env, stream.type);
@@ -3493,14 +3459,7 @@ export class BodyValidator {
         kind: "stream",
         element: fn.result,
         effects: {
-          failures: sortedUnique([
-            ...source.effects.failures,
-            ...fn.effects.failures,
-          ]),
-          requirements: sortedUnique([
-            ...source.effects.requirements,
-            ...fn.effects.requirements,
-          ]),
+          ...unionEffects(source.effects, fn.effects),
         },
       },
       match: "exact",
@@ -3528,8 +3487,7 @@ export class BodyValidator {
       source.kind !== "stream" || fn === undefined ||
       fn.parameters.length !== 1 ||
       !fits(this.env, source.element, fn.parameters[0]) ||
-      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
-      fn.effects.requirements.length > 0
+      !isQuiet(invocationOf(fn))
     ) {
       this.add(
         AREA.types,
@@ -3573,8 +3531,7 @@ export class BodyValidator {
       !fits(this.env, seed.type, fn.parameters[0]) ||
       !fits(this.env, source.element, fn.parameters[1]) ||
       !fits(this.env, fn.result, seed.type) ||
-      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
-      fn.effects.requirements.length > 0
+      !isQuiet(invocationOf(fn))
     ) {
       this.add(
         AREA.types,
@@ -3585,8 +3542,7 @@ export class BodyValidator {
       return this.poison();
     }
     if (
-      seed.execution !== "pure" || seed.failures.length > 0 ||
-      seed.requirements.length > 0
+      !isQuiet(seed)
     ) {
       this.add(
         AREA.execution,
@@ -3637,8 +3593,7 @@ export class BodyValidator {
       !fits(this.env, source.element, fn.parameters[1]) ||
       state === undefined || !fits(this.env, state, seed.type) ||
       output?.kind !== "array" ||
-      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
-      fn.effects.requirements.length > 0
+      !isQuiet(invocationOf(fn))
     ) {
       this.add(
         AREA.types,
@@ -3649,8 +3604,7 @@ export class BodyValidator {
       return this.poison();
     }
     if (
-      seed.execution !== "pure" || seed.failures.length > 0 ||
-      seed.requirements.length > 0
+      !isQuiet(seed)
     ) {
       this.add(
         AREA.execution,
@@ -3693,8 +3647,7 @@ export class BodyValidator {
       !fits(this.env, seed.type, fn.parameters[0]) ||
       !fits(this.env, source.element, fn.parameters[1]) ||
       !fits(this.env, fn.result, seed.type) ||
-      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
-      fn.effects.requirements.length > 0
+      !isQuiet(invocationOf(fn))
     ) {
       this.add(
         AREA.types,
@@ -3705,8 +3658,7 @@ export class BodyValidator {
       return this.poison();
     }
     if (
-      seed.execution !== "pure" || seed.failures.length > 0 ||
-      seed.requirements.length > 0
+      !isQuiet(seed)
     ) {
       this.add(
         AREA.execution,
@@ -3759,8 +3711,7 @@ export class BodyValidator {
       return this.poison();
     }
     if (
-      seed.execution !== "pure" || seed.failures.length > 0 ||
-      seed.requirements.length > 0
+      !isQuiet(seed)
     ) {
       this.add(
         AREA.execution,
@@ -3773,14 +3724,7 @@ export class BodyValidator {
       type: seed.type,
       match: "exact",
       active: combine([stream, seed, update, {
-        failures: sortedUnique([
-          ...source.effects.failures,
-          ...fn.effects.failures,
-        ]),
-        requirements: sortedUnique([
-          ...source.effects.requirements,
-          ...fn.effects.requirements,
-        ]),
+        ...unionEffects(source.effects, fn.effects),
         execution: "effect",
       }]),
     };
@@ -3812,18 +3756,7 @@ export class BodyValidator {
 
   private mapStreams(e: StreamFlatten, path: string): Comp {
     const name = STREAM_FLATTENS[e.kind];
-    if (
-      e.kind === "flat-map-streams" && e.concurrency !== undefined &&
-      e.concurrency !== "unbounded" &&
-      !(Number.isSafeInteger(e.concurrency) && e.concurrency > 0)
-    ) {
-      this.add(
-        AREA.control,
-        `${path}.concurrency`,
-        `${name} concurrency must be a positive safe integer or unbounded`,
-        e.span,
-      );
-    }
+    if (e.kind === "flat-map-streams") this.checkConcurrency(e, path, name);
     const stream = this.check(e.stream, `${path}.stream`);
     const transform = this.check(e.transform, `${path}.transform`);
     const source = unfold(this.env, stream.type);
@@ -3841,8 +3774,7 @@ export class BodyValidator {
       source.kind !== "stream" || fn === undefined ||
       fn.parameters.length !== 1 ||
       !fits(this.env, source.element, fn.parameters[0]) ||
-      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
-      fn.effects.requirements.length > 0 || inner?.kind !== "stream"
+      !isQuiet(invocationOf(fn)) || inner?.kind !== "stream"
     ) {
       this.add(
         AREA.types,
@@ -3857,14 +3789,7 @@ export class BodyValidator {
         kind: "stream",
         element: inner.element,
         effects: {
-          failures: sortedUnique([
-            ...source.effects.failures,
-            ...inner.effects.failures,
-          ]),
-          requirements: sortedUnique([
-            ...source.effects.requirements,
-            ...inner.effects.requirements,
-          ]),
+          ...unionEffects(source.effects, inner.effects),
         },
       },
       match: "exact",
@@ -3901,8 +3826,7 @@ export class BodyValidator {
       source.kind !== "stream" || fn === undefined ||
       fn.parameters.length !== 1 ||
       !fits(this.env, errors, fn.parameters[0]) ||
-      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
-      fn.effects.requirements.length > 0 || replacement?.kind !== "stream"
+      !isQuiet(invocationOf(fn)) || replacement?.kind !== "stream"
     ) {
       this.add(
         AREA.types,
@@ -3957,8 +3881,7 @@ export class BodyValidator {
       }
     }
     if (
-      policy.execution !== "pure" || policy.failures.length > 0 ||
-      policy.requirements.length > 0
+      !isQuiet(policy)
     ) {
       this.add(
         AREA.execution,
@@ -4035,8 +3958,7 @@ export class BodyValidator {
       return this.poison();
     }
     if (
-      count.execution !== "pure" || count.failures.length > 0 ||
-      count.requirements.length > 0
+      !isQuiet(count)
     ) {
       this.add(
         AREA.execution,
@@ -4071,8 +3993,7 @@ export class BodyValidator {
       fn.parameters.length !== 1 ||
       !fits(this.env, source.element, fn.parameters[0]) ||
       !fits(this.env, fn.result, BOOLEAN) ||
-      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
-      fn.effects.requirements.length > 0
+      !isQuiet(invocationOf(fn))
     ) {
       this.add(
         AREA.types,
@@ -4133,14 +4054,7 @@ export class BodyValidator {
         kind: "stream",
         element: source.element,
         effects: {
-          failures: sortedUnique([
-            ...source.effects.failures,
-            ...fn.effects.failures,
-          ]),
-          requirements: sortedUnique([
-            ...source.effects.requirements,
-            ...fn.effects.requirements,
-          ]),
+          ...unionEffects(source.effects, fn.effects),
         },
       },
       match: "exact",
@@ -4270,8 +4184,7 @@ export class BodyValidator {
       );
     }
     if (
-      classifier.execution !== "pure" || classifier.effects.failures.length ||
-      classifier.effects.requirements.length
+      !isQuiet(invocationOf(classifier))
     ) {
       this.add(
         AREA.control,
@@ -4286,14 +4199,12 @@ export class BodyValidator {
         kind: "stream",
         element: consumer.result,
         effects: {
-          failures: sortedUnique([
-            ...source.effects.failures,
-            ...consumer.effects.failures,
-          ]),
-          requirements: sortedUnique([
-            ...source.effects.requirements,
-            ...minus(consumer.effects.requirements, [SCOPE_CAPABILITY]),
-          ]),
+          ...unionEffects(source.effects, {
+            failures: consumer.effects.failures,
+            requirements: minus(consumer.effects.requirements, [
+              SCOPE_CAPABILITY,
+            ]),
+          }),
         },
       },
       match: "exact",
@@ -4490,14 +4401,7 @@ export class BodyValidator {
         output,
         input,
         effects: {
-          failures: sortedUnique([
-            ...factory.effects.failures,
-            ...step.effects.failures,
-          ]),
-          requirements: sortedUnique([
-            ...factory.effects.requirements,
-            ...step.effects.requirements,
-          ]),
+          ...unionEffects(factory.effects, step.effects),
         },
       },
       match: "exact",
@@ -4548,14 +4452,7 @@ export class BodyValidator {
         output: fn.result,
         input: policy.input,
         effects: {
-          failures: sortedUnique([
-            ...policy.effects.failures,
-            ...fn.effects.failures,
-          ]),
-          requirements: sortedUnique([
-            ...policy.effects.requirements,
-            ...fn.effects.requirements,
-          ]),
+          ...unionEffects(policy.effects, fn.effects),
         },
       },
       match: "exact",
@@ -4607,14 +4504,7 @@ export class BodyValidator {
           : NUMBER,
         input,
         effects: {
-          failures: sortedUnique([
-            ...first.effects.failures,
-            ...second.effects.failures,
-          ]),
-          requirements: sortedUnique([
-            ...first.effects.requirements,
-            ...second.effects.requirements,
-          ]),
+          ...unionEffects(first.effects, second.effects),
         },
       },
       match: "exact",
@@ -4659,16 +4549,7 @@ export class BodyValidator {
         kind: "stream",
         element: consumer.result,
         effects: {
-          failures: sortedUnique([
-            ...source.effects.failures,
-            ...consumer.effects.failures,
-            ...policy.effects.failures,
-          ]),
-          requirements: sortedUnique([
-            ...source.effects.requirements,
-            ...consumer.effects.requirements,
-            ...policy.effects.requirements,
-          ]),
+          ...unionEffects(source.effects, consumer.effects, policy.effects),
         },
       },
       match: "exact",
@@ -4703,14 +4584,7 @@ export class BodyValidator {
         kind: "stream",
         element: consumer.result,
         effects: {
-          failures: sortedUnique([
-            ...source.effects.failures,
-            ...consumer.effects.failures,
-          ]),
-          requirements: sortedUnique([
-            ...source.effects.requirements,
-            ...consumer.effects.requirements,
-          ]),
+          ...unionEffects(source.effects, consumer.effects),
         },
       },
       match: "exact",
@@ -4742,14 +4616,7 @@ export class BodyValidator {
       type: consumer.result,
       match: "exact",
       active: combine([stream, sink, {
-        failures: sortedUnique([
-          ...source.effects.failures,
-          ...consumer.effects.failures,
-        ]),
-        requirements: sortedUnique([
-          ...source.effects.requirements,
-          ...consumer.effects.requirements,
-        ]),
+        ...unionEffects(source.effects, consumer.effects),
         execution: "effect",
       }]),
     };
@@ -4808,14 +4675,7 @@ export class BodyValidator {
         kind: "stream",
         element: aFitsB ? b.element : a.element,
         effects: {
-          failures: sortedUnique([
-            ...a.effects.failures,
-            ...b.effects.failures,
-          ]),
-          requirements: sortedUnique([
-            ...a.effects.requirements,
-            ...b.effects.requirements,
-          ]),
+          ...unionEffects(a.effects, b.effects),
         },
       },
       match: "exact",
@@ -4840,14 +4700,7 @@ export class BodyValidator {
         kind: "stream",
         element: { kind: "tuple", elements: [a.element, b.element] },
         effects: {
-          failures: sortedUnique([
-            ...a.effects.failures,
-            ...b.effects.failures,
-          ]),
-          requirements: sortedUnique([
-            ...a.effects.requirements,
-            ...b.effects.requirements,
-          ]),
+          ...unionEffects(a.effects, b.effects),
         },
       },
       match: "exact",
@@ -4877,14 +4730,7 @@ export class BodyValidator {
         kind: "stream",
         element: unionOf(this.env, [a.element, b.element]),
         effects: {
-          failures: sortedUnique([
-            ...a.effects.failures,
-            ...b.effects.failures,
-          ]),
-          requirements: sortedUnique([
-            ...a.effects.requirements,
-            ...b.effects.requirements,
-          ]),
+          ...unionEffects(a.effects, b.effects),
         },
       },
       match: "exact",
@@ -4911,14 +4757,7 @@ export class BodyValidator {
         kind: "effect",
         result: aFitsB ? b.result : a.result,
         effects: {
-          failures: sortedUnique([
-            ...a.effects.failures,
-            ...b.effects.failures,
-          ]),
-          requirements: sortedUnique([
-            ...a.effects.requirements,
-            ...b.effects.requirements,
-          ]),
+          ...unionEffects(a.effects, b.effects),
         },
       },
       match: "exact",
@@ -4974,8 +4813,7 @@ export class BodyValidator {
     const fn = asFunction(this.env, transform.type);
     if (
       fn === undefined || fn.parameters.length !== 1 ||
-      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
-      fn.effects.requirements.length > 0 ||
+      !isQuiet(invocationOf(fn)) ||
       !fits(this.env, type.element, fn.parameters[0]) ||
       !fits(this.env, fn.result, type.element)
     ) {
@@ -5088,14 +4926,7 @@ export class BodyValidator {
         acquisition: {
           execution: "effect",
           effects: {
-            failures: sortedUnique([
-              ...a.acquisition.effects.failures,
-              ...b.acquisition.effects.failures,
-            ]),
-            requirements: sortedUnique([
-              ...a.acquisition.effects.requirements,
-              ...b.acquisition.effects.requirements,
-            ]),
+            ...unionEffects(a.acquisition.effects, b.acquisition.effects),
           },
         },
       },

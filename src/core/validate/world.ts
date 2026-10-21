@@ -23,7 +23,7 @@ import {
   type TypeEnv,
   unfold,
 } from "./typing.ts";
-import { sameSet } from "./sets.ts";
+import { invocationOf, isQuiet, sameSet } from "./sets.ts";
 import { typeChildren } from "./type_children.ts";
 
 const PRELUDE_MODULE = "effective:prelude";
@@ -720,9 +720,7 @@ function checkBuiltinShape(
   }
   const quiet = (fn: Type, at: string): void => {
     if (
-      fn.kind === "function" &&
-      (fn.execution !== "pure" || fn.effects.failures.length > 0 ||
-        fn.effects.requirements.length > 0)
+      fn.kind === "function" && !isQuiet(invocationOf(fn))
     ) {
       report.add(
         AREA.execution,
