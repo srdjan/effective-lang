@@ -2,7 +2,12 @@
 // under the root, and `effective.json` at the root. The walk skips directories
 // whose names start with `.` and directories named `node_modules`.
 
-import { CONFIG_FILE, joinPath, type Result } from "../core/mod.ts";
+import {
+  compareText,
+  CONFIG_FILE,
+  joinPath,
+  type Result,
+} from "../core/mod.ts";
 import type { CliFs } from "./io.ts";
 
 function skippedDirectory(name: string): boolean {
@@ -38,7 +43,7 @@ export function readWorkspace(
       return;
     }
     const entries = [...listed.value].sort((a, b) =>
-      a.name < b.name ? -1 : a.name > b.name ? 1 : 0
+      compareText(a.name, b.name)
     );
     for (const entry of entries) {
       const child = relative === "" ? entry.name : `${relative}/${entry.name}`;

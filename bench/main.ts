@@ -7,6 +7,7 @@
 // and `m4` start the language server as a subprocess. The output is plain text
 // on stdout. The `--json` file holds the raw samples.
 
+import { errorMessage } from "../src/core/mod.ts";
 import { formatM1, type M1Result, runM1 } from "./m1.ts";
 import { describeM2Error, formatM2, type M2Result, runM2 } from "./m2.ts";
 import { formatM3, type M3Result, runM3 } from "./m3.ts";
@@ -184,9 +185,7 @@ export async function run(args: readonly string[]): Promise<number> {
       Deno.writeTextFileSync(options.json, JSON.stringify(document, null, 1));
     } catch (e) {
       console.error(
-        `bench: cannot write ${options.json}: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
+        `bench: cannot write ${options.json}: ${errorMessage(e)}`,
       );
       return 1;
     }

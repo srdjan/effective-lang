@@ -9,6 +9,7 @@
 // `deno run --allow-read --allow-write scripts/lex_snapshot.ts` only after a
 // deliberate change of the lexer output. A refactor of the lexer must not run it.
 
+import { compareText } from "../src/core/mod.ts";
 import { lex, type Lexed } from "../src/core/lex.ts";
 
 /** The number of random strings. */
@@ -79,7 +80,7 @@ export async function repositoryInputs(
     for await (const entry of Deno.readDir(new URL(directory, root))) {
       entries.push(entry);
     }
-    entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    entries.sort((a, b) => compareText(a.name, b.name));
     for (const entry of entries) {
       const path = `${directory}${entry.name}`;
       if (entry.isDirectory) {

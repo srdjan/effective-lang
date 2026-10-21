@@ -2,7 +2,7 @@
 // synthetic projects, as maps of TypeScript files, and the error values of the
 // measurement. Nothing here runs a type check.
 
-import { Program } from "../src/core/mod.ts";
+import { errorMessage, Program } from "../src/core/mod.ts";
 import type { Result } from "../src/core/source.ts";
 import { generateProject } from "./generate.ts";
 
@@ -108,7 +108,7 @@ export function exampleTarget(): Result<Target, M5Error> {
       ok: false,
       error: {
         tag: "setup",
-        message: e instanceof Error ? e.message : String(e),
+        message: errorMessage(e),
       },
     };
   }
@@ -129,7 +129,7 @@ export function exampleTarget(): Result<Target, M5Error> {
         ok: false,
         error: {
           tag: "setup",
-          message: e instanceof Error ? e.message : String(e),
+          message: errorMessage(e),
         },
       };
     }

@@ -7,6 +7,7 @@
 // Requests, waits, and the exit all have a timeout. A failure rejects with an
 // `LspClientError`, a tagged error with a clear message.
 
+import { errorMessage } from "../src/core/mod.ts";
 import {
   encodeMessage,
   FrameDecoder,
@@ -211,7 +212,7 @@ export class LspClient {
         throw new LspClientError(
           "write",
           `cannot write to the server: ${
-            error instanceof Error ? error.message : String(error)
+            errorMessage(error)
           }${this.#stderrNote()}`,
         );
       }

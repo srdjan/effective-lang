@@ -18,7 +18,7 @@
 // alone for the timing of the lexer. `parse` runs `parse`, which lexes again,
 // so its time includes `lex`. `total` is the sum of every stage except `lex`.
 
-import { Program, type Revision } from "../src/core/mod.ts";
+import { compareText, Program, type Revision } from "../src/core/mod.ts";
 import {
   checkAnalysis,
   type CheckedProject,
@@ -172,10 +172,6 @@ interface Prepared {
   readonly hostFiles: ReadonlyMap<string, string>;
   /** The `.eff` paths: the entries of the program. */
   readonly entries: readonly string[];
-}
-
-function compareText(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function prepare(project: GeneratedProject): Prepared {

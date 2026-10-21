@@ -21,6 +21,7 @@
 // `noUncheckedIndexedAccess`, with `skipLibCheck` on as `deno check` has it.
 
 import { type M5Error, type Target, writeTarget } from "./m5_target.ts";
+import { errorMessage } from "../src/core/mod.ts";
 import type { Result } from "../src/core/source.ts";
 import type { Pair } from "./stats.ts";
 
@@ -62,10 +63,6 @@ export const VARIANT_NAMES = {
 // ------------------------------------------------------------------ helpers
 
 const decoder = new TextDecoder();
-
-function messageOf(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
 
 function firstLines(text: string, count: number): string {
   return text.trim().split("\n").slice(0, count).join(" | ");
@@ -134,7 +131,7 @@ async function runDeno(
       },
     };
   } catch (e) {
-    return { ok: false, error: messageOf(e) };
+    return { ok: false, error: errorMessage(e) };
   }
 }
 
@@ -195,7 +192,7 @@ async function loadTypeScript(): Promise<Result<TsApi, string>> {
     if (isTsApi(loaded)) return { ok: true, value: loaded };
     return { ok: false, error: "the module has no language service API" };
   } catch (e) {
-    return { ok: false, error: messageOf(e) };
+    return { ok: false, error: errorMessage(e) };
   }
 }
 

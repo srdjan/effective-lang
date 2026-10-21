@@ -8,6 +8,7 @@
 // list. Any other list stops the run with an error value. This is the
 // checksum-like gate of the protocol.
 
+import { errorMessage } from "../src/core/mod.ts";
 import type { Result } from "../src/core/source.ts";
 import { STATS_METHOD } from "../src/lsp/methods.ts";
 import {
@@ -195,7 +196,7 @@ function writeProject(
     Deno.removeSync(dir, { recursive: true });
     return fail({
       tag: "setup",
-      message: e instanceof Error ? e.message : String(e),
+      message: errorMessage(e),
     });
   }
   return succeed(dir);
