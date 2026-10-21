@@ -28,7 +28,6 @@ import {
   type Lexed,
   TokenKind,
 } from "./lex.ts";
-import type { ReadError, Result, SourceHost } from "./source.ts";
 import {
   type FileMode,
   type NodeId,
@@ -62,16 +61,6 @@ export function parse(
     ...parser.diagnostics,
   ]);
   return { tree, diagnostics };
-}
-
-/** Reads a file through the host, then parses it. */
-export function parseFromHost(
-  host: SourceHost,
-  path: string,
-): Result<ParseResult, ReadError> {
-  const read = host.readText(path);
-  if (!read.ok) return read;
-  return { ok: true, value: parse(path, read.value) };
 }
 
 type Group = { readonly sig: boolean; readonly unmatched: number };

@@ -1,7 +1,6 @@
 import { assertEquals, assertNotEquals } from "@std/assert";
 import type { Diagnostic } from "../src/core/diagnostics.ts";
-import { fileModeOf, parse, parseFromHost } from "../src/core/parse.ts";
-import { memoryHost } from "../src/core/source.ts";
+import { fileModeOf, parse } from "../src/core/parse.ts";
 import {
   childrenOf,
   hasProblem,
@@ -403,18 +402,6 @@ Deno.test("diagnostic spans carry the source path", () => {
   const result = parse("dir/a.eff", "const a = )");
   assertEquals(result.diagnostics.length > 0, true);
   for (const d of result.diagnostics) assertEquals(d.span.source, "dir/a.eff");
-});
-
-Deno.test("parseFromHost reads through the host", () => {
-  const host = memoryHost({ "a.eff": "const a = 1\n" });
-  const ok = parseFromHost(host, "a.eff");
-  assertEquals(ok.ok, true);
-  if (ok.ok) assertEquals(ok.value.diagnostics, []);
-  const missing = parseFromHost(host, "b.eff");
-  assertEquals(missing, {
-    ok: false,
-    error: { tag: "not-found", path: "b.eff" },
-  });
 });
 
 Deno.test("odd inputs parse without throwing, print back exactly, and give a sound tree", () => {
