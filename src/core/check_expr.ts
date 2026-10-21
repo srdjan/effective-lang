@@ -525,6 +525,8 @@ interface Prologue<K extends PreludeCallName> extends PrologueFacts<K> {
   readonly arity: number | ((name: K, args: readonly Arg[]) => number);
   readonly bail: "pure" | "effect";
   readonly pipeline: "direct" | "any";
+  /** The message of a wrong count, instead of the counted form. */
+  readonly usage?: string;
 }
 
 /** A prologue row for each prelude name whose handler may assume a right count. */
@@ -546,6 +548,20 @@ function piped<K extends PreludeCallName>(
   facts: PrologueFacts<K> = {},
 ): Prologue<K> {
   return { arity, bail, pipeline: "any", ...facts };
+}
+
+/** A prologue for a call that takes `required` arguments and one optional last argument. */
+function optionalLast<K extends PreludeCallName>(
+  required: number,
+  usage: string,
+): Prologue<K> {
+  return {
+    arity: (_name, args) =>
+      args.length === required + 1 ? required + 1 : required,
+    bail: "pure",
+    pipeline: "any",
+    usage,
+  };
 }
 
 /** True when a checked expression is pure and has no failures or requirements. */
@@ -1237,7 +1253,7 @@ class BodyChecker {
     const count = typeof prologue.arity === "number"
       ? prologue.arity
       : prologue.arity(name, args);
-    if (!this.arity(node, name, count, args)) {
+    if (!this.arity(node, name, count, args, prologue.usage)) {
       if (bailFact !== undefined) this.fact(node, bailFact);
       const infos = args.map((a) => this.argInfo(a));
       return this.finish(
@@ -1406,7 +1422,8 @@ class BodyChecker {
 
   /**
    * The prologue of each prelude name that has one. A name without a row
-   * tests its own argument count, or accepts more than one count.
+   * tests its own argument count. A name with an optional last argument uses
+   * `optionalLast`, which also gives the message of a wrong count.
    */
   private static readonly PRELUDE_PROLOGUES: PreludePrologues = {
     retry: piped(2, "effect", {
@@ -1528,6 +1545,37 @@ class BodyChecker {
       bailFact: { kind: "layer", service: undefined },
     }),
     mergeLayers: direct(2, "pure", { fact: { kind: "merge-layers" } }),
+    mapEffect: optionalLast(
+      2,
+      "`mapEffect` takes a Stream, a callback, and an optional concurrency record",
+    ),
+    flatMapStreams: optionalLast(
+      2,
+      "`flatMapStreams` takes a Stream, a callback, and an optional concurrency record",
+    ),
+    all: optionalLast(
+      1,
+      "`all` takes an Effect collection and an optional concurrency record",
+    ),
+    partitionAll: optionalLast(
+      1,
+      "`partitionAll` takes an Effect array and an optional concurrency record",
+    ),
+    validateAll: optionalLast(
+      2,
+      "`validateAll` takes an Effect array, an error wrapper, and an optional concurrency record",
+    ),
+    allResults: optionalLast(
+      1,
+      "`allResults` takes an Effect collection and an optional concurrency record",
+    ),
+    traverse: optionalLast(
+      2,
+      "`traverse` takes two arguments and an optional concurrency record",
+    ),
+    map: piped(2, "pure"),
+    filter: piped(2, "pure"),
+    fold: piped(3, "pure"),
   };
 
   /**
@@ -1566,13 +1614,15 @@ class BodyChecker {
     name: string,
     expectedCount: number,
     args: readonly Arg[],
+    usage?: string,
   ): boolean {
     if (args.length === expectedCount) return true;
     this.report(
       "type-mismatch/004",
-      `\`${name}\` takes ${expectedCount} argument${
-        expectedCount === 1 ? "" : "s"
-      }, but ${args.length} ${args.length === 1 ? "is" : "are"} given`,
+      usage ??
+        `\`${name}\` takes ${expectedCount} argument${
+          expectedCount === 1 ? "" : "s"
+        }, but ${args.length} ${args.length === 1 ? "is" : "are"} given`,
       node,
     );
     return false;
@@ -3624,18 +3674,6 @@ class BodyChecker {
   }
 
   private mapEffectCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    if (args.length !== 2 && args.length !== 3) {
-      this.report(
-        "type-mismatch/004",
-        "`mapEffect` takes a Stream, a callback, and an optional concurrency record",
-        node,
-      );
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
     const concurrency = args[2] === undefined
       ? undefined
       : this.concurrencyBound(args[2], "mapEffect");
@@ -4018,18 +4056,6 @@ class BodyChecker {
   }
 
   private flatMapStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    if (args.length !== 2 && args.length !== 3) {
-      this.report(
-        "type-mismatch/004",
-        "`flatMapStreams` takes a Stream, a callback, and an optional concurrency record",
-        node,
-      );
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
     const concurrency = args[2] === undefined
       ? undefined
       : this.concurrencyBound(args[2], "flatMapStreams");
@@ -5300,18 +5326,6 @@ class BodyChecker {
   }
 
   private allCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    if (args.length !== 1 && args.length !== 2) {
-      this.report(
-        "type-mismatch/004",
-        "`all` takes an Effect collection and an optional concurrency record",
-        node,
-      );
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
     const input = this.argInfo(args[0]);
     const table = this.table;
     const shape = table.node(table.unfold(input.type));
@@ -5404,18 +5418,6 @@ class BodyChecker {
   }
 
   private partitionAllCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    if (args.length !== 1 && args.length !== 2) {
-      this.report(
-        "type-mismatch/004",
-        "`partitionAll` takes an Effect array and an optional concurrency record",
-        node,
-      );
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
     this.noPipeline("partitionAll", args);
     const jobs = this.argInfo(args[0]);
     const option = args[1] === undefined ? undefined : this.argInfo(args[1]);
@@ -5460,18 +5462,6 @@ class BodyChecker {
   }
 
   private validateAllCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    if (args.length !== 2 && args.length !== 3) {
-      this.report(
-        "type-mismatch/004",
-        "`validateAll` takes an Effect array, an error wrapper, and an optional concurrency record",
-        node,
-      );
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
     this.noPipeline("validateAll", args);
     const jobs = this.argInfo(args[0]);
     const shape = this.table.node(this.table.unfold(jobs.type));
@@ -5526,18 +5516,6 @@ class BodyChecker {
   }
 
   private allResultsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    if (args.length !== 1 && args.length !== 2) {
-      this.report(
-        "type-mismatch/004",
-        "`allResults` takes an Effect collection and an optional concurrency record",
-        node,
-      );
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
     this.noPipeline("allResults", args);
     const jobs = this.argInfo(args[0]);
     const option = args[1] === undefined ? undefined : this.argInfo(args[1]);
@@ -5628,22 +5606,6 @@ class BodyChecker {
     args: readonly Arg[],
     expected: TypeRef | undefined,
   ): NodeInfo {
-    const count = name === "fold" ? 3 : 2;
-    const unspecialized = (): NodeInfo => {
-      const infos = args.map((a) => this.argInfo(a));
-      return this.finish(node, this.table.error, combine(infos));
-    };
-    if (name === "traverse") {
-      if (args.length !== 2 && args.length !== 3) {
-        this.report(
-          "type-mismatch/004",
-          "`traverse` takes two arguments and an optional concurrency record",
-          node,
-        );
-        return unspecialized();
-      }
-    } else if (!this.arity(node, name, count, args)) return unspecialized();
-
     const xs = this.argInfo(args[0]);
     const element = this.arrayElement(name, args[0], xs);
     const table = this.table;
