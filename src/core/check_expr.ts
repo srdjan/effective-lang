@@ -244,9 +244,12 @@ function failsOnlyWith(
     failures.every((id) => allowed.includes(id));
 }
 
+/** The operation of a Schema builtin call. */
+type SchemaOp = Extract<NodeFact, { kind: "schema" }>["op"];
+
 /** How `schemaCall` treats one Schema builtin. */
 interface SchemaBuiltin {
-  readonly op: Extract<NodeFact, { kind: "schema" }>["op"];
+  readonly op: SchemaOp;
   /** The number of arguments. */
   readonly arity: number;
   /** A third options argument is also accepted. */
@@ -416,6 +419,54 @@ type PreludeHandler<K extends PreludeCallName> = (
 
 /** One handler for each prelude name except `None`. A missing name is a compile error. */
 type PreludeHandlers = { readonly [K in PreludeCallName]: PreludeHandler<K> };
+
+/**
+ * The facts of a prologue. `fact` is recorded before the argument count is
+ * tested, so a call with a wrong count keeps it. `bailFact` is recorded only
+ * after a wrong count, for a handler that records another fact after its checks.
+ */
+interface PrologueFacts<K extends PreludeCallName> {
+  readonly fact?:
+    | NodeFact
+    | ((checker: BodyChecker, name: K, args: readonly Arg[]) => NodeFact);
+  readonly bailFact?: NodeFact;
+}
+
+/**
+ * What a prelude call needs before its handler runs. The dispatcher runs these
+ * steps in order: record `fact`, test the argument count, and on a wrong count
+ * record `bailFact` and give the error type. A right count is followed by the
+ * `pipeline` rule. The handler then runs and may assume the right count.
+ * - `bail` "pure": a wrong count gives the effects of the arguments only.
+ *   "effect": a wrong count adds `EFFECT_ONLY` to them.
+ * - `pipeline` "direct": a pipeline left side is rejected. "any": it is allowed.
+ */
+interface Prologue<K extends PreludeCallName> extends PrologueFacts<K> {
+  readonly arity: number | ((name: K, args: readonly Arg[]) => number);
+  readonly bail: "pure" | "effect";
+  readonly pipeline: "direct" | "any";
+}
+
+/** A prologue row for each prelude name whose handler may assume a right count. */
+type PreludePrologues = { readonly [K in PreludeCallName]?: Prologue<K> };
+
+/** A prologue that rejects a pipeline left side. */
+function direct<K extends PreludeCallName>(
+  arity: number,
+  bail: "pure" | "effect",
+  facts: PrologueFacts<K> = {},
+): Prologue<K> {
+  return { arity, bail, pipeline: "direct", ...facts };
+}
+
+/** A prologue that allows a pipeline left side. */
+function piped<K extends PreludeCallName>(
+  arity: number,
+  bail: "pure" | "effect",
+  facts: PrologueFacts<K> = {},
+): Prologue<K> {
+  return { arity, bail, pipeline: "any", ...facts };
+}
 
 // ------------------------------------------------------------------ the checker
 
@@ -1074,8 +1125,43 @@ class BodyChecker {
     args: readonly Arg[],
     expected: TypeRef | undefined,
   ): NodeInfo {
+    const prologue = BodyChecker.PRELUDE_PROLOGUES[name];
+    if (prologue !== undefined) {
+      const bailed = this.runPrologue(node, name, args, prologue);
+      if (bailed !== undefined) return bailed;
+    }
     const handler: PreludeHandler<K> = BodyChecker.PRELUDE_HANDLERS[name];
     return handler(this, node, name, args, expected);
+  }
+
+  /** Runs a prologue. Returns the result of a wrong argument count, or undefined. */
+  private runPrologue<K extends PreludeCallName>(
+    node: NodeId,
+    name: K,
+    args: readonly Arg[],
+    prologue: Prologue<K>,
+  ): NodeInfo | undefined {
+    const { fact, bailFact } = prologue;
+    if (fact !== undefined) {
+      this.fact(
+        node,
+        typeof fact === "function" ? fact(this, name, args) : fact,
+      );
+    }
+    const count = typeof prologue.arity === "number"
+      ? prologue.arity
+      : prologue.arity(name, args);
+    if (!this.arity(node, name, count, args)) {
+      if (bailFact !== undefined) this.fact(node, bailFact);
+      const infos = args.map((a) => this.argInfo(a));
+      return this.finish(
+        node,
+        this.table.error,
+        combine(prologue.bail === "effect" ? [...infos, EFFECT_ONLY] : infos),
+      );
+    }
+    if (prologue.pipeline === "direct") this.noPipeline(name, args);
+    return undefined;
   }
 
   private static readonly schemaBuiltin: PreludeHandler<SchemaBuiltinName> = (
@@ -1206,6 +1292,150 @@ class BodyChecker {
       c.collectionCall(node, name, args, expected),
     traverse: (c, node, name, args, expected) =>
       c.collectionCall(node, name, args, expected),
+  };
+
+  private static readonly schemaPrologue: Prologue<SchemaBuiltinName> = {
+    arity: (name, args) => {
+      const builtin: SchemaBuiltin = SCHEMA_BUILTINS[name];
+      return builtin.acceptsOptions === true && args.length === 3
+        ? 3
+        : builtin.arity;
+    },
+    bail: "pure",
+    pipeline: "direct",
+    // `schemaDefaultKey` selects its operation with the `on` option.
+    fact: (c, name, args) => ({
+      kind: "schema",
+      op: name === "schemaDefaultKey" && args.length === 3
+        ? c.defaultKeyOp(name, args[2])
+        : SCHEMA_BUILTINS[name].op,
+    }),
+  };
+
+  /**
+   * The prologue of each prelude name that has one. A name without a row
+   * tests its own argument count, or accepts more than one count.
+   */
+  private static readonly PRELUDE_PROLOGUES: PreludePrologues = {
+    retry: piped(2, "effect", {
+      bailFact: { kind: "retry", times: undefined },
+    }),
+    retrySchedule: piped(1, "pure", { fact: { kind: "retry-schedule" } }),
+    codec: direct(2, "pure", { fact: { kind: "codec" } }),
+    schema: BodyChecker.schemaPrologue,
+    schemaArray: BodyChecker.schemaPrologue,
+    schemaStruct: BodyChecker.schemaPrologue,
+    schemaOptionalKey: BodyChecker.schemaPrologue,
+    schemaNullToMissingKey: BodyChecker.schemaPrologue,
+    schemaOptionFromOptionalKey: BodyChecker.schemaPrologue,
+    schemaDefaultKey: BodyChecker.schemaPrologue,
+    schemaConstructorDefault: BodyChecker.schemaPrologue,
+    schemaOptionalTransform: BodyChecker.schemaPrologue,
+    schemaOptionalFromRequired: BodyChecker.schemaPrologue,
+    schemaUnion: BodyChecker.schemaPrologue,
+    schemaTransform: BodyChecker.schemaPrologue,
+    schemaRecursive: BodyChecker.schemaPrologue,
+    schemaDecode: BodyChecker.schemaPrologue,
+    schemaEncode: BodyChecker.schemaPrologue,
+    schemaMake: BodyChecker.schemaPrologue,
+    schemaInvalid: BodyChecker.schemaPrologue,
+    schemaAt: BodyChecker.schemaPrologue,
+    schemaBoth: BodyChecker.schemaPrologue,
+    decode: direct(2, "pure", { fact: { kind: "decode" } }),
+    encode: direct(2, "pure", { fact: { kind: "encode" } }),
+    withFiber: direct(2, "effect", { fact: { kind: "with-fiber" } }),
+    joinFiber: piped(1, "effect", { fact: { kind: "join-fiber" } }),
+    interruptFiber: piped(1, "effect", { fact: { kind: "interrupt-fiber" } }),
+    provide: piped(2, "effect", {
+      bailFact: { kind: "provide", provider: undefined },
+    }),
+    defer: piped(1, "pure", { fact: { kind: "defer" } }),
+    run: piped(1, "effect", { fact: { kind: "run" } }),
+    scoped: piped(1, "effect", { fact: { kind: "scoped" } }),
+    forkScoped: piped(1, "effect", { fact: { kind: "fork-scoped" } }),
+    makeScope: piped(0, "effect", { fact: { kind: "make-scope" } }),
+    provideScope: piped(2, "effect", { fact: { kind: "provide-scope" } }),
+    addScopeFinalizer: piped(2, "effect", {
+      fact: { kind: "add-scope-finalizer" },
+    }),
+    closeScope: piped(1, "effect", { fact: { kind: "close-scope" } }),
+    withResource: piped(3, "pure", { fact: { kind: "with-resource" } }),
+    unfold: direct(2, "pure", { fact: { kind: "unfold" } }),
+    mapGroups: direct(4, "pure", {
+      fact: { kind: "map-groups", bufferSize: undefined },
+    }),
+    scanStream: direct(3, "pure", { fact: { kind: "scan-stream" } }),
+    mapAccumStream: direct(3, "pure", { fact: { kind: "map-accum-stream" } }),
+    foldStream: direct(3, "effect", { fact: { kind: "fold-stream" } }),
+    foldEffectStream: direct(3, "effect", {
+      fact: { kind: "fold-effect-stream" },
+    }),
+    collectStream: direct(1, "effect", { fact: { kind: "collect-stream" } }),
+    headStream: direct(1, "effect", { fact: { kind: "head-stream" } }),
+    lastStream: direct(1, "effect", { fact: { kind: "last-stream" } }),
+    drainStream: direct(1, "effect", { fact: { kind: "drain-stream" } }),
+    switchMapStreams: direct(2, "pure"),
+    catchStream: direct(2, "pure"),
+    retryStream: direct(2, "pure"),
+    debounceStream: direct(2, "pure", {
+      bailFact: { kind: "debounce-stream", delayMs: undefined },
+    }),
+    throttleStream: direct(2, "pure", {
+      bailFact: {
+        kind: "throttle-stream",
+        units: undefined,
+        durationMs: undefined,
+        strategy: undefined,
+      },
+    }),
+    takeStream: direct(2, "pure", { fact: { kind: "take-stream" } }),
+    dropStream: direct(2, "pure", { fact: { kind: "drop-stream" } }),
+    filterEffectStream: direct(2, "pure", {
+      bailFact: { kind: STREAM_PREDICATE_FACTS.filterEffectStream.effect },
+    }),
+    takeWhileEffectStream: direct(2, "pure", {
+      bailFact: { kind: STREAM_PREDICATE_FACTS.takeWhileEffectStream.effect },
+    }),
+    takeUntilEffectStream: direct(2, "pure", {
+      bailFact: { kind: STREAM_PREDICATE_FACTS.takeUntilEffectStream.effect },
+    }),
+    dropWhileEffectStream: direct(2, "pure", {
+      bailFact: { kind: STREAM_PREDICATE_FACTS.dropWhileEffectStream.effect },
+    }),
+    sinkForEach: direct(1, "pure", { fact: { kind: "sink-for-each" } }),
+    takeSink: direct(1, "pure", {
+      fact: { kind: "take-sink", count: undefined },
+    }),
+    transduceStream: direct(2, "pure", { fact: { kind: "transduce-stream" } }),
+    aggregateStream: direct(2, "pure", { fact: { kind: "aggregate-stream" } }),
+    aggregateWithinStream: direct(3, "pure", {
+      fact: { kind: "aggregate-within-stream" },
+    }),
+    scheduleFromStep: direct(2, "pure", {
+      fact: { kind: "schedule-from-step" },
+    }),
+    scheduleRecurs: direct(1, "pure", { fact: { kind: "schedule-recurs" } }),
+    scheduleSpaced: direct(1, "pure", { fact: { kind: "schedule-spaced" } }),
+    scheduleMap: direct(2, "pure", { fact: { kind: "schedule-map" } }),
+    scheduleMax: direct(2, "pure", { fact: { kind: "schedule-max" } }),
+    scheduleMin: direct(2, "pure", { fact: { kind: "schedule-min" } }),
+    scheduleConcat: direct(2, "pure", { fact: { kind: "schedule-concat" } }),
+    runStream: direct(2, "effect", { fact: { kind: "run-stream" } }),
+    bufferStream: direct(2, "pure", {
+      bailFact: { kind: "buffer-stream", capacity: undefined },
+    }),
+    mergeStreams: direct(2, "pure", { fact: { kind: "merge-streams" } }),
+    zipStreams: direct(2, "pure", { fact: { kind: "zip-streams" } }),
+    concatStreams: direct(2, "pure", { fact: { kind: "concat-streams" } }),
+    race: direct(2, "pure", { fact: { kind: "race" } }),
+    makeRef: direct(1, "effect", { fact: { kind: "make-ref" } }),
+    getRef: direct(1, "effect", { fact: { kind: "get-ref" } }),
+    setRef: direct(2, "effect", { fact: { kind: "set-ref" } }),
+    updateRef: direct(2, "effect", { fact: { kind: "update-ref" } }),
+    layer: direct(2, "pure", {
+      bailFact: { kind: "layer", service: undefined },
+    }),
+    mergeLayers: direct(2, "pure", { fact: { kind: "merge-layers" } }),
   };
 
   /** Reports a wrong argument count for a prelude call. Returns true when the count is right. */
@@ -1382,15 +1612,6 @@ class BodyChecker {
   }
 
   private retryCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    if (!this.arity(node, "retry", 2, args)) {
-      this.fact(node, { kind: "retry", times: undefined });
-      const infos = args.map((a) => this.argInfo(a));
-      return this.finish(
-        node,
-        this.table.error,
-        combine([...infos, EFFECT_ONLY]),
-      );
-    }
     const job = this.argInfo(args[0]);
     const fn = this.jobFunction("retry", args[0], job);
     if (this.retryScheduleOption(args[1])) {
@@ -1465,14 +1686,6 @@ class BodyChecker {
     args: readonly Arg[],
     expected: TypeRef | undefined,
   ): NodeInfo {
-    this.fact(node, { kind: "retry-schedule" });
-    if (!this.arity(node, "retrySchedule", 1, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
     const expectedType = expected === undefined
       ? undefined
       : this.table.node(this.table.unfold(expected));
@@ -1543,15 +1756,6 @@ class BodyChecker {
   }
 
   private codecCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "codec" });
-    if (!this.arity(node, "codec", 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
-    this.noPipeline("codec", args);
     const decode = this.argInfo(args[0]);
     const encode = this.argInfo(args[1]);
     const d = this.functionOf(decode.type);
@@ -1604,6 +1808,15 @@ class BodyChecker {
       this.table.codec(decoded, encoded),
       combine([decode, encode]),
     );
+  }
+
+  /** The Schema operation that the prologue recorded for a Schema builtin call. */
+  private schemaOp(node: NodeId): SchemaOp {
+    const fact = this.body.facts.get(node);
+    if (fact?.kind !== "schema") {
+      throw new Error("internal: a Schema builtin call has no schema fact");
+    }
+    return fact.op;
   }
 
   /** The literal value of a field in an inline options record, by label. */
@@ -1678,22 +1891,7 @@ class BodyChecker {
     expected: TypeRef | undefined,
   ): NodeInfo {
     const builtin: SchemaBuiltin = SCHEMA_BUILTINS[name];
-    // `schemaDefaultKey` selects its operation with the `on` option.
-    const op = name === "schemaDefaultKey" && args.length === 3
-      ? this.defaultKeyOp(name, args[2])
-      : builtin.op;
-    this.fact(node, { kind: "schema", op });
-    const actualCount = builtin.acceptsOptions === true && args.length === 3
-      ? 3
-      : builtin.arity;
-    if (!this.arity(node, name, actualCount, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
-    this.noPipeline(name, args);
+    const op = this.schemaOp(node);
     const changedMakeInput = (type: Extract<TypeNode, { kind: "schema" }>) =>
       type.makeInput !== undefined &&
       !(this.table.isAssignable(type.makeInput, type.decoded) &&
@@ -2548,18 +2746,9 @@ class BodyChecker {
 
   private codecOperation(
     node: NodeId,
-    name: string,
+    name: "decode" | "encode",
     args: readonly Arg[],
   ): NodeInfo {
-    this.fact(node, { kind: name === "decode" ? "decode" : "encode" });
-    if (!this.arity(node, name, 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
-    this.noPipeline(name, args);
     const codec = this.argInfo(args[0]);
     const type = this.table.node(this.table.unfold(codec.type));
     if (type.kind !== "codec" && !this.isError(codec.type)) {
@@ -2587,15 +2776,6 @@ class BodyChecker {
     args: readonly Arg[],
     expected: TypeRef | undefined,
   ): NodeInfo {
-    this.fact(node, { kind: "with-fiber" });
-    if (!this.arity(node, "withFiber", 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine([...args.map((a) => this.argInfo(a)), EFFECT_ONLY]),
-      );
-    }
-    this.noPipeline("withFiber", args);
     const job = this.argInfo(args[0]);
     const effect = this.table.node(this.table.unfold(job.type));
     if (effect.kind !== "effect") {
@@ -2655,19 +2835,9 @@ class BodyChecker {
 
   private fiberOperation(
     node: NodeId,
-    name: string,
+    name: "joinFiber" | "interruptFiber",
     args: readonly Arg[],
   ): NodeInfo {
-    this.fact(node, {
-      kind: name === "joinFiber" ? "join-fiber" : "interrupt-fiber",
-    });
-    if (!this.arity(node, name, 1, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine([...args.map((a) => this.argInfo(a)), EFFECT_ONLY]),
-      );
-    }
     const ref = this.argInfo(args[0]);
     const fiber = this.table.node(this.table.unfold(ref.type));
     if (fiber.kind !== "fiber") {
@@ -2744,14 +2914,6 @@ class BodyChecker {
   }
 
   private deferCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "defer" });
-    if (!this.arity(node, "defer", 1, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
     const job = this.argInfo(args[0]);
     const fn = this.jobFunction("defer", args[0], job);
     return this.finish(
@@ -2764,14 +2926,6 @@ class BodyChecker {
   }
 
   private runCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "run" });
-    if (!this.arity(node, "run", 1, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine([...args.map((a) => this.argInfo(a)), EFFECT_ONLY]),
-      );
-    }
     const value = this.argInfo(args[0]);
     const type = this.table.node(this.table.unfold(value.type));
     if (type.kind !== "effect") {
@@ -2801,14 +2955,6 @@ class BodyChecker {
   }
 
   private scopedCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "scoped" });
-    if (!this.arity(node, "scoped", 1, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine([...args.map((arg) => this.argInfo(arg)), EFFECT_ONLY]),
-      );
-    }
     const value = this.argInfo(args[0]);
     const effect = this.table.node(this.table.unfold(value.type));
     if (effect.kind !== "effect") {
@@ -2831,14 +2977,6 @@ class BodyChecker {
   }
 
   private forkScopedCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "fork-scoped" });
-    if (!this.arity(node, "forkScoped", 1, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine([...args.map((arg) => this.argInfo(arg)), EFFECT_ONLY]),
-      );
-    }
     const job = this.argInfo(args[0]);
     const effect = this.table.node(this.table.unfold(job.type));
     if (effect.kind !== "effect") {
@@ -2872,22 +3010,6 @@ class BodyChecker {
     name: "makeScope" | "provideScope" | "addScopeFinalizer" | "closeScope",
     args: readonly Arg[],
   ): NodeInfo {
-    const kind = name === "makeScope"
-      ? "make-scope"
-      : name === "provideScope"
-      ? "provide-scope"
-      : name === "addScopeFinalizer"
-      ? "add-scope-finalizer"
-      : "close-scope";
-    this.fact(node, { kind });
-    const count = name === "makeScope" ? 0 : name === "closeScope" ? 1 : 2;
-    if (!this.arity(node, name, count, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine([...args.map((arg) => this.argInfo(arg)), EFFECT_ONLY]),
-      );
-    }
     if (name === "makeScope") {
       return this.finish(node, this.table.closeableScope, EFFECT_ONLY);
     }
@@ -3022,14 +3144,6 @@ class BodyChecker {
     args: readonly Arg[],
     expected: TypeRef | undefined,
   ): NodeInfo {
-    this.fact(node, { kind: "with-resource" });
-    if (!this.arity(node, "withResource", 3, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
     for (const arg of args) {
       if (
         arg.pre !== undefined ||
@@ -3217,15 +3331,6 @@ class BodyChecker {
   }
 
   private unfoldCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "unfold" });
-    if (!this.arity(node, "unfold", 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
-    this.noPipeline("unfold", args);
     this.inlineStreamCallback("unfold", args[1]);
     const seed = this.argInfo(args[0]);
     const state = this.widen(seed.type);
@@ -3325,15 +3430,6 @@ class BodyChecker {
   }
 
   private mapGroupsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "map-groups", bufferSize: undefined });
-    if (!this.arity(node, "mapGroups", 4, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
-    this.noPipeline("mapGroups", args);
     this.inlineStreamCallback("mapGroups", args[1]);
     this.inlineStreamCallback("mapGroups", args[2]);
     const bufferSize = this.streamBufferCapacity(
@@ -3509,15 +3605,6 @@ class BodyChecker {
   }
 
   private scanStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "scan-stream" });
-    if (!this.arity(node, "scanStream", 3, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
-    this.noPipeline("scanStream", args);
     this.inlineStreamCallback("scanStream", args[2]);
     const stream = this.argInfo(args[0]);
     const seed = this.argInfo(args[1]);
@@ -3563,15 +3650,6 @@ class BodyChecker {
   }
 
   private mapAccumStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "map-accum-stream" });
-    if (!this.arity(node, "mapAccumStream", 3, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
-    this.noPipeline("mapAccumStream", args);
     this.inlineStreamCallback("mapAccumStream", args[2]);
     if (
       kindOf(this.tree, args[2].node) === SyntaxKind.ArrowExpr &&
@@ -3638,15 +3716,6 @@ class BodyChecker {
   }
 
   private foldStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "fold-stream" });
-    if (!this.arity(node, "foldStream", 3, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine([...args.map((arg) => this.argInfo(arg)), EFFECT_ONLY]),
-      );
-    }
-    this.noPipeline("foldStream", args);
     this.inlineStreamCallback("foldStream", args[2]);
     const stream = this.argInfo(args[0]);
     const seed = this.argInfo(args[1]);
@@ -3695,15 +3764,6 @@ class BodyChecker {
   }
 
   private foldEffectStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "fold-effect-stream" });
-    if (!this.arity(node, "foldEffectStream", 3, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine([...args.map((arg) => this.argInfo(arg)), EFFECT_ONLY]),
-      );
-    }
-    this.noPipeline("foldEffectStream", args);
     this.inlineStreamCallback("foldEffectStream", args[2]);
     const stream = this.argInfo(args[0]);
     const seed = this.argInfo(args[1]);
@@ -3760,15 +3820,6 @@ class BodyChecker {
   }
 
   private collectStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "collect-stream" });
-    if (!this.arity(node, "collectStream", 1, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine([...args.map((arg) => this.argInfo(arg)), EFFECT_ONLY]),
-      );
-    }
-    this.noPipeline("collectStream", args);
     const stream = this.argInfo(args[0]);
     const source = this.table.node(this.table.unfold(stream.type));
     if (source.kind !== "stream") {
@@ -3796,15 +3847,6 @@ class BodyChecker {
     );
   }
   private headStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "head-stream" });
-    if (!this.arity(node, "headStream", 1, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine([...args.map((arg) => this.argInfo(arg)), EFFECT_ONLY]),
-      );
-    }
-    this.noPipeline("headStream", args);
     const stream = this.argInfo(args[0]);
     const source = this.table.node(this.table.unfold(stream.type));
     if (source.kind !== "stream") {
@@ -3832,15 +3874,6 @@ class BodyChecker {
     );
   }
   private lastStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "last-stream" });
-    if (!this.arity(node, "lastStream", 1, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine([...args.map((arg) => this.argInfo(arg)), EFFECT_ONLY]),
-      );
-    }
-    this.noPipeline("lastStream", args);
     const stream = this.argInfo(args[0]);
     const source = this.table.node(this.table.unfold(stream.type));
     if (source.kind !== "stream") {
@@ -3868,15 +3901,6 @@ class BodyChecker {
     );
   }
   private drainStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "drain-stream" });
-    if (!this.arity(node, "drainStream", 1, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine([...args.map((arg) => this.argInfo(arg)), EFFECT_ONLY]),
-      );
-    }
-    this.noPipeline("drainStream", args);
     const stream = this.argInfo(args[0]);
     const source = this.table.node(this.table.unfold(stream.type));
     if (source.kind !== "stream") {
@@ -3972,15 +3996,7 @@ class BodyChecker {
   }
 
   private switchMapStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    if (!this.arity(node, "switchMapStreams", 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
     this.fact(node, { kind: "switch-map-streams" });
-    this.noPipeline("switchMapStreams", args);
     this.inlineStreamCallback("switchMapStreams", args[1]);
     const stream = this.argInfo(args[0]);
     const source = this.table.node(this.table.unfold(stream.type));
@@ -4023,15 +4039,7 @@ class BodyChecker {
   }
 
   private catchStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    if (!this.arity(node, "catchStream", 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
     this.fact(node, { kind: "catch-stream" });
-    this.noPipeline("catchStream", args);
     this.inlineStreamCallback("catchStream", args[1]);
     const stream = this.argInfo(args[0]);
     const source = this.table.node(this.table.unfold(stream.type));
@@ -4069,15 +4077,7 @@ class BodyChecker {
   }
 
   private retryStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    if (!this.arity(node, "retryStream", 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
     this.fact(node, { kind: "retry-stream" });
-    this.noPipeline("retryStream", args);
     const stream = this.argInfo(args[0]);
     const policy = this.argInfo(args[1]);
     const source = this.table.node(this.table.unfold(stream.type));
@@ -4130,15 +4130,6 @@ class BodyChecker {
   }
 
   private debounceStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    if (!this.arity(node, "debounceStream", 2, args)) {
-      this.fact(node, { kind: "debounce-stream", delayMs: undefined });
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
-    this.noPipeline("debounceStream", args);
     const stream = this.argInfo(args[0]);
     const source = this.table.node(this.table.unfold(stream.type));
     if (source.kind !== "stream" && !this.isError(stream.type)) {
@@ -4171,20 +4162,6 @@ class BodyChecker {
   }
 
   private throttleStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    if (!this.arity(node, "throttleStream", 2, args)) {
-      this.fact(node, {
-        kind: "throttle-stream",
-        units: undefined,
-        durationMs: undefined,
-        strategy: undefined,
-      });
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
-    this.noPipeline("throttleStream", args);
     const stream = this.argInfo(args[0]);
     const source = this.table.node(this.table.unfold(stream.type));
     if (source.kind !== "stream" && !this.isError(stream.type)) {
@@ -4281,15 +4258,6 @@ class BodyChecker {
   }
 
   private takeStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "take-stream" });
-    if (!this.arity(node, "takeStream", 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
-    this.noPipeline("takeStream", args);
     const stream = this.argInfo(args[0]);
     const count = this.argInfo(args[1], this.table.int);
     const source = this.table.node(this.table.unfold(stream.type));
@@ -4315,15 +4283,6 @@ class BodyChecker {
   }
 
   private dropStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "drop-stream" });
-    if (!this.arity(node, "dropStream", 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
-    this.noPipeline("dropStream", args);
     const stream = this.argInfo(args[0]);
     const count = this.argInfo(args[1], this.table.int);
     const source = this.table.node(this.table.unfold(stream.type));
@@ -4357,16 +4316,6 @@ class BodyChecker {
       | "takeUntilEffectStream"
       | "dropWhileEffectStream",
   ): NodeInfo {
-    const effectFact = STREAM_PREDICATE_FACTS[name];
-    if (!this.arity(node, name, 2, args)) {
-      this.fact(node, { kind: effectFact.effect });
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
-    this.noPipeline(name, args);
     this.inlineStreamCallback(name, args[1]);
     const stream = this.argInfo(args[0]);
     const source = this.table.node(this.table.unfold(stream.type));
@@ -4400,10 +4349,10 @@ class BodyChecker {
       fn !== undefined && fn.execution === "pure" &&
       fn.failures.length === 0 && fn.requirements.length === 0
     ) {
-      this.fact(node, { kind: effectFact.pure });
+      this.fact(node, { kind: STREAM_PREDICATE_FACTS[name].pure });
       return this.finish(node, stream.type, combine([stream, predicate.info]));
     }
-    this.fact(node, { kind: effectFact.effect });
+    this.fact(node, { kind: STREAM_PREDICATE_FACTS[name].effect });
     const type = this.table.stream(
       element,
       [
@@ -4419,15 +4368,6 @@ class BodyChecker {
   }
 
   private sinkForEachCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "sink-for-each" });
-    if (!this.arity(node, "sinkForEach", 1, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
-    this.noPipeline("sinkForEach", args);
     this.inlineStreamCallback("sinkForEach", args[0]);
     const consume = this.argInfo(args[0]);
     const fn = this.functionOf(consume.type);
@@ -4461,15 +4401,6 @@ class BodyChecker {
     args: readonly Arg[],
     expected: TypeRef | undefined,
   ): NodeInfo {
-    this.fact(node, { kind: "take-sink", count: undefined });
-    if (!this.arity(node, "takeSink", 1, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
-    this.noPipeline("takeSink", args);
     const literal = args[0].pre === undefined &&
         kindOf(this.tree, args[0].node) === SyntaxKind.LiteralExpr
       ? literalOf(this.tree, args[0].node)
@@ -4527,17 +4458,6 @@ class BodyChecker {
     args: readonly Arg[],
     name: "scheduleRecurs" | "scheduleSpaced",
   ): NodeInfo {
-    this.fact(node, {
-      kind: name === "scheduleRecurs" ? "schedule-recurs" : "schedule-spaced",
-    });
-    if (!this.arity(node, name, 1, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
-    this.noPipeline(name, args);
     const value = this.argInfo(args[0]);
     this.fits(
       args[0].node,
@@ -4556,15 +4476,6 @@ class BodyChecker {
     node: NodeId,
     args: readonly Arg[],
   ): NodeInfo {
-    this.fact(node, { kind: "schedule-from-step" });
-    if (!this.arity(node, "scheduleFromStep", 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
-    this.noPipeline("scheduleFromStep", args);
     this.inlineStreamCallback("scheduleFromStep", args[0]);
     this.inlineStreamCallback("scheduleFromStep", args[1]);
     const initial = this.argInfo(args[0]);
@@ -4641,15 +4552,6 @@ class BodyChecker {
     args: readonly Arg[],
     expected: TypeRef | undefined,
   ): NodeInfo {
-    this.fact(node, { kind: "schedule-map" });
-    if (!this.arity(node, "scheduleMap", 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
-    this.noPipeline("scheduleMap", args);
     this.inlineStreamCallback("scheduleMap", args[1]);
     const schedule = this.argInfo(args[0]);
     const policy = this.table.node(this.table.unfold(schedule.type));
@@ -4691,20 +4593,6 @@ class BodyChecker {
     args: readonly Arg[],
     name: "scheduleMax" | "scheduleMin" | "scheduleConcat",
   ): NodeInfo {
-    const kind = name === "scheduleMax"
-      ? "schedule-max"
-      : name === "scheduleMin"
-      ? "schedule-min"
-      : "schedule-concat";
-    this.fact(node, { kind });
-    if (!this.arity(node, name, 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
-    this.noPipeline(name, args);
     const left = this.argInfo(args[0]);
     const right = this.argInfo(args[1]);
     const first = this.table.node(this.table.unfold(left.type));
@@ -4750,15 +4638,6 @@ class BodyChecker {
     node: NodeId,
     args: readonly Arg[],
   ): NodeInfo {
-    this.fact(node, { kind: "aggregate-within-stream" });
-    if (!this.arity(node, "aggregateWithinStream", 3, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
-    this.noPipeline("aggregateWithinStream", args);
     const stream = this.argInfo(args[0]);
     const producer = this.table.node(this.table.unfold(stream.type));
     const sink = this.argInfo(args[1], this.takeSinkHint(stream.type, args[1]));
@@ -4815,19 +4694,6 @@ class BodyChecker {
     args: readonly Arg[],
     name: "transduceStream" | "aggregateStream",
   ): NodeInfo {
-    this.fact(node, {
-      kind: name === "aggregateStream"
-        ? "aggregate-stream"
-        : "transduce-stream",
-    });
-    if (!this.arity(node, name, 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
-    this.noPipeline(name, args);
     const stream = this.argInfo(args[0]);
     const producer = this.table.node(this.table.unfold(stream.type));
     const sink = this.argInfo(args[1], this.takeSinkHint(stream.type, args[1]));
@@ -4922,15 +4788,6 @@ class BodyChecker {
   }
 
   private runStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "run-stream" });
-    if (!this.arity(node, "runStream", 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine([...args.map((a) => this.argInfo(a)), EFFECT_ONLY]),
-      );
-    }
-    this.noPipeline("runStream", args);
     const stream = this.argInfo(args[0]);
     const producer = this.table.node(this.table.unfold(stream.type));
     const sink = this.argInfo(args[1], this.takeSinkHint(stream.type, args[1]));
@@ -4969,15 +4826,6 @@ class BodyChecker {
   }
 
   private bufferStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    if (!this.arity(node, "bufferStream", 2, args)) {
-      this.fact(node, { kind: "buffer-stream", capacity: undefined });
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
-    this.noPipeline("bufferStream", args);
     const stream = this.argInfo(args[0]);
     const source = this.table.node(this.table.unfold(stream.type));
     if (source.kind !== "stream" && !this.isError(stream.type)) {
@@ -5040,15 +4888,6 @@ class BodyChecker {
   }
 
   private mergeStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "merge-streams" });
-    if (!this.arity(node, "mergeStreams", 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
-    this.noPipeline("mergeStreams", args);
     const left = this.argInfo(args[0]);
     const right = this.argInfo(args[1]);
     const a = this.table.node(this.table.unfold(left.type));
@@ -5079,15 +4918,6 @@ class BodyChecker {
   }
 
   private zipStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "zip-streams" });
-    if (!this.arity(node, "zipStreams", 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
-    this.noPipeline("zipStreams", args);
     const left = this.argInfo(args[0]);
     const right = this.argInfo(args[1]);
     const a = this.table.node(this.table.unfold(left.type));
@@ -5109,15 +4939,6 @@ class BodyChecker {
   }
 
   private concatStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "concat-streams" });
-    if (!this.arity(node, "concatStreams", 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((arg) => this.argInfo(arg))),
-      );
-    }
-    this.noPipeline("concatStreams", args);
     const left = this.argInfo(args[0]);
     const right = this.argInfo(args[1]);
     const a = this.table.node(this.table.unfold(left.type));
@@ -5139,15 +4960,6 @@ class BodyChecker {
   }
 
   private raceCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "race" });
-    if (!this.arity(node, "race", 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
-    this.noPipeline("race", args);
     const left = this.argInfo(args[0]);
     const right = this.argInfo(args[1]);
     const a = this.table.node(this.table.unfold(left.type));
@@ -5173,26 +4985,13 @@ class BodyChecker {
     return this.finish(node, type, combine([left, right]));
   }
 
-  private refCall(node: NodeId, name: string, args: readonly Arg[]): NodeInfo {
-    const kind = name === "makeRef"
-      ? "make-ref"
-      : name === "getRef"
-      ? "get-ref"
-      : name === "setRef"
-      ? "set-ref"
-      : "update-ref";
-    this.fact(node, { kind });
-    const count = kind === "make-ref" || kind === "get-ref" ? 1 : 2;
-    if (!this.arity(node, name, count, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine([...args.map((a) => this.argInfo(a)), EFFECT_ONLY]),
-      );
-    }
-    this.noPipeline(name, args);
+  private refCall(
+    node: NodeId,
+    name: "makeRef" | "getRef" | "setRef" | "updateRef",
+    args: readonly Arg[],
+  ): NodeInfo {
     const first = this.argInfo(args[0]);
-    if (kind === "make-ref") {
+    if (name === "makeRef") {
       return this.finish(
         node,
         this.table.ref(this.widen(first.type)),
@@ -5208,10 +5007,10 @@ class BodyChecker {
       );
     }
     const element = ref.kind === "ref" ? ref.element : this.table.error;
-    if (kind === "get-ref") {
+    if (name === "getRef") {
       return this.finish(node, element, combine([first, EFFECT_ONLY]));
     }
-    if (kind === "set-ref") {
+    if (name === "setRef") {
       const value = this.argInfo(args[1], element);
       this.fits(args[1].node, value.type, element, "the new Ref value");
       return this.finish(
@@ -5230,15 +5029,6 @@ class BodyChecker {
   }
 
   private provideCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    if (!this.arity(node, "provide", 2, args)) {
-      this.fact(node, { kind: "provide", provider: undefined });
-      const infos = args.map((a) => this.argInfo(a));
-      return this.finish(
-        node,
-        this.table.error,
-        combine([...infos, EFFECT_ONLY]),
-      );
-    }
     const providerInfo = this.argInfo(args[0]);
     const job = this.argInfo(args[1]);
     const providerNode = kindOf(this.tree, args[0].node) === SyntaxKind.NameExpr
@@ -5286,15 +5076,6 @@ class BodyChecker {
   }
 
   private layerCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    if (!this.arity(node, "layer", 2, args)) {
-      this.fact(node, { kind: "layer", service: undefined });
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
-    this.noPipeline("layer", args);
     const target = kindOf(this.tree, args[0].node) === SyntaxKind.NameExpr
       ? this.targets.get(args[0].node)
       : undefined;
@@ -5370,15 +5151,6 @@ class BodyChecker {
   }
 
   private mergeLayersCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "merge-layers" });
-    if (!this.arity(node, "mergeLayers", 2, args)) {
-      return this.finish(
-        node,
-        this.table.error,
-        combine(args.map((a) => this.argInfo(a))),
-      );
-    }
-    this.noPipeline("mergeLayers", args);
     const left = this.argInfo(args[0]);
     const right = this.argInfo(args[1]);
     const a = this.table.node(this.table.unfold(left.type));
