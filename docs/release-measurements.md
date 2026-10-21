@@ -63,3 +63,37 @@ deno test --allow-all tests/bench_lsp_slow_test.ts tests/bench_session_test.ts t
 The final M4 smoke row was then extended to 13 steps to cover all four primary edit kinds with companion edits between them; `deno test --allow-all --filter M4 tests/bench_lsp_slow_test.ts` passed. Scoped formatting and lint checks passed. The pure regression independently confirms that 10,000 successive primary edit texts are distinct and retain only one revision marker.
 
 The saved JSON was independently checked for sample counts, per-document edit counts, distinct-edit totals, positive numeric baselines and samples, matching RSS summaries, monotonic type-table counts, and all M1/M3 count/budget claims above. These are automated measurements. They do not represent the user's manual release acceptance; installed-extension and browser acceptance evidence is recorded separately.
+
+## Save rounds
+
+The save plan (`docs/plans/2026-10-21-save-transpilation.md`, unit SV5) added M7 and a second M4 run with `writeOnSave` true. One full run measured the tree that was committed as `539dda6`:
+
+```sh
+deno task bench --full m1 m4 m7
+```
+
+The [complete text report](release-measurements-2026-10-21-save.txt) holds every row of that run, including a new M1 run. No JSON file was written for it. [Measurements](measurements.md) describes the M7 completion signal and its scenarios.
+
+M7 times one save from the write of `didSave` to the reply of a following `effective/stats` request. Two server processes, A and B, run each warm row, so `n` counts both sides. The cold rows use a fresh server for each sample. The budget SV-D3 applies to the `body` row on the large preset.
+
+| Preset and scenario | Saves | n | Median ms | p90 ms | Maximum ms | A/B floor % |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| large cold | 1 | 30 | 242.132 | 267.823 | 275.262 | 4.5 |
+| large stats only | 0 | 200 | 0.058 | 0.079 | 0.138 | 43.5 |
+| large repeat | 1 | 200 | 14.241 | 15.284 | 37.037 | 9.3 |
+| large body | 1 | 200 | 19.964 | 24.927 | 104.506 | 21.6 |
+| large interface | 1 | 200 | 94.877 | 104.494 | 287.177 | 10.9 |
+| large save all | 52 | 30 | 808.095 | 838.374 | 859.244 | 4.4 |
+
+The large `body` p90 of **24.927 ms** is within the 100 ms budget of SV-D3. The large `interface` p90 is above 100 ms, but SV-D3 does not apply to it. A `save all` of 52 modules runs 52 full rounds, one for each `didSave`. The small and medium rows are in the text report.
+
+M4 ran twice on the medium input with three open documents. In the second run, each step writes the edited text to disk and sends `didSave`, so each server holds a disk program. The difference includes the disk program and the file reads and writes of the saves.
+
+| Edits per side | RSS sampled peak A/B MiB, no saves | RSS sampled peak A/B MiB, with saves | Type table start → last |
+| ---: | ---: | ---: | ---: |
+| 200 | 189.2 / 200.4 | 273.7 / 235.6 | 174 → 176 |
+| 500 | 203.2 / 213.1 | 268.7 / 239.6 | 174 → 176 |
+| 1,000 | 211.6 / 221.3 | 277.6 / 274.2 | 174 → 176 |
+| 10,000 | 218.0 / 210.0 | 275.9 / 290.4 | 174 → 176 |
+
+The sampled RSS peak was higher with saves in every row. Peaks are sampled at step ends, and garbage collection is not forced. This run establishes no memory bound and no memory budget.

@@ -1,0 +1,107 @@
+effective-lang measurements, profile full
+deno 2.9.7, v8 15.0.245.2-rusty, typescript 6.0.3, aarch64-apple-darwin
+logical cores 14, timer performance.now(), single thread, not pinned
+No number below is a claim. Read each number with the noise floor of its row.
+
+M1: edit latency through the language server (ms), two server processes A and B
+change: from just before the write of didChange to the receipt of the matching publishDiagnostics. hover: one hover round trip on a fixed function name.
+n counts the runs of both sides. The floor is the p90 of |A/B - 1| in percent over the A/B step pairs of the row. Call a later A/B difference below the floor null.
+Server options: writeOnSave false, debounceMs 0. Only the edited document is open. Warm-up steps are dropped. examples: 5 warm-up and 100 timed steps per kind; small: 5 warm-up and 100 timed steps per kind; medium: 5 warm-up and 100 timed steps per kind; large: 5 warm-up and 100 timed steps per kind.
+
+input edit metric       n     min     p10  median     p90     max  floor %
+--------------------  ---  ------  ------  ------  ------  ------  -------
+examples body change  200   0.462   0.557   0.677   0.861   1.418     20.5
+examples body hover   200   0.268   0.337   0.412   0.508   1.262     23.5
+small body change     200   0.990   1.132   1.353   1.757   2.639     20.1
+small body hover      200   0.584   0.704   0.865   1.123   2.410     28.3
+small header change   200   0.991   1.072   1.203   1.393   2.287     20.0
+small header hover    200   0.604   0.644   0.734   1.006   1.768     40.8
+small alias change    200   0.946   1.013   1.123   1.305   1.725     21.3
+small alias hover     200   0.557   0.591   0.688   0.908   1.187     40.5
+small flip change     200   0.896   0.993   1.120   1.311   1.600     22.3
+small flip hover      200   0.518   0.603   0.710   0.949   1.197     34.4
+medium body change    200   2.433   2.608   2.932   3.695   4.583     14.5
+medium body hover     200   1.048   1.151   1.307   1.688   2.970     15.2
+medium header change  200   4.464   4.872   5.351   5.905   6.530     10.6
+medium header hover   200   0.986   1.121   1.245   1.446   2.504     13.1
+medium alias change   200   4.415   4.826   5.213   5.719   6.565     10.8
+medium alias hover    200   1.010   1.107   1.223   1.425   2.291     12.1
+medium flip change    200   4.461   4.736   5.059   5.414   6.076     13.1
+medium flip hover     200   0.948   1.088   1.191   1.362   2.476     21.5
+large body change     200   9.723  10.202  10.976  11.981  23.029     13.6
+large body hover      200   1.095   1.230   1.374   2.046   5.448     48.1
+large header change   200  51.520  52.962  54.548  57.350  88.774      6.4
+large header hover    200   1.150   1.264   1.376   1.533   2.885     17.9
+large alias change    200  51.660  53.198  59.067  62.237  85.012      8.0
+large alias hover     200   1.163   1.316   1.474   1.746   3.346     46.0
+large flip change     200  52.192  53.283  55.276  59.748  89.454      5.8
+large flip hover      200   1.142   1.275   1.399   1.549   2.943     23.8
+
+elapsed 47.8 s
+
+M4: server memory over distinct edits, size medium, 3 documents open concurrently, two server processes A and B, writeOnSave false (no save, no disk program)
+Edits rotate between documents. The primary cycles body, header, alias, and mode flip; companion feature modules receive body edits. Every text has a unique revision marker.
+Note: the peak is sampled only at step ends, so a short peak inside a step is not seen. These observations do not establish bounded memory.
+
+N steps  RSS peak A/B MiB  RSS last A/B MiB  heap last A/B MiB  types start A/B  types last A/B
+-------  ----------------  ----------------  -----------------  ---------------  --------------
+200           189.2/200.4       189.2/200.4          33.3/57.2          174/174         176/176
+500           203.2/213.1       203.2/213.1          73.5/27.9          174/174         176/176
+1000          211.6/221.3       211.6/221.3          28.8/21.0          174/174         176/176
+10000         218.0/210.0       205.5/187.4          17.9/65.9          174/174         176/176
+
+200 steps: distinct edits A/B 200/200; m02.eff 67/67 (body/header/alias/flip), m00.eff 67/67 (body), m01.eff 66/66 (body)
+500 steps: distinct edits A/B 500/500; m02.eff 167/167 (body/header/alias/flip), m00.eff 167/167 (body), m01.eff 166/166 (body)
+1000 steps: distinct edits A/B 1000/1000; m02.eff 334/334 (body/header/alias/flip), m00.eff 333/333 (body), m01.eff 333/333 (body)
+10000 steps: distinct edits A/B 10000/10000; m02.eff 3334/3334 (body/header/alias/flip), m00.eff 3333/3333 (body), m01.eff 3333/3333 (body)
+
+elapsed 74.8 s
+
+M4: server memory over distinct edits, size medium, 3 documents open concurrently, two server processes A and B, writeOnSave true (each step writes the text to disk and saves, so each server holds a disk program)
+Edits rotate between documents. The primary cycles body, header, alias, and mode flip; companion feature modules receive body edits. Every text has a unique revision marker.
+Note: the peak is sampled only at step ends, so a short peak inside a step is not seen. These observations do not establish bounded memory.
+
+N steps  RSS peak A/B MiB  RSS last A/B MiB  heap last A/B MiB  types start A/B  types last A/B
+-------  ----------------  ----------------  -----------------  ---------------  --------------
+200           273.7/235.6       273.7/235.6          62.4/46.2          174/174         176/176
+500           268.7/239.6       268.7/239.6          43.3/71.6          174/174         176/176
+1000          277.6/274.2       274.0/274.2         53.3/110.1          174/174         176/176
+10000         275.9/290.4       263.7/259.2          71.5/52.7          174/174         176/176
+
+200 steps: distinct edits A/B 200/200; m02.eff 67/67 (body/header/alias/flip), m00.eff 67/67 (body), m01.eff 66/66 (body)
+500 steps: distinct edits A/B 500/500; m02.eff 167/167 (body/header/alias/flip), m00.eff 167/167 (body), m01.eff 166/166 (body)
+1000 steps: distinct edits A/B 1000/1000; m02.eff 334/334 (body/header/alias/flip), m00.eff 333/333 (body), m01.eff 333/333 (body)
+10000 steps: distinct edits A/B 10000/10000; m02.eff 3334/3334 (body/header/alias/flip), m00.eff 3333/3333 (body), m01.eff 3333/3333 (body)
+
+elapsed 260.3 s
+
+M7: save round latency through the language server (ms), two server processes A and B
+Time: from just before the write of didSave to the receipt of the effective/stats reply that follows it. The server handles one message at a time, so the reply comes after the round and after the flush that follows it. The row `stats only` is that round trip with no save.
+Scenarios: cold is the first round after the open (a fresh server for each sample). repeat saves with no change on disk. body and interface write the edit to disk, send didChange, wait for its diagnostics, and then time the save. save all writes a body edit for every module, with every module open, sends didSave for each in one batch, and times until the last round ends. `saves` is the number of didSave messages of one sample.
+n counts the runs of both sides. The floor is the p90 of |A/B - 1| in percent over the A/B pairs of the row. Call a later A/B difference below the floor null.
+Server options: writeOnSave true, debounceMs 0. Warm-up rounds are dropped. small: 15 cold pairs, 5 warm-up and 100 timed steps per warm scenario, 1 warm-up and 30 timed save all steps; medium: 15 cold pairs, 5 warm-up and 100 timed steps per warm scenario, 1 warm-up and 30 timed save all steps; large: 15 cold pairs, 5 warm-up and 100 timed steps per warm scenario, 1 warm-up and 15 timed save all steps.
+
+preset scenario    saves    n      min      p10   median      p90      max  floor %
+-----------------  -----  ---  -------  -------  -------  -------  -------  -------
+small cold             1   30   15.108   15.215   15.477   15.926   16.428      3.7
+small stats only       0  200    0.028    0.031    0.038    0.072    1.451     40.0
+small repeat           1  200    0.485    0.519    0.579    0.699    0.841     15.6
+small body             1  200    2.214    2.381    2.711    3.340    5.845     12.4
+small interface        1  200    2.264    2.428    2.704    3.200   29.174     24.0
+small save all         3   60    4.011    4.226    4.702    5.457    7.266      9.8
+medium cold            1   30   43.528   43.957   45.277   47.055   47.857      4.9
+medium stats only      0  200    0.028    0.029    0.035    0.052    0.124     30.0
+medium repeat          1  200    1.426    1.490    1.629    1.929    2.894     18.5
+medium body            1  200    4.576    4.900    5.377    6.011   11.747     13.7
+medium interface       1  200   10.214   10.772   11.404   14.609   56.184     35.9
+medium save all        7   60   24.506   25.562   26.981   32.956   53.643     12.8
+large cold             1   30  229.501  235.330  242.132  267.823  275.262      4.5
+large stats only       0  200    0.034    0.043    0.058    0.079    0.138     43.5
+large repeat           1  200   12.793   13.445   14.241   15.284   37.037      9.3
+large body             1  200   17.057   18.400   19.964   24.927  104.506     21.6
+large interface        1  200   88.480   91.944   94.877  104.494  287.177     10.9
+large save all        52   30  768.020  779.416  808.095  838.374  859.244      4.4
+
+SV-D3: body edit save on the large preset, p90 24.927 ms against the budget of 100 ms: within the budget.
+
+elapsed 111.7 s
