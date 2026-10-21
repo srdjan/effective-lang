@@ -109,3 +109,45 @@ export function writeGenerated(
   }
   return { written, generated, tables, notes, failed };
 }
+
+/** The first line that the emitter writes for a module. Keep it equal to `emit.ts`. */
+function generatedHeader(module: string): string {
+  return `// Generated from ${module}.eff by the Effective compiler. Do not edit.`;
+}
+
+/**
+ * Removes the outputs of modules that left the project. Each named module has
+ * a `<module>.ts` and a `<module>.ts.map`. A `.ts` file goes only when its
+ * first line is the emitter header of that module, so a hand-written file at
+ * the same path stays. The map goes only together with its `.ts` file. Returns
+ * the root-relative paths that it removed, and messages for stderr.
+ */
+export function removeStaleOutputs(
+  fs: CliFs,
+  root: string,
+  modules: readonly string[],
+): { readonly removed: string[]; readonly notes: string[] } {
+  const removed: string[] = [];
+  const notes: string[] = [];
+  for (const module of modules) {
+    const path = `${module}.ts`;
+    const read = fs.readText(joinPath(root, path));
+    if (!read.ok) {
+      if (read.error.tag === "unreadable") {
+        notes.push(`error: cannot read ${path}: ${read.error.message}`);
+      }
+      continue;
+    }
+    if (read.value.split("\n", 1)[0] !== generatedHeader(module)) continue;
+    for (const target of [path, `${path}.map`]) {
+      const result = fs.remove(joinPath(root, target));
+      if (result.ok) {
+        removed.push(target);
+      } else {
+        notes.push(`error: cannot remove ${target}: ${result.error.message}`);
+        break;
+      }
+    }
+  }
+  return { removed, notes };
+}

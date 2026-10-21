@@ -42,6 +42,17 @@ export const denoFs: CliFs = {
       return { ok: false, error: { message: errorMessage(e) } };
     }
   },
+  remove(path: string): Result<void, FileFailure> {
+    try {
+      Deno.removeSync(path);
+      return { ok: true, value: undefined };
+    } catch (e) {
+      if (e instanceof Deno.errors.NotFound) {
+        return { ok: true, value: undefined };
+      }
+      return { ok: false, error: { message: errorMessage(e) } };
+    }
+  },
   kind(path: string): "file" | "directory" | "missing" {
     try {
       return Deno.statSync(path).isDirectory ? "directory" : "file";

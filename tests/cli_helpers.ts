@@ -71,6 +71,13 @@ export function memoryIo(
         map.set(path, text);
         return { ok: true, value: undefined };
       },
+      remove(path: string): Result<void, FileFailure> {
+        if (state.unwritable.has(path)) {
+          return { ok: false, error: { message: "permission denied" } };
+        }
+        map.delete(path);
+        return { ok: true, value: undefined };
+      },
       kind(path: string) {
         if (map.has(path)) return "file";
         const prefix = prefixOf(path);

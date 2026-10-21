@@ -15,6 +15,7 @@ import { parseArgs, type ProjectCommand, USAGE } from "./args.ts";
 import type { BuildOptions, BuildOutcome } from "./build.ts";
 import { denoIo } from "../host/deno_io.ts";
 import type { CliIo } from "../host/io.ts";
+import { removeStaleOutputs } from "../host/outputs.ts";
 import { printOutcome, rechecked } from "./report.ts";
 import { Session, type SyncResult } from "./session.ts";
 
@@ -37,6 +38,7 @@ function optionsOf(command: ProjectCommand): BuildOptions {
 /**
  * Builds the `first` sync result, then builds once for each batch of `events`.
  * Each build prints the modules that it checked again and its diagnostics.
+ * When a module leaves the project, the loop removes its generated files.
  * Returns when the event source ends. A broken project file prints an error,
  * and the loop goes on.
  */
@@ -47,6 +49,9 @@ async function watchLoop(
   events: AsyncIterable<readonly string[]>,
   options: BuildOptions,
 ): Promise<void> {
+  // The modules of the last revision that loaded. A round with a configuration
+  // error keeps it, so that the next revision still finds the modules that left.
+  let previous: readonly string[] = [];
   const round = async (synced: SyncResult): Promise<void> => {
     switch (synced.tag) {
       case "unchanged":
@@ -56,6 +61,15 @@ async function watchLoop(
         io.stderr(`error: ${synced.message}\n`);
         return;
       case "revision": {
+        const names = new Set(synced.revision.effModuleNames());
+        const stale = removeStaleOutputs(
+          io.fs,
+          session.root,
+          previous.filter((name) => !names.has(name)),
+        );
+        for (const path of stale.removed) io.stderr(`removed: ${path}\n`);
+        for (const note of stale.notes) io.stderr(`${note}\n`);
+        previous = [...names];
         const outcome: BuildOutcome = await session.build(
           synced.revision,
           options,

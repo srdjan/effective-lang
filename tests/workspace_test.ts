@@ -38,6 +38,7 @@ function linkedFs(
         : { ok: true, value: text };
     },
     writeText: () => ({ ok: false, error: { message: "read only" } }),
+    remove: () => ({ ok: false, error: { message: "read only" } }),
     kind: (path) => {
       const real = resolve(path);
       if (files[real] !== undefined) return "file";
