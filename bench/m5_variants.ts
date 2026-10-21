@@ -114,7 +114,7 @@ async function runDeno(
 ): Promise<Result<ToolRun, string>> {
   try {
     const start = performance.now();
-    const output = await new Deno.Command(Deno.execPath(), {
+    const output = await new Deno.Command("deno", {
       args: [...args],
       cwd,
       env: { NO_COLOR: "1" },

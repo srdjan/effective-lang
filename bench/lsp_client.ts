@@ -1,5 +1,5 @@
 // A client over a spawned language server process, for the measurements M1, M3,
-// and M4 (plan section 8). It spawns `Deno.execPath()` with the arguments of
+// and M4 (plan section 8). It spawns PATH’s `deno` with the arguments of
 // the VS Code client. The client reads stdout from the start into a
 // `FrameDecoder` and keeps reading while it sends. Otherwise a large response
 // could fill the pipe and block the synchronous server. It drains stderr too.
@@ -88,7 +88,7 @@ export class LspClient {
 
   constructor(options: LspClientOptions = {}) {
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    this.#process = new Deno.Command(Deno.execPath(), {
+    this.#process = new Deno.Command("deno", {
       args: [
         "run",
         "--allow-read",

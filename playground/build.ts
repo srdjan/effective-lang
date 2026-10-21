@@ -119,7 +119,7 @@ export async function build(
   try {
     Deno.mkdirSync(out, { recursive: true });
     const appPath = join(out, "app.js");
-    const bundle = await new Deno.Command(Deno.execPath(), {
+    const bundle = await new Deno.Command("deno", {
       args: [
         "bundle",
         "--platform",
