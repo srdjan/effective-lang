@@ -266,12 +266,14 @@ Run `deno task effective <command> [root] [flags]` from the repository root. The
 | Command                                       | What it does                                                                                              |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `deno task effective check [root]`            | Prints the diagnostics of the project.                                                                    |
-| `deno task effective build [root]`            | Also writes `<module>.ts` and `<module>.ts.map` next to each source for every module without an error.    |
+| `deno task effective build [root]`            | Also writes `<module>.ts` and `<module>.ts.map` next to each source for each module that no error blocks. |
 | `deno task effective build [root] --validate` | Also runs the IR validator and prints its diagnostics.                                                    |
 | `deno task effective build [root] --tsc`      | Also runs `deno check` over the written files and the host modules, and maps each error to the source.    |
 | `deno task effective watch [root] [--tsc]`    | Builds once, then builds again after each change of a source file. It prints the modules that it checked. |
 
-The root is the project directory with `effective.json`. The modules are the `.eff` files under the root, found by a recursive walk. The walk skips directories whose names start with `.` and directories named `node_modules`. The `.effi` files come from `effective.json`.
+The root is the project directory with `effective.json`. The modules are the `.eff` files under the root, found by a recursive walk. The walk skips directories whose names start with `.` and directories named `node_modules`. The `.effi` files come from `effective.json`. The walk reads a directory once. It skips a link to a directory that it already visited, and a link to a directory outside the root.
+
+The `build` command writes a module only when the module has no error and every `.eff` module that it imports, directly or through other imports, is also written. The generated file of a module with an error is not written, so no written file imports a missing file. In an import cycle, one error stops every module of the cycle. The `watch` command leaves the last written file of a stopped module on disk.
 
 A diagnostic prints as `path:line:column: error code: message`. The path is relative to the root. The line and the column are one-based, and the column counts UTF-16 code units. The tool sorts the lines by path, position, and code.
 
