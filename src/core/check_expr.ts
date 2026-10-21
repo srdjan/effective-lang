@@ -131,6 +131,15 @@ interface Arg {
   readonly pre?: NodeInfo;
 }
 
+/** One use of a local in a body. */
+interface LocalUse {
+  readonly node: NodeId;
+  readonly parent: NodeId | undefined;
+  readonly grandparent: NodeId | undefined;
+  /** True when an arrow function between the body and the use encloses it. */
+  readonly nested: boolean;
+}
+
 /** One `name: literal` field of an option record. */
 interface LiteralField {
   readonly node: NodeId;
@@ -2938,55 +2947,73 @@ class BodyChecker {
     );
   }
 
-  private scopedFiberUses(body: NodeId, id: LocalId): void {
+  /**
+   * The uses of a local in `body`, in syntax order. Each use has its two nearest
+   * ancestors and tells whether an arrow function encloses it. With `shorthand`,
+   * the name in a shorthand field such as `{ id }` also counts as a use.
+   */
+  private localUses(
+    body: NodeId,
+    id: LocalId,
+    shorthand = false,
+  ): LocalUse[] {
+    const uses: LocalUse[] = [];
     const visit = (
       node: NodeId,
       parent: NodeId | undefined,
       grandparent: NodeId | undefined,
       nested: boolean,
     ): void => {
-      if (kindOf(this.tree, node) === SyntaxKind.NameExpr) {
-        const target = this.targets.get(node);
-        if (target?.kind === "local" && target.id === id) {
-          const call = parent !== undefined &&
-              kindOf(this.tree, parent) === SyntaxKind.CallExpr
-            ? parent
-            : parent !== undefined &&
-                kindOf(this.tree, parent) === SyntaxKind.ArgList &&
-                grandparent !== undefined &&
-                kindOf(this.tree, grandparent) === SyntaxKind.CallExpr
-            ? grandparent
-            : undefined;
-          const callee = call === undefined ? undefined : this.kids(call)[0];
-          const called = callee === undefined
-            ? undefined
-            : this.targets.get(callee);
-          if (
-            nested || callee === undefined ||
-            (parent !== call &&
-              (parent === undefined || this.kids(parent).length !== 1 ||
-                this.kids(parent)[0] !== node)) ||
-            called?.kind !== "builtin" ||
-            (called.name !== "joinFiber" && called.name !== "interruptFiber")
-          ) {
-            this.report(
-              "type-mismatch/010",
-              "a borrowed fiber may only be joined or interrupted directly",
-              node,
-            );
-          }
-        }
+      const kind = kindOf(this.tree, node);
+      const target = this.targets.get(node);
+      if (
+        (kind === SyntaxKind.NameExpr ||
+          (shorthand && kind === SyntaxKind.Name && parent !== undefined &&
+            kindOf(this.tree, parent) === SyntaxKind.ShorthandField)) &&
+        target?.kind === "local" && target.id === id
+      ) {
+        uses.push({ node, parent, grandparent, nested });
       }
       for (const child of this.kids(node)) {
-        visit(
-          child,
-          node,
-          parent,
-          nested || kindOf(this.tree, node) === SyntaxKind.ArrowExpr,
-        );
+        visit(child, node, parent, nested || kind === SyntaxKind.ArrowExpr);
       }
     };
     visit(body, undefined, undefined, false);
+    return uses;
+  }
+
+  private scopedFiberUses(body: NodeId, id: LocalId): void {
+    for (
+      const { node, parent, grandparent, nested } of this.localUses(body, id)
+    ) {
+      const call = parent !== undefined &&
+          kindOf(this.tree, parent) === SyntaxKind.CallExpr
+        ? parent
+        : parent !== undefined &&
+            kindOf(this.tree, parent) === SyntaxKind.ArgList &&
+            grandparent !== undefined &&
+            kindOf(this.tree, grandparent) === SyntaxKind.CallExpr
+        ? grandparent
+        : undefined;
+      const callee = call === undefined ? undefined : this.kids(call)[0];
+      const called = callee === undefined
+        ? undefined
+        : this.targets.get(callee);
+      if (
+        nested || callee === undefined ||
+        (parent !== call &&
+          (parent === undefined || this.kids(parent).length !== 1 ||
+            this.kids(parent)[0] !== node)) ||
+        called?.kind !== "builtin" ||
+        (called.name !== "joinFiber" && called.name !== "interruptFiber")
+      ) {
+        this.report(
+          "type-mismatch/010",
+          "a borrowed fiber may only be joined or interrupted directly",
+          node,
+        );
+      }
+    }
   }
 
   private deferCall(node: NodeId, args: readonly Arg[]): NodeInfo {
@@ -3146,40 +3173,23 @@ class BodyChecker {
 
   /** A scoped handle is usable only as `handle.operation(...)`. */
   private scopedUses(body: NodeId, id: LocalId): void {
-    const visit = (
-      node: NodeId,
-      parent: NodeId | undefined,
-      grandparent: NodeId | undefined,
-      nested: boolean,
-    ): void => {
-      if (kindOf(this.tree, node) === SyntaxKind.NameExpr) {
-        const target = this.targets.get(node);
-        if (target?.kind === "local" && target.id === id) {
-          const directField = parent !== undefined &&
-            kindOf(this.tree, parent) === SyntaxKind.FieldExpr &&
-            this.kids(parent)[0] === node;
-          const directCall = grandparent !== undefined &&
-            kindOf(this.tree, grandparent) === SyntaxKind.CallExpr &&
-            this.kids(grandparent)[0] === parent;
-          if (nested || !directField || !directCall) {
-            this.report(
-              "type-mismatch/010",
-              "a scoped operation record may only be used as the direct receiver of an operation call",
-              node,
-            );
-          }
-        }
-      }
-      for (const child of this.kids(node)) {
-        visit(
-          child,
+    for (
+      const { node, parent, grandparent, nested } of this.localUses(body, id)
+    ) {
+      const directField = parent !== undefined &&
+        kindOf(this.tree, parent) === SyntaxKind.FieldExpr &&
+        this.kids(parent)[0] === node;
+      const directCall = grandparent !== undefined &&
+        kindOf(this.tree, grandparent) === SyntaxKind.CallExpr &&
+        this.kids(grandparent)[0] === parent;
+      if (nested || !directField || !directCall) {
+        this.report(
+          "type-mismatch/010",
+          "a scoped operation record may only be used as the direct receiver of an operation call",
           node,
-          parent,
-          nested || kindOf(this.tree, node) === SyntaxKind.ArrowExpr,
         );
       }
-    };
-    visit(body, undefined, undefined, false);
+    }
   }
 
   private operationRecord(ref: TypeRef, node: NodeId): boolean {
@@ -3300,61 +3310,42 @@ class BodyChecker {
   }
 
   private scopedBorrowUses(body: NodeId, id: LocalId): void {
-    const visit = (
-      node: NodeId,
-      parent: NodeId | undefined,
-      grandparent: NodeId | undefined,
-      nested: boolean,
-    ): void => {
-      if (kindOf(this.tree, node) === SyntaxKind.NameExpr) {
-        const target = this.targets.get(node);
-        if (target?.kind === "local" && target.id === id) {
-          const call = parent !== undefined &&
-              kindOf(this.tree, parent) === SyntaxKind.ArgList &&
-              grandparent !== undefined &&
-              kindOf(this.tree, grandparent) === SyntaxKind.CallExpr
-            ? grandparent
-            : undefined;
-          const callee = call === undefined ? undefined : this.kids(call)[0];
-          const method = callee === undefined
-            ? undefined
-            : this.targets.get(callee);
-          const index = parent === undefined
-            ? -1
-            : this.kids(parent).indexOf(node);
-          const capability = method?.kind === "cap" ? method.id : undefined;
-          const serviceId: ServiceId | undefined = capability === undefined
-            ? undefined
-            : serviceOfCapability(capability);
-          const signature = serviceId === undefined
-            ? undefined
-            : this.benv.env.services.get(serviceId)?.methods.find((m) =>
-              m.id === capability
-            );
-          const functionType = method?.kind === "value"
-            ? this.functionOf(this.benv.values(method.id))
-            : undefined;
-          const borrowed = signature?.borrows?.[index] === true ||
-            functionType?.borrows?.[index] === true;
-          if (nested || index < 0 || !borrowed) {
-            this.report(
-              "type-mismatch/010",
-              "a borrowed handle may only pass to a borrow-qualified method",
-              node,
-            );
-          }
-        }
-      }
-      for (const child of this.kids(node)) {
-        visit(
-          child,
+    for (
+      const { node, parent, grandparent, nested } of this.localUses(body, id)
+    ) {
+      const call = parent !== undefined &&
+          kindOf(this.tree, parent) === SyntaxKind.ArgList &&
+          grandparent !== undefined &&
+          kindOf(this.tree, grandparent) === SyntaxKind.CallExpr
+        ? grandparent
+        : undefined;
+      const callee = call === undefined ? undefined : this.kids(call)[0];
+      const method = callee === undefined
+        ? undefined
+        : this.targets.get(callee);
+      const index = parent === undefined ? -1 : this.kids(parent).indexOf(node);
+      const capability = method?.kind === "cap" ? method.id : undefined;
+      const serviceId: ServiceId | undefined = capability === undefined
+        ? undefined
+        : serviceOfCapability(capability);
+      const signature = serviceId === undefined
+        ? undefined
+        : this.benv.env.services.get(serviceId)?.methods.find((m) =>
+          m.id === capability
+        );
+      const functionType = method?.kind === "value"
+        ? this.functionOf(this.benv.values(method.id))
+        : undefined;
+      const borrowed = signature?.borrows?.[index] === true ||
+        functionType?.borrows?.[index] === true;
+      if (nested || index < 0 || !borrowed) {
+        this.report(
+          "type-mismatch/010",
+          "a borrowed handle may only pass to a borrow-qualified method",
           node,
-          parent,
-          nested || kindOf(this.tree, node) === SyntaxKind.ArrowExpr,
         );
       }
-    };
-    visit(body, undefined, undefined, false);
+    }
   }
 
   checkBorrowedParameter(
@@ -3598,7 +3589,6 @@ class BodyChecker {
   }
 
   private groupUses(body: NodeId, id: LocalId): void {
-    let references = 0;
     const terminals = new Set([
       "collectStream",
       "runStream",
@@ -3608,60 +3598,37 @@ class BodyChecker {
       "lastStream",
       "drainStream",
     ]);
-    const visit = (
-      node: NodeId,
-      parent: NodeId | undefined,
-      grandparent: NodeId | undefined,
-      nested: boolean,
-    ): void => {
-      const target = this.targets.get(node);
+    const uses = this.localUses(body, id, true);
+    uses.forEach(({ node, parent, grandparent, nested }, references) => {
+      const call = parent !== undefined &&
+          kindOf(this.tree, parent) === SyntaxKind.ArgList
+        ? grandparent
+        : parent;
+      const callee =
+        call !== undefined && kindOf(this.tree, call) === SyntaxKind.CallExpr
+          ? this.kids(call)[0]
+          : undefined;
+      const called = callee === undefined
+        ? undefined
+        : this.targets.get(callee);
+      const first = call === undefined
+        ? undefined
+        : this.kids(call).slice(1).flatMap((child) =>
+          kindOf(this.tree, child) === SyntaxKind.ArgList
+            ? this.kids(child)
+            : [child]
+        )[0];
       if (
-        (kindOf(this.tree, node) === SyntaxKind.NameExpr ||
-          (kindOf(this.tree, node) === SyntaxKind.Name &&
-            parent !== undefined &&
-            kindOf(this.tree, parent) === SyntaxKind.ShorthandField)) &&
-        target?.kind === "local" && target.id === id
+        nested || references > 0 || first !== node ||
+        called?.kind !== "builtin" || !terminals.has(called.name)
       ) {
-        references++;
-        const call = parent !== undefined &&
-            kindOf(this.tree, parent) === SyntaxKind.ArgList
-          ? grandparent
-          : parent;
-        const callee =
-          call !== undefined && kindOf(this.tree, call) === SyntaxKind.CallExpr
-            ? this.kids(call)[0]
-            : undefined;
-        const called = callee === undefined
-          ? undefined
-          : this.targets.get(callee);
-        const first = call === undefined
-          ? undefined
-          : this.kids(call).slice(1).flatMap((child) =>
-            kindOf(this.tree, child) === SyntaxKind.ArgList
-              ? this.kids(child)
-              : [child]
-          )[0];
-        if (
-          nested || references > 1 || first !== node ||
-          called?.kind !== "builtin" || !terminals.has(called.name)
-        ) {
-          this.report(
-            "type-mismatch/010",
-            "a borrowed group permits at most one direct terminal use and cannot escape or be captured",
-            node,
-          );
-        }
-      }
-      for (const child of this.kids(node)) {
-        visit(
-          child,
+        this.report(
+          "type-mismatch/010",
+          "a borrowed group permits at most one direct terminal use and cannot escape or be captured",
           node,
-          parent,
-          nested || kindOf(this.tree, node) === SyntaxKind.ArrowExpr,
         );
       }
-    };
-    visit(body, undefined, undefined, false);
+    });
   }
 
   private scanStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
