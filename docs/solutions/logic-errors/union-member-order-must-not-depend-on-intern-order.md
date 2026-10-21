@@ -58,7 +58,7 @@ const sorted = [...flat].sort((a, b) =>
 );
 ```
 
-Second, `recordTarget` narrows the fitting members by the known types of the name-reference field values (`src/core/check_expr.ts:5873-5916`). `knownNameType` reads settled locals, values, and providers. It records no fact and reports nothing (`src/core/check_expr.ts:5918-5934`). The old choice stays as the fallback when no member fits (`src/core/check_expr.ts:5915`).
+Second, `recordTarget` narrows the fitting members by the known types of the name-reference field values (`recordTarget` in `src/core/check_expr.ts`). `knownNameType` reads settled locals, values, and providers. It records no fact and reports nothing. The old choice stays as the fallback when no member fits.
 
 Six test messages changed, and only in the order of union members.
 
@@ -80,7 +80,7 @@ A fixed order is not enough. With a fixed order, `recordTarget` still picks the 
 
 ### Second lesson: `Lowered.ir` is not `toIr(ref)`
 
-`Lowered.ir` keeps source order and schema `makeInput`. `toIr(ref)` does not (`src/core/check.ts:1728-1732`). Commit 8a0abf2 (function-type alias on module constants) read the type of every function-typed binding, inline or alias, through `toIr`. A probe then showed the defect:
+`Lowered.ir` keeps source order and schema `makeInput`. `toIr(ref)` does not. Commit 8a0abf2 (function-type alias on module constants) read the type of every function-typed binding, inline or alias, through `toIr`. A probe then showed the defect:
 
 ```effective
 export const g: (x: B | A) => A = (x) => 2
@@ -88,7 +88,7 @@ export const g: (x: B | A) => A = (x) => 2
 
 The emitted TypeScript said `x: A | B` and not the written `x: B | A`. Both forms pass `deno check`, but the change also put the schema `makeInput` of a written type at risk.
 
-Commit ac9db59 fixed it. `functionOfBinding` uses `binding.ir` when it is a function type. It calls `toIr(ref)` only after it unfolds an alias (`src/core/check.ts:1733-1743`). The fast test `tests/function_alias_binding_test.ts` pins the source order.
+Commit ac9db59 fixed it. `functionOfBinding` uses `binding.ir` when it is a function type. It calls `toIr(ref)` only after it unfolds an alias. The fast test `tests/function_alias_binding_test.ts` pins the source order.
 
 The rederive review, section 9 (`docs/plans/2026-10-20-rederive-review.md:426`), records that `Lowered.ir` differs from `toIr(ref)` in 70 of 3620 lowerings. 65 differ in source order. 5 keep a schema `makeInput`. The two forms are not redundant.
 
@@ -97,4 +97,4 @@ The rederive review, section 9 (`docs/plans/2026-10-20-rederive-review.md:426`),
 - `docs/solutions/logic-errors/checker-expected-type-is-enforced-not-a-hint.md` also covers a checker choice that depends on how the expected type is used.
 - `docs/solutions/logic-errors/checker-result-type-from-expected-hint.md` touches `TypeTable.union` for result types, not for member order.
 - The rule row "Contextual record unions" in `docs/language-rules.md` states the selection order. The audit fix plan `docs/plans/2026-10-21-audit-fixes.md` (items AU1, AU2, AU4) holds the probes and measurements.
-- Commits d3a1633, 8a0abf2, and ac9db59 are on local main only. No pull request exists.
+- Commits d3a1633, 8a0abf2, and ac9db59 are on main.

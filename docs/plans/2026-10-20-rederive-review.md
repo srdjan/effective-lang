@@ -6,7 +6,7 @@ This document is a plan, not a change. It ranks the weak units of the transpiler
 
 ## 1. Executive summary
 
-The current state is better than the size suggests. `src/core` has 0 Deno or global calls and 0 mutable module-level bindings. Its 46 files have 0 import cycles. The ports in `src/cli/io.ts` and the `LanguageServer` constructor already sit at the edge. So the hexagonal target is met at the module level.
+The current state is better than the size suggests. `src/core` has 0 Deno or global calls and 0 mutable module-level bindings. Its 46 files have 0 import cycles. The ports in `src/host/io.ts` (moved from `src/cli/io.ts` by P4) and the `LanguageServer` constructor already sit at the edge. So the hexagonal target is met at the module level.
 
 The weak parts are inside the four largest stage files: `check_expr.ts`, `validate/expr.ts`, `emit/expr.ts`, and `lower.ts`. They hold 4757 of the 9617 AST branches in `src/` and `playground/src`.
 
@@ -493,7 +493,7 @@ D6. A pure function value from an effect-mode expression in an effect function s
 - Observation. The `check`, `program`, and `validate` records of `behavior:capture` hash only the result, not the input. So every clean result gives the same record, the hash of `[]`.
 - Effect. The comparison is a multiset difference. When a clean program gains a diagnostic, one `[]` record goes missing. A new test with a clean program adds a `[]` record, and the loss is hidden. A commit that adds tests can therefore hide a behavior change.
 - Phase 2 check. The coordinator captured the Phase 2 source with the Phase 1 test set, so that no new test is in the comparison.
-- Proposal, before Phase 3. Add the input to each `check`, `program`, and `validate` record: the module path and a hash of its source text. This is a test infrastructure change in `scripts/behavior_capture.ts` only.
+- Proposal, before Phase 3. Add the input to each `check`, `program`, and `validate` record: the module path and a hash of its source text. This is a test infrastructure change in `scripts/behavior_capture.ts` only. Done in `0844b30`.
 
 ## Architectural cleanup on 2026-10-21
 

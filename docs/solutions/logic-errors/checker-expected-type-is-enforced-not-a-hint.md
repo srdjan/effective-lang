@@ -61,7 +61,7 @@ requires an `Int[]` result and empty failure and requirement channels. A
 
 ## Solution
 
-All four stream sites now call one helper, `takeSinkHint`, in
+The three handlers of the four stream builtins now call one helper, `takeSinkHint`, in
 `src/core/check_expr.ts`. It returns the constructed Sink type only when the
 first argument is a Stream and a direct `takeSink` call is one of the sink
 argument's results. `resultsInTakeSink` walks the result positions as the

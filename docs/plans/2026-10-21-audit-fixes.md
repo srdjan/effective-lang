@@ -107,6 +107,6 @@ Status on 2026-10-21. Three Sonnet lanes implemented the items in separate workt
 Open follow-ups (no owner yet):
 
 - AU7 compares the first line with a header that it builds from the module name. The emitter writes the source path. With custom module roots the two can differ, and then `watch` keeps the stale file (I). This fails safe.
-- The language server save path (`src/lsp/features.ts:299`) can still write a module whose import was not written (the AU6 defect).
+- Fixed by SV1 and SV3/SV4 (`90ecd76`, `7fcf1d9`): the language server save path wrote a module whose import was not written (the AU6 defect).
 - A pure function type alias emits `type G = (a: Count) => Effect.Effect<Count>`, but a constant of that type emits as a plain function. The alias is unused, so `deno check` passes (M, AU4 lane). A use of the alias type in emitted code could disagree (I).
 - `tests/bench_lsp_slow_test.ts` compares shared `effective-bench-lsp-*` temporary directories, so it fails when two test runs overlap (M, three lanes).

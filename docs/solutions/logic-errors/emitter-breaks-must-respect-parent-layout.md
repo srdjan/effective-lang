@@ -36,7 +36,7 @@ Optional reads and error constructors use the ordinary call-argument printer.
 The core does not invoke Deno formatting. The renderer records spans while it
 lays out the final text, so the new breaks preserve source mappings.
 
-`tests/emit_extreme_identifiers_slow_test.ts` checks 274 generated modules.
+`tests/emit_extreme_identifiers_slow_test.ts` checks 273 generated modules.
 It checks Deno formatting, strict target types, runtime results, mapped source
 tokens and evaluation of an effectful member base exactly once. Boundary widths
 include adjacent passing and failing lengths from the original probes.

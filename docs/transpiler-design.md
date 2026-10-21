@@ -396,7 +396,7 @@ on every edit above the declaration. A name changes only on rename.
 | Hand-written lexer, recursive descent, whole-file token array, `line_starts` table | Yes | Front end shape is language-independent. |
 | Flat scope stacks with base indices | Yes, inside `checkBody` | Block scopes nest; no closure capture analysis is needed. |
 | Hash-consed types with integer ids | Yes | No recursive types in version 0, so every type is stable at creation. |
-| Resource caps with named diagnostics | Yes | Fixpoint rounds, expression nesting depth, diagnostic count. Phase A has the first two (`execution-mode/004`, `syntax/009`). It has no cap on the diagnostic count. The type comparison has a cap without a diagnostic (audit item C7). |
+| Resource caps with named diagnostics | Yes | Fixpoint rounds, expression nesting depth, diagnostic count. Phase A has the first two (`execution-mode/004`, `syntax/009`) and a type depth cap (`declaration/012`, D21). It has no cap on the diagnostic count. The type comparison has a cap without a diagnostic (audit item C7). |
 | Measurement discipline: checksum gate, interleaved A/B, noise floor, rejected-ideas ledger | Yes | Golden outputs are the checksum. Latency is the metric. |
 | Demand-driven checking with one specialization key | Partly | Checking on demand transfers. The key does not: version 0 has no user generics, and builtin specialization is local to a body. |
 | Whole-program pass structure | Only for `build` | `build` is the degenerate case where every query runs. The editor needs the query shape. |
@@ -594,7 +594,7 @@ skill notes that reporting several errors needs a plan for half-set facts.
 This design needs that plan.
 
 Parser recovery synchronizes at declaration keywords at the start of a line:
-`import`, `export`, `type`, `error`, `service`, `provider`, `const`. Inside an
+`import`, `export`, `type`, `opaque`, `error`, `service`, `provider`, `const`. Inside an
 unclosed bracket, `const` counts only at column 0. Inside a block the parser
 synchronizes at a newline, a `;`, or a closing brace. Inside a comma list it
 synchronizes at a comma or a closing bracket. An unparsable region

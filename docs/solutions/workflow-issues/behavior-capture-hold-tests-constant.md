@@ -19,7 +19,7 @@ tags: [behavior-capture, oracle, refactor, git-commit-tree, byte-identity, reder
 
 `deno task behavior:capture <base> <head>` is the refactor oracle of this
 project. It runs the fast and slow suites on both revisions and compares the
-record sets as multisets (`scripts/behavior_capture.ts:300`, `:341-342`).
+record sets as multisets (`scripts/behavior_capture.ts:300`, `:339-340`).
 Each `check`, `program`, and `validate` record holds a hash of its input
 (`scripts/behavior_capture.ts:13-17`, `:56`). That hash makes a clean program
 visible, but it also ties every record to the test that produced it.
