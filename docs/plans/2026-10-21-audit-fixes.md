@@ -100,7 +100,7 @@ Status on 2026-10-21. Three Sonnet lanes implemented the items in separate workt
 
 - AU1 with AU2: `d3a1633`. Exactly the 6 predicted message-order expectations changed. M2 check medians of three runs each, on a shared machine (noisy): large 74.4 ms before, 68.2 ms after.
 - AU3: `30b175b`. A link costs two levels. Measured diagnostics of a 300-link chain: `syntax/009` and `syntax/008` for each form, plus `declaration/012` for the array type. A 250-link call or field chain has no valid type by construction, so it stops at a type error before emit. The through-all-passes array case uses 120 links, because `declaration/012` limits array types to 128 levels.
-- AU4: `8a0abf2`. The alias form emits the same constant as the inline form, plus the unused alias declaration.
+- AU4: `8a0abf2`. The alias form emits the same constant as the inline form, plus the unused alias declaration. Follow-up `ac9db59`: `8a0abf2` read inline function types through `toIr`, which changed the emitted order of inferred parameter unions (`x: B | A` became `x: A | B`, M) and could drop schema make inputs (I). Only an alias now goes through `toIr`; the probe output equals `1150e1d` again (M), and a fast test pins the source order.
 - AU5: `f39d15b`. AU6: `b25405e`. AU7: `8873a3e`.
 - AU8: `5520fc6`. Seven of the nine stage forms lower, emit, pass `deno check`, and run. `joinFiber` and `interruptFiber` as stages always fail: a borrowed fiber may only be joined or interrupted by a direct call (`type-mismatch/010`). Website commit `a724c20` removes them from the spec stage list.
 
