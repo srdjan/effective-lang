@@ -61,6 +61,7 @@ import {
   dataOnly,
   guardedRecord,
   sortedUnique,
+  type TypeNode,
   type TypeRef,
   type TypeTable,
 } from "./types.ts";
@@ -97,6 +98,8 @@ export interface TypeEnv {
   /** Local and imported services by identity. */
   readonly services: Map<ServiceId, ServiceDecl>;
 }
+
+type FunctionNode = Extract<TypeNode, { readonly kind: "function" }>;
 
 interface ParameterSignature {
   readonly name: string;
@@ -1641,17 +1644,18 @@ class ModuleChecker {
       parameters: readonly TypeRef[];
       result: TypeRef;
     } | undefined;
-    if (binding !== undefined && binding.ir.kind === "function") {
-      const node = this.table.node(binding.ref);
-      if (
-        node.kind === "function" && node.parameters.length === written.length
-      ) {
-        bindingFn = {
-          type: binding.ir,
-          parameters: node.parameters,
-          result: node.result,
-        };
-      }
+    const bindingFunction = binding === undefined
+      ? undefined
+      : this.functionOfBinding(binding);
+    if (
+      bindingFunction !== undefined &&
+      bindingFunction.node.parameters.length === written.length
+    ) {
+      bindingFn = {
+        type: bindingFunction.ir,
+        parameters: bindingFunction.node.parameters,
+        result: bindingFunction.node.result,
+      };
     }
     const parameters: ParameterSignature[] = written.map((p, i) => {
       if (p.annotated || bindingFn === undefined) return p;
@@ -1721,6 +1725,17 @@ class ModuleChecker {
     };
   }
 
+  /** The function type of a binding annotation, seen through alias names. */
+  private functionOfBinding(
+    binding: Lowered,
+  ): { node: FunctionNode; ir: FunctionType } | undefined {
+    const ref = this.table.unfold(binding.ref);
+    const node = this.table.node(ref);
+    if (node.kind !== "function") return undefined;
+    const ir = this.table.toIr(ref);
+    return ir.kind === "function" ? { node, ir } : undefined;
+  }
+
   /**
    * The arrow of an annotated binding must fit the binding type. The arrow takes
    * the execution of the binding type, because its body decides its own mode later.
@@ -1736,7 +1751,8 @@ class ModuleChecker {
     },
   ): void {
     const expected = this.table.show(binding.ref);
-    if (binding.ir.kind !== "function") {
+    const fn = this.functionOfBinding(binding);
+    if (fn === undefined) {
       this.lowerer.report(
         "type-mismatch/003",
         `the value is a function, but ${expected} is expected`,
@@ -1746,7 +1762,7 @@ class ModuleChecker {
     }
     if (result === undefined) {
       // The body infers the result. Only the arity can disagree here.
-      if (parameters.length !== binding.ir.parameters.length) {
+      if (parameters.length !== fn.ir.parameters.length) {
         this.lowerer.report(
           "type-mismatch/003",
           `the function takes ${parameters.length} parameters, but ${expected} is expected`,
@@ -1756,7 +1772,7 @@ class ModuleChecker {
       return;
     }
     const found = this.table.function({
-      execution: binding.ir.execution,
+      execution: fn.ir.execution,
       parameters: parameters.map((p) => p.type.ref),
       result: result.ref,
       failures: effects.failures,
