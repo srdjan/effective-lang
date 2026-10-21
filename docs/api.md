@@ -90,6 +90,7 @@ scripts/       Scripts that the tasks run. golden_update.ts writes the golden fi
                lex_snapshot.ts writes the lexer snapshot in fixtures/lex.
                measure.ts counts branches and cyclomatic complexity of the files given.
                measure_functions.ts counts the same for each function.
+               measure_kernel.ts holds the counting rules that both measure scripts share.
 tests/         Deno tests and test helpers.
 fixtures/      Input files for the tests.
   examples/      The five example programs, the host interface file, and users-live.ts.
