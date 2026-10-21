@@ -83,7 +83,7 @@ src/lsp/       The language server. See "Language server".
   protocol.ts    The subset of the protocol: types and the narrowing of incoming params.
   positions.ts   Positions, ranges, and the conversion between URIs and paths.
   methods.ts     The names of the custom methods, shared with the client.
-editors/vscode/ The VS Code client. See "VS Code client". Plain JavaScript, no build step.
+editors/vscode/ The VS Code client. See "VS Code client". Plain JavaScript client; release packaging bundles the server.
 playground/    The browser playground. See "Playground". The page is in src/, the build in build.ts.
 scripts/       Scripts that the tasks run. golden_update.ts writes the golden files.
                validate_fixtures.ts writes the mutation fixtures.
@@ -366,15 +366,15 @@ When `effective.json` is missing or invalid, the server publishes one diagnostic
 
 ## VS Code client
 
-The client is in `editors/vscode/`. It is plain JavaScript with no build step. It starts the language server, adds syntax highlighting, and adds the command `Effective: Show Generated TypeScript`. Its README, `editors/vscode/README.md`, lists the settings and the versions.
+The client is in `editors/vscode/`. It is plain JavaScript. The packaged VSIX includes the bundled language server and client runtime dependencies, and requires Deno 2.9.7. It starts the bundled server by default, adds syntax highlighting, and adds the command `Effective: Show Generated TypeScript`. See [local installation](installation.md) for artifact builds and installation; its README lists settings and development overrides.
 
-Run `npm ci` once in `editors/vscode`. Then start VS Code with the extension and the example files. Replace `<repo>` with the path of this repository.
+For development, run `npm ci` once in `editors/vscode`, set `effective.server.repository` to the checkout, and start VS Code with the extension and example files. Replace `<repo>` with the path of this repository.
 
 ```sh
 code --extensionDevelopmentPath=<repo>/editors/vscode <repo>/fixtures/examples
 ```
 
-A fast test, `tests/vscode_client_test.ts`, checks `package.json`, the grammar, and the method names. No automated test covers the user interface of the client.
+Fast client tests check settings, grammar, methods, and startup failures. The portable installation slow test checks reproducible archives and offline startup outside the checkout. `deno task test:vscode` separately installs the VSIX into isolated VS Code directories and exercises editor providers, generated output, save, recovery, and restart. Automated evidence and manual acceptance remain separate.
 
 ## Playground
 

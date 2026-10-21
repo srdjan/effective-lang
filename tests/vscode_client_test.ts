@@ -1,4 +1,6 @@
 import { assert, assertEquals } from "@std/assert";
+import { runInNewContext } from "node:vm";
+import * as path from "node:path";
 import { KEYWORDS } from "../src/core/lex.ts";
 import { BUILTIN_TYPE_NAMES, PRELUDE_NAMES } from "../src/core/resolve.ts";
 import {
@@ -169,5 +171,119 @@ Deno.test("extension.js uses the method names and scheme of the server", () => {
       source.includes(`"${value}"`),
       `extension.js must hold the string literal "${value}"`,
     );
+  }
+});
+
+function activateClient(
+  settings: Record<string, unknown>,
+  denoVersion: string | Error,
+) {
+  const errors: string[] = [];
+  const launches: { command: string; args: string[] }[] = [];
+  class Client {
+    constructor(
+      _id: string,
+      _name: string,
+      options: { command: string; args: string[] },
+    ) {
+      launches.push(options);
+    }
+    onNotification() {}
+    start() {
+      return Promise.resolve();
+    }
+  }
+  const module = { exports: {} as { activate?: (context: unknown) => void } };
+  const vscode = {
+    workspace: {
+      getConfiguration: () => ({
+        get: (name: string, fallback: unknown) => settings[name] ?? fallback,
+      }),
+      createFileSystemWatcher: () => ({}),
+      registerTextDocumentContentProvider: () => ({}),
+      onDidChangeConfiguration: () => ({}),
+    },
+    window: {
+      showErrorMessage: (message: string) => errors.push(message),
+      createOutputChannel: (_name: string, options: { log?: boolean }) => {
+        assertEquals(
+          options.log,
+          true,
+          "languageclient 10 requires a log output channel",
+        );
+        return {};
+      },
+    },
+    commands: { registerCommand: () => ({}) },
+    EventEmitter: class {
+      event = () => {};
+    },
+  };
+  runInNewContext(Deno.readTextFileSync(new URL("extension.js", CLIENT)), {
+    module,
+    __dirname: "/installed/effective",
+    require: (name: string) => {
+      if (name === "fs") return { existsSync: () => true };
+      if (name === "path") return path;
+      if (name === "vscode") return vscode;
+      if (name === "vscode-languageclient/node") {
+        return { LanguageClient: Client };
+      }
+      if (name === "child_process") {
+        return {
+          execFileSync: () => {
+            if (denoVersion instanceof Error) throw denoVersion;
+            return `deno ${denoVersion}\nv8 test\n`;
+          },
+        };
+      }
+      throw new Error(`unexpected dependency ${name}`);
+    },
+  });
+  module.exports.activate!({ subscriptions: [] });
+  return { errors, launches };
+}
+
+Deno.test("the installed client starts its bundled server without checkout configuration", () => {
+  const { errors, launches } = activateClient({}, "2.9.7");
+  assertEquals(errors, []);
+  assertEquals(launches.length, 1);
+  assertEquals(launches[0].command, "deno");
+  assertEquals(Array.from(launches[0].args), [
+    "run",
+    "--no-config",
+    "--no-lock",
+    "--cached-only",
+    "--allow-read",
+    "--allow-write",
+    "/installed/effective/server/effective-lsp.js",
+  ]);
+});
+
+Deno.test("the client keeps an explicit checkout development override", () => {
+  const { errors, launches } = activateClient({
+    "server.repository": "/work/effective",
+    "server.deno": "/tools/deno",
+  }, "2.9.7");
+  assertEquals(errors, []);
+  assertEquals(launches[0].command, "/tools/deno");
+  assertEquals(Array.from(launches[0].args), [
+    "run",
+    "--allow-read",
+    "--allow-write",
+    "--config",
+    "/work/effective/deno.json",
+    "/work/effective/src/lsp/main.ts",
+  ]);
+});
+
+Deno.test("missing or incompatible Deno prevents startup with an actionable error", () => {
+  for (const version of ["2.9.6", "3.0.0", new Error("ENOENT")]) {
+    const { errors, launches } = activateClient({}, version);
+    assertEquals(launches, []);
+    assertEquals(errors.length, 1);
+    assert(errors[0].includes("2.9.7"));
+    assert(errors[0].includes("effective.server.deno"));
+    if (version instanceof Error) assert(errors[0].includes("ENOENT"));
   }
 });

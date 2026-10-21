@@ -13,3 +13,5 @@ playground/dist/
 docs/plans/*-probes/
 docs/plans/**/repro/
 docs/plans/rederive-review-evidence/*.ts
+dist/
+editors/vscode/server/

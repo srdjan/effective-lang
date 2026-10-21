@@ -1,9 +1,11 @@
 "use strict";
 
-// VS Code client of the Effective language server. Plain CommonJS, no build step.
+// VS Code client of the Effective language server. The VSIX includes its runtime dependencies.
 
 const fs = require("fs");
 const path = require("path");
+const { execFileSync } = require("child_process");
+const REQUIRED_DENO_VERSION = "2.9.7";
 const vscode = require("vscode");
 const { LanguageClient } = require("vscode-languageclient/node");
 
@@ -87,21 +89,57 @@ function serverOptions() {
   const config = vscode.workspace.getConfiguration("effective");
   const deno = config.get("server.deno", "deno") || "deno";
   const setting = config.get("server.repository", "");
-  const repository = setting ? setting : path.resolve(__dirname, "..", "..");
+  const entry = setting
+    ? path.join(setting, "src", "lsp", "main.ts")
+    : path.join(__dirname, "server", "effective-lsp.js");
   return {
-    repository,
+    entry,
     options: {
       command: deno,
-      args: [
-        "run",
-        "--allow-read",
-        "--allow-write",
-        "--config",
-        path.join(repository, "deno.json"),
-        path.join(repository, "src", "lsp", "main.ts"),
-      ],
+      args: setting
+        ? [
+          "run",
+          "--allow-read",
+          "--allow-write",
+          "--config",
+          path.join(setting, "deno.json"),
+          entry,
+        ]
+        : [
+          "run",
+          "--no-config",
+          "--no-lock",
+          "--cached-only",
+          "--allow-read",
+          "--allow-write",
+          entry,
+        ],
     },
   };
+}
+
+/** Check before spawning so missing executables and version mismatches are actionable. */
+function checkDeno(executable) {
+  let version;
+  try {
+    const output = execFileSync(executable, ["--version"], {
+      encoding: "utf8",
+      timeout: 5000,
+      windowsHide: true,
+    });
+    version = /^deno (\S+)/m.exec(output)?.[1];
+  } catch (error) {
+    throw new Error(
+      `Cannot run Deno at "${executable}": ${error.message}. Install Deno ${REQUIRED_DENO_VERSION} and set effective.server.deno to its executable.`,
+    );
+  }
+  if (version !== REQUIRED_DENO_VERSION) {
+    throw new Error(
+      `Deno ${REQUIRED_DENO_VERSION} is required; "${executable}" reports ${
+        version || "an unknown version"
+      }. Set effective.server.deno to Deno ${REQUIRED_DENO_VERSION}.`,
+    );
+  }
 }
 
 async function showGeneratedTypeScript() {
@@ -130,16 +168,24 @@ async function showGeneratedTypeScript() {
 
 function activate(context) {
   const config = vscode.workspace.getConfiguration("effective");
-  const { repository, options } = serverOptions();
-  const entry = path.join(repository, "src", "lsp", "main.ts");
+  const { entry, options } = serverOptions();
   if (!fs.existsSync(entry)) {
     vscode.window.showErrorMessage(
       `Effective: the language server was not found at ${entry}. ` +
-        "Set effective.server.repository to the effective-lang repository.",
+        "Reinstall the Effective VSIX, or set effective.server.repository for checkout development.",
     );
+    return;
+  }
+  try {
+    checkDeno(options.command);
+  } catch (error) {
+    vscode.window.showErrorMessage(`Effective: ${error.message}`);
+    return;
   }
 
-  const outputChannel = vscode.window.createOutputChannel("Effective");
+  const outputChannel = vscode.window.createOutputChannel("Effective", {
+    log: true,
+  });
   client = new LanguageClient(
     "effective",
     "Effective",

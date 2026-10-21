@@ -1,49 +1,22 @@
 # Effective for VS Code
 
-This extension connects VS Code to the Effective language server. The server lives in `src/lsp/` of this repository. The extension has no build step.
+The Effective extension includes its language server and all client runtime dependencies. It needs VS Code 1.91 or later and **Deno 2.9.7**; no checkout or separate npm installation is needed after installing the VSIX.
 
-## What the client does
+Install the local VSIX with **Extensions: Install from VSIX...**, then open an `.eff` or `.effi` file. The extension checks Deno before starting and reports a missing executable or incompatible version. Set `effective.server.deno` if VS Code cannot find Deno on `PATH`.
 
-The client starts the language server over standard input and output. It shows diagnostics, hover text, definitions, and document symbols for `.eff` and `.effi` files. It also adds syntax highlighting and one command that shows the generated TypeScript of a module.
-
-The client watches `**/*.eff`, `**/*.effi`, and `**/effective.json` files. The server uses these events to reload files that change on disk.
-
-## Versions
-
-The client pins `vscode-languageclient` at version 10.1.2. This is the newest version at the time of writing. Its `engines.vscode` value is `^1.91.0`.
-
-The extension declares `engines.vscode` as `^1.91.0`. This value equals the requirement of the library. The VS Code version used for tests is 1.142.0, which is later than 1.91.0.
-
-## Install
-
-Install Node 20 or later and Deno 2.9.7 or later. Run these commands once.
-
-```sh
-cd editors/vscode
-npm ci
-```
-
-## Run from the repository
-
-Start VS Code with the extension and the example files. Replace `<repo>` with the path of this repository.
-
-```sh
-code --extensionDevelopmentPath=<repo>/editors/vscode <repo>/fixtures/examples
-```
-
-Open a `.eff` file in the new window. The server starts when the file opens. The `Effective` output channel shows the server log.
+The language client supports diagnostics, hover, definitions, document symbols, and the editor capabilities advertised by the bundled server. **Effective: Show Generated TypeScript** opens generated output beside the source and refreshes it after edits. Errors retain the last good output with a stale marker.
 
 ## Settings
 
-Each server setting needs a window reload after a change. The extension shows a message when one of them changes.
+- `effective.server.deno` (default `deno`): the Deno 2.9.7 executable.
+- `effective.server.repository` (default empty): an explicit development override pointing to an effective-lang checkout. Empty uses the bundled server.
+- `effective.writeOnSave` (default `true`): write generated `.ts` and `.ts.map` files on save.
+- `effective.debounceMs` (default `0`): compilation delay after an edit, in milliseconds.
 
-- `effective.server.deno` (default `deno`): the Deno executable that starts the server.
-- `effective.server.repository` (default empty): the path of this repository. An empty value means two directories above the extension.
-- `effective.writeOnSave` (default `true`): when true, the server writes the `.ts` and `.ts.map` files of a module on save.
-- `effective.debounceMs` (default `0`): the delay in milliseconds before the server compiles after an edit.
+Reload the window after changing a server setting.
 
-## Command
+## Build from source
 
-The command `Effective: Show Generated TypeScript` opens the generated TypeScript of the active `.eff` file. It opens a read-only document beside the editor. The command works only in an Effective editor.
+Run `deno task package` at the repository root with Deno 2.9.7 and Node 20 or later. This installs the pinned `vscode-languageclient` 10.1.2 closure using `npm ci` and creates `dist/effective-vscode-0.5.2.vsix`. No publishing occurs. See `docs/installation.md` for the standalone CLI and isolated offline smoke test.
 
-The document updates when the module compiles again. A module with errors shows the last good output. Its first line says that the output is stale.
+For checkout development, run `npm ci` in this directory, set `effective.server.repository` to the repository root, and launch VS Code with `--extensionDevelopmentPath=<repo>/editors/vscode`. The development override uses the checkout's Deno configuration and server source.
