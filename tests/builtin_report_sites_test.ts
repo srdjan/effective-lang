@@ -526,6 +526,22 @@ const ROWS: readonly SiteRow[] = [
     fragment: "`mergeStreams` needs compatible element types",
   },
   {
+    builtin: "zipStreams",
+    change: "replace the first stream with an int",
+    valid: `${INT}const probe = (s: Stream<Int>) => zipStreams(s, s)\n`,
+    invalid: `${INT}const probe = (s: Stream<Int>) => zipStreams(1, s)\n`,
+    code: "type-mismatch/010",
+    fragment: "`zipStreams` needs two Stream values",
+  },
+  {
+    builtin: "concatStreams",
+    change: "replace the first stream with an int",
+    valid: `${INT}const probe = (s: Stream<Int>) => concatStreams(s, s)\n`,
+    invalid: `${INT}const probe = (s: Stream<Int>) => concatStreams(1, s)\n`,
+    code: "type-mismatch/010",
+    fragment: "`concatStreams` needs two Stream values",
+  },
+  {
     builtin: "race",
     change: "replace the first job with an int",
     valid: `${INT}const probe = () => race(defer(() => 1), defer(() => 2))\n`,
