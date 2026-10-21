@@ -1376,9 +1376,9 @@ class BodyChecker {
       c.scheduleComposeCall(node, args, name),
     runStream: (c, node, _name, args) => c.runStreamCall(node, args),
     bufferStream: (c, node, _name, args) => c.bufferStreamCall(node, args),
-    mergeStreams: (c, node, _name, args) => c.mergeStreamsCall(node, args),
-    zipStreams: (c, node, _name, args) => c.zipStreamsCall(node, args),
-    concatStreams: (c, node, _name, args) => c.concatStreamsCall(node, args),
+    mergeStreams: (c, node, name, args) => c.streamPairCall(node, name, args),
+    zipStreams: (c, node, name, args) => c.streamPairCall(node, name, args),
+    concatStreams: (c, node, name, args) => c.streamPairCall(node, name, args),
     race: (c, node, _name, args) => c.raceCall(node, args),
     makeRef: (c, node, name, args) => c.refCall(node, name, args),
     getRef: (c, node, name, args) => c.refCall(node, name, args),
@@ -4883,7 +4883,12 @@ class BodyChecker {
     return value;
   }
 
-  private mergeStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+  /** `mergeStreams`, `zipStreams`, and `concatStreams`: two Streams give one. */
+  private streamPairCall(
+    node: NodeId,
+    name: "mergeStreams" | "zipStreams" | "concatStreams",
+    args: readonly Arg[],
+  ): NodeInfo {
     const left = this.argInfo(args[0]);
     const right = this.argInfo(args[1]);
     const a = this.table.node(this.table.unfold(left.type));
@@ -4891,64 +4896,30 @@ class BodyChecker {
     if (a.kind !== "stream" || b.kind !== "stream") {
       this.report(
         "type-mismatch/010",
-        "`mergeStreams` needs two Stream values",
+        `\`${name}\` needs two Stream values`,
         node,
       );
       return this.finish(node, this.table.error, combine([left, right]));
     }
-    const aFitsB = this.table.isAssignable(a.element, b.element);
-    const bFitsA = this.table.isAssignable(b.element, a.element);
-    if (!aFitsB && !bFitsA) {
-      this.report(
-        "type-mismatch/010",
-        "`mergeStreams` needs compatible element types",
-        node,
-      );
-    }
-    const element = aFitsB ? b.element : a.element;
-    const type = this.table.stream(element, [...a.failures, ...b.failures], [
-      ...a.requirements,
-      ...b.requirements,
-    ]);
-    return this.finish(node, type, combine([left, right]));
-  }
-
-  private zipStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const left = this.argInfo(args[0]);
-    const right = this.argInfo(args[1]);
-    const a = this.table.node(this.table.unfold(left.type));
-    const b = this.table.node(this.table.unfold(right.type));
-    if (a.kind !== "stream" || b.kind !== "stream") {
-      this.report(
-        "type-mismatch/010",
-        "`zipStreams` needs two Stream values",
-        node,
-      );
-      return this.finish(node, this.table.error, combine([left, right]));
+    let element: TypeRef;
+    if (name === "zipStreams") {
+      element = this.table.tuple([a.element, b.element]);
+    } else if (name === "concatStreams") {
+      element = this.table.union([a.element, b.element]);
+    } else {
+      const aFitsB = this.table.isAssignable(a.element, b.element);
+      const bFitsA = this.table.isAssignable(b.element, a.element);
+      if (!aFitsB && !bFitsA) {
+        this.report(
+          "type-mismatch/010",
+          "`mergeStreams` needs compatible element types",
+          node,
+        );
+      }
+      element = aFitsB ? b.element : a.element;
     }
     const type = this.table.stream(
-      this.table.tuple([a.element, b.element]),
-      [...a.failures, ...b.failures],
-      [...a.requirements, ...b.requirements],
-    );
-    return this.finish(node, type, combine([left, right]));
-  }
-
-  private concatStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const left = this.argInfo(args[0]);
-    const right = this.argInfo(args[1]);
-    const a = this.table.node(this.table.unfold(left.type));
-    const b = this.table.node(this.table.unfold(right.type));
-    if (a.kind !== "stream" || b.kind !== "stream") {
-      this.report(
-        "type-mismatch/010",
-        "`concatStreams` needs two Stream values",
-        node,
-      );
-      return this.finish(node, this.table.error, combine([left, right]));
-    }
-    const type = this.table.stream(
-      this.table.union([a.element, b.element]),
+      element,
       [...a.failures, ...b.failures],
       [...a.requirements, ...b.requirements],
     );
