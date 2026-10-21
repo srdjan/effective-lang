@@ -576,6 +576,23 @@ class Parser {
     this.depth--;
   }
 
+  /**
+   * Guards one link of a left-deep chain: a binary, pipeline, call, field, or
+   * array-type wrap. A link costs two levels, as a parenthesis does, so a chain
+   * stays within the depth that later passes can recurse. The caller counts the
+   * accepted links and calls `leaveLinks` once at the end of the chain.
+   */
+  private enterLink(): boolean {
+    if (!this.enter()) return false;
+    if (this.enter()) return true;
+    this.leave();
+    return false;
+  }
+
+  private leaveLinks(links: number): void {
+    this.depth -= 2 * links;
+  }
+
   /** Top-level recovery: skip to the next declaration keyword at the start of a line. */
   private recoverTop(): void {
     this.begin();
@@ -967,14 +984,18 @@ class Parser {
   private parsePostfixType(): void {
     const cp = this.checkpoint();
     this.parsePrimaryType();
+    let links = 0;
     while (
       this.kind() === TokenKind.LBracket &&
       this.kinds[this.pos + 1] === TokenKind.RBracket
     ) {
+      if (!this.enterLink()) break;
+      links++;
       this.tok();
       this.tok();
       this.wrap(cp, SyntaxKind.ArrayType);
     }
+    this.leaveLinks(links);
   }
 
   private parsePrimaryType(): void {
@@ -1134,7 +1155,10 @@ class Parser {
   private parseExprInner(): void {
     const cp = this.checkpoint();
     this.parseBinary(1);
+    let links = 0;
     while (this.la() === TokenKind.PipeGt) {
+      if (!this.enterLink()) break;
+      links++;
       this.skipNl();
       this.tok(); // |>
       this.skipNl();
@@ -1148,38 +1172,46 @@ class Parser {
       this.end(SyntaxKind.PipeStage);
       this.wrap(cp, SyntaxKind.PipeExpr);
     }
+    this.leaveLinks(links);
   }
 
   private parseBinary(minPrecedence: number): void {
     const cp = this.checkpoint();
     this.parsePostfix();
+    let links = 0;
     while (true) {
       const k = this.kind();
       const p = binaryPrecedence(k);
       if (p === 0 || p < minPrecedence) break;
+      if (!this.enterLink()) break;
+      links++;
       this.tok();
       this.skipNl();
       this.parseBinary(p + 1);
       this.wrap(cp, SyntaxKind.BinaryExpr);
     }
+    this.leaveLinks(links);
   }
 
   private parsePostfix(): void {
     const cp = this.checkpoint();
     this.parsePrimary();
+    let links = 0;
     while (true) {
       const k = this.kind();
+      if (k !== TokenKind.LParen && k !== TokenKind.Dot) break;
+      if (!this.enterLink()) break;
+      links++;
       if (k === TokenKind.LParen) {
         this.parseArgList();
         this.wrap(cp, SyntaxKind.CallExpr);
-      } else if (k === TokenKind.Dot) {
+      } else {
         this.tok();
         this.parseName("member");
         this.wrap(cp, SyntaxKind.FieldExpr);
-      } else {
-        break;
       }
     }
+    this.leaveLinks(links);
   }
 
   private parseArgList(): void {
