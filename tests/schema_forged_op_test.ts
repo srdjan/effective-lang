@@ -52,3 +52,28 @@ for (const name of ["integer", "shifted", "tree"]) {
     assertEquals(found[0].span, declaration.value.span);
   });
 }
+
+// A forged operation can also name a property that every object inherits. The
+// operation table must not answer for it.
+for (const op of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+  Deno.test(`a Schema expression with the inherited name ${op} as its operation gives validation/002`, () => {
+    const { text, module } = lowerFixture("schema-composition");
+    const declaration = module.declarations.find((d) => d.name === "integer");
+    assert(
+      declaration?.kind === "constant" && declaration.value.kind === "schema",
+    );
+    const forged: { op: string } = declaration.value;
+    forged.op = op;
+    const found = validateModule(module, new Map([["main.eff", text]]));
+    assertEquals(
+      found.map((d) => [d.code, d.message]),
+      [[
+        "validation/002",
+        `${
+          declarationPath(module, "integer")
+        }.value: unknown schema constructor`,
+      ]],
+    );
+    assertEquals(found[0].span, declaration.value.span);
+  });
+}

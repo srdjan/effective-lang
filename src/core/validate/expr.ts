@@ -18,6 +18,7 @@ import type {
   Execution,
   Expr,
   FunctionDecl,
+  FunctionType,
   Parameter,
   Pattern,
   Span,
@@ -158,16 +159,91 @@ function validConcurrency(value: number | "unbounded" | undefined): boolean {
     (Number.isSafeInteger(value) && value > 0);
 }
 
-function validSchemaCallback(
-  fn: Extract<Type, { kind: "function" }> | undefined,
-): boolean {
-  return fn !== undefined &&
-    (fn.effects.failures.length === 0 ||
-      (fn.effects.failures.length === 1 &&
-        fn.effects.failures[0] === SCHEMA_ISSUE_ID)) &&
+type SchemaExpr = Extract<Expr, { kind: "schema" }>;
+type SchemaOp = SchemaExpr["op"];
+type SchemaType = Extract<Type, { kind: "schema" }>;
+type DefaultKeyOp = Extract<
+  SchemaOp,
+  "default-key" | "default-null-key" | "default-encoded-key"
+>;
+
+const DEFAULT_KEY_NAMES: Record<DefaultKeyOp, string> = {
+  "default-key": "schemaDefaultKey",
+  "default-null-key": "schemaDefaultNullKey",
+  "default-encoded-key": "schemaDefaultEncodedKey",
+};
+
+/** The Schema operation under validation: the node, its path, and its checked arguments. */
+interface SchemaCall {
+  readonly e: SchemaExpr;
+  readonly path: string;
+  readonly args: readonly Out[];
+}
+
+/**
+ * How a Schema operation passes the self reference of a recursive Schema body.
+ * - none: the operation cannot hold the reference.
+ * - default: argument 0 holds it, and the later arguments must not.
+ * - optional: arguments 0 and 1 hold it, and the callbacks after them must not.
+ * - guarding: every argument holds it, and the operation guards the recursion.
+ * - passing: every argument holds it, and the guard state passes through.
+ */
+type SchemaRecursion = "none" | "default" | "optional" | "guarding" | "passing";
+
+interface SchemaRow {
+  readonly run: (self: BodyValidator, call: SchemaCall) => Comp;
+  /** The input Schema may carry a constructor default. */
+  readonly acceptsDefault: boolean;
+  readonly recursion: SchemaRecursion;
+}
+
+function schemaIssueType(): Type {
+  return { kind: "named", id: SCHEMA_ISSUE_ID };
+}
+
+/** The function has no failure outside `allowed`, and at most one failure. */
+function failsOnly(fn: FunctionType, allowed: readonly string[]): boolean {
+  const { failures } = fn.effects;
+  return failures.length === 0 ||
+    (failures.length === 1 && allowed.includes(failures[0]));
+}
+
+function validSchemaCallback(fn: FunctionType | undefined): boolean {
+  return fn !== undefined && failsOnly(fn, [SCHEMA_ISSUE_ID]) &&
     (fn.execution !== "pure" ||
       (fn.effects.failures.length === 0 &&
         fn.effects.requirements.length === 0));
+}
+
+/** The requirement sets of a Schema made from a source, a target, and two callbacks. */
+function directionalRequirements(
+  source: SchemaType,
+  target: SchemaType,
+  decode: FunctionType,
+  encode: FunctionType,
+): Pick<SchemaType, "decodeRequirements" | "encodeRequirements"> {
+  return {
+    decodeRequirements: sortedUnique([
+      ...source.decodeRequirements,
+      ...target.decodeRequirements,
+      ...decode.effects.requirements,
+    ]),
+    encodeRequirements: sortedUnique([
+      ...source.encodeRequirements,
+      ...target.encodeRequirements,
+      ...encode.effects.requirements,
+    ]),
+  };
+}
+
+function inheritedDefault(
+  target: SchemaType,
+): Pick<SchemaType, "constructorDefault"> {
+  return target.constructorDefault === true ? { constructorDefault: true } : {};
+}
+
+function inheritedMakeInput(target: SchemaType): Pick<SchemaType, "makeInput"> {
+  return target.makeInput === undefined ? {} : { makeInput: target.makeInput };
 }
 
 /** Equality can match unknown values and the runtime base of nominal brands. */
@@ -1998,564 +2074,642 @@ export class BodyValidator {
     };
   }
 
-  private schema(e: Extract<Expr, { kind: "schema" }>, path: string): Comp {
-    const args = e.arguments.map((arg, i) =>
-      this.check(arg, `${path}.arguments[${i}]`)
-    );
-    const schemaOf = (type: Type) => {
-      const found = unfold(this.env, type);
-      const acceptsDefault = [
-        "optional-key",
-        "null-to-missing-key",
-        "default-key",
-        "default-null-key",
-        "default-encoded-key",
-        "option-from-optional-key",
-        "optional-from-required",
-      ].includes(e.op);
-      return found.kind === "schema" &&
-          (e.op === "constructor-default" || (found.optionalKey !== true &&
-            found.encodedOptionalKey !== true &&
-            found.decodedOptionalKey !== true)) &&
-          (acceptsDefault || found.constructorDefault !== true) &&
-          (found.makeInput === undefined ||
-            same(this.env, found.makeInput, found.decoded) ||
-            // "invalid" and "at" return before any schemaOf call, so only
-            // "identity" is left out of the make-input operations.
-            e.op !== "identity")
-        ? found
-        : undefined;
+  /**
+   * One row for each Schema operation. A new operation is a compile error
+   * until it has a row. The columns are the handler, whether `schemaOf`
+   * accepts an input with a constructor default, and the role of the
+   * operation in a recursive Schema body.
+   */
+  private static readonly schemaRows: Record<SchemaOp, SchemaRow> = {
+    "identity": {
+      run: (self, call) => self.schemaIdentity(call),
+      acceptsDefault: false,
+      recursion: "none",
+    },
+    "array": {
+      run: (self, call) => self.schemaArray(call),
+      acceptsDefault: false,
+      recursion: "guarding",
+    },
+    "struct": {
+      run: (self, call) => self.schemaStruct(call),
+      acceptsDefault: false,
+      recursion: "passing",
+    },
+    "optional-key": {
+      run: (self, call) => self.schemaOptionalKey(call),
+      acceptsDefault: true,
+      recursion: "guarding",
+    },
+    "null-to-missing-key": {
+      run: (self, call) => self.schemaNullToMissingKey(call),
+      acceptsDefault: true,
+      recursion: "guarding",
+    },
+    "option-from-optional-key": {
+      run: (self, call) => self.schemaOptionFromOptionalKey(call),
+      acceptsDefault: true,
+      recursion: "none",
+    },
+    "default-key": {
+      run: (self, call) => self.schemaDefaultKey(call, "default-key"),
+      acceptsDefault: true,
+      recursion: "default",
+    },
+    "constructor-default": {
+      run: (self, call) => self.schemaConstructorDefault(call),
+      acceptsDefault: false,
+      recursion: "default",
+    },
+    "default-null-key": {
+      run: (self, call) => self.schemaDefaultKey(call, "default-null-key"),
+      acceptsDefault: true,
+      recursion: "default",
+    },
+    "default-encoded-key": {
+      run: (self, call) => self.schemaDefaultKey(call, "default-encoded-key"),
+      acceptsDefault: true,
+      recursion: "default",
+    },
+    "optional-transform": {
+      run: (self, call) => self.schemaOptionalTransform(call),
+      acceptsDefault: false,
+      recursion: "optional",
+    },
+    "optional-from-required": {
+      run: (self, call) => self.schemaOptionalFromRequired(call),
+      acceptsDefault: true,
+      recursion: "optional",
+    },
+    "union": {
+      run: (self, call) => self.schemaUnion(call),
+      acceptsDefault: false,
+      recursion: "passing",
+    },
+    "transform": {
+      run: (self, call) => self.schemaTransform(call),
+      acceptsDefault: false,
+      recursion: "none",
+    },
+    "recursive": {
+      run: (self, call) => self.schemaRecursive(call),
+      acceptsDefault: false,
+      recursion: "none",
+    },
+    "invalid": {
+      run: (self, call) => self.schemaInvalid(call),
+      acceptsDefault: false,
+      recursion: "none",
+    },
+    "at": {
+      run: (self, call) => self.schemaAt(call),
+      acceptsDefault: false,
+      recursion: "none",
+    },
+    "both": {
+      run: (self, call) => self.schemaBoth(call),
+      acceptsDefault: false,
+      recursion: "none",
+    },
+  };
+
+  /**
+   * The validator reads IR that can be forged, so an operation can lie
+   * outside the type. The table is read only for an operation that it names.
+   */
+  private static isSchemaOp(op: string): op is SchemaOp {
+    return Object.hasOwn(BodyValidator.schemaRows, op);
+  }
+
+  private schema(e: SchemaExpr, path: string): Comp {
+    const call: SchemaCall = {
+      e,
+      path,
+      args: e.arguments.map((arg, i) =>
+        this.check(arg, `${path}.arguments[${i}]`)
+      ),
     };
-    const optionalOf = (type: Type) => {
-      const found = unfold(this.env, type);
-      return found.kind === "schema" && found.optionalKey === true &&
+    if (!BodyValidator.isSchemaOp(e.op)) {
+      return this.schemaBad(call, "unknown schema constructor");
+    }
+    return BodyValidator.schemaRows[e.op].run(this, call);
+  }
+
+  /** The Schema that the operation accepts as input, or undefined. */
+  private schemaOf(call: SchemaCall, type: Type): SchemaType | undefined {
+    const found = unfold(this.env, type);
+    const { e } = call;
+    return found.kind === "schema" &&
+        (e.op === "constructor-default" || (found.optionalKey !== true &&
           found.encodedOptionalKey !== true &&
-          found.decodedOptionalKey !== true
-        ? found
+          found.decodedOptionalKey !== true)) &&
+        (BodyValidator.schemaRows[e.op].acceptsDefault ||
+          found.constructorDefault !== true) &&
+        (found.makeInput === undefined ||
+          same(this.env, found.makeInput, found.decoded) ||
+          // "invalid" and "at" return before any Schema is read, so only
+          // "identity" is left out of the make-input operations.
+          e.op !== "identity")
+      ? found
+      : undefined;
+  }
+
+  // The argument readers share one rule: a missing argument gives undefined.
+
+  /** The accepted input Schema at an argument position. */
+  private schemaArg(call: SchemaCall, index: number): SchemaType | undefined {
+    const arg = call.args[index];
+    return arg === undefined ? undefined : this.schemaOf(call, arg.type);
+  }
+
+  /** The optional-key Schema at an argument position. */
+  private optionalArg(call: SchemaCall, index: number): SchemaType | undefined {
+    const arg = call.args[index];
+    if (arg === undefined) return undefined;
+    const found = unfold(this.env, arg.type);
+    return found.kind === "schema" && found.optionalKey === true &&
+        found.encodedOptionalKey !== true &&
+        found.decodedOptionalKey !== true
+      ? found
+      : undefined;
+  }
+
+  /** The function type at an argument position. */
+  private functionArg(
+    call: SchemaCall,
+    index: number,
+  ): FunctionType | undefined {
+    const arg = call.args[index];
+    return arg === undefined ? undefined : asFunction(this.env, arg.type);
+  }
+
+  /** The unfolded type at an argument position. */
+  private typeArg(call: SchemaCall, index: number): Type | undefined {
+    const arg = call.args[index];
+    return arg === undefined ? undefined : unfold(this.env, arg.type);
+  }
+
+  /** Whether the node holds an inline closure at an argument position. */
+  private closureArg(call: SchemaCall, index: number): boolean {
+    return call.e.arguments[index]?.kind === "closure";
+  }
+
+  private schemaBad(call: SchemaCall, message: string): Comp {
+    this.add(AREA.types, call.path, message, call.e.span);
+    return this.poison();
+  }
+
+  private schemaResult(call: SchemaCall, type: Type): Comp {
+    return { type, match: "exact", active: combine(call.args) };
+  }
+
+  private schemaInvalid(call: SchemaCall): Comp {
+    const { args } = call;
+    if (args.length !== 1 || !fits(this.env, args[0].type, STRING)) {
+      return this.schemaBad(call, "schemaInvalid needs a string message");
+    }
+    return this.schemaResult(call, schemaIssueType());
+  }
+
+  private schemaAt(call: SchemaCall): Comp {
+    const { args } = call;
+    if (
+      args.length !== 2 ||
+      !fits(this.env, args[0].type, {
+        kind: "union",
+        members: [
+          { kind: "primitive", name: "string" },
+          { kind: "primitive", name: "int" },
+        ],
+      }) || !fits(this.env, args[1].type, schemaIssueType())
+    ) return this.schemaBad(call, "schemaAt needs a key and a SchemaIssue");
+    return this.schemaResult(call, schemaIssueType());
+  }
+
+  private schemaBoth(call: SchemaCall): Comp {
+    const { args } = call;
+    if (
+      args.length !== 3 || this.schemaArg(call, 0) === undefined ||
+      !fits(this.env, args[1].type, schemaIssueType()) ||
+      !fits(this.env, args[2].type, schemaIssueType())
+    ) {
+      return this.schemaBad(call, "schemaBoth needs a Schema and two issues");
+    }
+    return this.schemaResult(call, schemaIssueType());
+  }
+
+  private schemaIdentity(call: SchemaCall): Comp {
+    const hint = this.schemaOf(call, call.e.type);
+    if (
+      call.args.length !== 0 || hint === undefined ||
+      !same(this.env, hint.decoded, hint.encoded) ||
+      hint.decodeRequirements.length || hint.encodeRequirements.length ||
+      !dataOnly(this.env, hint.decoded, "value")
+    ) {
+      return this.schemaBad(
+        call,
+        "schema() needs an identity data Schema with no services",
+      );
+    }
+    return { type: hint, match: "exact", active: QUIET };
+  }
+
+  private schemaConstructorDefault(call: SchemaCall): Comp {
+    const source = this.schemaArg(call, 0);
+    const fn = this.functionArg(call, 1);
+    if (
+      call.args.length !== 2 || source === undefined || fn === undefined ||
+      !this.closureArg(call, 1) ||
+      fn.parameters.length !== 0 || fn.effects.requirements.length !== 0 ||
+      !failsOnly(fn, [SCHEMA_ISSUE_ID]) ||
+      (fn.execution === "pure" && fn.effects.failures.length !== 0) ||
+      !fits(this.env, fn.result, source.makeInput ?? source.decoded)
+    ) {
+      return this.schemaBad(
+        call,
+        "schemaConstructorDefault needs an inline make-input callback with no services and only SchemaIssue failure",
+      );
+    }
+    return this.schemaResult(call, { ...source, constructorDefault: true });
+  }
+
+  private schemaArray(call: SchemaCall): Comp {
+    const input = this.schemaArg(call, 0);
+    if (call.args.length !== 1 || input === undefined) {
+      return this.schemaBad(call, "schemaArray needs one Schema");
+    }
+    return this.schemaResult(call, {
+      kind: "schema",
+      decoded: { kind: "array", element: input.decoded },
+      encoded: { kind: "array", element: input.encoded },
+      makeInput: {
+        kind: "array",
+        element: input.makeInput ?? input.decoded,
+      },
+      decodeRequirements: input.decodeRequirements,
+      encodeRequirements: input.encodeRequirements,
+    });
+  }
+
+  private schemaNullToMissingKey(call: SchemaCall): Comp {
+    const input = this.schemaArg(call, 0);
+    const nil: Type = { kind: "literal", value: null };
+    if (
+      call.args.length !== 1 || input === undefined ||
+      fits(this.env, nil, input.decoded) || fits(this.env, nil, input.encoded)
+    ) {
+      return this.schemaBad(
+        call,
+        "schemaNullToMissingKey needs one ordinary Schema with nonnullable decoded and encoded types",
+      );
+    }
+    return this.schemaResult(call, {
+      ...input,
+      encoded: { kind: "union", members: [input.encoded, nil] },
+      optionalKey: true,
+    });
+  }
+
+  private schemaOptionalKey(call: SchemaCall): Comp {
+    const input = this.schemaArg(call, 0);
+    if (call.args.length !== 1 || input === undefined) {
+      return this.schemaBad(
+        call,
+        "schemaOptionalKey needs one ordinary Schema",
+      );
+    }
+    return this.schemaResult(call, { ...input, optionalKey: true });
+  }
+
+  private schemaOptionFromOptionalKey(call: SchemaCall): Comp {
+    const input = this.schemaArg(call, 0);
+    if (call.args.length !== 1 || input === undefined) {
+      return this.schemaBad(
+        call,
+        "schemaOptionFromOptionalKey needs one ordinary Schema",
+      );
+    }
+    const { constructorDefault: _constructorDefault, ...plain } = input;
+    return this.schemaResult(call, {
+      ...plain,
+      decoded: { kind: "option", element: input.decoded },
+      makeInput: { kind: "option", element: input.decoded },
+      encodedOptionalKey: true,
+    });
+  }
+
+  private schemaDefaultKey(call: SchemaCall, op: DefaultKeyOp): Comp {
+    const name = DEFAULT_KEY_NAMES[op];
+    const direction = op === "default-encoded-key" ? "encoded" : "decoded";
+    const nil: Type = { kind: "literal", value: null };
+    const input = this.schemaArg(call, 0);
+    const fallback = this.functionArg(call, 1);
+    const validFailure = fallback !== undefined &&
+      failsOnly(fallback, [SCHEMA_ISSUE_ID, SCHEMA_ERROR_ID]);
+    const options = call.e.arguments[2];
+    if (options !== undefined) {
+      const field = options.kind === "record" && options.fields.length === 1
+        ? options.fields[0]
         : undefined;
-    };
-    const bad = (message: string): Comp => {
-      this.add(AREA.types, path, message, e.span);
-      return this.poison();
-    };
-    if (e.op === "invalid" || e.op === "at" || e.op === "both") {
-      const issue: Type = { kind: "named", id: SCHEMA_ISSUE_ID };
       if (
-        e.op === "invalid" &&
-        (args.length !== 1 || !fits(this.env, args[0].type, {
-          kind: "primitive",
-          name: "string",
-        }))
-      ) return bad("schemaInvalid needs a string message");
-      if (
-        e.op === "at" &&
-        (args.length !== 2 ||
-          !fits(this.env, args[0].type, {
-            kind: "union",
-            members: [
-              { kind: "primitive", name: "string" },
-              { kind: "primitive", name: "int" },
-            ],
-          }) || !fits(this.env, args[1].type, issue))
-      ) return bad("schemaAt needs a key and a SchemaIssue");
-      if (
-        e.op === "both" &&
-        (args.length !== 3 || schemaOf(args[0].type) === undefined ||
-          !fits(this.env, args[1].type, issue) ||
-          !fits(this.env, args[2].type, issue))
-      ) return bad("schemaBoth needs a Schema and two issues");
-      return { type: issue, match: "exact", active: combine(args) };
-    }
-    if (e.op === "identity") {
-      const hint = schemaOf(e.type);
-      if (
-        args.length !== 0 || hint === undefined ||
-        !same(this.env, hint.decoded, hint.encoded) ||
-        hint.decodeRequirements.length || hint.encodeRequirements.length ||
-        !dataOnly(this.env, hint.decoded, "value")
+        field?.name !== "encodingStrategy" ||
+        field.value.kind !== "literal" ||
+        (field.value.value !== "omit" && field.value.value !== "passthrough")
       ) {
-        return bad("schema() needs an identity data Schema with no services");
-      }
-      return { type: hint, match: "exact", active: QUIET };
-    }
-    if (e.op === "constructor-default") {
-      const source = args[0] === undefined ? undefined : schemaOf(args[0].type);
-      const fn = args[1] === undefined
-        ? undefined
-        : asFunction(this.env, args[1].type);
-      if (
-        args.length !== 2 || source === undefined || fn === undefined ||
-        e.arguments[1].kind !== "closure" ||
-        fn.parameters.length !== 0 || fn.effects.requirements.length !== 0 ||
-        !(fn.effects.failures.length === 0 ||
-          (fn.effects.failures.length === 1 &&
-            fn.effects.failures[0] === SCHEMA_ISSUE_ID)) ||
-        (fn.execution === "pure" && fn.effects.failures.length !== 0) ||
-        !fits(this.env, fn.result, source.makeInput ?? source.decoded)
-      ) {
-        return bad(
-          "schemaConstructorDefault needs an inline make-input callback with no services and only SchemaIssue failure",
+        return this.schemaBad(
+          call,
+          `${name} options need one literal "omit" or "passthrough" encodingStrategy`,
         );
       }
-      return {
-        type: { ...source, constructorDefault: true },
-        match: "exact",
-        active: combine(args),
-      };
-    }
-    if (e.op === "array") {
-      const input = args[0] === undefined ? undefined : schemaOf(args[0].type);
-      if (args.length !== 1 || input === undefined) {
-        return bad("schemaArray needs one Schema");
-      }
-      return {
-        type: {
-          kind: "schema",
-          decoded: { kind: "array", element: input.decoded },
-          encoded: { kind: "array", element: input.encoded },
-          makeInput: {
-            kind: "array",
-            element: input.makeInput ?? input.decoded,
-          },
-          decodeRequirements: input.decodeRequirements,
-          encodeRequirements: input.encodeRequirements,
-        },
-        match: "exact",
-        active: combine(args),
-      };
-    }
-    if (e.op === "null-to-missing-key") {
-      const input = args[0] === undefined ? undefined : schemaOf(args[0].type);
-      const nil: Type = { kind: "literal", value: null };
-      if (
-        args.length !== 1 || input === undefined ||
-        fits(this.env, nil, input.decoded) || fits(this.env, nil, input.encoded)
-      ) {
-        return bad(
-          "schemaNullToMissingKey needs one ordinary Schema with nonnullable decoded and encoded types",
-        );
-      }
-      return {
-        type: {
-          ...input,
-          encoded: { kind: "union", members: [input.encoded, nil] },
-          optionalKey: true,
-        },
-        match: "exact",
-        active: combine(args),
-      };
-    }
-    if (e.op === "optional-key") {
-      const input = args[0] === undefined ? undefined : schemaOf(args[0].type);
-      if (args.length !== 1 || input === undefined) {
-        return bad("schemaOptionalKey needs one ordinary Schema");
-      }
-      return {
-        type: { ...input, optionalKey: true },
-        match: "exact",
-        active: combine(args),
-      };
-    }
-    if (e.op === "option-from-optional-key") {
-      const input = args[0] === undefined ? undefined : schemaOf(args[0].type);
-      if (args.length !== 1 || input === undefined) {
-        return bad("schemaOptionFromOptionalKey needs one ordinary Schema");
-      }
-      const { constructorDefault: _constructorDefault, ...plain } = input;
-      return {
-        type: {
-          ...plain,
-          decoded: { kind: "option", element: input.decoded },
-          makeInput: { kind: "option", element: input.decoded },
-          encodedOptionalKey: true,
-        },
-        match: "exact",
-        active: combine(args),
-      };
     }
     if (
-      e.op === "default-key" || e.op === "default-null-key" ||
-      e.op === "default-encoded-key"
+      (call.args.length !== 2 && call.args.length !== 3) ||
+      input === undefined || fallback === undefined ||
+      !this.closureArg(call, 1) ||
+      fallback.parameters.length !== 0 ||
+      !validFailure ||
+      (fallback.execution === "pure" &&
+        (fallback.effects.failures.length !== 0 ||
+          fallback.effects.requirements.length !== 0)) ||
+      !fits(this.env, fallback.result, input[direction])
     ) {
-      const name = e.op === "default-key"
-        ? "schemaDefaultKey"
-        : e.op === "default-null-key"
-        ? "schemaDefaultNullKey"
-        : "schemaDefaultEncodedKey";
-      const direction = e.op === "default-encoded-key" ? "encoded" : "decoded";
-      const nil: Type = { kind: "literal", value: null };
-      const input = args[0] === undefined ? undefined : schemaOf(args[0].type);
-      const fallback = args[1] === undefined
-        ? undefined
-        : asFunction(this.env, args[1].type);
-      const validFailure = fallback !== undefined &&
-        (fallback.effects.failures.length === 0 ||
-          (fallback.effects.failures.length === 1 &&
-            (fallback.effects.failures[0] === SCHEMA_ISSUE_ID ||
-              fallback.effects.failures[0] === SCHEMA_ERROR_ID)));
-      const options = e.arguments[2];
-      if (options !== undefined) {
-        const field = options.kind === "record" && options.fields.length === 1
-          ? options.fields[0]
-          : undefined;
-        if (
-          field?.name !== "encodingStrategy" ||
-          field.value.kind !== "literal" ||
-          (field.value.value !== "omit" && field.value.value !== "passthrough")
-        ) {
-          return bad(
-            `${name} options need one literal "omit" or "passthrough" encodingStrategy`,
-          );
-        }
-      }
-      if (
-        (args.length !== 2 && args.length !== 3) || input === undefined ||
-        fallback === undefined ||
-        e.arguments[1]?.kind !== "closure" ||
-        fallback.parameters.length !== 0 ||
-        !validFailure ||
-        (fallback.execution === "pure" &&
-          (fallback.effects.failures.length !== 0 ||
-            fallback.effects.requirements.length !== 0)) ||
-        !fits(this.env, fallback.result, input[direction])
-      ) {
-        return bad(
-          `${name} needs a callback returning the ${direction} field type with only SchemaIssue or SchemaError failure`,
-        );
-      }
-      if (
-        e.op === "default-null-key" &&
-        (fits(this.env, nil, input.decoded) ||
-          fits(this.env, nil, input.encoded))
-      ) {
-        return bad(`${name} needs nonnullable decoded and encoded field types`);
-      }
-      return {
-        type: {
-          ...input,
-          encoded: e.op === "default-null-key"
-            ? { kind: "union", members: [input.encoded, nil] }
-            : input.encoded,
-          encodedOptionalKey: true,
-          decodeRequirements: sortedUnique([
-            ...input.decodeRequirements,
-            ...fallback.effects.requirements,
-          ]),
-        },
-        match: "exact",
-        active: combine(args),
-      };
+      return this.schemaBad(
+        call,
+        `${name} needs a callback returning the ${direction} field type with only SchemaIssue or SchemaError failure`,
+      );
     }
-    if (e.op === "struct") {
-      const record = args[0] === undefined
-        ? undefined
-        : unfold(this.env, args[0].type);
-      if (
-        args.length !== 1 || record?.kind !== "record" ||
-        record.fields.some((field) => field.optional)
-      ) return bad("schemaStruct needs required Schema fields");
-      const fields = record.fields.map((field) => ({
-        field,
-        schema: unfold(this.env, field.type),
-      }));
-      if (fields.some((field) => field.schema.kind !== "schema")) {
-        return bad("schemaStruct field is not a Schema or optional descriptor");
-      }
-      return {
-        type: {
-          kind: "schema",
-          decoded: {
-            kind: "record",
-            fields: fields.map(({ field, schema }) => ({
-              name: field.name,
-              optional: schema.kind === "schema" &&
-                (schema.optionalKey === true ||
-                  schema.decodedOptionalKey === true),
-              type: schema.kind === "schema" ? schema.decoded : field.type,
-            })),
-          },
-          encoded: {
-            kind: "record",
-            fields: fields.map(({ field, schema }) => ({
-              name: field.name,
-              optional: schema.kind === "schema" &&
-                (schema.optionalKey === true ||
-                  schema.encodedOptionalKey === true),
-              type: schema.kind === "schema" ? schema.encoded : field.type,
-            })),
-          },
-          makeInput: {
-            kind: "record",
-            fields: fields.map(({ field, schema }) => ({
-              name: field.name,
-              type: schema.kind === "schema"
-                ? schema.makeInput ?? schema.decoded
-                : field.type,
-              optional: schema.kind === "schema" &&
-                (schema.optionalKey === true ||
-                  schema.decodedOptionalKey === true ||
-                  schema.constructorDefault === true),
-            })),
-          },
-          decodeRequirements: sortedUnique(
-            fields.flatMap(({ schema }) =>
-              schema.kind === "schema" ? schema.decodeRequirements : []
-            ),
-          ),
-          encodeRequirements: sortedUnique(
-            fields.flatMap(({ schema }) =>
-              schema.kind === "schema" ? schema.encodeRequirements : []
-            ),
-          ),
-        },
-        match: "exact",
-        active: combine(args),
-      };
+    if (
+      op === "default-null-key" &&
+      (fits(this.env, nil, input.decoded) ||
+        fits(this.env, nil, input.encoded))
+    ) {
+      return this.schemaBad(
+        call,
+        `${name} needs nonnullable decoded and encoded field types`,
+      );
     }
-    if (e.op === "union") {
-      const list = e.arguments[0];
-      const tuple = args[0] === undefined
-        ? undefined
-        : unfold(this.env, args[0].type);
-      if (
-        args.length !== 1 || list?.kind !== "tuple" ||
-        tuple?.kind !== "tuple" || tuple.elements.length < 2
-      ) return bad("schemaUnion needs an inline tuple of branches");
-      const branches = tuple.elements.map(schemaOf);
-      if (branches.some((branch) => branch === undefined)) {
-        return bad("schemaUnion branches must be ordinary Schema values");
-      }
-      const schemas = branches.filter((branch) => branch !== undefined);
-      return {
-        type: {
-          kind: "schema",
-          decoded: { kind: "union", members: schemas.map((s) => s.decoded) },
-          encoded: { kind: "union", members: schemas.map((s) => s.encoded) },
-          makeInput: {
-            kind: "union",
-            members: schemas.map((s) => s.makeInput ?? s.decoded),
-          },
-          decodeRequirements: sortedUnique(
-            schemas.flatMap((s) => s.decodeRequirements),
-          ),
-          encodeRequirements: sortedUnique(
-            schemas.flatMap((s) => s.encodeRequirements),
-          ),
-        },
-        match: "exact",
-        active: combine(args),
-      };
+    return this.schemaResult(call, {
+      ...input,
+      encoded: op === "default-null-key"
+        ? { kind: "union", members: [input.encoded, nil] }
+        : input.encoded,
+      encodedOptionalKey: true,
+      decodeRequirements: sortedUnique([
+        ...input.decodeRequirements,
+        ...fallback.effects.requirements,
+      ]),
+    });
+  }
+
+  private schemaStruct(call: SchemaCall): Comp {
+    const record = this.typeArg(call, 0);
+    if (
+      call.args.length !== 1 || record?.kind !== "record" ||
+      record.fields.some((field) => field.optional)
+    ) return this.schemaBad(call, "schemaStruct needs required Schema fields");
+    const fields = record.fields.map((field) => ({
+      field,
+      schema: unfold(this.env, field.type),
+    }));
+    if (fields.some((field) => field.schema.kind !== "schema")) {
+      return this.schemaBad(
+        call,
+        "schemaStruct field is not a Schema or optional descriptor",
+      );
     }
-    if (e.op === "optional-from-required") {
-      const source = args[0] === undefined ? undefined : schemaOf(args[0].type);
-      const target = args[1] === undefined
-        ? undefined
-        : optionalOf(args[1].type);
-      const decode = args[2] === undefined
-        ? undefined
-        : asFunction(this.env, args[2].type);
-      const encode = args[3] === undefined
-        ? undefined
-        : asFunction(this.env, args[3].type);
-      if (
-        args.length !== 4 || source === undefined || target === undefined ||
-        !validSchemaCallback(decode) || !validSchemaCallback(encode) ||
-        decode?.parameters.length !== 1 || encode?.parameters.length !== 1 ||
-        !fits(this.env, source.decoded, decode.parameters[0]) ||
-        !fits(
-          this.env,
-          { kind: "option", element: target.encoded },
-          encode.parameters[0],
-        ) ||
-        !fits(this.env, decode.result, {
+    return this.schemaResult(call, {
+      kind: "schema",
+      decoded: {
+        kind: "record",
+        fields: fields.map(({ field, schema }) => ({
+          name: field.name,
+          optional: schema.kind === "schema" &&
+            (schema.optionalKey === true ||
+              schema.decodedOptionalKey === true),
+          type: schema.kind === "schema" ? schema.decoded : field.type,
+        })),
+      },
+      encoded: {
+        kind: "record",
+        fields: fields.map(({ field, schema }) => ({
+          name: field.name,
+          optional: schema.kind === "schema" &&
+            (schema.optionalKey === true ||
+              schema.encodedOptionalKey === true),
+          type: schema.kind === "schema" ? schema.encoded : field.type,
+        })),
+      },
+      makeInput: {
+        kind: "record",
+        fields: fields.map(({ field, schema }) => ({
+          name: field.name,
+          type: schema.kind === "schema"
+            ? schema.makeInput ?? schema.decoded
+            : field.type,
+          optional: schema.kind === "schema" &&
+            (schema.optionalKey === true ||
+              schema.decodedOptionalKey === true ||
+              schema.constructorDefault === true),
+        })),
+      },
+      decodeRequirements: sortedUnique(
+        fields.flatMap(({ schema }) =>
+          schema.kind === "schema" ? schema.decodeRequirements : []
+        ),
+      ),
+      encodeRequirements: sortedUnique(
+        fields.flatMap(({ schema }) =>
+          schema.kind === "schema" ? schema.encodeRequirements : []
+        ),
+      ),
+    });
+  }
+
+  private schemaUnion(call: SchemaCall): Comp {
+    const list = call.e.arguments[0];
+    const tuple = this.typeArg(call, 0);
+    if (
+      call.args.length !== 1 || list?.kind !== "tuple" ||
+      tuple?.kind !== "tuple" || tuple.elements.length < 2
+    ) {
+      return this.schemaBad(
+        call,
+        "schemaUnion needs an inline tuple of branches",
+      );
+    }
+    const branches = tuple.elements.map((element) =>
+      this.schemaOf(call, element)
+    );
+    if (branches.some((branch) => branch === undefined)) {
+      return this.schemaBad(
+        call,
+        "schemaUnion branches must be ordinary Schema values",
+      );
+    }
+    const schemas = branches.filter((branch) => branch !== undefined);
+    return this.schemaResult(call, {
+      kind: "schema",
+      decoded: { kind: "union", members: schemas.map((s) => s.decoded) },
+      encoded: { kind: "union", members: schemas.map((s) => s.encoded) },
+      makeInput: {
+        kind: "union",
+        members: schemas.map((s) => s.makeInput ?? s.decoded),
+      },
+      decodeRequirements: sortedUnique(
+        schemas.flatMap((s) => s.decodeRequirements),
+      ),
+      encodeRequirements: sortedUnique(
+        schemas.flatMap((s) => s.encodeRequirements),
+      ),
+    });
+  }
+
+  private schemaOptionalFromRequired(call: SchemaCall): Comp {
+    const source = this.schemaArg(call, 0);
+    const target = this.optionalArg(call, 1);
+    const decode = this.functionArg(call, 2);
+    const encode = this.functionArg(call, 3);
+    if (
+      call.args.length !== 4 || source === undefined || target === undefined ||
+      !validSchemaCallback(decode) || !validSchemaCallback(encode) ||
+      decode?.parameters.length !== 1 || encode?.parameters.length !== 1 ||
+      !fits(this.env, source.decoded, decode.parameters[0]) ||
+      !fits(
+        this.env,
+        { kind: "option", element: target.encoded },
+        encode.parameters[0],
+      ) ||
+      !fits(this.env, decode.result, {
+        kind: "option",
+        element: target.encoded,
+      }) ||
+      !fits(this.env, encode.result, source.decoded) ||
+      !this.closureArg(call, 2) ||
+      !this.closureArg(call, 3)
+    ) {
+      return this.schemaBad(
+        call,
+        "schemaOptionalFromRequired needs required-to-optional callbacks with only SchemaIssue failure",
+      );
+    }
+    return this.schemaResult(call, {
+      kind: "schema",
+      decoded: target.decoded,
+      encoded: source.encoded,
+      ...directionalRequirements(source, target, decode, encode),
+      decodedOptionalKey: true,
+      ...inheritedDefault(target),
+      ...inheritedMakeInput(target),
+    });
+  }
+
+  private schemaOptionalTransform(call: SchemaCall): Comp {
+    const source = this.optionalArg(call, 0);
+    const target = this.optionalArg(call, 1);
+    const decode = this.functionArg(call, 2);
+    const encode = this.functionArg(call, 3);
+    if (
+      call.args.length !== 4 || source === undefined || target === undefined ||
+      !validSchemaCallback(decode) || !validSchemaCallback(encode) ||
+      decode?.parameters.length !== 1 || encode?.parameters.length !== 1 ||
+      !fits(
+        this.env,
+        { kind: "option", element: source.decoded },
+        decode.parameters[0],
+      ) ||
+      !fits(
+        this.env,
+        { kind: "option", element: target.encoded },
+        encode.parameters[0],
+      ) ||
+      !fits(this.env, decode.result, {
+        kind: "option",
+        element: target.encoded,
+      }) ||
+      !fits(this.env, encode.result, {
+        kind: "option",
+        element: source.decoded,
+      }) ||
+      !this.closureArg(call, 2) ||
+      !this.closureArg(call, 3)
+    ) {
+      return this.schemaBad(
+        call,
+        "schemaOptionalTransform needs directional Option callbacks with only SchemaIssue failure",
+      );
+    }
+    return this.schemaResult(call, {
+      kind: "schema",
+      decoded: target.decoded,
+      encoded: source.encoded,
+      ...directionalRequirements(source, target, decode, encode),
+      optionalKey: true,
+      ...inheritedDefault(target),
+      ...inheritedMakeInput(target),
+    });
+  }
+
+  private schemaRecursive(call: SchemaCall): Comp {
+    const hint = this.schemaOf(call, call.e.type);
+    const fn = this.functionArg(call, 0);
+    if (
+      call.args.length !== 1 || hint === undefined || fn === undefined ||
+      fn.parameters.length !== 1 ||
+      !same(this.env, fn.parameters[0], hint) ||
+      !fits(this.env, fn.result, hint) || !isQuiet(invocationOf(fn)) ||
+      !dataOnly(this.env, hint.decoded, "value") ||
+      !dataOnly(this.env, hint.encoded, "value") ||
+      !dataOnly(this.env, hint.makeInput ?? hint.decoded, "value") ||
+      !this.guardedSchemaBody(call.e.arguments[0])
+    ) {
+      return this.schemaBad(
+        call,
+        "schemaRecursive needs a pure body from self to the expected data Schema",
+      );
+    }
+    return this.schemaResult(call, hint);
+  }
+
+  private schemaTransform(call: SchemaCall): Comp {
+    const source = this.schemaArg(call, 0);
+    const target = this.schemaArg(call, 1);
+    const decode = this.functionArg(call, 2);
+    const encode = this.functionArg(call, 3);
+    const callbackResult = (fn: typeof decode, value: Type) => {
+      if (fn === undefined) return false;
+      if (fn.effects.failures.length === 0) {
+        return fits(this.env, fn.result, {
           kind: "option",
-          element: target.encoded,
-        }) ||
-        !fits(this.env, encode.result, source.decoded) ||
-        e.arguments[2]?.kind !== "closure" ||
-        e.arguments[3]?.kind !== "closure"
-      ) {
-        return bad(
-          "schemaOptionalFromRequired needs required-to-optional callbacks with only SchemaIssue failure",
-        );
+          element: value,
+        });
       }
-      return {
-        type: {
-          kind: "schema",
-          decoded: target.decoded,
-          encoded: source.encoded,
-          decodeRequirements: sortedUnique([
-            ...source.decodeRequirements,
-            ...target.decodeRequirements,
-            ...decode.effects.requirements,
-          ]),
-          encodeRequirements: sortedUnique([
-            ...source.encodeRequirements,
-            ...target.encodeRequirements,
-            ...encode.effects.requirements,
-          ]),
-          decodedOptionalKey: true,
-          ...(target.constructorDefault === true
-            ? { constructorDefault: true as const }
-            : {}),
-          ...(target.makeInput === undefined
-            ? {}
-            : { makeInput: target.makeInput }),
-        },
-        match: "exact",
-        active: combine(args),
-      };
+      return fn.effects.failures.length === 1 &&
+        fn.effects.failures[0] === SCHEMA_ISSUE_ID &&
+        fits(this.env, fn.result, value);
+    };
+    if (
+      call.args.length !== 4 || source === undefined || target === undefined ||
+      decode === undefined || encode === undefined ||
+      decode.parameters.length !== 1 || encode.parameters.length !== 1 ||
+      !fits(this.env, source.decoded, decode.parameters[0]) ||
+      !fits(this.env, target.encoded, encode.parameters[0]) ||
+      !callbackResult(decode, target.encoded) ||
+      !callbackResult(encode, source.decoded) ||
+      !this.closureArg(call, 2) ||
+      !this.closureArg(call, 3)
+    ) {
+      return this.schemaBad(
+        call,
+        "schemaTransform callback types or failure channels do not match",
+      );
     }
-    if (e.op === "optional-transform") {
-      const source = args[0] === undefined
-        ? undefined
-        : optionalOf(args[0].type);
-      const target = args[1] === undefined
-        ? undefined
-        : optionalOf(args[1].type);
-      const decode = args[2] === undefined
-        ? undefined
-        : asFunction(this.env, args[2].type);
-      const encode = args[3] === undefined
-        ? undefined
-        : asFunction(this.env, args[3].type);
-      if (
-        args.length !== 4 || source === undefined || target === undefined ||
-        !validSchemaCallback(decode) || !validSchemaCallback(encode) ||
-        decode?.parameters.length !== 1 || encode?.parameters.length !== 1 ||
-        !fits(
-          this.env,
-          { kind: "option", element: source.decoded },
-          decode.parameters[0],
-        ) ||
-        !fits(
-          this.env,
-          { kind: "option", element: target.encoded },
-          encode.parameters[0],
-        ) ||
-        !fits(this.env, decode.result, {
-          kind: "option",
-          element: target.encoded,
-        }) ||
-        !fits(this.env, encode.result, {
-          kind: "option",
-          element: source.decoded,
-        }) ||
-        e.arguments[2]?.kind !== "closure" ||
-        e.arguments[3]?.kind !== "closure"
-      ) {
-        return bad(
-          "schemaOptionalTransform needs directional Option callbacks with only SchemaIssue failure",
-        );
-      }
-      return {
-        type: {
-          kind: "schema",
-          decoded: target.decoded,
-          encoded: source.encoded,
-          decodeRequirements: sortedUnique([
-            ...source.decodeRequirements,
-            ...target.decodeRequirements,
-            ...decode.effects.requirements,
-          ]),
-          encodeRequirements: sortedUnique([
-            ...source.encodeRequirements,
-            ...target.encodeRequirements,
-            ...encode.effects.requirements,
-          ]),
-          optionalKey: true,
-          ...(target.constructorDefault === true
-            ? { constructorDefault: true as const }
-            : {}),
-          ...(target.makeInput === undefined
-            ? {}
-            : { makeInput: target.makeInput }),
-        },
-        match: "exact",
-        active: combine(args),
-      };
-    }
-    if (e.op === "recursive") {
-      const hint = schemaOf(e.type);
-      const fn = args[0] === undefined
-        ? undefined
-        : asFunction(this.env, args[0].type);
-      if (
-        args.length !== 1 || hint === undefined || fn === undefined ||
-        fn.parameters.length !== 1 ||
-        !same(this.env, fn.parameters[0], hint) ||
-        !fits(this.env, fn.result, hint) || !isQuiet(invocationOf(fn)) ||
-        !dataOnly(this.env, hint.decoded, "value") ||
-        !dataOnly(this.env, hint.encoded, "value") ||
-        !dataOnly(this.env, hint.makeInput ?? hint.decoded, "value") ||
-        !this.guardedSchemaBody(e.arguments[0])
-      ) {
-        return bad(
-          "schemaRecursive needs a pure body from self to the expected data Schema",
-        );
-      }
-      return { type: hint, match: "exact", active: combine(args) };
-    }
-    if (e.op === "transform") {
-      const source = args[0] === undefined ? undefined : schemaOf(args[0].type);
-      const target = args[1] === undefined ? undefined : schemaOf(args[1].type);
-      const decode = args[2] === undefined
-        ? undefined
-        : asFunction(this.env, args[2].type);
-      const encode = args[3] === undefined
-        ? undefined
-        : asFunction(this.env, args[3].type);
-      const callbackResult = (fn: typeof decode, value: Type) => {
-        if (fn === undefined) return false;
-        if (fn.effects.failures.length === 0) {
-          return fits(this.env, fn.result, {
-            kind: "option",
-            element: value,
-          });
-        }
-        return fn.effects.failures.length === 1 &&
-          fn.effects.failures[0] === SCHEMA_ISSUE_ID &&
-          fits(this.env, fn.result, value);
-      };
-      if (
-        args.length !== 4 || source === undefined || target === undefined ||
-        decode === undefined || encode === undefined ||
-        decode.parameters.length !== 1 || encode.parameters.length !== 1 ||
-        !fits(this.env, source.decoded, decode.parameters[0]) ||
-        !fits(this.env, target.encoded, encode.parameters[0]) ||
-        !callbackResult(decode, target.encoded) ||
-        !callbackResult(encode, source.decoded) ||
-        e.arguments[2]?.kind !== "closure" ||
-        e.arguments[3]?.kind !== "closure"
-      ) {
-        return bad(
-          "schemaTransform callback types or failure channels do not match",
-        );
-      }
-      return {
-        type: {
-          kind: "schema",
-          decoded: target.decoded,
-          ...(target.makeInput === undefined
-            ? {}
-            : { makeInput: target.makeInput }),
-          encoded: source.encoded,
-          decodeRequirements: sortedUnique([
-            ...source.decodeRequirements,
-            ...target.decodeRequirements,
-            ...decode.effects.requirements,
-          ]),
-          encodeRequirements: sortedUnique([
-            ...source.encodeRequirements,
-            ...target.encodeRequirements,
-            ...encode.effects.requirements,
-          ]),
-        },
-        match: "exact",
-        active: combine(args),
-      };
-    }
-    return bad("unknown schema constructor");
+    return this.schemaResult(call, {
+      kind: "schema",
+      decoded: target.decoded,
+      ...inheritedMakeInput(target),
+      encoded: source.encoded,
+      ...directionalRequirements(source, target, decode, encode),
+    });
   }
 
   private guardedSchemaBody(callback: Expr | undefined): boolean {
@@ -2616,43 +2770,38 @@ export class BodyValidator {
       if (value.kind === "record") {
         return value.fields.every((field) => visit(field.value, guarded));
       }
-      if (
-        value.kind === "schema" &&
-        (value.op === "constructor-default" || value.op === "default-key" ||
-          value.op === "default-null-key" || value.op === "default-encoded-key")
-      ) {
-        return value.arguments.length >= 2 &&
-          value.arguments.slice(1).every((argument) =>
-            !containsSelf(argument)
-          ) &&
-          visit(value.arguments[0], guarded);
-      }
-      if (
-        value.kind === "schema" &&
-        (value.op === "optional-transform" ||
-          value.op === "optional-from-required")
-      ) {
-        return value.arguments.length === 4 &&
-          value.arguments.slice(2).every((argument) =>
-            !containsSelf(argument)
-          ) &&
-          value.arguments.slice(0, 2).every((argument) =>
-            visit(argument, guarded)
-          );
-      }
-      if (
-        value.kind === "schema" &&
-        (value.op === "array" || value.op === "struct" ||
-          value.op === "optional-key" || value.op === "null-to-missing-key" ||
-          value.op === "union")
-      ) {
-        return value.arguments.every((argument) =>
-          visit(
-            argument,
-            guarded || value.op === "array" || value.op === "optional-key" ||
-              value.op === "null-to-missing-key",
-          )
-        );
+      if (value.kind === "schema") {
+        const role = BodyValidator.isSchemaOp(value.op)
+          ? BodyValidator.schemaRows[value.op].recursion
+          : "none";
+        switch (role) {
+          case "default":
+            return value.arguments.length >= 2 &&
+              value.arguments.slice(1).every((argument) =>
+                !containsSelf(argument)
+              ) &&
+              visit(value.arguments[0], guarded);
+          case "optional":
+            return value.arguments.length === 4 &&
+              value.arguments.slice(2).every((argument) =>
+                !containsSelf(argument)
+              ) &&
+              value.arguments.slice(0, 2).every((argument) =>
+                visit(argument, guarded)
+              );
+          case "guarding":
+            return value.arguments.every((argument) => visit(argument, true));
+          case "passing":
+            return value.arguments.every((argument) =>
+              visit(argument, guarded)
+            );
+          case "none":
+            return false;
+          default: {
+            const unreachable: never = role;
+            return unreachable;
+          }
+        }
       }
       if (value.kind === "tuple") {
         return value.elements.every((element) => visit(element, guarded));
