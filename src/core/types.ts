@@ -25,6 +25,19 @@ declare const typeRefBrand: unique symbol;
 /** An interned type. Equal structural types have equal refs. */
 export type TypeRef = number & { readonly [typeRefBrand]: true };
 
+export type SchemaPresence =
+  | "required"
+  | "optional"
+  | "encoded-optional"
+  | "decoded-optional";
+
+export interface SchemaOptions {
+  readonly presence?: SchemaPresence;
+  readonly makeInput?: TypeRef;
+  /** Constructor defaults are independent of field presence. */
+  readonly constructorDefault?: boolean;
+}
+
 type PrimitiveName =
   | "string"
   | "boolean"
@@ -171,11 +184,9 @@ export type TypeNode =
     readonly encoded: TypeRef;
     readonly decodeRequirements: readonly CapabilityId[];
     readonly encodeRequirements: readonly CapabilityId[];
-    readonly optionalKey?: true;
-    readonly encodedOptionalKey?: true;
-    readonly decodedOptionalKey?: true;
+    readonly presence: SchemaPresence;
     readonly makeInput?: TypeRef;
-    /** Independent of the mutually exclusive field-presence flags. */
+    /** Independent of field presence. */
     readonly constructorDefault?: true;
   }
   | {
@@ -400,9 +411,9 @@ export class TypeTable {
             node.encoded,
             node.decodeRequirements,
             node.encodeRequirements,
-            node.optionalKey === true,
-            node.encodedOptionalKey === true,
-            node.decodedOptionalKey === true,
+            node.presence === "optional",
+            node.presence === "encoded-optional",
+            node.presence === "decoded-optional",
             node.makeInput ?? node.decoded,
             node.constructorDefault === true,
           ])
@@ -526,21 +537,20 @@ export class TypeTable {
     encoded: TypeRef,
     decodeRequirements: readonly CapabilityId[],
     encodeRequirements: readonly CapabilityId[],
-    optionalKey = false,
-    encodedOptionalKey = false,
-    decodedOptionalKey = false,
-    makeInput: TypeRef = decoded,
-    constructorDefault = false,
+    options: SchemaOptions = {},
   ): TypeRef {
+    const {
+      presence = "required",
+      makeInput = decoded,
+      constructorDefault = false,
+    } = options;
     return this.intern({
       kind: "schema",
       decoded,
       encoded,
       decodeRequirements: sortedUnique(decodeRequirements),
       encodeRequirements: sortedUnique(encodeRequirements),
-      ...(optionalKey ? { optionalKey: true as const } : {}),
-      ...(encodedOptionalKey ? { encodedOptionalKey: true as const } : {}),
-      ...(decodedOptionalKey ? { decodedOptionalKey: true as const } : {}),
+      presence,
       ...(makeInput === decoded ||
           (this.isAssignable(makeInput, decoded) &&
             this.isAssignable(decoded, makeInput))
@@ -956,11 +966,17 @@ export class TypeTable {
           this.fromIr(type.encoded),
           type.decodeRequirements,
           type.encodeRequirements,
-          type.optionalKey === true,
-          type.encodedOptionalKey === true,
-          type.decodedOptionalKey === true,
-          this.fromIr(type.makeInput ?? type.decoded),
-          type.constructorDefault === true,
+          {
+            presence: type.optionalKey === true
+              ? "optional"
+              : type.encodedOptionalKey === true
+              ? "encoded-optional"
+              : type.decodedOptionalKey === true
+              ? "decoded-optional"
+              : "required",
+            makeInput: this.fromIr(type.makeInput ?? type.decoded),
+            constructorDefault: type.constructorDefault === true,
+          },
         );
       case "fiber":
         return this.fiber(this.fromIr(type.result), type.failures);
@@ -1073,11 +1089,13 @@ export class TypeTable {
           encoded: this.toIr(node.encoded),
           decodeRequirements: node.decodeRequirements,
           encodeRequirements: node.encodeRequirements,
-          ...(node.optionalKey === true ? { optionalKey: true as const } : {}),
-          ...(node.encodedOptionalKey === true
+          ...(node.presence === "optional"
+            ? { optionalKey: true as const }
+            : {}),
+          ...(node.presence === "encoded-optional"
             ? { encodedOptionalKey: true as const }
             : {}),
-          ...(node.decodedOptionalKey === true
+          ...(node.presence === "decoded-optional"
             ? { decodedOptionalKey: true as const }
             : {}),
           ...(node.makeInput === undefined
@@ -1265,9 +1283,7 @@ export class TypeTable {
           this.assignable(tn.encoded, sn.encoded, depth + 1);
       case "schema":
         return sn.kind === "schema" &&
-          sn.optionalKey === tn.optionalKey &&
-          sn.encodedOptionalKey === tn.encodedOptionalKey &&
-          sn.decodedOptionalKey === tn.decodedOptionalKey &&
+          sn.presence === tn.presence &&
           sn.constructorDefault === tn.constructorDefault &&
           this.assignable(
             sn.makeInput ?? sn.decoded,
@@ -1398,11 +1414,11 @@ export class TypeTable {
         return `Codec<${this.show(node.decoded)}, ${this.show(node.encoded)}>`;
       case "schema":
         return `${
-          node.optionalKey === true
+          node.presence === "optional"
             ? "SchemaOptional"
-            : node.encodedOptionalKey === true
+            : node.presence === "encoded-optional"
             ? "SchemaEncodedOptional"
-            : node.decodedOptionalKey === true
+            : node.presence === "decoded-optional"
             ? "SchemaDecodedOptional"
             : "Schema"
         }${node.constructorDefault === true ? "ConstructorDefault" : ""}<${

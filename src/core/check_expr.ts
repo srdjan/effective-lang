@@ -2039,9 +2039,7 @@ class BodyChecker implements BuiltinContext {
     const type = this.table.node(this.table.unfold(info.type));
     const accepted = type.kind === "schema" &&
       (op === "constructor-default" ||
-        (type.optionalKey !== true &&
-          type.encodedOptionalKey !== true &&
-          type.decodedOptionalKey !== true)) &&
+        type.presence === "required") &&
       (builtin.acceptsDefault || type.constructorDefault !== true);
     if (!accepted && !this.isError(info.type)) {
       this.report(
@@ -2071,7 +2069,7 @@ class BodyChecker implements BuiltinContext {
   ): SchemaNode | undefined {
     const type = this.table.node(this.table.unfold(info.type));
     if (
-      type.kind !== "schema" || type.optionalKey !== true
+      type.kind !== "schema" || type.presence !== "optional"
     ) {
       if (!this.isError(info.type)) {
         this.report(
@@ -2265,16 +2263,16 @@ class BodyChecker implements BuiltinContext {
       fields.map(({ field, schema }) => ({
         name: field.name,
         type: schema.decoded,
-        optional: schema.optionalKey === true ||
-          schema.decodedOptionalKey === true,
+        optional: schema.presence === "optional" ||
+          schema.presence === "decoded-optional",
       })),
     );
     const encoded = this.table.record(
       fields.map(({ field, schema }) => ({
         name: field.name,
         type: schema.encoded,
-        optional: schema.optionalKey === true ||
-          schema.encodedOptionalKey === true,
+        optional: schema.presence === "optional" ||
+          schema.presence === "encoded-optional",
       })),
     );
     return this.finish(
@@ -2284,16 +2282,15 @@ class BodyChecker implements BuiltinContext {
         encoded,
         fields.flatMap(({ schema }) => schema.decodeRequirements),
         fields.flatMap(({ schema }) => schema.encodeRequirements),
-        false,
-        false,
-        false,
-        this.table.record(fields.map(({ field, schema }) => ({
-          name: field.name,
-          type: schema.makeInput ?? schema.decoded,
-          optional: schema.optionalKey === true ||
-            schema.decodedOptionalKey === true ||
-            schema.constructorDefault === true,
-        }))),
+        {
+          makeInput: this.table.record(fields.map(({ field, schema }) => ({
+            name: field.name,
+            type: schema.makeInput ?? schema.decoded,
+            optional: schema.presence === "optional" ||
+              schema.presence === "decoded-optional" ||
+              schema.constructorDefault === true,
+          }))),
+        },
       ),
       combine([input]),
     );
@@ -2340,12 +2337,11 @@ class BodyChecker implements BuiltinContext {
         this.table.union(schemas.map((branch) => branch.encoded)),
         schemas.flatMap((branch) => branch.decodeRequirements),
         schemas.flatMap((branch) => branch.encodeRequirements),
-        false,
-        false,
-        false,
-        this.table.union(
-          schemas.map((branch) => branch.makeInput ?? branch.decoded),
-        ),
+        {
+          makeInput: this.table.union(
+            schemas.map((branch) => branch.makeInput ?? branch.decoded),
+          ),
+        },
       ),
       combine([input]),
     );
@@ -2418,11 +2414,11 @@ class BodyChecker implements BuiltinContext {
         schema.encoded,
         schema.decodeRequirements,
         schema.encodeRequirements,
-        schema.optionalKey === true,
-        schema.encodedOptionalKey === true,
-        schema.decodedOptionalKey === true,
-        schema.makeInput ?? schema.decoded,
-        true,
+        {
+          presence: schema.presence,
+          makeInput: schema.makeInput ?? schema.decoded,
+          constructorDefault: true,
+        },
       ),
       combine([first, callback.info]),
     );
@@ -2450,11 +2446,11 @@ class BodyChecker implements BuiltinContext {
         this.table.union([schema.encoded, nil]),
         schema.decodeRequirements,
         schema.encodeRequirements,
-        true,
-        false,
-        false,
-        schema.makeInput ?? schema.decoded,
-        schema.constructorDefault === true,
+        {
+          presence: "optional",
+          makeInput: schema.makeInput ?? schema.decoded,
+          constructorDefault: schema.constructorDefault === true,
+        },
       ),
       combine([first]),
     );
@@ -2469,11 +2465,11 @@ class BodyChecker implements BuiltinContext {
         schema.encoded,
         schema.decodeRequirements,
         schema.encodeRequirements,
-        true,
-        false,
-        false,
-        schema.makeInput ?? schema.decoded,
-        schema.constructorDefault === true,
+        {
+          presence: "optional",
+          makeInput: schema.makeInput ?? schema.decoded,
+          constructorDefault: schema.constructorDefault === true,
+        },
       ),
       combine([first]),
     );
@@ -2488,10 +2484,7 @@ class BodyChecker implements BuiltinContext {
         this.table.array(schema.encoded),
         schema.decodeRequirements,
         schema.encodeRequirements,
-        false,
-        false,
-        false,
-        this.table.array(schema.makeInput ?? schema.decoded),
+        { makeInput: this.table.array(schema.makeInput ?? schema.decoded) },
       ),
       combine([first]),
     );
@@ -2506,8 +2499,7 @@ class BodyChecker implements BuiltinContext {
         schema.encoded,
         schema.decodeRequirements,
         schema.encodeRequirements,
-        false,
-        true,
+        { presence: "encoded-optional" },
       ),
       combine([first]),
     );
@@ -2606,11 +2598,11 @@ class BodyChecker implements BuiltinContext {
         nullable ? this.table.union([schema.encoded, nil]) : schema.encoded,
         [...schema.decodeRequirements, ...(fallbackFn?.requirements ?? [])],
         schema.encodeRequirements,
-        false,
-        true,
-        false,
-        schema.makeInput ?? schema.decoded,
-        schema.constructorDefault === true,
+        {
+          presence: "encoded-optional",
+          makeInput: schema.makeInput ?? schema.decoded,
+          constructorDefault: schema.constructorDefault === true,
+        },
       ),
       combine([
         first,
@@ -2729,24 +2721,15 @@ class BodyChecker implements BuiltinContext {
     }
     return this.finish(
       node,
-      this.table.schema(
-        target.decoded,
-        schema.encoded,
-        [
-          ...schema.decodeRequirements,
-          ...target.decodeRequirements,
-          ...(decodeFn?.requirements ?? []),
-        ],
-        [
-          ...schema.encodeRequirements,
-          ...target.encodeRequirements,
-          ...(encodeFn?.requirements ?? []),
-        ],
-        false,
-        false,
-        false,
-        target.makeInput ?? target.decoded,
-      ),
+      this.table.schema(target.decoded, schema.encoded, [
+        ...schema.decodeRequirements,
+        ...target.decodeRequirements,
+        ...(decodeFn?.requirements ?? []),
+      ], [
+        ...schema.encodeRequirements,
+        ...target.encodeRequirements,
+        ...(encodeFn?.requirements ?? []),
+      ], { makeInput: target.makeInput ?? target.decoded }),
       combine([first, targetInfo, decode.info, encode.info]),
     );
   }
@@ -2826,25 +2809,19 @@ class BodyChecker implements BuiltinContext {
     }
     return this.finish(
       node,
-      this.table.schema(
-        target.decoded,
-        source.encoded,
-        [
-          ...source.decodeRequirements,
-          ...target.decodeRequirements,
-          ...(decodeFn?.requirements ?? []),
-        ],
-        [
-          ...source.encodeRequirements,
-          ...target.encodeRequirements,
-          ...(encodeFn?.requirements ?? []),
-        ],
-        !fromRequired,
-        false,
-        fromRequired,
-        target.makeInput ?? target.decoded,
-        target.constructorDefault === true,
-      ),
+      this.table.schema(target.decoded, source.encoded, [
+        ...source.decodeRequirements,
+        ...target.decodeRequirements,
+        ...(decodeFn?.requirements ?? []),
+      ], [
+        ...source.encodeRequirements,
+        ...target.encodeRequirements,
+        ...(encodeFn?.requirements ?? []),
+      ], {
+        presence: fromRequired ? "decoded-optional" : "optional",
+        makeInput: target.makeInput ?? target.decoded,
+        constructorDefault: target.constructorDefault === true,
+      }),
       combine([sourceInfo, targetInfo, decode.info, encode.info]),
     );
   }

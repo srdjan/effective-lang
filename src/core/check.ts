@@ -756,11 +756,17 @@ export class TypeLowerer {
           encoded.ref,
           decodeRequirements,
           encodeRequirements,
-          optionalKey,
-          encodedOptionalKey,
-          decodedOptionalKey,
-          makeInput.ref,
-          constructorDefault,
+          {
+            presence: optionalKey
+              ? "optional"
+              : encodedOptionalKey
+              ? "encoded-optional"
+              : decodedOptionalKey
+              ? "decoded-optional"
+              : "required",
+            makeInput: makeInput.ref,
+            constructorDefault,
+          },
         ),
         ir: {
           kind: "schema",
