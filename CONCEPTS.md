@@ -30,6 +30,12 @@ The second checker that recomputes every annotation of the typed IR without shar
 It acts as a differential oracle: a program that the checker accepts and the validator rejects shows a defect in one of the two. A disagreement is repaired so that both derive the same annotation, not by weakening the validator.
 _Avoid: IR checker, second pass_
 
+### Type table
+
+The project-wide store in which the checker interns each type once and refers to it by a reference number.
+
+A reference number depends on the order in which types were first interned, and the incremental program keeps one table across all edits. So a reference number must never decide an order, a choice, or a message that a user can see; a canonical structural key decides those, and the number only breaks ties.
+
 ### Prelude table
 
 The one table in `resolve.ts` that lists every prelude operation, with a flag that tells whether a source binding may shadow it.
