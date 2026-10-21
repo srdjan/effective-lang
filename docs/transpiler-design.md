@@ -127,7 +127,7 @@ whole-module recheck misses the latency budget. Section 4 gives the model.
 | Mode | Trigger | Work | Output | Runs in |
 | --- | --- | --- | --- | --- |
 | Per change | Editor `didChange` | Parse the changed file, recheck, no file writes | Diagnostics, hover, go-to-definition, in-memory generated TypeScript | LSP server |
-| Per save | Editor `didSave` | Emit the module and its span table | `*.ts` and `*.ts.map` on disk | LSP server |
+| Per save | Editor `didSave` | Check the disk texts in a second program; emit each module that `build` would write and whose text changed | `*.ts` and `*.ts.map` on disk | LSP server |
 | Watch | File system event | Check and emit the changed module and its dependents; optional `tsc` | Files, terminal diagnostics | CLI `watch` |
 | Build | One command | Check and emit everything; validate IR; optional `tsc` | Files, exit code | CLI `build`, CI |
 
@@ -135,6 +135,11 @@ Inference: the per-change loop must not write files. A write per keystroke
 triggers every other watcher on the machine, such as `deno task dev --watch` and
 the TypeScript server. The generated TypeScript stays visible per change through
 an in-memory virtual document. The disk copy updates on save.
+
+Correction, 2026-10-21: a save first wrote only the saved module, from the
+open-document texts. The save plan (`docs/plans/2026-10-21-save-transpilation.md`)
+made each save write every changed output from the disk texts, with the
+`build` write rule.
 
 ### 2.2 The user-visible loop
 

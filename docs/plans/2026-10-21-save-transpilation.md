@@ -1,6 +1,6 @@
 # Transpilation on every save (SV)
 
-Accepted plan based on `cd1b899`. On 2026-10-21 the user accepted option (a)
+Complete. Accepted plan based on `cd1b899`. On 2026-10-21 the user accepted option (a)
 of decisions SV-D1 to SV-D4. Codex astra validated the first draft. Section 7 records each finding
 and its resolution.
 
@@ -229,3 +229,11 @@ run, because the Fable rate limit was reached.
 | A configuration error needs the attempted inputs, separate from success state. | Accepted. `diskInputs` and `diskModules` are separate. |
 | More tests, doc owners, and save-specific measurements. | Accepted. SV4, SV5, and SV6. |
 | Use a lazy disk `Program` in `ProjectState`, not a separate abstraction. | Accepted. Section 3.2. |
+
+## 8. Evidence
+
+SV1 is `90ecd76`, SV2 is `e5f607b`, SV3 and SV4 are `7fcf1d9` (one commit,
+because they share one change in `src/lsp/projects.ts`), and SV5 is
+`539dda6`. On 2026-10-21 the user confirmed SV-D1 (a) again, after a review
+of the first-save behavior. The full M7 run of SV5 met the SV-D3 budget. The
+M7 and M4 numbers are not recorded here until the user decides what to record.

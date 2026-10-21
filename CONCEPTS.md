@@ -36,6 +36,13 @@ The project-wide store in which the checker interns each type once and refers to
 
 A reference number depends on the order in which types were first interned, and the incremental program keeps one table across all edits. So a reference number must never decide an order, a choice, or a message that a user can see; a canonical structural key decides those, and the number only breaks ties.
 
+### Disk program
+
+The second `Program` of a language-server project that sees only the disk texts and never the open-document overlay. Each save round updates it and writes the generated files from it.
+
+It exists so that a generated file always comes from saved source: the overlay program serves diagnostics and hover, and the disk program serves file output.
+_Avoid: mirror, shadow program_
+
 ### Prelude table
 
 The one table in `resolve.ts` that lists every prelude operation, with a flag that tells whether a source binding may shadow it.

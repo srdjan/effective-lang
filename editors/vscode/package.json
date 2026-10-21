@@ -75,7 +75,7 @@
         "effective.writeOnSave": {
           "type": "boolean",
           "default": true,
-          "description": "Write the generated .ts and .ts.map files of a module when the user saves it."
+          "description": "When the user saves a source file, write every generated .ts and .ts.map file that changed, from the saved files on disk."
         },
         "effective.debounceMs": {
           "type": "number",

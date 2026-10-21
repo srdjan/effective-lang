@@ -351,7 +351,7 @@ The client passes `initializationOptions` with the `initialize` request. Both op
 | Option        | Default | Meaning                                                                                            |
 | ------------- | ------- | -------------------------------------------------------------------------------------------------- |
 | `debounceMs`  | `0`     | A finite number of at least 0. The delay in milliseconds before the server compiles after an edit. |
-| `writeOnSave` | `true`  | A boolean. When true, a save writes the `.ts` and `.ts.map` files of the saved module.             |
+| `writeOnSave` | `true`  | A boolean. When true, a save writes the `.ts` and `.ts.map` files that `build` would write.         |
 
 A missing or invalid value takes the default. The server logs an invalid value. A request on a project with unsaved changes compiles first, so an answer never comes from an old revision.
 
@@ -361,14 +361,18 @@ A project is a directory with an `effective.json` file. When a document opens, t
 
 An open document overrides the disk text of its path. When the document closes, the server reads the disk text again. Out-of-order document changes are ignored. Rename and code-action edits are withheld if the project configuration is invalid or any loaded source text differs from the current overlay or disk. Open documents receive their current version in each workspace edit; closed documents use a null version. The client sends `workspace/didChangeWatchedFiles` for changes on disk. The server ignores such an event for an open document, because the editor owns that text.
 
-On `textDocument/didSave` of an `.eff` file, the server does nothing when `writeOnSave` is false. Else it compiles first. Then it writes the files of the saved module only. It does not write other modules. A module with an error keeps its last good `.ts` and `.ts.map` files, as `build` does. A write failure goes to `window/logMessage`.
+A save round starts on `textDocument/didSave` of an `.eff` or `.effi` file, and on a watched-file event for the `effective.json` of a project, because the client sends no `didSave` for that file. The server does nothing when `writeOnSave` is false. `writeOnSave` comes from the initialization options, so a change takes effect after a restart of the server.
+
+The round uses the disk texts only. Unsaved text of an open document never reaches a generated file. The server reads the whole project from disk and updates a second `Program`, the disk program, which it creates on the first round. Then it writes the modules that `build` would write: each module without an error whose imported `.eff` modules are also written. It writes a file only when its text differs from the disk, so a deleted or partly written output is repaired on the next round. The first round of a session therefore writes every module whose generated files are missing or stale. A later round writes only the files whose text changed, for example the saved module and the importers whose generated code changed.
+
+A module with an error keeps its last good `.ts` and `.ts.map` files, as `build` does. When a module left the project since an earlier round of the session, the round removes its files, as `watch` does. A project writes and removes only the outputs of modules that have no nearer `effective.json`. The round logs each written and removed path at type 4 and each module that it holds back, with the reason, once at type 3. A read, write, or configuration error goes to `window/logMessage` at type 1. A concurrent `effective watch` or `build` on the same project can interleave its writes with the round.
 
 When `effective.json` is missing or invalid, the server publishes one diagnostic on `effective.json`, at line 0 and character 0. It keeps the last good revision for hover, definition, symbols, and generated text. It keeps the published diagnostics of the other files. The next good update clears the configuration diagnostic. Before the first good revision, hover, definition, and generated text return `null`. Document symbols parse the file on its own, and `effective/stats` returns revision 0.
 
 ### Known limits
 
 - The server has no cancellation inside the core. `Program.update` runs as one synchronous call, and the server handles one message at a time. The plan, section 3, explains the reason. Measurement M1 measures the stall.
-- Nested projects are not supported. The disk walk of an outer project also reads the files of an inner project, so one file can belong to two programs.
+- Nested projects are not supported. The disk walk of an outer project also reads the files of an inner project, so one file can belong to two programs. A save round of the outer project does not write or remove the outputs of the inner project.
 - An `.effi` file that no `.eff` module imports is not in the module graph. For such a file, the server gives document symbols only. Hover and definition return `null`.
 - A generated `.ts` file has no go-to-definition into the `.eff` source.
 - Rename edits Effective source/interface references only; it does not rename TypeScript host code. Completion does not add imports, semantic tokens have no delta mode, and quick fixes target reliable explicit inline function contracts only. See [editor queries](editor.md).
