@@ -1608,6 +1608,30 @@ class BodyChecker {
     };
   }
 
+  /**
+   * Checks the Stream and the seed of a fold-like call, in that order, and
+   * reports a seed that is not pure.
+   */
+  private seededStream(
+    name: string,
+    args: readonly Arg[],
+  ): { stream: NodeInfo; seed: NodeInfo; source: TypeNode; element: TypeRef } {
+    const stream = this.argInfo(args[0]);
+    const seed = this.argInfo(args[1]);
+    const source = this.streamOf(name, args[0], stream);
+    if (!isPureInfo(seed)) {
+      this.report(
+        "execution-mode/001",
+        `\`${name}\` seed must be pure`,
+        args[1].node,
+      );
+    }
+    const element = source.kind === "stream"
+      ? source.element
+      : this.table.error;
+    return { stream, seed, source, element };
+  }
+
   /** Reports a wrong argument count for a prelude call. Returns true when the count is right. */
   private arity(
     node: NodeId,
@@ -3866,23 +3890,10 @@ class BodyChecker {
 
   private scanStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
     this.inlineStreamCallback("scanStream", args[2]);
-    const stream = this.argInfo(args[0]);
-    const seed = this.argInfo(args[1]);
-    const source = this.streamOf(
+    const { stream, seed, source, element } = this.seededStream(
       "scanStream",
-      args[0],
-      stream,
+      args,
     );
-    if (!isPureInfo(seed)) {
-      this.report(
-        "execution-mode/001",
-        "`scanStream` seed must be pure",
-        args[1].node,
-      );
-    }
-    const element = source.kind === "stream"
-      ? source.element
-      : this.table.error;
     const update = this.callback(
       "scanStream",
       args[2],
@@ -3915,23 +3926,10 @@ class BodyChecker {
         args[2].node,
       );
     }
-    const stream = this.argInfo(args[0]);
-    const seed = this.argInfo(args[1]);
-    const source = this.streamOf(
+    const { stream, seed, source, element } = this.seededStream(
       "mapAccumStream",
-      args[0],
-      stream,
+      args,
     );
-    if (!isPureInfo(seed)) {
-      this.report(
-        "execution-mode/001",
-        "`mapAccumStream` seed must be pure",
-        args[1].node,
-      );
-    }
-    const element = source.kind === "stream"
-      ? source.element
-      : this.table.error;
     const update = this.callback(
       "mapAccumStream",
       args[2],
@@ -3965,23 +3963,10 @@ class BodyChecker {
 
   private foldStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
     this.inlineStreamCallback("foldStream", args[2]);
-    const stream = this.argInfo(args[0]);
-    const seed = this.argInfo(args[1]);
-    const source = this.streamOf(
+    const { stream, seed, source, element } = this.seededStream(
       "foldStream",
-      args[0],
-      stream,
+      args,
     );
-    if (!isPureInfo(seed)) {
-      this.report(
-        "execution-mode/001",
-        "`foldStream` seed must be pure",
-        args[1].node,
-      );
-    }
-    const element = source.kind === "stream"
-      ? source.element
-      : this.table.error;
     const update = this.callback(
       "foldStream",
       args[2],
@@ -4007,23 +3992,10 @@ class BodyChecker {
 
   private foldEffectStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
     this.inlineStreamCallback("foldEffectStream", args[2]);
-    const stream = this.argInfo(args[0]);
-    const seed = this.argInfo(args[1]);
-    const source = this.streamOf(
+    const { stream, seed, source, element } = this.seededStream(
       "foldEffectStream",
-      args[0],
-      stream,
+      args,
     );
-    if (!isPureInfo(seed)) {
-      this.report(
-        "execution-mode/001",
-        "`foldEffectStream` seed must be pure",
-        args[1].node,
-      );
-    }
-    const element = source.kind === "stream"
-      ? source.element
-      : this.table.error;
     const update = this.callback(
       "foldEffectStream",
       args[2],
