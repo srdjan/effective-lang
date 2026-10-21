@@ -570,6 +570,15 @@ function isPureInfo(info: NodeInfo): boolean {
     info.requirements.length === 0;
 }
 
+/** The invocation effects of a function type. An unknown function has none. */
+function invocationOf(fn: FunctionNode | undefined): EffectSet {
+  return fn === undefined ? PURE_EFFECTS : {
+    failures: fn.failures,
+    requirements: fn.requirements,
+    mode: fn.execution,
+  };
+}
+
 // ------------------------------------------------------------------ the checker
 
 class BodyChecker {
@@ -1056,15 +1065,10 @@ class BodyChecker {
       }
       return info;
     });
-    const invocation: EffectSet = {
-      failures: fn.failures,
-      requirements: fn.requirements,
-      mode: fn.execution,
-    };
     return this.finish(
       node,
       fn.result,
-      combine([base, ...infos, invocation, extra]),
+      combine([base, ...infos, invocationOf(fn), extra]),
     );
   }
 
@@ -1863,11 +1867,7 @@ class BodyChecker {
         }
       }
       this.fact(node, { kind: "retry-with-schedule" });
-      const invocation: EffectSet = fn === undefined ? PURE_EFFECTS : {
-        failures: fn.failures,
-        requirements: fn.requirements,
-        mode: fn.execution,
-      };
+      const invocation: EffectSet = invocationOf(fn);
       return this.finish(
         node,
         fn?.result ?? this.table.error,
@@ -1876,11 +1876,7 @@ class BodyChecker {
     }
     const times = this.retryTimes(args[1]);
     this.fact(node, { kind: "retry", times });
-    const invocation: EffectSet = fn === undefined ? PURE_EFFECTS : {
-      failures: fn.failures,
-      requirements: fn.requirements,
-      mode: fn.execution,
-    };
+    const invocation: EffectSet = invocationOf(fn);
     return this.finish(
       node,
       fn?.result ?? this.table.error,
@@ -3161,11 +3157,7 @@ class BodyChecker {
       if (body !== undefined) this.scopedFiberUses(body, fact.parameters[0].id);
     }
     const useFn = this.functionOf(use.info.type);
-    const invocation: EffectSet = useFn === undefined ? PURE_EFFECTS : {
-      failures: useFn.failures,
-      requirements: useFn.requirements,
-      mode: useFn.execution,
-    };
+    const invocation: EffectSet = invocationOf(useFn);
     return this.finish(
       node,
       use.result,
@@ -3545,11 +3537,7 @@ class BodyChecker {
     }
     const invoked = [acquire.info, use.info, release.info].map((info) => {
       const fn = this.functionOf(info.type);
-      return fn === undefined ? PURE_EFFECTS : {
-        failures: fn.failures,
-        requirements: fn.requirements,
-        mode: fn.execution,
-      };
+      return invocationOf(fn);
     });
     return this.finish(
       node,
