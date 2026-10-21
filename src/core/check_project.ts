@@ -136,14 +136,25 @@ export interface CheckedProject {
 
 // ------------------------------------------------------------------ one module
 
-interface Entry {
-  readonly signature: FunctionSignature | ConstantSignature;
-  readonly initNode: NodeId | undefined;
-  /** The body expression of a function's arrow. */
-  readonly bodyNode: NodeId | undefined;
+interface EntryInfo {
   readonly broken: boolean;
   readonly references: readonly ValueId[];
 }
+
+interface FunctionEntry extends EntryInfo {
+  readonly kind: "function";
+  readonly signature: FunctionSignature;
+  /** The body expression of the arrow, or undefined when the source is broken. */
+  readonly bodyNode: NodeId | undefined;
+}
+
+interface ConstantEntry extends EntryInfo {
+  readonly kind: "constant";
+  readonly signature: ConstantSignature;
+  readonly initNode: NodeId | undefined;
+}
+
+type Entry = FunctionEntry | ConstantEntry;
 
 interface CheckArguments {
   readonly analysis: Analysis;
@@ -154,8 +165,16 @@ interface CheckArguments {
 }
 
 type Run =
-  | { readonly kind: "function"; readonly run: FunctionRun }
-  | { readonly kind: "constant"; readonly run: ConstantRun };
+  | {
+    readonly kind: "function";
+    readonly entry: FunctionEntry;
+    readonly run: FunctionRun;
+  }
+  | {
+    readonly kind: "constant";
+    readonly entry: ConstantEntry;
+    readonly run: ConstantRun;
+  };
 
 function collectEntries(args: CheckArguments): Entry[] {
   const { analysis, module, declarations } = args;
@@ -187,13 +206,15 @@ function collectEntries(args: CheckArguments): Entry[] {
         }
       });
     }
-    entries.push({
-      signature,
-      initNode,
-      bodyNode,
+    const common = {
       broken: info.index.byName.get(signature.name)?.broken ?? false,
       references: [...references],
-    });
+    };
+    entries.push(
+      signature.kind === "function"
+        ? { ...common, kind: "function", signature, bodyNode }
+        : { ...common, kind: "constant", signature, initNode },
+    );
   }
   return entries;
 }
@@ -273,21 +294,23 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
   const diagnostics: Diagnostic[] = [];
 
   const runEntry = (entry: Entry): Run =>
-    entry.signature.kind === "function"
+    entry.kind === "function"
       ? {
         kind: "function",
+        entry,
         run: checkFunctionBody(benv, entry.signature, entry.bodyNode),
       }
       : {
         kind: "constant",
+        entry,
         run: checkConstantBody(benv, entry.signature, entry.initNode),
       };
 
   /** Records the final run of a declaration and publishes its diagnostics. */
-  const commit = (entry: Entry, run: Run, recursive: boolean): void => {
-    if (!entry.broken) diagnostics.push(...run.run.diagnostics);
+  const commit = (run: Run, recursive: boolean): void => {
+    if (!run.entry.broken) diagnostics.push(...run.run.diagnostics);
     if (run.kind === "function") {
-      const signature = entry.signature as FunctionSignature;
+      const { signature, bodyNode } = run.entry;
       const result = run.run;
       modes.set(signature.id, result.mode);
       if (signature.contract === "inferred" && !recursive) {
@@ -296,7 +319,7 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
       functions.set(signature.id, {
         kind: "function",
         signature,
-        bodyNode: entry.bodyNode,
+        bodyNode,
         table: result.table,
         body: result.body,
         result: result.result,
@@ -306,12 +329,12 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
         type: result.type,
       });
     } else {
-      const signature = entry.signature as ConstantSignature;
+      const { signature, initNode } = run.entry;
       constantTypes.set(signature.id, run.run.type);
       constants.set(signature.id, {
         kind: "constant",
         signature,
-        initNode: entry.initNode,
+        initNode,
         table: run.run.table,
         init: run.run.init,
         type: run.run.type,
@@ -324,7 +347,7 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
     const recursive = members.length > 1 ||
       edges[component[0]].includes(component[0]);
     if (!recursive) {
-      commit(members[0], runEntry(members[0]), false);
+      commit(runEntry(members[0]), false);
       continue;
     }
     for (const member of members) {
@@ -348,10 +371,11 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
       for (const [id, mode] of assumed) modes.set(id, mode);
       const runs = members.map(runEntry);
       const computed = new Map<ValueId, Execution>();
-      runs.forEach((run, i) => {
-        const signature = members[i].signature;
-        if (run.kind === "function" && pending.includes(signature.id)) {
-          computed.set(signature.id, run.run.mode);
+      runs.forEach((run) => {
+        if (
+          run.kind === "function" && pending.includes(run.entry.signature.id)
+        ) {
+          computed.set(run.entry.signature.id, run.run.mode);
         }
       });
       return { results: runs, computed };
@@ -365,9 +389,7 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
         first.nameSpan,
       ));
     }
-    members.forEach((member, i) => {
-      commit(member, solution.results[i], true);
-    });
+    solution.results.forEach((run) => commit(run, true));
   }
 
   const initialization = buildInitializationGraph(

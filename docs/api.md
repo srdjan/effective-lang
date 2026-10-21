@@ -21,7 +21,7 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
   types.ts       Interned types, compatibility, IR conversion, canonical JSON.
   check.ts       Declaration checker: type lowering, signatures, providers.
   check_expr.ts  Body checker: expressions, calls, patterns, contracts.
-  check_project.ts Project driver: bodies, modes, interfaces, the shared per-module step, and effectText.
+  check_project.ts Project driver: paired declaration entries and body results, modes, interfaces, the shared per-module step, and effectText.
   tables.ts      Side tables of a body: node info and lowering facts.
   patterns.ts    Pattern domains of match subjects.
   modes.ts       Strongly connected components and the mode fixed point.
