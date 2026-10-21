@@ -83,6 +83,14 @@ import {
 } from "./types.ts";
 import { isErrorId, isTypeId, serviceOfCapability, shortName } from "./ids.ts";
 import type { Arg, BuiltinContext } from "./check_builtins/context.ts";
+import {
+  allCall,
+  allResultsCall,
+  collectionCall,
+  type CollectionContext,
+  partitionAllCall,
+  validateAllCall,
+} from "./check_builtins/collections.ts";
 import { codecCall, codecOperation } from "./check_builtins/codec.ts";
 import { refCall } from "./check_builtins/ref.ts";
 import {
@@ -514,7 +522,7 @@ function invocationOf(fn: FunctionNode | undefined): EffectSet {
 // ------------------------------------------------------------------ the checker
 
 // Shared members are exposed only through BuiltinContext to family handlers.
-class BodyChecker implements BuiltinContext {
+class BodyChecker implements BuiltinContext, CollectionContext {
   readonly sink: Diagnostic[] = [];
   readonly body: BodyTable;
   private readonly lowerer: TypeLowerer;
@@ -571,7 +579,7 @@ class BodyChecker implements BuiltinContext {
     return info;
   }
 
-  private fact(node: NodeId, fact: NodeFact): void {
+  fact(node: NodeId, fact: NodeFact): void {
     this.body.facts.set(node, fact);
   }
 
@@ -1325,18 +1333,18 @@ class BodyChecker implements BuiltinContext {
     mergeLayers: (c, node, _name, args) => c.mergeLayersCall(node, args),
     unbrand: (c, node, _name, args) => c.unbrandCall(node, args),
     Some: (c, node, _name, args, expected) => c.someCall(node, args, expected),
-    all: (c, node, _name, args) => c.allCall(node, args),
-    partitionAll: (c, node, _name, args) => c.partitionAllCall(node, args),
-    validateAll: (c, node, _name, args) => c.validateAllCall(node, args),
-    allResults: (c, node, _name, args) => c.allResultsCall(node, args),
+    all: (c, node, _name, args) => allCall(c, node, args),
+    partitionAll: (c, node, _name, args) => partitionAllCall(c, node, args),
+    validateAll: (c, node, _name, args) => validateAllCall(c, node, args),
+    allResults: (c, node, _name, args) => allResultsCall(c, node, args),
     map: (c, node, name, args, expected) =>
-      c.collectionCall(node, name, args, expected),
+      collectionCall(c, node, name, args, expected),
     filter: (c, node, name, args, expected) =>
-      c.collectionCall(node, name, args, expected),
+      collectionCall(c, node, name, args, expected),
     fold: (c, node, name, args, expected) =>
-      c.collectionCall(node, name, args, expected),
+      collectionCall(c, node, name, args, expected),
     traverse: (c, node, name, args, expected) =>
-      c.collectionCall(node, name, args, expected),
+      collectionCall(c, node, name, args, expected),
   };
 
   private static readonly schemaPrologue: Prologue<SchemaBuiltinName> = {
@@ -3451,7 +3459,7 @@ class BodyChecker implements BuiltinContext {
     if (body !== undefined) this.scopedBorrowUses(body, parameter.id);
   }
 
-  private noPipeline(name: string, args: readonly Arg[]): void {
+  noPipeline(name: string, args: readonly Arg[]): void {
     if (args[0]?.pre !== undefined) {
       this.report(
         "type-mismatch/010",
@@ -4720,24 +4728,6 @@ class BodyChecker implements BuiltinContext {
     return this.finish(node, type, combine([left, right]));
   }
 
-  // -------------------------------------------------------------- map, filter, fold
-
-  /** The element type of an array argument, or the error type after a diagnostic. */
-  private arrayElement(name: string, arg: Arg, info: NodeInfo): TypeRef {
-    const node = this.table.node(this.table.unfold(info.type));
-    if (node.kind === "array") return node.element;
-    if (!this.isError(info.type)) {
-      this.report(
-        "type-mismatch/010",
-        `\`${name}\` needs an array as its first argument, but the value has type ${
-          this.show(info.type)
-        }`,
-        arg.node,
-      );
-    }
-    return this.table.error;
-  }
-
   /**
    * Checks a collection callback. An inline arrow receives its parameter
    * types from the context. Only traverse permits invocation effects.
@@ -4800,20 +4790,7 @@ class BodyChecker implements BuiltinContext {
     return { info, result: fn.result };
   }
 
-  private pureFunction(
-    parameters: readonly TypeRef[],
-    result: TypeRef,
-  ): TypeRef {
-    return this.table.function({
-      execution: "pure",
-      parameters,
-      result,
-      failures: [],
-      requirements: [],
-    });
-  }
-
-  private concurrencyBound(
+  concurrencyBound(
     arg: Arg,
     operation:
       | "traverse"
@@ -4839,393 +4816,6 @@ class BodyChecker implements BuiltinContext {
       arg.node,
     );
     return undefined;
-  }
-
-  private allCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const input = this.argInfo(args[0]);
-    const table = this.table;
-    const shape = table.node(table.unfold(input.type));
-    const effectTypes = shape.kind === "tuple"
-      ? shape.elements
-      : shape.kind === "record"
-      ? shape.fields.map((field) => field.type)
-      : shape.kind === "array"
-      ? [shape.element]
-      : undefined;
-    const option = args[1] === undefined ? undefined : this.argInfo(args[1]);
-    const concurrency = args[1] === undefined
-      ? undefined
-      : this.concurrencyBound(args[1], "all");
-    if (effectTypes === undefined) {
-      this.report(
-        "type-mismatch/010",
-        "`all` needs a tuple, record, or array of Effect values",
-        args[0].node,
-      );
-      return this.finish(
-        node,
-        table.error,
-        combine([input, ...(option === undefined ? [] : [option])]),
-      );
-    }
-    if (
-      shape.kind === "record" && shape.fields.some((field) => field.optional)
-    ) {
-      this.report(
-        "type-mismatch/010",
-        "`all` requires every record field to be present",
-        args[0].node,
-      );
-    }
-    const effects = effectTypes.map((type) => {
-      const member = table.node(table.unfold(type));
-      if (member.kind !== "effect") {
-        this.report(
-          "type-mismatch/010",
-          "`all` requires an Effect value at every position",
-          args[0].node,
-        );
-        return { result: table.error, failures: [], requirements: [] };
-      }
-      return member;
-    });
-    const invocation = combine(effects.map((effect) => ({
-      failures: effect.failures,
-      requirements: effect.requirements,
-      mode: "effect" as const,
-    })));
-    const results = effects.map((effect) => effect.result);
-    const result = shape.kind === "tuple"
-      ? table.tuple(results)
-      : shape.kind === "record"
-      ? table.record(shape.fields.map((field, i) => ({
-        name: field.name,
-        type: results[i],
-        optional: false,
-      })))
-      : table.array(results[0]);
-    const specialized = table.function({
-      execution: "effect",
-      parameters: args.length === 2
-        ? [
-          input.type,
-          table.record([{
-            name: "concurrency",
-            type: concurrency === "unbounded" ? table.string : table.int,
-            optional: false,
-          }]),
-        ]
-        : [input.type],
-      result,
-      failures: invocation.failures,
-      requirements: invocation.requirements,
-    });
-    this.fact(node, {
-      kind: "builtin",
-      name: "all",
-      specialized,
-      ir: table.toIrFunction(specialized),
-    });
-    return this.finish(
-      node,
-      result,
-      combine([input, ...(option === undefined ? [] : [option]), invocation]),
-    );
-  }
-
-  private partitionAllCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.noPipeline("partitionAll", args);
-    const jobs = this.argInfo(args[0]);
-    const option = args[1] === undefined ? undefined : this.argInfo(args[1]);
-    const concurrency = args[1] === undefined
-      ? undefined
-      : this.concurrencyBound(args[1], "partitionAll");
-    this.fact(node, { kind: "partition-all", concurrency });
-    const shape = this.table.node(this.table.unfold(jobs.type));
-    const member = shape.kind === "array"
-      ? this.table.node(this.table.unfold(shape.element))
-      : undefined;
-    if (member?.kind !== "effect") {
-      if (!this.isError(jobs.type)) {
-        this.report(
-          "type-mismatch/010",
-          "`partitionAll` needs an array of Effect values",
-          args[0].node,
-        );
-      }
-      return this.finish(
-        node,
-        this.table.error,
-        combine([jobs, ...(option === undefined ? [] : [option])]),
-      );
-    }
-    const errors = this.table.union(
-      member.failures.map((id) => this.table.named(id)),
-    );
-    const result = this.table.tuple([
-      this.table.array(member.result),
-      this.table.array(errors),
-    ]);
-    return this.finish(
-      node,
-      result,
-      combine([jobs, ...(option === undefined ? [] : [option]), {
-        failures: [],
-        requirements: member.requirements,
-        mode: "effect",
-      }]),
-    );
-  }
-
-  private validateAllCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.noPipeline("validateAll", args);
-    const jobs = this.argInfo(args[0]);
-    const shape = this.table.node(this.table.unfold(jobs.type));
-    const member = shape.kind === "array"
-      ? this.table.node(this.table.unfold(shape.element))
-      : undefined;
-    if (member?.kind !== "effect" && !this.isError(jobs.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`validateAll` needs an array of Effect values",
-        args[0].node,
-      );
-    }
-    const errors = member?.kind === "effect"
-      ? this.table.union(member.failures.map((id) => this.table.named(id)))
-      : this.table.error;
-    const wrapped = this.callback(
-      "validateAll",
-      args[1],
-      [this.table.array(errors)],
-      undefined,
-    );
-    const wrapper = this.table.node(this.table.unfold(wrapped.result));
-    if (wrapper.kind !== "named" || !wrapper.id.startsWith("error:")) {
-      if (!this.isError(wrapped.result)) {
-        this.report(
-          "type-mismatch/010",
-          "`validateAll` error wrapper must return a nominal error",
-          args[1].node,
-        );
-      }
-    }
-    const option = args[2] === undefined ? undefined : this.argInfo(args[2]);
-    const concurrency = args[2] === undefined
-      ? undefined
-      : this.concurrencyBound(args[2], "validateAll");
-    this.fact(node, { kind: "validate-all", concurrency });
-    return this.finish(
-      node,
-      member?.kind === "effect"
-        ? this.table.array(member.result)
-        : this.table.error,
-      combine([jobs, wrapped.info, ...(option === undefined ? [] : [option]), {
-        failures: wrapper.kind === "named" &&
-            isErrorId(wrapper.id)
-          ? [wrapper.id]
-          : [],
-        requirements: member?.kind === "effect" ? member.requirements : [],
-        mode: "effect",
-      }]),
-    );
-  }
-
-  private allResultsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.noPipeline("allResults", args);
-    const jobs = this.argInfo(args[0]);
-    const option = args[1] === undefined ? undefined : this.argInfo(args[1]);
-    const concurrency = args[1] === undefined
-      ? undefined
-      : this.concurrencyBound(args[1], "allResults");
-    this.fact(node, { kind: "all-results", concurrency });
-    const table = this.table;
-    const shape = table.node(table.unfold(jobs.type));
-    const members = shape.kind === "tuple"
-      ? shape.elements
-      : shape.kind === "record"
-      ? shape.fields.map((field) => field.type)
-      : shape.kind === "array"
-      ? [shape.element]
-      : undefined;
-    if (members === undefined) {
-      if (!this.isError(jobs.type)) {
-        this.report(
-          "type-mismatch/010",
-          "`allResults` needs a tuple, record, or array of Effect values",
-          args[0].node,
-        );
-      }
-      return this.finish(
-        node,
-        table.error,
-        combine([jobs, ...(option === undefined ? [] : [option])]),
-      );
-    }
-    if (
-      shape.kind === "record" && shape.fields.some((field) => field.optional)
-    ) {
-      this.report(
-        "type-mismatch/010",
-        "`allResults` requires every record field to be present",
-        args[0].node,
-      );
-    }
-    const outcomes = members.map((type) => {
-      const member = table.node(table.unfold(type));
-      if (member.kind !== "effect") {
-        this.report(
-          "type-mismatch/010",
-          "`allResults` requires an Effect value at every position",
-          args[0].node,
-        );
-        return { result: table.error, requirements: [] };
-      }
-      const error = table.union(member.failures.map((id) => table.named(id)));
-      return {
-        result: table.union([
-          table.record([
-            { name: "_tag", type: table.literal("Success"), optional: false },
-            { name: "success", type: member.result, optional: false },
-          ]),
-          table.record([
-            { name: "_tag", type: table.literal("Failure"), optional: false },
-            { name: "failure", type: error, optional: false },
-          ]),
-        ]),
-        requirements: member.requirements,
-      };
-    });
-    const result = shape.kind === "tuple"
-      ? table.tuple(outcomes.map((outcome) => outcome.result))
-      : shape.kind === "record"
-      ? table.record(shape.fields.map((field, i) => ({
-        name: field.name,
-        type: outcomes[i].result,
-        optional: false,
-      })))
-      : table.array(outcomes[0].result);
-    return this.finish(
-      node,
-      result,
-      combine([jobs, ...(option === undefined ? [] : [option]), {
-        failures: [],
-        requirements: outcomes.flatMap((outcome) => outcome.requirements),
-        mode: "effect",
-      }]),
-    );
-  }
-
-  private collectionCall(
-    node: NodeId,
-    name: "map" | "filter" | "fold" | "traverse",
-    args: readonly Arg[],
-    expected: TypeRef | undefined,
-  ): NodeInfo {
-    const xs = this.argInfo(args[0]);
-    const element = this.arrayElement(name, args[0], xs);
-    const table = this.table;
-    const infos: NodeInfo[] = [xs];
-    let result: TypeRef;
-    let specialized: TypeRef;
-
-    if (name === "traverse") {
-      const cb = this.callback(name, args[1], [element], undefined, true);
-      infos.push(cb.info);
-      const concurrency = args[2] === undefined
-        ? undefined
-        : this.concurrencyBound(args[2]);
-      if (args[2] !== undefined) {
-        infos.push(this.argInfo(args[2]));
-      }
-      const fn = this.functionOf(cb.info.type);
-      const failures = fn?.failures ?? [];
-      const requirements = fn?.requirements ?? [];
-      const callbackType = table.function({
-        execution: "effect",
-        parameters: [element],
-        result: cb.result,
-        failures,
-        requirements,
-      });
-      result = table.array(cb.result);
-      specialized = table.function({
-        execution: "effect",
-        parameters: args.length === 3
-          ? [
-            table.array(element),
-            callbackType,
-            table.record([{
-              name: "concurrency",
-              type: concurrency === "unbounded" ? table.string : table.int,
-              optional: false,
-            }]),
-          ]
-          : [table.array(element), callbackType],
-        result,
-        failures,
-        requirements,
-      });
-    } else if (name === "map") {
-      const cb = this.callback(name, args[1], [element], undefined);
-      infos.push(cb.info);
-      result = table.array(cb.result);
-      specialized = this.pureFunction(
-        [table.array(element), this.pureFunction([element], cb.result)],
-        result,
-      );
-    } else if (name === "filter") {
-      const cb = this.callback(name, args[1], [element], table.boolean);
-      infos.push(cb.info);
-      this.fits(args[1].node, cb.result, table.boolean, "the predicate result");
-      result = table.array(element);
-      specialized = this.pureFunction(
-        [result, this.pureFunction([element], table.boolean)],
-        result,
-      );
-    } else {
-      const initial = this.argInfo(args[1], expected);
-      infos.push(initial);
-      const accumulator = expected ?? this.widen(initial.type);
-      this.fits(args[1].node, initial.type, accumulator, "the initial value");
-      const cb = this.callback(
-        name,
-        args[2],
-        [accumulator, element],
-        accumulator,
-      );
-      infos.push(cb.info);
-      this.fits(args[2].node, cb.result, accumulator, "the callback result");
-      result = accumulator;
-      specialized = this.pureFunction(
-        [
-          table.array(element),
-          accumulator,
-          this.pureFunction([accumulator, element], accumulator),
-        ],
-        result,
-      );
-    }
-    this.fact(node, {
-      kind: "builtin",
-      name,
-      specialized,
-      ir: table.toIrFunction(specialized),
-    });
-    const invocation = name === "traverse"
-      ? this.table.node(specialized)
-      : undefined;
-    return this.finish(
-      node,
-      result,
-      invocation?.kind === "function"
-        ? combine([...infos, {
-          failures: invocation.failures,
-          requirements: invocation.requirements,
-          mode: invocation.execution,
-        }])
-        : combine(infos),
-    );
   }
 
   // -------------------------------------------------------------- pipelines

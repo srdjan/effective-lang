@@ -24,6 +24,7 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
   check_builtins/ Source-checker builtin families; arity, pipeline rules and facts stay in check_expr.ts.
     context.ts     The argument shape and the ten shared members used by the extracted handlers.
     codec.ts       Codec construction, decode and encode, including pure transformations and derived-schema checks.
+    collections.ts Collection callbacks, traversal, grouped effects and result accumulation through a family-specific context.
     ref.ts         Mutable reference construction, reads, writes and pure update callbacks.
     schedule.ts    General Schedule construction, mapping and comparable-input composition.
   check_project.ts Project driver: paired declaration entries and body results, modes, interfaces, the shared per-module step, and effectText.

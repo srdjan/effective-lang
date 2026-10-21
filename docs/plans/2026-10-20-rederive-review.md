@@ -1,6 +1,6 @@
 # Rederive review: measured re-basing plan
 
-Date: 2026-10-20. Base revision: 730977c. Status: Phase 0 accepted on 2026-10-20. The user chose option (a) for D1, D2, D3, and D4. Phases 0 to 2 are done on main. R1 to R6, R9, R10, R14, and D1 to D6 are done. R7, R8, R11 (checker and validator sides), R12 (FE-1, FE-3, FE-5), and R18 (compareText, isRecord, errorMessage, the editor search, and the dead exports) are done on main. R12 FE-1, FE-3, FE-5, and R18 were replayed in `d25a6a6..c542847`. R7 and the checker side of R11 are in `39e94ba..d858322`. R8 and the validator side of R11 are in `044c2e3..7c2d151`. R16 and R17 are done through P1 and R17 of the hardening plan. Still open: R12 FE-2 (LSP param schema kit), R15b (Schedule, Codec and Ref complete; other families open), R18 CHK-12 (built-in type table; its only implementation is commit `21449db`, kept by the tag `keep/chk-12`), and the R18 `isErrorId` casts (CHK-11). The R18 closing-token parser sites are done in `463b872`. R13 is complete through the accepted completion batch. R15a and C10 are complete through the shared syntax queries; A6 is complete in `docs/builtin-changes.md`. The sibling plan `2026-10-20-hardening-pruning.md` carries the remaining cleanup work.
+Date: 2026-10-20. Base revision: 730977c. Status: Phase 0 accepted on 2026-10-20. The user chose option (a) for D1, D2, D3, and D4. Phases 0 to 2 are done on main. R1 to R6, R9, R10, R14, and D1 to D6 are done. R7, R8, R11 (checker and validator sides), R12 (FE-1, FE-3, FE-5), and R18 (compareText, isRecord, errorMessage, the editor search, and the dead exports) are done on main. R12 FE-1, FE-3, FE-5, and R18 were replayed in `d25a6a6..c542847`. R7 and the checker side of R11 are in `39e94ba..d858322`. R8 and the validator side of R11 are in `044c2e3..7c2d151`. R16 and R17 are done through P1 and R17 of the hardening plan. Still open: R12 FE-2 (LSP param schema kit), R15b (Schedule, Codec, Ref and collections complete; other families open), R18 CHK-12 (built-in type table; its only implementation is commit `21449db`, kept by the tag `keep/chk-12`), and the R18 `isErrorId` casts (CHK-11). The R18 closing-token parser sites are done in `463b872`. R13 is complete through the accepted completion batch. R15a and C10 are complete through the shared syntax queries; A6 is complete in `docs/builtin-changes.md`. The sibling plan `2026-10-20-hardening-pruning.md` carries the remaining cleanup work.
 
 This document is a plan, not a change. It ranks the weak units of the transpiler by measured leverage. For each rederived unit, it gives the contract to keep, the judging tests, and the verification. The evidence is in `docs/plans/rederive-review-evidence/`. Each finding ID (for example CHK-2) points to a section of a scout report in that directory. The scratch paths under `/tmp/rederive/` in those reports are not kept.
 
@@ -613,3 +613,14 @@ rounds and failed removals; those distinct save-round timelines are unchanged.
 All 96 focused state/server/editor/save tests pass. Four negative compile
 checks reject independent assignments to the legacy properties. This closes
 R13; the evidence ledger records its full gate and comparison.
+
+R15b collections move five entry handlers and two collection-only helpers to
+`check_builtins/collections.ts`. Its twelve-member `CollectionContext` selects
+nine shared operations and adds fact recording, direct-call checking and
+concurrency-option checking. The shared context stays at ten members. Dispatch
+still selects the handler; arity, pipeline order and specialization facts keep
+their behavior. Argument evaluation and body tables remain in `BodyChecker`.
+The moved array-element helper calls `table.show` directly, the same query that
+the former checker wrapper delegated to. The two collection-only helpers are
+private to the family module. All 466 focused tests pass; full gate and capture
+are recorded in the ledger.
