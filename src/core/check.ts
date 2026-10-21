@@ -225,30 +225,51 @@ export function signatureType(
   if (result === undefined) {
     return { ok: false, error: { tag: "inferred-contract", id: signature.id } };
   }
-  const ref = table.function({
-    execution: execution.value,
-    parameters: signature.parameters.map((p) => p.type.ref),
-    ...(signature.parameters.some((p) => p.borrow)
-      ? { borrows: signature.parameters.map((p) => p.borrow) }
-      : {}),
-    result: result.ref,
-    failures: signature.failures,
-    requirements: signature.requirements,
-  });
-  const ir: FunctionType = {
-    kind: "function",
-    execution: execution.value,
-    parameters: signature.parameters.map((p) => p.type.ir),
-    ...(signature.parameters.some((p) => p.borrow)
-      ? { borrows: signature.parameters.map((p) => p.borrow) }
-      : {}),
-    result: result.ir,
-    effects: {
-      failures: sortedUnique(signature.failures),
-      requirements: sortedUnique(signature.requirements),
+  return {
+    ok: true,
+    value: loweredFunction(
+      table,
+      execution.value,
+      signature.parameters.map((p) => p.type),
+      result,
+      signature.failures,
+      signature.requirements,
+      signature.parameters.map((p) => p.borrow),
+    ),
+  };
+}
+
+/** A function type as an interned type and an IR tree. The sets are sorted and unique. */
+function loweredFunction(
+  table: TypeTable,
+  execution: Execution,
+  parameters: readonly Lowered[],
+  result: Lowered,
+  failures: readonly ErrorId[],
+  requirements: readonly CapabilityId[],
+  borrows?: readonly boolean[],
+): SignatureType {
+  const failureSet = sortedUnique(failures);
+  const requirementSet = sortedUnique(requirements);
+  const borrowed = borrows?.some(Boolean) ? { borrows } : {};
+  return {
+    ref: table.function({
+      execution,
+      parameters: parameters.map((p) => p.ref),
+      ...borrowed,
+      result: result.ref,
+      failures: failureSet,
+      requirements: requirementSet,
+    }),
+    ir: {
+      kind: "function",
+      execution,
+      parameters: parameters.map((p) => p.ir),
+      ...borrowed,
+      result: result.ir,
+      effects: { failures: failureSet, requirements: requirementSet },
     },
   };
-  return { ok: true, value: { ref, ir } };
 }
 
 // ------------------------------------------------------------------ type lowering
@@ -788,20 +809,7 @@ export class TypeLowerer {
           provides.push(...this.capabilitiesOf(qn));
         }
       }
-      const provided = sortedUnique(provides);
-      return {
-        ref: this.env.table.provider({
-          provides: provided,
-          execution: "effect",
-          failures,
-          requirements,
-        }),
-        ir: {
-          kind: "provider",
-          provides: provided,
-          acquisition: { execution: "effect", effects },
-        },
-      };
+      return this.providerOf(provides, failures, requirements);
     }
     if (kind === SyntaxKind.StreamType) {
       return {
@@ -861,6 +869,31 @@ export class TypeLowerer {
     };
   }
 
+  /** A provider type. Its acquisition execution is always `effect`. */
+  providerOf(
+    provides: readonly CapabilityId[],
+    failures: readonly ErrorId[],
+    requirements: readonly CapabilityId[],
+  ): Lowered {
+    const provided = sortedUnique(provides);
+    return {
+      ref: this.env.table.provider({
+        provides: provided,
+        execution: "effect",
+        failures,
+        requirements,
+      }),
+      ir: {
+        kind: "provider",
+        provides: provided,
+        acquisition: {
+          execution: "effect",
+          effects: { failures, requirements },
+        },
+      },
+    };
+  }
+
   functionOf(
     execution: Execution,
     parameters: readonly Lowered[],
@@ -868,27 +901,16 @@ export class TypeLowerer {
     failures: readonly ErrorId[],
     requirements: readonly CapabilityId[],
     borrows?: readonly boolean[],
-  ): Lowered {
-    const failureSet = sortedUnique(failures);
-    const requirementSet = sortedUnique(requirements);
-    return {
-      ref: this.env.table.function({
-        execution,
-        parameters: parameters.map((p) => p.ref),
-        ...(borrows?.some(Boolean) ? { borrows } : {}),
-        result: result.ref,
-        failures: failureSet,
-        requirements: requirementSet,
-      }),
-      ir: {
-        kind: "function",
-        execution,
-        parameters: parameters.map((p) => p.ir),
-        ...(borrows?.some(Boolean) ? { borrows } : {}),
-        result: result.ir,
-        effects: { failures: failureSet, requirements: requirementSet },
-      },
-    };
+  ): SignatureType {
+    return loweredFunction(
+      this.env.table,
+      execution,
+      parameters,
+      result,
+      failures,
+      requirements,
+      borrows,
+    );
   }
 
   /**
@@ -1498,7 +1520,7 @@ class ModuleChecker {
       methods.push({
         id: capability,
         name: method.name,
-        type: type.ir as FunctionType,
+        type: type.ir,
         ...(parameters.some((p) => p.borrow)
           ? { borrows: parameters.map((p) => p.borrow) }
           : {}),
@@ -1537,31 +1559,14 @@ class ModuleChecker {
     const requirements = this.lowerer.requirements(
       parts.find((k) => kindOf(this.tree, k) === SyntaxKind.UsesClause),
     );
-    const providesSet = sortedUnique(provides);
-    const ref = this.table.provider({
-      provides: providesSet,
-      execution: "effect",
-      failures,
-      requirements,
-    });
     const signature: ProviderSignature = {
       kind: "provider",
       id,
       ...this.base(entry),
-      provides: providesSet,
+      provides: sortedUnique(provides),
       failures,
       requirements,
-      type: {
-        ref,
-        ir: {
-          kind: "provider",
-          provides: providesSet,
-          acquisition: {
-            execution: "effect",
-            effects: { failures, requirements },
-          },
-        },
-      },
+      type: this.lowerer.providerOf(provides, failures, requirements),
     };
     this.values.set(id, signature);
   }
