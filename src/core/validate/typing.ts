@@ -17,7 +17,7 @@
 
 import type { Execution, Field, FunctionType, Type } from "../ir.ts";
 import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID } from "../ir.ts";
-import { isSubset, sameSet } from "./sets.ts";
+import { effectsFit, isSubset, sameSet } from "./sets.ts";
 
 export interface TypeEnv {
   /** Alias identity to the aliased type. */
@@ -175,6 +175,12 @@ function executionFits(source: Execution, target: Execution): boolean {
   return source === target || (source === "pure" && target === "effect");
 }
 
+/** Each type fits the other: the position is invariant. */
+function invariant(env: TypeEnv, a: Type, b: Type, depth: number): boolean {
+  return assignable(env, a, b, false, depth + 1) &&
+    assignable(env, b, a, false, depth + 1);
+}
+
 function assignable(
   env: TypeEnv,
   s: Type,
@@ -248,42 +254,28 @@ function assignable(
         assignable(env, s.element, t.element, false, depth + 1);
     case "ref":
       return s.kind === "ref" &&
-        assignable(env, s.element, t.element, false, depth + 1) &&
-        assignable(env, t.element, s.element, false, depth + 1);
+        invariant(env, s.element, t.element, depth);
     case "retry-schedule":
       return s.kind === "retry-schedule" &&
-        assignable(env, s.error, t.error, false, depth + 1) &&
-        assignable(env, t.error, s.error, false, depth + 1);
+        invariant(env, s.error, t.error, depth);
     case "codec":
       return s.kind === "codec" &&
-        assignable(env, s.decoded, t.decoded, false, depth + 1) &&
-        assignable(env, t.decoded, s.decoded, false, depth + 1) &&
-        assignable(env, s.encoded, t.encoded, false, depth + 1) &&
-        assignable(env, t.encoded, s.encoded, false, depth + 1);
+        invariant(env, s.decoded, t.decoded, depth) &&
+        invariant(env, s.encoded, t.encoded, depth);
     case "schema":
       return s.kind === "schema" &&
         s.optionalKey === t.optionalKey &&
         s.encodedOptionalKey === t.encodedOptionalKey &&
         s.decodedOptionalKey === t.decodedOptionalKey &&
         s.constructorDefault === t.constructorDefault &&
-        assignable(
+        invariant(
           env,
           s.makeInput ?? s.decoded,
           t.makeInput ?? t.decoded,
-          false,
-          depth + 1,
+          depth,
         ) &&
-        assignable(
-          env,
-          t.makeInput ?? t.decoded,
-          s.makeInput ?? s.decoded,
-          false,
-          depth + 1,
-        ) &&
-        assignable(env, s.decoded, t.decoded, false, depth + 1) &&
-        assignable(env, t.decoded, s.decoded, false, depth + 1) &&
-        assignable(env, s.encoded, t.encoded, false, depth + 1) &&
-        assignable(env, t.encoded, s.encoded, false, depth + 1) &&
+        invariant(env, s.decoded, t.decoded, depth) &&
+        invariant(env, s.encoded, t.encoded, depth) &&
         isSubset(s.decodeRequirements, t.decodeRequirements) &&
         isSubset(s.encodeRequirements, t.encodeRequirements);
     case "fiber":
@@ -293,20 +285,17 @@ function assignable(
     case "effect":
       return s.kind === "effect" &&
         assignable(env, s.result, t.result, false, depth + 1) &&
-        isSubset(s.effects.failures, t.effects.failures) &&
-        isSubset(s.effects.requirements, t.effects.requirements);
+        effectsFit(s.effects, t.effects);
     case "stream":
       return s.kind === "stream" &&
         assignable(env, s.element, t.element, false, depth + 1) &&
-        isSubset(s.effects.failures, t.effects.failures) &&
-        isSubset(s.effects.requirements, t.effects.requirements);
+        effectsFit(s.effects, t.effects);
     case "schedule":
       return s.kind === "schedule" &&
         assignable(env, s.output, t.output, false, depth + 1) &&
         (isUnknown(env, s.input) ||
           assignable(env, t.input, s.input, false, depth + 1)) &&
-        isSubset(s.effects.failures, t.effects.failures) &&
-        isSubset(s.effects.requirements, t.effects.requirements);
+        effectsFit(s.effects, t.effects);
     case "sink":
       return s.kind === "sink" &&
         assignable(env, t.input, s.input, false, depth + 1) &&
@@ -318,8 +307,7 @@ function assignable(
           false,
           depth + 1,
         ) &&
-        isSubset(s.effects.failures, t.effects.failures) &&
-        isSubset(s.effects.requirements, t.effects.requirements);
+        effectsFit(s.effects, t.effects);
     case "tuple":
       if (s.kind !== "tuple" || s.elements.length !== t.elements.length) {
         return false;
@@ -340,10 +328,7 @@ function assignable(
         s.execution !== t.execution &&
         !(lift && executionFits(s.execution, t.execution))
       ) return false;
-      if (!isSubset(s.effects.failures, t.effects.failures)) return false;
-      if (!isSubset(s.effects.requirements, t.effects.requirements)) {
-        return false;
-      }
+      if (!effectsFit(s.effects, t.effects)) return false;
       if (!assignable(env, s.result, t.result, false, depth + 1)) return false;
       for (let i = 0; i < t.parameters.length; i++) {
         if (
@@ -360,14 +345,7 @@ function assignable(
           s.acquisition.execution,
           t.acquisition.execution,
         ) &&
-        isSubset(
-          s.acquisition.effects.failures,
-          t.acquisition.effects.failures,
-        ) &&
-        isSubset(
-          s.acquisition.effects.requirements,
-          t.acquisition.effects.requirements,
-        );
+        effectsFit(s.acquisition.effects, t.acquisition.effects);
   }
 }
 
@@ -524,6 +502,11 @@ export function comparisonClass(
   return found;
 }
 
+/** The members of an identity set, or `never` for the empty set. */
+function orNever(items: readonly string[]): string {
+  return items.join(" | ") || "never";
+}
+
 /** A readable form for messages. */
 export function show(type: Type): string {
   switch (type.kind) {
@@ -572,31 +555,27 @@ export function show(type: Type): string {
           : "Schema"
       }${type.constructorDefault === true ? "ConstructorDefault" : ""}<${
         show(type.decoded)
-      }, ${show(type.encoded)}, ${
-        type.decodeRequirements.join(" | ") || "never"
-      }, ${type.encodeRequirements.join(" | ") || "never"}${
-        type.makeInput === undefined ? "" : `, ${show(type.makeInput)}`
-      }>`;
+      }, ${show(type.encoded)}, ${orNever(type.decodeRequirements)}, ${
+        orNever(type.encodeRequirements)
+      }${type.makeInput === undefined ? "" : `, ${show(type.makeInput)}`}>`;
     case "fiber":
-      return `Fiber<${show(type.result)}, ${
-        type.failures.join(" | ") || "never"
-      }>`;
+      return `Fiber<${show(type.result)}, ${orNever(type.failures)}>`;
     case "effect":
-      return `Effect<${show(type.result)}, ${
-        type.effects.failures.join(" | ") || "never"
-      }, ${type.effects.requirements.join(" | ") || "never"}>`;
+      return `Effect<${show(type.result)}, ${orNever(type.effects.failures)}, ${
+        orNever(type.effects.requirements)
+      }>`;
     case "stream":
       return `Stream<${show(type.element)}, ${
-        type.effects.failures.join(" | ") || "never"
-      }, ${type.effects.requirements.join(" | ") || "never"}>`;
+        orNever(type.effects.failures)
+      }, ${orNever(type.effects.requirements)}>`;
     case "schedule":
       return `Schedule<${show(type.output)}, ${show(type.input)}, ${
-        type.effects.failures.join(" | ") || "never"
-      }, ${type.effects.requirements.join(" | ") || "never"}>`;
+        orNever(type.effects.failures)
+      }, ${orNever(type.effects.requirements)}>`;
     case "sink":
       return `Sink<${show(type.input)}, ${show(type.result)}, ${
-        type.effects.failures.join(" | ") || "never"
-      }, ${type.effects.requirements.join(" | ") || "never"}${
+        orNever(type.effects.failures)
+      }, ${orNever(type.effects.requirements)}${
         type.leftover === undefined ? "" : `, ${show(type.leftover)}`
       }>`;
     case "function": {

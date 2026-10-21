@@ -15,6 +15,12 @@ export function isSubset(
   return small.every((item) => set.has(item));
 }
 
+/** Both the failure set and the requirement set of `small` are subsets of those of `large`. */
+export function effectsFit(small: Effects, large: Effects): boolean {
+  return isSubset(small.failures, large.failures) &&
+    isSubset(small.requirements, large.requirements);
+}
+
 export function sameSet(a: readonly string[], b: readonly string[]): boolean {
   return isSubset(a, b) && isSubset(b, a);
 }
