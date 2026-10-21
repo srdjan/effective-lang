@@ -453,7 +453,7 @@ export function at(e: Emitted, min: number): Doc {
   return e.prec < min ? ["(", e.doc, ")"] : e.doc;
 }
 
-/** The doc in a position that needs no parentheses, except around a leading brace. */
+/** The doc in a position that needs no parentheses. It adds none, and braces get no special case. */
 function free(e: Emitted): Doc {
   return e.doc;
 }
