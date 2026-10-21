@@ -164,20 +164,12 @@ function emitted(
     readonly condChain?: CondChain;
   } = {},
 ): Emitted {
-  const base = {
+  return {
+    ...flags,
     doc,
     prec,
     brace: flags.brace ?? false,
     huggable: flags.huggable ?? false,
-  };
-  return {
-    ...base,
-    ...(flags.bracket === undefined ? {} : { bracket: flags.bracket }),
-    ...(flags.chain === undefined ? {} : { chain: flags.chain }),
-    ...(flags.run === undefined ? {} : { run: flags.run }),
-    ...(flags.flush === undefined ? {} : { flush: flags.flush }),
-    ...(flags.bodyGroup === undefined ? {} : { bodyGroup: flags.bodyGroup }),
-    ...(flags.condChain === undefined ? {} : { condChain: flags.condChain }),
   };
 }
 
