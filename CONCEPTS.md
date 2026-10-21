@@ -35,3 +35,12 @@ _Avoid: IR checker, second pass_
 The one table in `resolve.ts` that lists every prelude operation, with a flag that tells whether a source binding may shadow it.
 
 The type `PreludeName`, the set `PRELUDE_NAMES`, and the set `SHADOWABLE_PRELUDE_NAMES` all derive from this table. The checker keeps a handler table that has one row for each prelude name except `None`, so a name without a handler is a compile error.
+
+## Verification
+
+### Behavior capture
+
+The refactor oracle that records a hash of each checker, program, lowering, emission, and validation result that the test suites produce on two revisions, and compares the two record sets.
+
+A base record that is missing from the head means a behavior change, and a new head record usually comes from an added test. The checker, program, and validation records also hash their input, so a change that moves or rewrites tests changes the record set without any change in behavior. To judge such a change, compare revisions that run the same tests.
+_Avoid: snapshot, golden run_
