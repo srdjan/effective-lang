@@ -89,7 +89,7 @@ The hardening plan [section 9](plans/2026-10-20-hardening-pruning.md) tracks the
 
 | Item | State | Owner |
 | --- | --- | --- |
-| Unmerged rederive branches | The branches `worktree-agent-a28e00ce3e1b81470` (13 commits: R12, R18), `worktree-agent-a630ed98d187a0331` (9 commits: R7, R11 checker side), and `worktree-agent-af885fbe79f07a6f4` (5 commits: R8, R11 validator side) hold Phase 3 work that is not on `main`. `main` has changed since their bases (`9adc5cd`, `0844b30`), including S1, which removes stream handlers that R7 merges. A decision is needed: rebase and verify them, or delete them. | User |
+| Replayed rederive branches | The three Phase 3 branches `worktree-agent-a28e00ce3e1b81470`, `worktree-agent-a630ed98d187a0331`, and `worktree-agent-af885fbe79f07a6f4` are now replayed or redone on `main`: front-end `d25a6a6..c542847`, checker `39e94ba..d858322`, validator `044c2e3..7c2d151`. The branches can be deleted. Deleting them is the decision of the user. | User |
 | Hand test of the VS Code client | Acceptance check 5 of the [language server plan](archive/plans/2026-10-16-lsp.md) is not done. | User |
 | Playground acceptance | The user has not accepted the page (acceptance check 5 of the [playground plan](archive/plans/2026-10-16-playground.md)). A manual browser review on 2026-10-16 passed at 375 and 1280 pixels. Three later commits changed the page: the 720 pixel threshold, the hover feedback, and the wrap indent. No review ran after them. | User |
 | Documentation items W1, W2, W3, W5 | Done in the documentation batch. The plan owner records them in section 9 of the hardening plan. | Plan owner |
