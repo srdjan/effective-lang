@@ -1,6 +1,6 @@
 # API and editors
 
-This file describes the public interfaces of the core library, the command-line tool, the language server, the VS Code client, and the playground. It also holds the map of the source files. The README gives the commands and the repository layout.
+This file describes the public interfaces of the core library, the command-line tool, the language server, the VS Code client, and the playground. It also holds the map of the source files. [Development](development.md) gives the commands and the repository layout.
 
 ## Source file map
 

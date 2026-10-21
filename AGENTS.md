@@ -2,11 +2,11 @@
 
 ## Project Structure & Module Organization
 
-The core library is in `src/core/`, the command-line tool in `src/cli/`, the host adapters that the command-line tool and the language server share in `src/host/`, and the language server in `src/lsp/`. The VS Code client is in `editors/vscode/`, the browser playground in `playground/`, the measurement harnesses in `bench/`, and the task scripts in `scripts/`. Tests and test helpers are in `tests/`. Test inputs are in `fixtures/`. Design, rules, status, and live plans are in `docs/`. Finished plans and ledgers are in `docs/archive/`. The project status and the application stopping rule are in `docs/status.md`. The README describes each directory and the fixture conventions. Solved problems are recorded in `docs/solutions/<category>/`, with YAML frontmatter (`module`, `problem_type`, `tags`). Shared terms are in `CONCEPTS.md`. Search both before you change a documented area.
+The core library is in `src/core/`, the command-line tool in `src/cli/`, the host adapters that the command-line tool and the language server share in `src/host/`, and the language server in `src/lsp/`. The VS Code client is in `editors/vscode/`, the browser playground in `playground/`, the measurement harnesses in `bench/`, and the task scripts in `scripts/`. Tests and test helpers are in `tests/`. Test inputs are in `fixtures/`. Design, rules, status, and live plans are in `docs/`. Finished plans and ledgers are in `docs/archive/`. The project status and the application stopping rule are in `docs/status.md`. `docs/development.md` describes each directory and the fixture conventions. Solved problems are recorded in `docs/solutions/<category>/`, with YAML frontmatter (`module`, `problem_type`, `tags`). Shared terms are in `CONCEPTS.md`. Search both before you change a documented area.
 
 ## Build, Test, and Development Commands
 
-The README lists the exact commands. Run `deno task check` from the repository root before each commit. It runs the format check, the lint, the type check, and all tests. Use Deno 2.9.7.
+`docs/development.md` lists the exact commands. Run `deno task check` from the repository root before each commit. It runs the format check, the lint, the type check, and all tests. Use Deno 2.9.7.
 
 ## Coding Style & Naming Conventions
 
@@ -14,7 +14,7 @@ Follow the formatter and linter selected for the implementation language, and co
 
 ## Testing Guidelines
 
-Tests use `Deno.test` and `@std/assert`. A fast test runs in under one second. A test that starts a subprocess goes in a file named `*_slow_test.ts`. Error fixtures follow the marker convention in the README. Do not claim a coverage target until the project adopts one.
+Tests use `Deno.test` and `@std/assert`. A fast test runs in under one second. A test that starts a subprocess goes in a file named `*_slow_test.ts`. Error fixtures follow the marker convention in `docs/development.md`. Do not claim a coverage target until the project adopts one.
 
 ## Commit & Pull Request Guidelines
 

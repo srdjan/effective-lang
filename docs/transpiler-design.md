@@ -152,7 +152,7 @@ edit users.eff
 
 Correction, 2026-10-17: the sets print in sorted identity order, as the
 Phase A plan (section 6.6) decided. Go-to-definition from a generated `.ts`
-file is not implemented. The LSP plan puts it out of scope, and the README
+file is not implemented. The LSP plan puts it out of scope, and `docs/api.md`
 lists it as a known limit. The source map exists, so a later phase can add it.
 
 Hover must show two things, because the spec makes them differ. Observation
