@@ -877,6 +877,53 @@ Deno.test("a stream seed, count, or policy that is not pure is rejected", () => 
   }
 });
 
+/** Declaration, IR kind, callback field, message fragment. */
+type EffectfulRow = readonly [...Case, field: string, fragment: string];
+const EFFECTFUL_ROWS: readonly EffectfulRow[] = [
+  [
+    "mapped",
+    "map-stream",
+    "transform",
+    "mapStream needs a Stream and a pure element callback",
+  ],
+  [
+    "scanned",
+    "scan-stream",
+    "update",
+    "scanStream needs a Stream and a pure state update callback",
+  ],
+  [
+    "accumulated",
+    "map-accum-stream",
+    "update",
+    "mapAccumStream needs a Stream and a pure callback returning [State, Output[]]",
+  ],
+  [
+    "folded",
+    "fold-stream",
+    "update",
+    "foldStream needs a Stream and a pure state update callback",
+  ],
+];
+
+Deno.test("a pure stream callback that runs an effect is rejected", () => {
+  for (const [declaration, kind, field, fragment] of EFFECTFUL_ROWS) {
+    const ir = STREAM_PROGRAM.forge();
+    const root = rootOf(ir, declaration);
+    assertEquals(root.node.kind, kind, declaration);
+    const closure = objectAt(root.node, field);
+    assertEquals(closure.kind, "closure", `${declaration}.${field}`);
+    objectAt(closure, "type").execution = "effect";
+    assertValidation(
+      validateModule(ir, STREAM_PROGRAM.sources),
+      "validation/002",
+      root.path,
+      fragment,
+      `${declaration}.${field}`,
+    );
+  }
+});
+
 // ------------------------------------------------------------------ Schema families
 
 /**
