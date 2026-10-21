@@ -25,6 +25,7 @@ None yet. Part A8 added the harness. No candidate change has been measured.
 
 These items are not measured. Each one names the reason.
 
+- Speed of the lexer split (R12 FE-1, commit `d25a6a6`). On 2026-10-21, `deno task bench --quick` ran twice on each side, on `44c1e6e` and on `d25a6a6`, minutes apart, on one machine. The M2 `lex` medians in ms were 0.070 and 0.084 (small), 0.449 and 0.468 (medium), and 3.915 and 3.992 (large). The noise floors of these rows were 3% to 58%, so the result is null: it shows no gain and no loss outside noise. Equal speed is not established. A `--full` run on both builds is needed before anyone claims it. The split stays, because it reduces the code and keeps the lexer output identical to the frozen snapshot.
 - Token representation. M2 of the design compares object arrays with typed arrays for tokens. The lexer in `src/core/lex.ts` has only the typed-array form (`Lexed.kinds`, `starts`, `ends`). The comparison needs a second lexer that builds object tokens. No second lexer exists, so the comparison is not run.
 - M4 samples `rss` only at the end of a step. A short memory peak inside a step is not seen.
 - M1 times hover only on a declaration name. Hover on other nodes is not timed.
