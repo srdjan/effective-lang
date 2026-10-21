@@ -1,6 +1,6 @@
 # Rederive review: measured re-basing plan
 
-Date: 2026-10-20. Base revision: 730977c. Status: Phase 0 accepted on 2026-10-20. The user chose option (a) for D1, D2, D3, and D4. Phases 0 to 2 are done on main. R1 to R6, R9, R10, R14, and D1 to D6 are done. R7, R8, R11 (checker and validator sides), R12 (FE-1, FE-3, FE-5), and R18 (compareText, isRecord, errorMessage, the editor search, and the dead exports) are done on main. R12 FE-1, FE-3, FE-5, and R18 were replayed in `d25a6a6..c542847`. R7 and the checker side of R11 are in `39e94ba..d858322`. R8 and the validator side of R11 are in `044c2e3..7c2d151`. R16 and R17 are done through P1 and R17 of the hardening plan. Still open: R12 FE-2 (LSP param schema kit), R13 (entry/result pairing complete; other state types and the shared mode-map remainder open), R15b (Schedule, Codec and Ref complete; other families open), R18 CHK-12 (built-in type table; its only implementation is commit `21449db`, kept by the tag `keep/chk-12`), and the R18 `isErrorId` casts (CHK-11). The R18 closing-token parser sites are done in `463b872`. R15a and C10 are complete through the shared syntax queries; A6 is complete in `docs/builtin-changes.md`. The sibling plan `2026-10-20-hardening-pruning.md` carries the remaining cleanup work.
+Date: 2026-10-20. Base revision: 730977c. Status: Phase 0 accepted on 2026-10-20. The user chose option (a) for D1, D2, D3, and D4. Phases 0 to 2 are done on main. R1 to R6, R9, R10, R14, and D1 to D6 are done. R7, R8, R11 (checker and validator sides), R12 (FE-1, FE-3, FE-5), and R18 (compareText, isRecord, errorMessage, the editor search, and the dead exports) are done on main. R12 FE-1, FE-3, FE-5, and R18 were replayed in `d25a6a6..c542847`. R7 and the checker side of R11 are in `39e94ba..d858322`. R8 and the validator side of R11 are in `044c2e3..7c2d151`. R16 and R17 are done through P1 and R17 of the hardening plan. Still open: R12 FE-2 (LSP param schema kit), R13 (entry/result pairing and generation port complete; other state types and the shared mode-map remainder open), R15b (Schedule, Codec and Ref complete; other families open), R18 CHK-12 (built-in type table; its only implementation is commit `21449db`, kept by the tag `keep/chk-12`), and the R18 `isErrorId` casts (CHK-11). The R18 closing-token parser sites are done in `463b872`. R15a and C10 are complete through the shared syntax queries; A6 is complete in `docs/builtin-changes.md`. The sibling plan `2026-10-20-hardening-pruning.md` carries the remaining cleanup work.
 
 This document is a plan, not a change. It ranks the weak units of the transpiler by measured leverage. For each rederived unit, it gives the contract to keep, the judging tests, and the verification. The evidence is in `docs/plans/rederive-review-evidence/`. Each finding ID (for example CHK-2) points to a section of a scout report in that directory. The scratch paths under `/tmp/rederive/` in those reports are not kept.
 
@@ -204,7 +204,7 @@ The 17 sites are of three kinds. The 3 emitter walker defaults are part of R3, w
 - CHK-8. The checker schema `TypeNode` has 3 exclusive flags: 8 states are representable and 4 are legal. 11 sites pass them as positional booleans. `ir.ts` does not change.
 - CHK-13. Entry/result pairing completed on 2026-10-21: tagged function/constant entries travel with their matching run results, removing the two signature casts and positional result pairing. The solver and value lookup still share the `modes` map; that remainder stays open.
 - FE-9. `lsp/projects.ts` ProjectState has 4 independent mutable fields and 3 illegal states.
-- FE-4. `cli/outputs.ts` writeGenerated takes the concrete `Revision`, so no test can inject a failure. 29 of its 77 lines never run.
+- FE-4. Complete: `host/outputs.ts` writes through the tagged `GeneratedSource` port; the revision adapter and injected generation failures are tested. The public `Revision` API is unchanged.
 - Delta. Each change makes illegal states unrepresentable. The branch deltas are about neutral and need measurement.
 
 #### R14. One data-only rule on each side (CHK-10, VAL-7)
@@ -549,3 +549,25 @@ match after receiver normalization. The checker falls from 6669 to 6627 raw
 lines. Across the two affected files, filtered LOC rises by 5 and the branch
 count stays the same. Schedule, Codec and Ref extraction is complete; the other
 R15b families remain open.
+
+## Accepted completion batch
+
+The user accepted closing the remaining R13 and R15b work after the Schedule,
+Codec and Ref units. Recheck each original finding against the current code,
+including save-transpilation changes. Keep behavior, diagnostic text/order,
+public core contracts and the independent validator intact. The order is R13
+FE-4 (generation boundary), VAL-6 (validator result states), CHK-13 (mode-map
+ownership), CHK-8 (schema presence), FE-9 (project state), then the remaining
+R15b families: collections, Effect/Layer, Fiber/Scope, Stream/Sink and Schema.
+Retire an obsolete finding only with current evidence; a last-good revision
+alongside a configuration error is a valid state. Each complete unit gets its
+own local commit after the full gate and constant-input behavior comparison.
+
+FE-4 now gives `writeGenerated` a `GeneratedSource` port whose result is one of
+skip, lower failure, emit failure, map failure or ready output. The adapter in
+`src/host/generation.ts` preserves all four lazy query calls and their order;
+the writer receives a complete emitted module, span table and source map only
+in the ready variant. It retains silent diagnostic skips, exact notes,
+continuation after errors, dry runs and changed-file-only writes. The public
+`Revision` API is unchanged. Failure injection uses the port and a structural
+query adapter without casts. Verification is in the evidence ledger.

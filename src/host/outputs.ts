@@ -11,6 +11,7 @@ import {
   type SpanTable,
 } from "../core/mod.ts";
 import type { CliFs } from "./io.ts";
+import type { GeneratedSource } from "./generation.ts";
 
 interface GeneratedOutputs {
   /** The root-relative paths of the files that changed on disk. */
@@ -90,7 +91,7 @@ export function writableModules(
 export function writeGenerated(
   fs: CliFs,
   root: string,
-  revision: Revision,
+  source: GeneratedSource,
   names: readonly string[],
   write: boolean,
 ): GeneratedOutputs {
@@ -100,38 +101,36 @@ export function writeGenerated(
   const notes: string[] = [];
   let failed = false;
   for (const name of names) {
-    const lowered = revision.lowered(name);
-    if (lowered === undefined) continue;
-    if (!lowered.ok) {
-      // A module with diagnostics is already reported. Any other reason is a defect.
-      if (lowered.error.tag !== "diagnostics") {
+    const output = source.generated(name);
+    switch (output.kind) {
+      case "skip":
+        continue;
+      case "lower":
         notes.push(
-          `error: cannot lower ${describeLowerError(lowered.error)}`,
+          `error: cannot lower ${describeLowerError(output.error)}`,
         );
         failed = true;
+        continue;
+      case "emit":
+        notes.push(`error: cannot emit ${name}: ${output.error.tag}`);
+        failed = true;
+        continue;
+      case "map":
+        notes.push(`error: cannot build the source map of ${name}`);
+        failed = true;
+        continue;
+      case "ready":
+        break;
+      default: {
+        const unreachable: never = output;
+        return unreachable;
       }
-      continue;
     }
-    const emitted = revision.emitted(name);
-    const table = revision.spanTable(name);
-    const map = revision.sourceMap(name);
-    if (emitted === undefined || table === undefined || map === undefined) {
-      continue;
-    }
-    if (!emitted.ok) {
-      notes.push(`error: cannot emit ${name}: ${emitted.error.tag}`);
-      failed = true;
-      continue;
-    }
-    if (!map.ok || !table.ok) {
-      notes.push(`error: cannot build the source map of ${name}`);
-      failed = true;
-      continue;
-    }
+    const { emitted, table, map } = output;
     if (write) {
       const outputs: [string, string][] = [
-        [emitted.value.path, emitted.value.text],
-        [`${emitted.value.path}.map`, serializeSourceMap(map.value)],
+        [emitted.path, emitted.text],
+        [`${emitted.path}.map`, serializeSourceMap(map)],
       ];
       for (const [path, text] of outputs) {
         const full = joinPath(root, path);
@@ -146,8 +145,8 @@ export function writeGenerated(
         }
       }
     }
-    generated.push(emitted.value.path);
-    tables.set(emitted.value.path, table.value);
+    generated.push(emitted.path);
+    tables.set(emitted.path, table);
   }
   return { written, generated, tables, notes, failed };
 }

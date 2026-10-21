@@ -13,6 +13,7 @@ import {
 import { formatDiagnostics, type TextOf } from "./format.ts";
 import type { CliIo } from "../host/io.ts";
 import { writableModules, writeGenerated } from "../host/outputs.ts";
+import { generationSource } from "../host/generation.ts";
 import { runTsc } from "./tsc.ts";
 
 export interface BuildOptions {
@@ -77,7 +78,7 @@ export async function buildRevision(
     const outputs = writeGenerated(
       io.fs,
       root,
-      revision,
+      generationSource(revision),
       writableModules(revision, validation),
       options.write,
     );

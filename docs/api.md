@@ -80,6 +80,7 @@ src/cli/       The command-line tool. Deno APIs stay here, in src/host/, src/lsp
   format.ts      The output line of a diagnostic.
   report.ts      Printing of a build outcome: diagnostics on stdout, the rest on stderr.
 src/host/      The host adapters that the command-line tool and the language server share.
+  generation.ts  A tagged generation result over the revision's four lazy queries; the narrow source port of file writing.
   io.ts          The ports: file system, deno check runner, and watch source.
   deno_io.ts     The real ports: Deno file system, subprocess, and Deno.watchFs.
   workspace.ts   Source/configuration walks and separate local target-check inputs.

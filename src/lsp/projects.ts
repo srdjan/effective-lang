@@ -8,6 +8,7 @@
 // wrapper is the only exception boundary.
 
 import type { CliFs } from "../host/io.ts";
+import { generationSource } from "../host/generation.ts";
 import {
   removeStaleOutputs,
   writableModules,
@@ -441,7 +442,7 @@ export class ProjectSet {
     const outputs = writeGenerated(
       fs,
       project.root,
-      revision,
+      generationSource(revision),
       writable.filter(owns),
       true,
     );
