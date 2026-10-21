@@ -13,7 +13,9 @@
 import type {
   CapabilityId,
   ConstantDecl,
+  Effects,
   ErrorId,
+  Execution,
   Expr,
   FunctionDecl,
   Parameter,
@@ -434,87 +436,138 @@ export class BodyValidator {
     for (const id of ids) this.scope.delete(id);
   }
 
+  /**
+   * Runs `run` with the locals that it declares in scope, and releases them
+   * when `run` ends. A local cannot stay in scope after its region.
+   */
+  private withLocals<T>(
+    run: (declare: (p: Parameter, path: string) => void) => T,
+  ): T {
+    const added: string[] = [];
+    try {
+      return run((p, path) => {
+        this.declareLocal(p, path);
+        added.push(p.id);
+      });
+    } finally {
+      this.release(added);
+    }
+  }
+
+  /** Compares each declared parameter type with the recorded function type. */
+  private checkParameterTypes(
+    parameters: readonly Parameter[],
+    recorded: readonly Type[],
+    path: string,
+    countMessage: string,
+    span: Span,
+  ): void {
+    if (recorded.length !== parameters.length) {
+      this.add(AREA.types, `${path}.type.parameters`, countMessage, span);
+      return;
+    }
+    parameters.forEach((p, j) => {
+      if (!same(this.env, p.type, recorded[j])) {
+        this.add(
+          AREA.types,
+          `${path}.type.parameters[${j}]`,
+          `expected ${show(p.type)}, recorded ${show(recorded[j])}`,
+          p.span,
+        );
+      }
+    });
+  }
+
+  /** The recorded execution mode must follow the body mode and the effect sets. */
+  private checkExecution(
+    recorded: { readonly execution: Execution; readonly effects: Effects },
+    body: Active,
+    path: string,
+    span: Span,
+  ): void {
+    const nonempty =
+      recorded.effects.failures.length + recorded.effects.requirements.length >
+        0;
+    const expected = nonempty || body.execution === "effect"
+      ? "effect"
+      : "pure";
+    if (recorded.execution !== expected) {
+      this.add(
+        AREA.execution,
+        `${path}.type.execution`,
+        `expected ${expected}, recorded ${recorded.execution}`,
+        span,
+      );
+    }
+  }
+
   // -------------------------------------------------------------- declarations
 
   checkFunction(d: FunctionDecl, path: string): void {
     const env = this.env;
-    const added: string[] = [];
-    d.parameters.forEach((p, j) => {
-      this.declareLocal(p, `${path}.parameters[${j}]`);
-      added.push(p.id);
-    });
-    if (d.type.parameters.length !== d.parameters.length) {
-      this.add(
-        AREA.types,
-        `${path}.type.parameters`,
+    const body = this.withLocals((declare) => {
+      d.parameters.forEach((p, j) => declare(p, `${path}.parameters[${j}]`));
+      this.checkParameterTypes(
+        d.parameters,
+        d.type.parameters,
+        path,
         `the function type has ${d.type.parameters.length} parameters, the function declares ${d.parameters.length}`,
         d.span,
       );
-    } else {
-      d.parameters.forEach((p, j) => {
-        if (!same(env, p.type, d.type.parameters[j])) {
-          this.add(
-            AREA.types,
-            `${path}.type.parameters[${j}]`,
-            `expected ${show(p.type)}, recorded ${show(d.type.parameters[j])}`,
-            p.span,
-          );
-        }
-      });
-    }
-    const body = this.check(d.body, `${path}.body`);
-    if (
-      d.type.borrows !== undefined &&
-      d.type.borrows.length !== d.parameters.length
-    ) {
-      this.add(
-        AREA.types,
-        `${path}.type.borrows`,
-        "borrow flags must match function parameters",
-        d.span,
-      );
-    }
-    d.parameters.forEach((parameter, index) => {
-      if (d.type.borrows?.[index] === true && parameter.borrow !== true) {
-        this.add(
-          AREA.types,
-          `${path}.parameters[${index}]`,
-          "borrow parameter flag disagrees with function type",
-          parameter.span,
-        );
-      }
-      if (parameter.borrow !== true) return;
-      const type = unfold(env, parameter.type);
+      const checked = this.check(d.body, `${path}.body`);
       if (
-        type.kind !== "named" ||
-        this.ctx.world.types.get(type.id)?.opaque !== true
+        d.type.borrows !== undefined &&
+        d.type.borrows.length !== d.parameters.length
       ) {
         this.add(
           AREA.types,
-          `${path}.parameters[${index}]`,
-          "a borrow parameter needs an opaque type",
-          parameter.span,
-        );
-      }
-      if (d.type.borrows?.[index] !== true) {
-        this.add(
-          AREA.types,
-          `${path}.type.borrows[${index}]`,
-          "borrow flag missing from function type",
-          parameter.span,
-        );
-      }
-      if (!dataOnly(this.env, d.type.result, "value")) {
-        this.add(
-          AREA.types,
-          `${path}.type.result`,
-          "a borrow function must return data only",
+          `${path}.type.borrows`,
+          "borrow flags must match function parameters",
           d.span,
         );
       }
-      this.borrowedReferences(d.body, parameter.id, `${path}.body`);
+      d.parameters.forEach((parameter, index) => {
+        if (d.type.borrows?.[index] === true && parameter.borrow !== true) {
+          this.add(
+            AREA.types,
+            `${path}.parameters[${index}]`,
+            "borrow parameter flag disagrees with function type",
+            parameter.span,
+          );
+        }
+        if (parameter.borrow !== true) return;
+        const type = unfold(env, parameter.type);
+        if (
+          type.kind !== "named" ||
+          this.ctx.world.types.get(type.id)?.opaque !== true
+        ) {
+          this.add(
+            AREA.types,
+            `${path}.parameters[${index}]`,
+            "a borrow parameter needs an opaque type",
+            parameter.span,
+          );
+        }
+        if (d.type.borrows?.[index] !== true) {
+          this.add(
+            AREA.types,
+            `${path}.type.borrows[${index}]`,
+            "borrow flag missing from function type",
+            parameter.span,
+          );
+        }
+        if (!dataOnly(this.env, d.type.result, "value")) {
+          this.add(
+            AREA.types,
+            `${path}.type.result`,
+            "a borrow function must return data only",
+            d.span,
+          );
+        }
+        this.borrowedReferences(d.body, parameter.id, `${path}.body`);
+      });
+      return checked;
     });
-    this.release(added);
     if (!fits(env, body.type, d.type.result)) {
       this.add(
         AREA.types,
@@ -573,19 +626,7 @@ export class BodyValidator {
         );
       }
     }
-    const nonempty = declared.failures.length + declared.requirements.length >
-      0;
-    const expected = nonempty || body.execution === "effect"
-      ? "effect"
-      : "pure";
-    if (d.type.execution !== expected) {
-      this.add(
-        AREA.execution,
-        `${path}.type.execution`,
-        `expected ${expected}, recorded ${d.type.execution}`,
-        d.span,
-      );
-    }
+    this.checkExecution(d.type, body, path, d.span);
   }
 
   checkConstant(d: ConstantDecl, path: string): void {
@@ -601,9 +642,7 @@ export class BodyValidator {
       );
     }
     const v = d.value;
-    if (
-      !isQuiet(invocationOf(v))
-    ) {
+    if (!isQuiet(invocationOf(v))) {
       this.add(
         AREA.initialization,
         `${path}.value`,
@@ -1274,13 +1313,10 @@ export class BodyValidator {
 
   private closure(e: Extract<Expr, { kind: "closure" }>, path: string): Comp {
     const env = this.env;
-    const added: string[] = [];
-    e.parameters.forEach((p, j) => {
-      this.declareLocal(p, `${path}.parameters[${j}]`);
-      added.push(p.id);
+    const body = this.withLocals((declare) => {
+      e.parameters.forEach((p, j) => declare(p, `${path}.parameters[${j}]`));
+      return this.check(e.body, `${path}.body`);
     });
-    const body = this.check(e.body, `${path}.body`);
-    this.release(added);
     const fn = asFunction(env, e.type);
     if (fn === undefined) {
       this.add(
@@ -1291,25 +1327,13 @@ export class BodyValidator {
       );
       return { type: undefined, match: "exact", active: QUIET };
     }
-    if (fn.parameters.length !== e.parameters.length) {
-      this.add(
-        AREA.types,
-        `${path}.type.parameters`,
-        `the closure declares ${e.parameters.length} parameters, its type has ${fn.parameters.length}`,
-        e.span,
-      );
-    } else {
-      e.parameters.forEach((p, j) => {
-        if (!same(env, p.type, fn.parameters[j])) {
-          this.add(
-            AREA.types,
-            `${path}.type.parameters[${j}]`,
-            `expected ${show(p.type)}, recorded ${show(fn.parameters[j])}`,
-            p.span,
-          );
-        }
-      });
-    }
+    this.checkParameterTypes(
+      e.parameters,
+      fn.parameters,
+      path,
+      `the closure declares ${e.parameters.length} parameters, its type has ${fn.parameters.length}`,
+      e.span,
+    );
     if (!fits(env, body.type, fn.result)) {
       this.add(
         AREA.types,
@@ -1340,20 +1364,7 @@ export class BodyValidator {
         e.span,
       );
     }
-    const nonempty =
-      fn.effects.failures.length + fn.effects.requirements.length >
-        0;
-    const expected = nonempty || body.execution === "effect"
-      ? "effect"
-      : "pure";
-    if (fn.execution !== expected) {
-      this.add(
-        AREA.execution,
-        `${path}.type.execution`,
-        `expected ${expected}, recorded ${fn.execution}`,
-        e.span,
-      );
-    }
+    this.checkExecution(fn, body, path, e.span);
     // Construction evaluates no part of the body: closure construction is pure.
     return { type: undefined, match: "exact", active: QUIET };
   }
@@ -1533,29 +1544,30 @@ export class BodyValidator {
   // -------------------------------------------------------------- control flow
 
   private block(e: Extract<Expr, { kind: "block" }>, path: string): Comp {
-    const added: string[] = [];
     const parts: Out[] = [];
-    e.steps.forEach((step, i) => {
-      const at = `${path}.steps[${i}]`;
-      const value = this.check(step.value, `${at}.value`);
-      parts.push(value);
-      if (step.kind === "bind") {
-        this.declareLocal(step.binding, `${at}.binding`);
-        added.push(step.binding.id);
-        if (!fits(this.env, value.type, step.binding.type)) {
-          this.add(
-            AREA.types,
-            `${at}.binding.type`,
-            `the value has type ${
-              show(value.type)
-            }, which does not fit the binding type ${show(step.binding.type)}`,
-            step.binding.span,
-          );
+    const result = this.withLocals((declare) => {
+      e.steps.forEach((step, i) => {
+        const at = `${path}.steps[${i}]`;
+        const value = this.check(step.value, `${at}.value`);
+        parts.push(value);
+        if (step.kind === "bind") {
+          declare(step.binding, `${at}.binding`);
+          if (!fits(this.env, value.type, step.binding.type)) {
+            this.add(
+              AREA.types,
+              `${at}.binding.type`,
+              `the value has type ${
+                show(value.type)
+              }, which does not fit the binding type ${
+                show(step.binding.type)
+              }`,
+              step.binding.span,
+            );
+          }
         }
-      }
+      });
+      return this.check(e.result, `${path}.result`);
     });
-    const result = this.check(e.result, `${path}.result`);
-    this.release(added);
     return {
       type: result.type,
       match: "exact",
@@ -1761,20 +1773,21 @@ export class BodyValidator {
         handled.add(h.error);
       }
       seen.add(h.error);
-      this.declareLocal(h.binding, `${at}.binding`);
-      if (
-        this.ctx.world.errors.has(h.error) &&
-        !same(env, h.binding.type, { kind: "named", id: h.error })
-      ) {
-        this.add(
-          AREA.types,
-          `${at}.binding.type`,
-          `expected ${h.error}, recorded ${show(h.binding.type)}`,
-          h.binding.span,
-        );
-      }
-      const out = this.check(h.body, `${at}.body`);
-      this.release([h.binding.id]);
+      const out = this.withLocals((declare) => {
+        declare(h.binding, `${at}.binding`);
+        if (
+          this.ctx.world.errors.has(h.error) &&
+          !same(env, h.binding.type, { kind: "named", id: h.error })
+        ) {
+          this.add(
+            AREA.types,
+            `${at}.binding.type`,
+            `expected ${h.error}, recorded ${show(h.binding.type)}`,
+            h.binding.span,
+          );
+        }
+        return this.check(h.body, `${at}.body`);
+      });
       outs.push(out);
       this.branchFits(out, e.type, `${at}.body`, h.body.span, AREA.recovery);
     });
@@ -1876,9 +1889,7 @@ export class BodyValidator {
         e.step.span,
       );
     }
-    if (
-      !isQuiet(invocationOf(fn))
-    ) {
+    if (!isQuiet(invocationOf(fn))) {
       this.add(
         AREA.control,
         `${path}.step`,
@@ -1950,9 +1961,7 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    if (
-      !isQuiet(invocationOf(d)) || !isQuiet(invocationOf(en))
-    ) {
+    if (!isQuiet(invocationOf(d)) || !isQuiet(invocationOf(en))) {
       this.add(
         AREA.control,
         path,
@@ -3541,9 +3550,7 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    if (
-      !isQuiet(seed)
-    ) {
+    if (!isQuiet(seed)) {
       this.add(
         AREA.execution,
         `${path}.seed`,
@@ -3603,9 +3610,7 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    if (
-      !isQuiet(seed)
-    ) {
+    if (!isQuiet(seed)) {
       this.add(
         AREA.execution,
         `${path}.seed`,
@@ -3657,9 +3662,7 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    if (
-      !isQuiet(seed)
-    ) {
+    if (!isQuiet(seed)) {
       this.add(
         AREA.execution,
         `${path}.seed`,
@@ -3710,9 +3713,7 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    if (
-      !isQuiet(seed)
-    ) {
+    if (!isQuiet(seed)) {
       this.add(
         AREA.execution,
         `${path}.seed`,
@@ -3880,9 +3881,7 @@ export class BodyValidator {
         );
       }
     }
-    if (
-      !isQuiet(policy)
-    ) {
+    if (!isQuiet(policy)) {
       this.add(
         AREA.execution,
         `${path}.policy`,
@@ -3957,9 +3956,7 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    if (
-      !isQuiet(count)
-    ) {
+    if (!isQuiet(count)) {
       this.add(
         AREA.execution,
         `${path}.count`,
@@ -4183,9 +4180,7 @@ export class BodyValidator {
         e.span,
       );
     }
-    if (
-      !isQuiet(invocationOf(classifier))
-    ) {
+    if (!isQuiet(invocationOf(classifier))) {
       this.add(
         AREA.control,
         path,
