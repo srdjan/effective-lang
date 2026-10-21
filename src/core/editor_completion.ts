@@ -105,8 +105,21 @@ export function completionsAt(
     values.filter((v) => v.label.startsWith(prefix)).sort((a, b) =>
       a.label.localeCompare(b.label)
     );
-  if (text[start - 1] === ".") {
-    const baseEnd = start - 1;
+  let previousToken = -1;
+  for (let i = 0; i < lexed.count; i++) {
+    if (
+      lexed.ends[i] <= start && lexed.kinds[i] !== TokenKind.Newline &&
+      lexed.kinds[i] !== TokenKind.Eof
+    ) previousToken = i;
+  }
+  if (previousToken >= 0 && lexed.kinds[previousToken] === TokenKind.Dot) {
+    let baseToken = previousToken - 1;
+    while (baseToken >= 0 && lexed.kinds[baseToken] === TokenKind.Newline) {
+      baseToken--;
+    }
+    const baseEnd = baseToken >= 0
+      ? lexed.ends[baseToken]
+      : lexed.starts[previousToken];
     const baseOccurrence = occurrenceAt(revision, path, baseEnd);
     if (baseOccurrence?.target.kind === "service") {
       // The resolver's namespace contains imported service declarations too.

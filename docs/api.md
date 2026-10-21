@@ -315,6 +315,11 @@ The server announces `positionEncoding: "utf-16"`. It supports these features.
 - Hover. The text has the source contract of the node. On the name of a function or constant, it also has the backend type, which is the TypeScript signature that the emitter prints. When the module has errors, the backend line says that it is not available.
 - Definition. The server resolves types, errors, services, values, providers, service methods, and local bindings. It also finds declarations in `.effi` files. A builtin, a builtin type, and a field have no definition.
 - Document symbols. The result lists the declarations of the file in source order, with service methods as children. A file with syntax errors still has a symbol for each declaration whose name parsed.
+- References. Declarations, imports and uses share resolver identities across the project, including local bindings and service-method capabilities. The request honors `context.includeDeclaration`.
+- Rename. Prepare-rename identifies source-origin symbols. Rename returns versioned `documentChanges`, rejects invalid names, capture and conflicts, and re-resolves edits before returning them. Host-origin symbols and structural fields cannot be renamed. Generated TypeScript is rebuilt through save/build.
+- Completion. Visible locals, module/imported names, applicable builtins/types, record fields and service methods respect scope, context, shadowing and partially typed names. There are no automatic imports.
+- Full semantic tokens. A fixed legend includes declaration and readonly modifiers; lexical fallback covers broken regions. There are no delta tokens.
+- Contract quick fixes. Missing `fails` and `uses` entries come from checked body effects. Reliable explicit inline contracts receive validated source edits that preserve existing entries. Diagnostic prose is not parsed.
 
 Diagnostics follow a fixed order. The server publishes the open documents of the project first, sorted by path. An open document gets a message when the compile used a new version of it or when its list changed. The server then publishes each closed file whose list changed. A file with an unchanged list and no new version gets no message.
 
@@ -326,9 +331,9 @@ The names are in `src/lsp/methods.ts`. Each request takes the params `{ textDocu
 | ------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `effective/generatedTypeScript` | Request      | `{ text, stale }` or `null`. The text is the emitted module. When the module has errors, the text is the last good output and `stale` is true. The result is `null` if it never emitted.                     |
 | `effective/generatedChanged`    | Notification | The params are `{ uri }`, the URI of the `.eff` source. The first `effective/generatedTypeScript` request for a module subscribes it. The server sends this message when its text or its stale flag changes. |
-| `effective/stats`               | Request      | `{ revision, rechecked, counts, delta, memory }`, or `null` for a document with no project. The measurements M3 and M4 use it.                                                                               |
+| `effective/stats`               | Request      | `{ revision, rechecked, counts, delta, typeTableSize, memory }`, or `null` for a document with no project. The measurements M3 and M4 use it.                                                                               |
 
-In the `effective/stats` result, `rechecked` lists the modules that the last compile checked again. The `counts` value holds the cumulative query counts `parses`, `checks`, `lowerings`, and `emits`. The `delta` value holds `interfaceChanged` and `modeChanged`, the modules whose interface hash or mode map changed in the last compile. The `memory` value holds `rss` and `heapUsed` in bytes.
+In the `effective/stats` result, `rechecked` lists the modules that the last compile checked again. The `counts` value holds the cumulative query counts `parses`, `checks`, `lowerings`, and `emits`. The `delta` value holds `interfaceChanged` and `modeChanged`, the modules whose interface hash or mode map changed in the last compile. The `typeTableSize` value counts interned type nodes. The `memory` value holds `rss` and `heapUsed` in bytes. Neither metric establishes a memory bound.
 
 ### Options
 
@@ -345,7 +350,7 @@ A missing or invalid value takes the default. The server logs an invalid value. 
 
 A project is a directory with an `effective.json` file. When a document opens, the server walks up from its directory to the nearest `effective.json`. It keeps one `Program` for each project root. A document with no project gets no diagnostics, and its requests return `null`.
 
-An open document overrides the disk text of its path. When the document closes, the server reads the disk text again. The client sends `workspace/didChangeWatchedFiles` for changes on disk. The server ignores such an event for an open document, because the editor owns that text.
+An open document overrides the disk text of its path. When the document closes, the server reads the disk text again. Out-of-order document changes are ignored. Rename and code-action edits are withheld if the project configuration is invalid or any loaded source text differs from the current overlay or disk. Open documents receive their current version in each workspace edit; closed documents use a null version. The client sends `workspace/didChangeWatchedFiles` for changes on disk. The server ignores such an event for an open document, because the editor owns that text.
 
 On `textDocument/didSave` of an `.eff` file, the server does nothing when `writeOnSave` is false. Else it compiles first. Then it writes the files of the saved module only. It does not write other modules. A module with an error keeps its last good `.ts` and `.ts.map` files, as `build` does. A write failure goes to `window/logMessage`.
 
@@ -357,7 +362,7 @@ When `effective.json` is missing or invalid, the server publishes one diagnostic
 - Nested projects are not supported. The disk walk of an outer project also reads the files of an inner project, so one file can belong to two programs.
 - An `.effi` file that no `.eff` module imports is not in the module graph. For such a file, the server gives document symbols only. Hover and definition return `null`.
 - A generated `.ts` file has no go-to-definition into the `.eff` source.
-- The server has no completion, semantic tokens, rename, references, or code actions.
+- Rename edits Effective source/interface references only; it does not rename TypeScript host code. Completion does not add imports, semantic tokens have no delta mode, and quick fixes target reliable explicit inline function contracts only. See [editor queries](editor.md).
 
 ## VS Code client
 

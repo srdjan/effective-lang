@@ -320,6 +320,7 @@ export function statsRequest(
       interfaceChanged: [...(project.lastDelta?.interfaceChanged ?? [])],
       modeChanged: [...(project.lastDelta?.modeChanged ?? [])],
     },
+    typeTableSize: revision?.checked.table.size ?? 0,
     memory: ctx.memory(),
   };
   return answer(result);

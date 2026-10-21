@@ -277,3 +277,18 @@ Deno.test("references separate same-named local scopes and capability rename pre
     false,
   );
 });
+
+Deno.test("member completion tolerates whitespace around the dot", () => {
+  const text =
+    "type Int = int\nservice S { read(): Int }\nconst f = (): Int => S . re\n";
+  const loaded = new Program("").update({
+    set: { "effective.json": "{}", "m.eff": text },
+  });
+  assert(loaded.ok);
+  assertEquals(
+    completionsAt(loaded.value, "m.eff", text.indexOf("S . re") + 6).map((c) =>
+      c.label
+    ),
+    ["read"],
+  );
+});

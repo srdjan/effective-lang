@@ -1,3 +1,11 @@
+import {
+  codeActionRequest,
+  completionRequest,
+  prepareRenameRequest,
+  referencesRequest,
+  renameRequest,
+  semanticTokensRequest,
+} from "./editor_features.ts";
 // The language server: lifecycle, message dispatch, and flush scheduling
 // (plan 5.1, 5.4, and 5.10). The server has no I/O of its own. It reaches the
 // outside through the ports of `ServerPorts`, so that tests drive it in process.
@@ -34,12 +42,16 @@ import {
 import {
   DEFAULT_INITIALIZATION_OPTIONS,
   type InitializationOptions,
+  narrowCodeActionParams,
   narrowDidChange,
   narrowDidChangeWatchedFiles,
   narrowDidOpen,
   type Narrowed,
+  narrowEditorPositionParams,
   narrowInitializeParams,
   narrowPositionParams,
+  narrowReferencesParams,
+  narrowRenameParams,
   narrowTextDocumentParams,
   type PublishDiagnosticsParams,
   SERVER_CAPABILITIES,
@@ -131,6 +143,27 @@ const REQUEST_HANDLERS: ReadonlyMap<string, RequestHandler> = new Map<
   RequestHandler
 >([
   ["textDocument/hover", withParams(narrowPositionParams, hoverRequest)],
+  [
+    "textDocument/references",
+    withParams(narrowReferencesParams, referencesRequest),
+  ],
+  [
+    "textDocument/prepareRename",
+    withParams(narrowEditorPositionParams, prepareRenameRequest),
+  ],
+  ["textDocument/rename", withParams(narrowRenameParams, renameRequest)],
+  [
+    "textDocument/completion",
+    withParams(narrowEditorPositionParams, completionRequest),
+  ],
+  [
+    "textDocument/semanticTokens/full",
+    withParams(narrowTextDocumentParams, semanticTokensRequest),
+  ],
+  [
+    "textDocument/codeAction",
+    withParams(narrowCodeActionParams, codeActionRequest),
+  ],
   [
     "textDocument/definition",
     withParams(narrowPositionParams, definitionRequest),

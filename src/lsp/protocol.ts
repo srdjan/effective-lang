@@ -3,7 +3,12 @@
 // shape. A narrowing function returns a Result. Its error text is fit for the
 // message of a -32602 response.
 
-import { isRecord, type Result } from "../core/mod.ts";
+import {
+  isRecord,
+  type Result,
+  SEMANTIC_TOKEN_MODIFIERS,
+  SEMANTIC_TOKEN_TYPES,
+} from "../core/mod.ts";
 
 // ---- Wire types -----------------------------------------------------------
 
@@ -92,6 +97,19 @@ interface ServerCapabilities {
   readonly hoverProvider: true;
   readonly definitionProvider: true;
   readonly documentSymbolProvider: true;
+  readonly referencesProvider: true;
+  readonly renameProvider: { readonly prepareProvider: true };
+  readonly completionProvider: {
+    readonly triggerCharacters: readonly string[];
+  };
+  readonly semanticTokensProvider: {
+    readonly legend: {
+      readonly tokenTypes: readonly string[];
+      readonly tokenModifiers: readonly string[];
+    };
+    readonly full: true;
+  };
+  readonly codeActionProvider: { readonly codeActionKinds: readonly string[] };
 }
 
 export const SERVER_CAPABILITIES: ServerCapabilities = {
@@ -104,6 +122,17 @@ export const SERVER_CAPABILITIES: ServerCapabilities = {
   hoverProvider: true,
   definitionProvider: true,
   documentSymbolProvider: true,
+  referencesProvider: true,
+  renameProvider: { prepareProvider: true },
+  completionProvider: { triggerCharacters: ["."] },
+  semanticTokensProvider: {
+    legend: {
+      tokenTypes: SEMANTIC_TOKEN_TYPES,
+      tokenModifiers: SEMANTIC_TOKEN_MODIFIERS,
+    },
+    full: true,
+  },
+  codeActionProvider: { codeActionKinds: ["quickfix"] },
 };
 
 interface InitializeResult {
@@ -186,6 +215,7 @@ export interface StatsResult {
     readonly interfaceChanged: string[];
     readonly modeChanged: string[];
   };
+  readonly typeTableSize: number;
   readonly memory: { readonly rss: number; readonly heapUsed: number };
 }
 
@@ -448,4 +478,68 @@ export function narrowDidChangeWatchedFiles(
     changes.push({ uri: uri.value, type });
   }
   return ok({ changes });
+}
+
+/** Editor mutation requests may carry an explicit document version. */
+export interface EditorPositionParams extends PositionParams {
+  readonly documentVersion?: number;
+}
+export interface ReferencesParams extends EditorPositionParams {
+  readonly includeDeclaration: boolean;
+}
+export interface RenameParams extends EditorPositionParams {
+  readonly newName: string;
+}
+export interface CodeActionParams extends TextDocumentParams {
+  readonly range: Range;
+}
+
+export function narrowEditorPositionParams(
+  params: unknown,
+): Narrowed<EditorPositionParams> {
+  const position = narrowPositionParams(params);
+  if (!position.ok) return position;
+  if (
+    !isRecord(params) || !isRecord(params.textDocument) ||
+    params.textDocument.version === undefined
+  ) return position;
+  const version = params.textDocument.version;
+  if (!isInteger(version)) {
+    return fail("textDocument.version must be an integer");
+  }
+  return ok({ ...position.value, documentVersion: version });
+}
+
+export function narrowReferencesParams(
+  params: unknown,
+): Narrowed<ReferencesParams> {
+  const position = narrowEditorPositionParams(params);
+  if (!position.ok) return position;
+  if (
+    !isRecord(params) || !isRecord(params.context) ||
+    typeof params.context.includeDeclaration !== "boolean"
+  ) return fail("context.includeDeclaration must be a boolean");
+  return ok({
+    ...position.value,
+    includeDeclaration: params.context.includeDeclaration,
+  });
+}
+
+export function narrowRenameParams(params: unknown): Narrowed<RenameParams> {
+  const position = narrowEditorPositionParams(params);
+  if (!position.ok) return position;
+  if (!isRecord(params) || typeof params.newName !== "string") {
+    return fail("newName must be a string");
+  }
+  return ok({ ...position.value, newName: params.newName });
+}
+
+export function narrowCodeActionParams(
+  params: unknown,
+): Narrowed<CodeActionParams> {
+  const document = narrowTextDocumentParams(params);
+  if (!document.ok) return document;
+  if (!isRecord(params)) return fail("params must be an object");
+  const range = narrowRange(params.range, "range");
+  return range.ok ? ok({ ...document.value, range: range.value }) : range;
 }

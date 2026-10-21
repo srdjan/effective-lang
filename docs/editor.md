@@ -38,3 +38,18 @@ effect identities through visible names, and check the edited project before
 returning an action. Diagnostic messages are not parsed to generate edits.
 
 Pure behavior regressions are in `tests/editor_queries_test.ts`.
+
+## Language server
+
+The LSP adapter exposes `textDocument/references`, `prepareRename`, `rename`,
+`completion`, `semanticTokens/full` and `codeAction`. Requests flush pending
+changes first. Edit requests additionally check current overlays and closed
+files against the indexed revision and return versioned `documentChanges`.
+A stale request or changed disk source cannot produce an edit. Out-of-order
+`didChange` versions are ignored. Invalid project configuration disables edits;
+semantic highlighting can still fall back to the current lexical text.
+
+`tests/lsp_editor_test.ts` covers overlays, UTF-16 positions, reference
+inclusion, workspace versions, stale requests/disk, out-of-order changes,
+malformed source, quick fixes and invalid request parameters. The installed
+VSIX check is a separate release check documented in [installation](installation.md).

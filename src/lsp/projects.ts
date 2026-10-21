@@ -264,6 +264,10 @@ export class ProjectSet {
     }
     const document = found.project.open.get(found.path);
     if (document === undefined) return;
+    if (version <= document.version) {
+      this.ports.stderr(`ignored stale document version ${version} for ${uri}`);
+      return;
+    }
     document.text = applyContentChanges(
       document.text,
       params.contentChanges,
