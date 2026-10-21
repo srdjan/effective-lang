@@ -92,6 +92,7 @@ The hardening plan [section 9](plans/2026-10-20-hardening-pruning.md) tracks the
 | Hand test of the VS Code client | Acceptance check 5 of the [language server plan](archive/plans/2026-10-16-lsp.md) is not done. | User |
 | Playground acceptance | The user has not accepted the page (acceptance check 5 of the [playground plan](archive/plans/2026-10-16-playground.md)). A manual browser review on 2026-10-16 passed at 375 and 1280 pixels. Three later commits changed the page: the 720 pixel threshold, the hover feedback, and the wrap indent. No review ran after them. | User |
 | Documentation items W1, W2, W3, W5 | Done in the documentation batch. The plan owner records them in section 9 of the hardening plan. | Plan owner |
+| Audit fix batch | Items AU1 to AU8 of the [audit fix plan](plans/2026-10-21-audit-fixes.md) are on `main`. Its Progress section lists the open follow-ups. | Plan owner |
 | Measured numbers | The documents hold no measured number from the bench harnesses. The user decides which numbers enter the docs. | User |
 
 ## Implementation parts

@@ -86,10 +86,27 @@ Tests: a fast test of the watch loop with the in-memory host: rename a module; i
 
 ## AU8 (build tests for builtin pipeline stages)
 
-Gap (M): website commit `3f0028a` states that all, joinFiber, interruptFiber, retrySchedule, scoped, forkScoped, provideScope, addScopeFinalizer, and closeScope accept a pipeline stage. The checker accepts these nine stage forms; a probe over all prelude names with one to five arguments found "requires direct call syntax" for the other core 1 builtins only. No test or fixture uses `|> all`, `|> joinFiber`, `|> interruptFiber`, `|> scoped`, or `|> forkScoped` (M, grep over `tests/` and `fixtures/`). So no test shows that these stage forms lower, emit, and pass `deno check`.
+Gap (M): website commit `3f0028a` stated that all, joinFiber, interruptFiber, retrySchedule, scoped, forkScoped, provideScope, addScopeFinalizer, and closeScope accept a pipeline stage. The checker accepts these nine stage forms; a probe over all prelude names with one to five arguments found "requires direct call syntax" for the other core 1 builtins only. No test or fixture uses `|> all`, `|> joinFiber`, `|> interruptFiber`, `|> scoped`, or `|> forkScoped` (M, grep over `tests/` and `fixtures/`). So no test shows that these stage forms lower, emit, and pass `deno check`.
 
 Fix: add one slow test that builds, for each of the nine names, a small program that uses the name as a pipeline stage, with `--validate` and `--tsc` equivalents, and runs it where the program has an observable result. If a stage form fails to lower, emit, or type-check, stop and report it: the spec text then needs a correction, and that is a user decision.
 
 ## Closing
 
 After AU7: run `deno task check` and `deno task bench --quick`. Add a line for this plan to the open items of `docs/status.md`, and add the prefix AU to the list in `AGENTS.md`. Then record each item's commit in a section "Progress" at the end of this file.
+
+## Progress
+
+Status on 2026-10-21. Three Sonnet lanes implemented the items in separate worktrees from `1150e1d`. The plan owner reviewed each diff and applied the commits to `main`. `deno task check` on `main` after the last commit: fast suite 1760 of 1760, slow suite 162 of 162 (M). The audit probes for AU1 to AU4 give the fixed results on `main` (M). `deno task bench --quick` completed; this plan records no number from it.
+
+- AU1 with AU2: `d3a1633`. Exactly the 6 predicted message-order expectations changed. M2 check medians of three runs each, on a shared machine (noisy): large 74.4 ms before, 68.2 ms after.
+- AU3: `30b175b`. A link costs two levels. Measured diagnostics of a 300-link chain: `syntax/009` and `syntax/008` for each form, plus `declaration/012` for the array type. A 250-link call or field chain has no valid type by construction, so it stops at a type error before emit. The through-all-passes array case uses 120 links, because `declaration/012` limits array types to 128 levels.
+- AU4: `8a0abf2`. The alias form emits the same constant as the inline form, plus the unused alias declaration.
+- AU5: `f39d15b`. AU6: `b25405e`. AU7: `8873a3e`.
+- AU8: `5520fc6`. Seven of the nine stage forms lower, emit, pass `deno check`, and run. `joinFiber` and `interruptFiber` as stages always fail: a borrowed fiber may only be joined or interrupted by a direct call (`type-mismatch/010`). Website commit `a724c20` removes them from the spec stage list.
+
+Open follow-ups (no owner yet):
+
+- AU7 compares the first line with a header that it builds from the module name. The emitter writes the source path. With custom module roots the two can differ, and then `watch` keeps the stale file (I). This fails safe.
+- The language server save path (`src/lsp/features.ts:299`) can still write a module whose import was not written (the AU6 defect).
+- A pure function type alias emits `type G = (a: Count) => Effect.Effect<Count>`, but a constant of that type emits as a plain function. The alias is unused, so `deno check` passes (M, AU4 lane). A use of the alias type in emitted code could disagree (I).
+- `tests/bench_lsp_slow_test.ts` compares shared `effective-bench-lsp-*` temporary directories, so it fails when two test runs overlap (M, three lanes).
