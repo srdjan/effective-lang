@@ -1,6 +1,6 @@
 # Refactor and simplify pass
 
-Date: 2026-10-21. Base: `5e4c3c7`. Status: accepted for APPLY by the user on 2026-10-21. Each item must keep the observable behavior.
+Date: 2026-10-21. Base: `5e4c3c7`. Status: accepted for APPLY by the user on 2026-10-21. Complete on 2026-10-21: all 25 items are on `main` (section 7). Each item must keep the observable behavior.
 
 This plan is a sibling of `2026-10-20-rederive-review.md` and `2026-10-20-hardening-pruning.md`. It does not restate their items. Section 9 of the rederive review ("What not to touch") applies here. In particular: do not share code between the checker and the validator, do not change `ir.ts`, do not convert internal throws to `Result`, and do not run `golden:update` or `validate:update`.
 
