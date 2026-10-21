@@ -1747,15 +1747,15 @@ function preludeImport(
   builtins: ReadonlyMap<ValueId, BuiltinInstance>,
 ): Import | undefined {
   if (builtins.size === 0) return undefined;
-  const ids = [...builtins.keys()].sort(compareText);
+  const entries = [...builtins].sort(([a], [b]) => compareText(a, b));
   return {
     module: "effective:prelude",
     bindings: [],
-    exports: ids,
-    values: ids.map((id) => ({
+    exports: entries.map(([id]) => id),
+    values: entries.map(([id, builtin]) => ({
       id,
       name: id.slice(id.indexOf("#") + 1),
-      type: (builtins.get(id) as BuiltinInstance).type,
+      type: builtin.type,
     })),
     types: [],
     errors: [],
