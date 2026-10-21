@@ -5,23 +5,15 @@
 import { assert, assertEquals } from "@std/assert";
 import {
   type CheckedProject,
-  checkProject,
   lowerProject,
-  memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
 import type { ValueId } from "../src/core/ir.ts";
 import { assertDiagnostics } from "./schema_diagnostics.ts";
+import { checkModule } from "./helpers.ts";
 
-function checked(source: string): CheckedProject {
-  const result = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": source }),
-    "",
-    ["main.eff"],
-  );
-  assert(result.ok, JSON.stringify(result));
-  return result.value;
-}
+const checked = (source: string): CheckedProject =>
+  checkModule(source, "main.eff");
 
 const PRELUDE = `export type Int = int
 export type Text = string

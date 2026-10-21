@@ -1,10 +1,5 @@
 import { assert, assertEquals } from "@std/assert";
-import {
-  checkProject,
-  lowerProject,
-  memoryHost,
-  validateProject,
-} from "../src/core/mod.ts";
+import { lowerProject, validateProject } from "../src/core/mod.ts";
 import { validateModule } from "../src/core/validate/index.ts";
 import {
   assertRejected,
@@ -12,6 +7,7 @@ import {
   type Case,
   declarationPath,
 } from "./schema_diagnostics.ts";
+import { checkModule } from "./helpers.ts";
 
 const prefix = `type Text = string
 type Int = int
@@ -27,15 +23,7 @@ const field: Schema<Int, Text, Read.parse, Write.print> = schemaTransform(text, 
 const record: Schema<D, E, Read.parse, Write.print> = schemaStruct({ score: field })
 `;
 
-function checked(source: string) {
-  const result = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": source }),
-    "",
-    ["main.eff"],
-  );
-  assert(result.ok, JSON.stringify(result));
-  return result.value;
-}
+const checked = (source: string) => checkModule(source, "main.eff");
 
 Deno.test("type-side Schema construction requires D and only SchemaIssue", () => {
   const project = checked(

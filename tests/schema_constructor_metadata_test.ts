@@ -1,10 +1,5 @@
 import { assert, assertEquals } from "@std/assert";
-import {
-  checkProject,
-  lowerProject,
-  memoryHost,
-  validateProject,
-} from "../src/core/mod.ts";
+import { lowerProject, validateProject } from "../src/core/mod.ts";
 import { validateModule } from "../src/core/validate/index.ts";
 import {
   assertRejected,
@@ -13,6 +8,7 @@ import {
   declarationPath,
   PURE_CONSTANT,
 } from "./schema_diagnostics.ts";
+import { checkModule } from "./helpers.ts";
 
 const prefix = `type Int = int
 type D = { score: Int }
@@ -20,15 +16,7 @@ type M = { score?: Int }
 const integer: Schema<Int> = schema()
 const child: Schema<D, D, never, never, M> = schemaStruct({ score: schemaConstructorDefault(integer, (): Int => 4) })
 `;
-function checked(source: string) {
-  const result = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": source }),
-    "",
-    ["main.eff"],
-  );
-  assert(result.ok, JSON.stringify(result));
-  return result.value;
-}
+const checked = (source: string) => checkModule(source, "main.eff");
 
 Deno.test("constructor metadata retains make input independently of D and E", () => {
   const project = checked(

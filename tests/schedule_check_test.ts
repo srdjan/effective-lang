@@ -2,22 +2,10 @@
 // from the decision callback, and the independent validator agrees with it.
 
 import { assert, assertEquals } from "@std/assert";
-import {
-  checkProject,
-  lowerProject,
-  memoryHost,
-  validateProject,
-} from "../src/core/mod.ts";
+import { lowerProject, validateProject } from "../src/core/mod.ts";
+import { checkModule } from "./helpers.ts";
 
-function checked(source: string) {
-  const result = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": source }),
-    "",
-    ["main.eff"],
-  );
-  assert(result.ok, JSON.stringify(result));
-  return result.value;
-}
+const checked = (source: string) => checkModule(source, "main.eff");
 
 function codes(source: string): string[] {
   return checked(source).diagnostics.map((d) => d.code);

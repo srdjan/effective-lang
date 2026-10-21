@@ -1,26 +1,13 @@
 import { assert, assertEquals } from "@std/assert";
-import {
-  checkProject,
-  emitProject,
-  lowerProject,
-  memoryHost,
-  validateProject,
-} from "../src/core/mod.ts";
+import { emitProject, lowerProject, validateProject } from "../src/core/mod.ts";
+import { checkModule } from "./helpers.ts";
 import { runStrictTarget } from "./target_helpers.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-composition.eff", import.meta.url),
 );
 
-function checked(source: string) {
-  const result = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": source }),
-    "",
-    ["main.eff"],
-  );
-  assert(result.ok, JSON.stringify(result));
-  return result.value;
-}
+const checked = (source: string) => checkModule(source, "main.eff");
 
 /**
  * Emits the source, checks the strict target, runs `run.ts` against it, and

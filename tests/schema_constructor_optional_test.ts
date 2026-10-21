@@ -1,10 +1,5 @@
 import { assert, assertEquals } from "@std/assert";
-import {
-  checkProject,
-  lowerProject,
-  memoryHost,
-  validateProject,
-} from "../src/core/mod.ts";
+import { lowerProject, validateProject } from "../src/core/mod.ts";
 import { validateModule } from "../src/core/validate/index.ts";
 import {
   assertRejected,
@@ -13,20 +8,13 @@ import {
   declarationPath,
   PURE_CONSTANT,
 } from "./schema_diagnostics.ts";
+import { checkModule } from "./helpers.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-constructor-optional.eff", import.meta.url),
 );
 
-function checked(source = fixture) {
-  const result = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": source }),
-    "",
-    ["main.eff"],
-  );
-  assert(result.ok, JSON.stringify(result));
-  return result.value;
-}
+const checked = (source = fixture) => checkModule(source, "main.eff");
 
 Deno.test("optional adapters retain target make inputs and invariant field types", () => {
   const project = checked();

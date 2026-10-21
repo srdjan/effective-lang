@@ -2,23 +2,15 @@
 // alias constants that they can refer to.
 
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
-import { checkProject, lowerProject, memoryHost } from "../src/core/mod.ts";
+import { lowerProject } from "../src/core/mod.ts";
 import { validateModule } from "../src/core/validate/index.ts";
-import { emitFiles } from "./helpers.ts";
+import { checkModule, emitFiles } from "./helpers.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-composition.eff", import.meta.url),
 );
 
-function checked(source: string) {
-  const result = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": source }),
-    "",
-    ["main.eff"],
-  );
-  assert(result.ok, JSON.stringify(result));
-  return result.value;
-}
+const checked = (source: string) => checkModule(source, "main.eff");
 
 function emitted(source: string): string {
   const module = emitFiles({ "effective.json": "{}", "main.eff": source }, [

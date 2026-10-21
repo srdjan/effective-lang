@@ -1,29 +1,17 @@
 import { assert, assertEquals } from "@std/assert";
-import {
-  checkProject,
-  lowerProject,
-  memoryHost,
-  validateProject,
-} from "../src/core/mod.ts";
+import { lowerProject, validateProject } from "../src/core/mod.ts";
 import { validateModule } from "../src/core/validate/index.ts";
 import {
   assertDiagnostics,
   type Expected,
   PURE_CONSTANT,
 } from "./schema_diagnostics.ts";
+import { checkModule } from "./helpers.ts";
 
 const fixture = Deno.readTextFileSync(
   new URL("../fixtures/emit/schema-recursive-adapters.eff", import.meta.url),
 );
-function checked(source = fixture) {
-  const result = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": source }),
-    "",
-    ["main.eff"],
-  );
-  assert(result.ok, JSON.stringify(result));
-  return result.value;
-}
+const checked = (source = fixture) => checkModule(source, "main.eff");
 
 Deno.test("recursive field adapters retain structural guards and independent D/E/M", () => {
   const project = checked(fixture.replace(

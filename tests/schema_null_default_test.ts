@@ -14,6 +14,7 @@ import {
   declarationPath,
   PURE_CONSTANT,
 } from "./schema_diagnostics.ts";
+import { checkModule } from "./helpers.ts";
 
 const prefix = `type Text = string
 type Int = int
@@ -25,15 +26,7 @@ const text: Schema<Text> = schema()
 const nullable: Schema<Nullable> = schema()
 `;
 
-function checked(source: string) {
-  const result = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": source }),
-    "",
-    ["main.eff"],
-  );
-  assert(result.ok, JSON.stringify(result));
-  return result.value;
-}
+const checked = (source: string) => checkModule(source, "main.eff");
 
 Deno.test("null defaults retain required decoded and nullable optional encoded fields", () => {
   const project = checked(

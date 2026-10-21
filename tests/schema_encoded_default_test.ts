@@ -1,10 +1,5 @@
 import { assert, assertEquals } from "@std/assert";
-import {
-  checkProject,
-  lowerProject,
-  memoryHost,
-  validateProject,
-} from "../src/core/mod.ts";
+import { lowerProject, validateProject } from "../src/core/mod.ts";
 import { validateModule } from "../src/core/validate/index.ts";
 import {
   assertRejected,
@@ -13,6 +8,7 @@ import {
   declarationPath,
   PURE_CONSTANT,
 } from "./schema_diagnostics.ts";
+import { checkModule } from "./helpers.ts";
 
 const prefix = `type Text = string
 type Int = int
@@ -25,15 +21,7 @@ const converted: Schema<Int, Text> = schemaTransform(text, integer,
   (value: Int): Option<Text> => Some("1"))
 `;
 
-function checked(source: string) {
-  const result = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": source }),
-    "",
-    ["main.eff"],
-  );
-  assert(result.ok, JSON.stringify(result));
-  return result.value;
-}
+const checked = (source: string) => checkModule(source, "main.eff");
 
 Deno.test("encoded defaults check callbacks against E and retain field directionality", () => {
   const project = checked(
