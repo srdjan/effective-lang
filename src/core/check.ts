@@ -1725,14 +1725,20 @@ class ModuleChecker {
     };
   }
 
-  /** The function type of a binding annotation, seen through alias names. */
+  /**
+   * The function type of a binding annotation, seen through alias names. A
+   * written function type keeps its lowered IR, which holds the source order and
+   * schema make inputs that `toIr` does not.
+   */
   private functionOfBinding(
     binding: Lowered,
   ): { node: FunctionNode; ir: FunctionType } | undefined {
     const ref = this.table.unfold(binding.ref);
     const node = this.table.node(ref);
     if (node.kind !== "function") return undefined;
-    const ir = this.table.toIr(ref);
+    const ir = binding.ir.kind === "function"
+      ? binding.ir
+      : this.table.toIr(ref);
     return ir.kind === "function" ? { node, ir } : undefined;
   }
 

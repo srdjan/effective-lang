@@ -1,5 +1,5 @@
-import { assertEquals } from "@std/assert";
-import { checkModule } from "./helpers.ts";
+import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import { checkModule, emitFiles } from "./helpers.ts";
 
 const HEAD = `type Count = int
 error Boom = { code: int }
@@ -49,4 +49,16 @@ export const g: G = (x: Count): Count => x
 `),
     ["type-mismatch/003 the value is a function, but G is expected"],
   );
+});
+
+Deno.test("a written function type keeps its source order for inferred parameters", () => {
+  const module = emitFiles({
+    "effective.json": "{}",
+    "m.eff": `type B = string
+type A = int
+export const g: (x: B | A) => A = (x) => 2
+`,
+  }, ["m.eff"]).get("m");
+  assert(module !== undefined, "module m was not emitted");
+  assertStringIncludes(module.text, "export const g = (x: B | A): A => 2;");
 });
