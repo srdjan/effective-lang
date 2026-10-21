@@ -126,6 +126,81 @@ const STREAM_FLATTENS: Record<StreamFlatten["kind"], string> = {
   "switch-map-streams": "switchMapStreams",
 };
 
+/** The Stream operators that map the elements, with the callback rule and the message. */
+type StreamMap = Extract<Expr, { kind: "map-effect" | "map-stream" }>;
+
+const STREAM_MAPS: Record<
+  StreamMap["kind"],
+  {
+    readonly name: string;
+    /** The callback must be pure. Its effects then stay out of the result. */
+    readonly pure: boolean;
+    readonly needs: string;
+  }
+> = {
+  "map-effect": {
+    name: "mapEffect",
+    pure: false,
+    needs: "mapEffect needs a Stream and an element callback",
+  },
+  "map-stream": {
+    name: "mapStream",
+    pure: true,
+    needs: "mapStream needs a Stream and a pure element callback",
+  },
+};
+
+/** The Stream operators that carry a state through a callback of two arguments. */
+type StreamAccumulator = Extract<
+  Expr,
+  {
+    kind:
+      | "scan-stream"
+      | "map-accum-stream"
+      | "fold-stream"
+      | "fold-effect-stream";
+  }
+>;
+
+const STREAM_ACCUMULATORS: Record<
+  StreamAccumulator["kind"],
+  {
+    readonly name: string;
+    /** The callback must be pure. Its effects then stay out of the result. */
+    readonly pure: boolean;
+    /** The operator runs the Stream to the final state instead of returning a Stream. */
+    readonly terminal: boolean;
+    readonly needs: string;
+  }
+> = {
+  "scan-stream": {
+    name: "scanStream",
+    pure: true,
+    terminal: false,
+    needs: "scanStream needs a Stream and a pure state update callback",
+  },
+  "map-accum-stream": {
+    name: "mapAccumStream",
+    pure: true,
+    terminal: false,
+    needs:
+      "mapAccumStream needs a Stream and a pure callback returning [State, Output[]]",
+  },
+  "fold-stream": {
+    name: "foldStream",
+    pure: true,
+    terminal: true,
+    needs: "foldStream needs a Stream and a pure state update callback",
+  },
+  "fold-effect-stream": {
+    name: "foldEffectStream",
+    pure: false,
+    terminal: true,
+    needs:
+      "foldEffectStream needs a Stream and a compatible state update callback",
+  },
+};
+
 /** The Stream operators that take a pure Int count, with the operator name. */
 type StreamCount = Extract<Expr, { kind: "take-stream" | "drop-stream" }>;
 
@@ -897,19 +972,15 @@ export class BodyValidator {
       case "unfold":
         return this.unfoldStream(e, path);
       case "map-effect":
-        return this.mapEffect(e, path);
       case "map-stream":
-        return this.mapStream(e, path);
+        return this.mapElements(e, path);
       case "map-groups":
         return this.mapGroups(e, path);
       case "scan-stream":
-        return this.scanStream(e, path);
       case "map-accum-stream":
-        return this.mapAccumStream(e, path);
       case "fold-stream":
-        return this.foldStream(e, path);
       case "fold-effect-stream":
-        return this.foldEffectStream(e, path);
+        return this.accumulateStream(e, path);
       case "collect-stream":
       case "head-stream":
       case "last-stream":
@@ -3582,11 +3653,9 @@ export class BodyValidator {
     };
   }
 
-  private mapEffect(
-    e: Extract<Expr, { kind: "map-effect" }>,
-    path: string,
-  ): Comp {
-    this.checkConcurrency(e, path, "mapEffect");
+  private mapElements(e: StreamMap, path: string): Comp {
+    const row = STREAM_MAPS[e.kind];
+    if (e.kind === "map-effect") this.checkConcurrency(e, path, row.name);
     const stream = this.check(e.stream, `${path}.stream`);
     const transform = this.check(e.transform, `${path}.transform`);
     const source = unfold(this.env, stream.type);
@@ -3595,49 +3664,7 @@ export class BodyValidator {
       this.add(
         AREA.control,
         `${path}.transform`,
-        "mapEffect requires an inline closure",
-        e.transform.span,
-      );
-    }
-    if (
-      source.kind !== "stream" || fn === undefined ||
-      fn.parameters.length !== 1 ||
-      !fits(this.env, source.element, fn.parameters[0])
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "mapEffect needs a Stream and an element callback",
-        e.span,
-      );
-      return this.poison();
-    }
-    return {
-      type: {
-        kind: "stream",
-        element: fn.result,
-        effects: {
-          ...unionEffects(source.effects, fn.effects),
-        },
-      },
-      match: "exact",
-      active: combine([stream, transform]),
-    };
-  }
-
-  private mapStream(
-    e: Extract<Expr, { kind: "map-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const transform = this.check(e.transform, `${path}.transform`);
-    const source = unfold(this.env, stream.type);
-    const fn = asFunction(this.env, transform.type);
-    if (e.transform.kind !== "closure") {
-      this.add(
-        AREA.control,
-        `${path}.transform`,
-        "mapStream requires an inline closure",
+        `${row.name} requires an inline closure`,
         e.transform.span,
       );
     }
@@ -3645,31 +3672,26 @@ export class BodyValidator {
       source.kind !== "stream" || fn === undefined ||
       fn.parameters.length !== 1 ||
       !fits(this.env, source.element, fn.parameters[0]) ||
-      !isQuiet(invocationOf(fn))
+      (row.pure && !isQuiet(invocationOf(fn)))
     ) {
-      this.add(
-        AREA.types,
-        path,
-        "mapStream needs a Stream and a pure element callback",
-        e.span,
-      );
+      this.add(AREA.types, path, row.needs, e.span);
       return this.poison();
     }
     return {
       type: {
         kind: "stream",
         element: fn.result,
-        effects: source.effects,
+        effects: row.pure
+          ? source.effects
+          : { ...unionEffects(source.effects, fn.effects) },
       },
       match: "exact",
       active: combine([stream, transform]),
     };
   }
 
-  private scanStream(
-    e: Extract<Expr, { kind: "scan-stream" }>,
-    path: string,
-  ): Comp {
+  private accumulateStream(e: StreamAccumulator, path: string): Comp {
+    const row = STREAM_ACCUMULATORS[e.kind];
     const stream = this.check(e.stream, `${path}.stream`);
     const seed = this.check(e.seed, `${path}.seed`);
     const update = this.check(e.update, `${path}.update`);
@@ -3679,204 +3701,61 @@ export class BodyValidator {
       this.add(
         AREA.control,
         `${path}.update`,
-        "scanStream requires an inline closure",
+        `${row.name} requires an inline closure`,
         e.update.span,
       );
     }
-    if (
-      source.kind !== "stream" || fn === undefined ||
-      fn.parameters.length !== 2 ||
-      !fits(this.env, seed.type, fn.parameters[0]) ||
-      !fits(this.env, source.element, fn.parameters[1]) ||
-      !fits(this.env, fn.result, seed.type) ||
-      !isQuiet(invocationOf(fn))
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "scanStream needs a Stream and a pure state update callback",
-        e.span,
-      );
-      return this.poison();
-    }
-    if (!isQuiet(seed)) {
-      this.add(
-        AREA.execution,
-        `${path}.seed`,
-        "scanStream seed must be pure",
-        e.seed.span,
-      );
-    }
-    return {
-      type: {
-        kind: "stream",
-        element: seed.type,
-        effects: source.effects,
-      },
-      match: "exact",
-      active: combine([stream, seed, update]),
-    };
-  }
-
-  private mapAccumStream(
-    e: Extract<Expr, { kind: "map-accum-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const seed = this.check(e.seed, `${path}.seed`);
-    const update = this.check(e.update, `${path}.update`);
-    const source = unfold(this.env, stream.type);
-    const fn = asFunction(this.env, update.type);
-    if (e.update.kind !== "closure") {
-      this.add(
-        AREA.control,
-        `${path}.update`,
-        "mapAccumStream requires an inline closure",
-        e.update.span,
-      );
-    }
-    const result = fn === undefined ? undefined : unfold(this.env, fn.result);
-    const state = result?.kind === "tuple" && result.elements.length === 2
-      ? result.elements[0]
+    // mapAccumStream returns [State, Output[]]. The others return the State.
+    const pair = e.kind === "map-accum-stream" && fn !== undefined
+      ? unfold(this.env, fn.result)
       : undefined;
-    const output = result?.kind === "tuple" && result.elements.length === 2
-      ? unfold(this.env, result.elements[1])
+    const elements = pair?.kind === "tuple" && pair.elements.length === 2
+      ? pair.elements
       : undefined;
+    const output = elements === undefined
+      ? undefined
+      : unfold(this.env, elements[1]);
+    const state = e.kind === "map-accum-stream" ? elements?.[0] : fn?.result;
     if (
       source.kind !== "stream" || fn === undefined ||
       fn.parameters.length !== 2 ||
       !fits(this.env, seed.type, fn.parameters[0]) ||
       !fits(this.env, source.element, fn.parameters[1]) ||
       state === undefined || !fits(this.env, state, seed.type) ||
-      output?.kind !== "array" ||
-      !isQuiet(invocationOf(fn))
+      (e.kind === "map-accum-stream" && output?.kind !== "array") ||
+      (row.pure && !isQuiet(invocationOf(fn)))
     ) {
-      this.add(
-        AREA.types,
-        path,
-        "mapAccumStream needs a Stream and a pure callback returning [State, Output[]]",
-        e.span,
-      );
+      this.add(AREA.types, path, row.needs, e.span);
       return this.poison();
     }
     if (!isQuiet(seed)) {
       this.add(
         AREA.execution,
         `${path}.seed`,
-        "mapAccumStream seed must be pure",
+        `${row.name} seed must be pure`,
         e.seed.span,
       );
+    }
+    if (row.terminal) {
+      return {
+        type: seed.type,
+        match: "exact",
+        active: combine([stream, seed, update, {
+          ...(row.pure
+            ? source.effects
+            : unionEffects(source.effects, fn.effects)),
+          execution: "effect",
+        }]),
+      };
     }
     return {
       type: {
         kind: "stream",
-        element: output.element,
+        element: output?.kind === "array" ? output.element : seed.type,
         effects: source.effects,
       },
       match: "exact",
       active: combine([stream, seed, update]),
-    };
-  }
-
-  private foldStream(
-    e: Extract<Expr, { kind: "fold-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const seed = this.check(e.seed, `${path}.seed`);
-    const update = this.check(e.update, `${path}.update`);
-    const source = unfold(this.env, stream.type);
-    const fn = asFunction(this.env, update.type);
-    if (e.update.kind !== "closure") {
-      this.add(
-        AREA.control,
-        `${path}.update`,
-        "foldStream requires an inline closure",
-        e.update.span,
-      );
-    }
-    if (
-      source.kind !== "stream" || fn === undefined ||
-      fn.parameters.length !== 2 ||
-      !fits(this.env, seed.type, fn.parameters[0]) ||
-      !fits(this.env, source.element, fn.parameters[1]) ||
-      !fits(this.env, fn.result, seed.type) ||
-      !isQuiet(invocationOf(fn))
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "foldStream needs a Stream and a pure state update callback",
-        e.span,
-      );
-      return this.poison();
-    }
-    if (!isQuiet(seed)) {
-      this.add(
-        AREA.execution,
-        `${path}.seed`,
-        "foldStream seed must be pure",
-        e.seed.span,
-      );
-    }
-    return {
-      type: seed.type,
-      match: "exact",
-      active: combine([stream, seed, update, {
-        failures: source.effects.failures,
-        requirements: source.effects.requirements,
-        execution: "effect",
-      }]),
-    };
-  }
-
-  private foldEffectStream(
-    e: Extract<Expr, { kind: "fold-effect-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const seed = this.check(e.seed, `${path}.seed`);
-    const update = this.check(e.update, `${path}.update`);
-    const source = unfold(this.env, stream.type);
-    const fn = asFunction(this.env, update.type);
-    if (e.update.kind !== "closure") {
-      this.add(
-        AREA.control,
-        `${path}.update`,
-        "foldEffectStream requires an inline closure",
-        e.update.span,
-      );
-    }
-    if (
-      source.kind !== "stream" || fn === undefined ||
-      fn.parameters.length !== 2 ||
-      !fits(this.env, seed.type, fn.parameters[0]) ||
-      !fits(this.env, source.element, fn.parameters[1]) ||
-      !fits(this.env, fn.result, seed.type)
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "foldEffectStream needs a Stream and a compatible state update callback",
-        e.span,
-      );
-      return this.poison();
-    }
-    if (!isQuiet(seed)) {
-      this.add(
-        AREA.execution,
-        `${path}.seed`,
-        "foldEffectStream seed must be pure",
-        e.seed.span,
-      );
-    }
-    return {
-      type: seed.type,
-      match: "exact",
-      active: combine([stream, seed, update, {
-        ...unionEffects(source.effects, fn.effects),
-        execution: "effect",
-      }]),
     };
   }
 
