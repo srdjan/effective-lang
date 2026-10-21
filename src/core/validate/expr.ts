@@ -82,6 +82,71 @@ interface Comp {
   readonly poisoned?: boolean;
 }
 
+/** The Stream operators that run a Stream to one value, with the result type. */
+type StreamTerminal = Extract<
+  Expr,
+  {
+    kind: "collect-stream" | "head-stream" | "last-stream" | "drain-stream";
+  }
+>;
+
+const STREAM_TERMINALS: Record<
+  StreamTerminal["kind"],
+  { readonly name: string; readonly result: (element: Type) => Type }
+> = {
+  "collect-stream": {
+    name: "collectStream",
+    result: (element) => ({ kind: "array", element }),
+  },
+  "head-stream": {
+    name: "headStream",
+    result: (element) => ({ kind: "option", element }),
+  },
+  "last-stream": {
+    name: "lastStream",
+    result: (element) => ({ kind: "option", element }),
+  },
+  "drain-stream": { name: "drainStream", result: () => UNIT },
+};
+
+/** The Stream operators that flatten a Stream of Streams, with the operator name. */
+type StreamFlatten = Extract<
+  Expr,
+  { kind: "flat-map-streams" | "switch-map-streams" }
+>;
+
+const STREAM_FLATTENS: Record<StreamFlatten["kind"], string> = {
+  "flat-map-streams": "flatMapStreams",
+  "switch-map-streams": "switchMapStreams",
+};
+
+/** The Stream operators that take a pure Int count, with the operator name. */
+type StreamCount = Extract<Expr, { kind: "take-stream" | "drop-stream" }>;
+
+const STREAM_COUNTS: Record<StreamCount["kind"], string> = {
+  "take-stream": "takeStream",
+  "drop-stream": "dropStream",
+};
+
+/** The Stream operators that take a pure boolean predicate, with the operator name. */
+type PureStreamPredicate = Extract<
+  Expr,
+  {
+    kind:
+      | "drop-while-stream"
+      | "filter-stream"
+      | "take-while-stream"
+      | "take-until-stream";
+  }
+>;
+
+const PURE_STREAM_PREDICATES: Record<PureStreamPredicate["kind"], string> = {
+  "drop-while-stream": "dropWhileStream",
+  "filter-stream": "filterStream",
+  "take-while-stream": "takeWhileStream",
+  "take-until-stream": "takeUntilStream",
+};
+
 function invocationOf(fn: {
   readonly execution: Active["execution"];
   readonly effects: {
@@ -719,17 +784,13 @@ export class BodyValidator {
       case "fold-effect-stream":
         return this.foldEffectStream(e, path);
       case "collect-stream":
-        return this.collectStream(e, path);
       case "head-stream":
-        return this.headStream(e, path);
       case "last-stream":
-        return this.lastStream(e, path);
       case "drain-stream":
-        return this.drainStream(e, path);
+        return this.streamTerminal(e, path);
       case "flat-map-streams":
-        return this.flatMapStreams(e, path);
       case "switch-map-streams":
-        return this.switchMapStreams(e, path);
+        return this.mapStreams(e, path);
       case "catch-stream":
         return this.catchStream(e, path);
       case "retry-stream":
@@ -739,22 +800,18 @@ export class BodyValidator {
       case "throttle-stream":
         return this.throttleStream(e, path);
       case "take-stream":
-        return this.takeStream(e, path);
       case "drop-stream":
-        return this.dropStream(e, path);
+        return this.streamCount(e, path);
       case "drop-while-stream":
-        return this.dropWhileStream(e, path);
       case "filter-stream":
-        return this.filterStream(e, path);
+      case "take-while-stream":
+      case "take-until-stream":
+        return this.pureStreamPredicate(e, path);
       case "filter-effect-stream":
       case "take-while-effect-stream":
       case "take-until-effect-stream":
       case "drop-while-effect-stream":
         return this.effectStreamPredicate(e, path);
-      case "take-while-stream":
-        return this.takeWhileStream(e, path);
-      case "take-until-stream":
-        return this.takeUntilStream(e, path);
       case "sink-for-each":
         return this.sinkForEach(e, path);
       case "take-sink":
@@ -3729,23 +3786,21 @@ export class BodyValidator {
     };
   }
 
-  private collectStream(
-    e: Extract<Expr, { kind: "collect-stream" }>,
-    path: string,
-  ): Comp {
+  private streamTerminal(e: StreamTerminal, path: string): Comp {
+    const row = STREAM_TERMINALS[e.kind];
     const stream = this.check(e.stream, `${path}.stream`);
     const source = unfold(this.env, stream.type);
     if (source.kind !== "stream") {
       this.add(
         AREA.types,
         path,
-        "collectStream needs a Stream value",
+        `${row.name} needs a Stream value`,
         e.span,
       );
       return this.poison();
     }
     return {
-      type: { kind: "array", element: source.element },
+      type: row.result(source.element),
       match: "exact",
       active: combine([stream, {
         failures: source.effects.failures,
@@ -3755,96 +3810,17 @@ export class BodyValidator {
     };
   }
 
-  private headStream(
-    e: Extract<Expr, { kind: "head-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const source = unfold(this.env, stream.type);
-    if (source.kind !== "stream") {
-      this.add(
-        AREA.types,
-        path,
-        "headStream needs a Stream value",
-        e.span,
-      );
-      return this.poison();
-    }
-    return {
-      type: { kind: "option", element: source.element },
-      match: "exact",
-      active: combine([stream, {
-        failures: source.effects.failures,
-        requirements: source.effects.requirements,
-        execution: "effect",
-      }]),
-    };
-  }
-
-  private lastStream(
-    e: Extract<Expr, { kind: "last-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const source = unfold(this.env, stream.type);
-    if (source.kind !== "stream") {
-      this.add(
-        AREA.types,
-        path,
-        "lastStream needs a Stream value",
-        e.span,
-      );
-      return this.poison();
-    }
-    return {
-      type: { kind: "option", element: source.element },
-      match: "exact",
-      active: combine([stream, {
-        failures: source.effects.failures,
-        requirements: source.effects.requirements,
-        execution: "effect",
-      }]),
-    };
-  }
-
-  private drainStream(
-    e: Extract<Expr, { kind: "drain-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const source = unfold(this.env, stream.type);
-    if (source.kind !== "stream") {
-      this.add(
-        AREA.types,
-        path,
-        "drainStream needs a Stream value",
-        e.span,
-      );
-      return this.poison();
-    }
-    return {
-      type: UNIT,
-      match: "exact",
-      active: combine([stream, {
-        failures: source.effects.failures,
-        requirements: source.effects.requirements,
-        execution: "effect",
-      }]),
-    };
-  }
-
-  private flatMapStreams(
-    e: Extract<Expr, { kind: "flat-map-streams" }>,
-    path: string,
-  ): Comp {
+  private mapStreams(e: StreamFlatten, path: string): Comp {
+    const name = STREAM_FLATTENS[e.kind];
     if (
-      e.concurrency !== undefined && e.concurrency !== "unbounded" &&
+      e.kind === "flat-map-streams" && e.concurrency !== undefined &&
+      e.concurrency !== "unbounded" &&
       !(Number.isSafeInteger(e.concurrency) && e.concurrency > 0)
     ) {
       this.add(
         AREA.control,
         `${path}.concurrency`,
-        "flatMapStreams concurrency must be a positive safe integer or unbounded",
+        `${name} concurrency must be a positive safe integer or unbounded`,
         e.span,
       );
     }
@@ -3856,7 +3832,7 @@ export class BodyValidator {
       this.add(
         AREA.control,
         `${path}.transform`,
-        "flatMapStreams requires an inline closure",
+        `${name} requires an inline closure`,
         e.transform.span,
       );
     }
@@ -3871,59 +3847,7 @@ export class BodyValidator {
       this.add(
         AREA.types,
         path,
-        "flatMapStreams needs a Stream and a pure callback returning a Stream",
-        e.span,
-      );
-      return this.poison();
-    }
-    return {
-      type: {
-        kind: "stream",
-        element: inner.element,
-        effects: {
-          failures: sortedUnique([
-            ...source.effects.failures,
-            ...inner.effects.failures,
-          ]),
-          requirements: sortedUnique([
-            ...source.effects.requirements,
-            ...inner.effects.requirements,
-          ]),
-        },
-      },
-      match: "exact",
-      active: combine([stream, transform]),
-    };
-  }
-
-  private switchMapStreams(
-    e: Extract<Expr, { kind: "switch-map-streams" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const transform = this.check(e.transform, `${path}.transform`);
-    const source = unfold(this.env, stream.type);
-    const fn = asFunction(this.env, transform.type);
-    if (e.transform.kind !== "closure") {
-      this.add(
-        AREA.control,
-        `${path}.transform`,
-        "switchMapStreams requires an inline closure",
-        e.transform.span,
-      );
-    }
-    const inner = fn === undefined ? undefined : unfold(this.env, fn.result);
-    if (
-      source.kind !== "stream" || fn === undefined ||
-      fn.parameters.length !== 1 ||
-      !fits(this.env, source.element, fn.parameters[0]) ||
-      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
-      fn.effects.requirements.length > 0 || inner?.kind !== "stream"
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "switchMapStreams needs a Stream and a pure callback returning a Stream",
+        `${name} needs a Stream and a pure callback returning a Stream`,
         e.span,
       );
       return this.poison();
@@ -4096,10 +4020,8 @@ export class BodyValidator {
     return { type: source, match: "exact", active: combine([stream]) };
   }
 
-  private takeStream(
-    e: Extract<Expr, { kind: "take-stream" }>,
-    path: string,
-  ): Comp {
+  private streamCount(e: StreamCount, path: string): Comp {
+    const name = STREAM_COUNTS[e.kind];
     const stream = this.check(e.stream, `${path}.stream`);
     const count = this.check(e.count, `${path}.count`);
     const source = unfold(this.env, stream.type);
@@ -4107,7 +4029,7 @@ export class BodyValidator {
       this.add(
         AREA.types,
         path,
-        "takeStream needs a Stream value and an Int count",
+        `${name} needs a Stream value and an Int count`,
         e.span,
       );
       return this.poison();
@@ -4119,7 +4041,7 @@ export class BodyValidator {
       this.add(
         AREA.execution,
         `${path}.count`,
-        "takeStream count must be pure",
+        `${name} count must be pure`,
         e.count.span,
       );
     }
@@ -4130,44 +4052,8 @@ export class BodyValidator {
     };
   }
 
-  private dropStream(
-    e: Extract<Expr, { kind: "drop-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const count = this.check(e.count, `${path}.count`);
-    const source = unfold(this.env, stream.type);
-    if (source.kind !== "stream" || !fits(this.env, count.type, INT)) {
-      this.add(
-        AREA.types,
-        path,
-        "dropStream needs a Stream value and an Int count",
-        e.span,
-      );
-      return this.poison();
-    }
-    if (
-      count.execution !== "pure" || count.failures.length > 0 ||
-      count.requirements.length > 0
-    ) {
-      this.add(
-        AREA.execution,
-        `${path}.count`,
-        "dropStream count must be pure",
-        e.count.span,
-      );
-    }
-    return {
-      type: source,
-      match: "exact",
-      active: combine([stream, count]),
-    };
-  }
-
-  private dropWhileStream(
-    e: Extract<Expr, { kind: "drop-while-stream" }>,
-    path: string,
-  ): Comp {
+  private pureStreamPredicate(e: PureStreamPredicate, path: string): Comp {
+    const name = PURE_STREAM_PREDICATES[e.kind];
     const stream = this.check(e.stream, `${path}.stream`);
     const predicate = this.check(e.predicate, `${path}.predicate`);
     const source = unfold(this.env, stream.type);
@@ -4176,7 +4062,7 @@ export class BodyValidator {
       this.add(
         AREA.control,
         `${path}.predicate`,
-        "dropWhileStream requires an inline closure",
+        `${name} requires an inline closure`,
         e.predicate.span,
       );
     }
@@ -4191,46 +4077,7 @@ export class BodyValidator {
       this.add(
         AREA.types,
         path,
-        "dropWhileStream needs a Stream and a pure boolean predicate",
-        e.span,
-      );
-      return this.poison();
-    }
-    return {
-      type: source,
-      match: "exact",
-      active: combine([stream, predicate]),
-    };
-  }
-
-  private filterStream(
-    e: Extract<Expr, { kind: "filter-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const predicate = this.check(e.predicate, `${path}.predicate`);
-    const source = unfold(this.env, stream.type);
-    const fn = asFunction(this.env, predicate.type);
-    if (e.predicate.kind !== "closure") {
-      this.add(
-        AREA.control,
-        `${path}.predicate`,
-        "filterStream requires an inline closure",
-        e.predicate.span,
-      );
-    }
-    if (
-      source.kind !== "stream" || fn === undefined ||
-      fn.parameters.length !== 1 ||
-      !fits(this.env, source.element, fn.parameters[0]) ||
-      !fits(this.env, fn.result, BOOLEAN) ||
-      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
-      fn.effects.requirements.length > 0
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "filterStream needs a Stream and a pure boolean predicate",
+        `${name} needs a Stream and a pure boolean predicate`,
         e.span,
       );
       return this.poison();
@@ -4296,84 +4143,6 @@ export class BodyValidator {
           ]),
         },
       },
-      match: "exact",
-      active: combine([stream, predicate]),
-    };
-  }
-
-  private takeWhileStream(
-    e: Extract<Expr, { kind: "take-while-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const predicate = this.check(e.predicate, `${path}.predicate`);
-    const source = unfold(this.env, stream.type);
-    const fn = asFunction(this.env, predicate.type);
-    if (e.predicate.kind !== "closure") {
-      this.add(
-        AREA.control,
-        `${path}.predicate`,
-        "takeWhileStream requires an inline closure",
-        e.predicate.span,
-      );
-    }
-    if (
-      source.kind !== "stream" || fn === undefined ||
-      fn.parameters.length !== 1 ||
-      !fits(this.env, source.element, fn.parameters[0]) ||
-      !fits(this.env, fn.result, BOOLEAN) ||
-      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
-      fn.effects.requirements.length > 0
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "takeWhileStream needs a Stream and a pure boolean predicate",
-        e.span,
-      );
-      return this.poison();
-    }
-    return {
-      type: source,
-      match: "exact",
-      active: combine([stream, predicate]),
-    };
-  }
-
-  private takeUntilStream(
-    e: Extract<Expr, { kind: "take-until-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const predicate = this.check(e.predicate, `${path}.predicate`);
-    const source = unfold(this.env, stream.type);
-    const fn = asFunction(this.env, predicate.type);
-    if (e.predicate.kind !== "closure") {
-      this.add(
-        AREA.control,
-        `${path}.predicate`,
-        "takeUntilStream requires an inline closure",
-        e.predicate.span,
-      );
-    }
-    if (
-      source.kind !== "stream" || fn === undefined ||
-      fn.parameters.length !== 1 ||
-      !fits(this.env, source.element, fn.parameters[0]) ||
-      !fits(this.env, fn.result, BOOLEAN) ||
-      fn.execution !== "pure" || fn.effects.failures.length > 0 ||
-      fn.effects.requirements.length > 0
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "takeUntilStream needs a Stream and a pure boolean predicate",
-        e.span,
-      );
-      return this.poison();
-    }
-    return {
-      type: source,
       match: "exact",
       active: combine([stream, predicate]),
     };
