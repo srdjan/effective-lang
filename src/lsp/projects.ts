@@ -100,7 +100,7 @@ interface ProjectSetPorts {
   log(type: LogType, message: string): void;
   /** Writes a line to stderr. The set adds the line end. */
   stderr(text: string): void;
-  /** Called after each flush that ran `Program.update`, after the diagnostics went out. */
+  /** Called after each flush whose `Program.update` gave a revision, after the diagnostics went out. */
   flushed(project: ProjectState, revision: Revision): void;
 }
 
