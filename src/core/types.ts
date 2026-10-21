@@ -18,6 +18,7 @@ import type {
 } from "./ir.ts";
 import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID } from "./ir.ts";
 import { isErrorId } from "./ids.ts";
+import { compareText } from "./util.ts";
 
 declare const typeRefBrand: unique symbol;
 
@@ -245,10 +246,6 @@ interface ProviderSpec {
   readonly execution: Execution;
   readonly failures: readonly ErrorId[];
   readonly requirements: readonly CapabilityId[];
-}
-
-function compareText(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /** Sorted copy without duplicates. */

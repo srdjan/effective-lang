@@ -71,6 +71,7 @@ import {
   isTypeId,
   serviceOfCapability,
 } from "./ids.ts";
+import { compareText } from "./util.ts";
 
 // ------------------------------------------------------------------ shapes
 
@@ -1105,10 +1106,6 @@ interface TypeNodeInfo {
   readonly start: number;
   readonly kind: "alias" | "brand" | "error";
   readonly refs: ReadonlySet<string>;
-}
-
-function compareText(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /** The most levels that a type declaration may have, counting its aliases. */
