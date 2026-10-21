@@ -211,7 +211,7 @@ function collectEntries(args: CheckArguments): Entry[] {
 }
 
 /** Checks every body of one module and solves its execution modes. */
-export function checkModuleBodies(args: CheckArguments): ModuleBodies {
+function checkModuleBodies(args: CheckArguments): ModuleBodies {
   const { analysis, module, declarations } = args;
   const table = declarations.env.table;
   const resolution = analysis.resolutions.get(module);
@@ -266,7 +266,6 @@ export function checkModuleBodies(args: CheckArguments): ModuleBodies {
     }
   };
   const benv: BodyEnv = {
-    module,
     env: declarations.env,
     values,
     methodType,
@@ -441,7 +440,7 @@ export function checkModuleBodies(args: CheckArguments): ModuleBodies {
 // ------------------------------------------------------------------ the project
 
 /** What a module sees of the modules that it reaches, among those that are checked so far. */
-export interface ReachedModules {
+interface ReachedModules {
   readonly reached: readonly string[];
   readonly graphs: ReadonlyMap<string, TypeGraph>;
   readonly interfaces: ReadonlyMap<string, ModuleInterface>;
@@ -467,7 +466,7 @@ export function reachedModules(
 }
 
 /** The result of the check of one module: its checked form and its type graph. */
-export interface ModuleStep {
+interface ModuleStep {
   readonly checked: CheckedModule;
   readonly graph: TypeGraph;
 }

@@ -83,7 +83,6 @@ import { isErrorId, isTypeId, serviceOfCapability, shortName } from "./ids.ts";
 
 /** What the body checker needs from the module and from the project. */
 export interface BodyEnv {
-  readonly module: string;
   readonly env: TypeEnv;
   /** The type of a module-level value, local or imported. The error type when unknown. */
   readonly values: (id: ValueId) => TypeRef;
