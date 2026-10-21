@@ -4113,7 +4113,7 @@ const SCHEMA_DEFAULT_KEY_CASES: readonly SchemaCase[] = [
       'const bad = schemaDefaultKey(text, (): Text => "a", { encodingStrategy: "omit", extra: true })',
     expected: [
       'type-mismatch/010 | schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values | { encodingStrategy: "omit", extra: true }',
-      'type-mismatch/005 | the record type { encodingStrategy?: "omit" | "passthrough", on?: "missing" | "null" | "encoded" } has no field `extra` | extra',
+      'type-mismatch/005 | the record type { encodingStrategy?: "omit" | "passthrough", on?: "encoded" | "missing" | "null" } has no field `extra` | extra',
     ],
   },
   {
@@ -4310,7 +4310,7 @@ const SCHEMA_DEFAULT_NULL_KEY_CASES: readonly SchemaCase[] = [
       'const bad = schemaDefaultKey(text, (): Text => "a", { on: "null", encodingStrategy: "omit", extra: true })',
     expected: [
       'type-mismatch/010 | schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values | { on: "null", encodingStrategy: "omit", extra: true }',
-      'type-mismatch/005 | the record type { encodingStrategy?: "omit" | "passthrough", on?: "missing" | "null" | "encoded" } has no field `extra` | extra',
+      'type-mismatch/005 | the record type { encodingStrategy?: "omit" | "passthrough", on?: "encoded" | "missing" | "null" } has no field `extra` | extra',
     ],
   },
   {
@@ -4350,7 +4350,7 @@ const SCHEMA_DEFAULT_NULL_KEY_CASES: readonly SchemaCase[] = [
     tail:
       'const shown: Int = schemaDefaultKey(text, (): Text => "a", { on: "null" })',
     expected: [
-      'type-mismatch/003 | the constant has type SchemaEncodedOptional<Text, null | Text, never, never>, but Int is expected | schemaDefaultKey(text, (): Text => "a", { on: "null" })',
+      'type-mismatch/003 | the constant has type SchemaEncodedOptional<Text, Text | null, never, never>, but Int is expected | schemaDefaultKey(text, (): Text => "a", { on: "null" })',
     ],
   },
   {
@@ -4358,7 +4358,7 @@ const SCHEMA_DEFAULT_NULL_KEY_CASES: readonly SchemaCase[] = [
     tail:
       'const shown: Int = schemaDefaultKey(text, (): Text => "a", { on: "null", encodingStrategy: "passthrough" })',
     expected: [
-      'type-mismatch/003 | the constant has type SchemaEncodedOptional<Text, null | Text, never, never>, but Int is expected | schemaDefaultKey(text, (): Text => "a", { on: "null", encodingStrategy: "passthrough" })',
+      'type-mismatch/003 | the constant has type SchemaEncodedOptional<Text, Text | null, never, never>, but Int is expected | schemaDefaultKey(text, (): Text => "a", { on: "null", encodingStrategy: "passthrough" })',
     ],
   },
   {
@@ -4527,7 +4527,7 @@ const SCHEMA_DEFAULT_ENCODED_KEY_CASES: readonly SchemaCase[] = [
       'const bad = schemaDefaultKey(text, (): Text => "a", { on: "encoded", encodingStrategy: "omit", extra: true })',
     expected: [
       'type-mismatch/010 | schemaDefaultKey options must be an inline { on?: "missing" | "null" | "encoded", encodingStrategy?: "omit" | "passthrough" } record with literal values | { on: "encoded", encodingStrategy: "omit", extra: true }',
-      'type-mismatch/005 | the record type { encodingStrategy?: "omit" | "passthrough", on?: "missing" | "null" | "encoded" } has no field `extra` | extra',
+      'type-mismatch/005 | the record type { encodingStrategy?: "omit" | "passthrough", on?: "encoded" | "missing" | "null" } has no field `extra` | extra',
     ],
   },
   {
@@ -5453,7 +5453,7 @@ const STRUCT_CASES: readonly SchemaCase[] = [
     tail:
       "const shown: Text = schemaStruct({ a: integer, b: optional, c: schemaOptionFromOptionalKey(integer), d: schemaDefaultKey(integer, (): Int => 1), e: schemaConstructorDefault(integer, (): Int => 1), f: schemaNullToMissingKey(integer) })",
     expected: [
-      "type-mismatch/003 | the constant has type Schema<{ a: Int, b?: Int, c: Option<Int>, d: Int, e: Int, f?: Int }, { a: Int, b?: Int, c?: Int, d?: Int, e: Int, f?: null | Int }, never, never, { a: Int, b?: Int, c: Option<Int>, d: Int, e?: Int, f?: Int }>, but Text is expected | schemaStruct({ a: integer, b: optional, c: schemaOptionFromOptionalKey(integer), d: schemaDefaultKey(integer, (): Int => 1), e: schemaConstructorDefault(integer, (): Int => 1), f: schemaNullToMissingKey(integer) })",
+      "type-mismatch/003 | the constant has type Schema<{ a: Int, b?: Int, c: Option<Int>, d: Int, e: Int, f?: Int }, { a: Int, b?: Int, c?: Int, d?: Int, e: Int, f?: Int | null }, never, never, { a: Int, b?: Int, c: Option<Int>, d: Int, e?: Int, f?: Int }>, but Text is expected | schemaStruct({ a: integer, b: optional, c: schemaOptionFromOptionalKey(integer), d: schemaDefaultKey(integer, (): Int => 1), e: schemaConstructorDefault(integer, (): Int => 1), f: schemaNullToMissingKey(integer) })",
     ],
   },
   {
@@ -5497,7 +5497,7 @@ const ISSUE_AND_HINT_CASES: readonly SchemaCase[] = [
     name: "at rejects the key type",
     tail: 'const bad = schemaAt(true, schemaInvalid("b"))',
     expected: [
-      "type-mismatch/003 | schema issue key has type boolean, but string | int is expected | true",
+      "type-mismatch/003 | schema issue key has type boolean, but int | string is expected | true",
     ],
   },
   {
@@ -5649,7 +5649,7 @@ const ISSUE_AND_HINT_CASES: readonly SchemaCase[] = [
     name: "null to missing key accepts a plain schema",
     tail: "const shown: Int = schemaNullToMissingKey(text)",
     expected: [
-      "type-mismatch/003 | the constant has type SchemaOptional<Text, null | Text, never, never>, but Int is expected | schemaNullToMissingKey(text)",
+      "type-mismatch/003 | the constant has type SchemaOptional<Text, Text | null, never, never>, but Int is expected | schemaNullToMissingKey(text)",
     ],
   },
   {

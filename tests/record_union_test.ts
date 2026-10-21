@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "@std/assert";
-import { lowerProject, validateProject } from "../src/core/mod.ts";
+import { lowerProject, Program, validateProject } from "../src/core/mod.ts";
 import { validateModule } from "../src/core/validate/index.ts";
 import { checkModule } from "./helpers.ts";
 
@@ -165,3 +165,55 @@ const bad: T = { kind: "b", value: 1 }
     assert(rejected.diagnostics.length > 0);
   }
 });
+
+const FILES = (text: string) => ({ "effective.json": "{}", "main.eff": text });
+
+Deno.test("union member order does not depend on the revision history", () => {
+  const history = "type N = int\ntype Q = { k: N[], v: N }\n";
+  const program = `type N = int
+type S = string
+type U = { k: S[], v: S } | { k: N[], v: N }
+export const f = (x: N): U => ({ k: [], v: x })
+`;
+  const incremental = new Program("");
+  const first = incremental.update({ set: FILES(history) });
+  assert(first.ok, JSON.stringify(first));
+  const second = incremental.update({ set: FILES(program) });
+  assert(second.ok, JSON.stringify(second));
+  const fresh = new Program("").update({ set: FILES(program) });
+  assert(fresh.ok, JSON.stringify(fresh));
+  assertEquals(fresh.value.diagnostics, []);
+  assertEquals(second.value.diagnostics, fresh.value.diagnostics);
+});
+
+const AZ = "type A = string\ntype Z = int\ntype B = boolean\n";
+const MEMBER_A = "{ k: A[], v: A }";
+const MEMBER_Z = "{ k: Z[], v: Z }";
+
+for (
+  const [name, members] of [
+    ["string member first", `${MEMBER_A} | ${MEMBER_Z}`],
+    ["int member first", `${MEMBER_Z} | ${MEMBER_A}`],
+  ]
+) {
+  Deno.test(`a record literal picks the union member by the type of a name field (${name})`, () => {
+    valid(
+      `${AZ}type U = ${members}
+export const f = (x: Z): U => ({ k: [], v: x })
+export const g = (v: Z): U => ({ k: [], v })
+export const h = (x: A): U => ({ k: [], v: (x) })
+`,
+    );
+  });
+
+  Deno.test(`a name field of a type that fits no member keeps the canonical first member (${name})`, () => {
+    const checked = check(
+      `${AZ}type U = ${members}
+export const f = (x: B): U => ({ k: [], v: x })
+`,
+    );
+    assertEquals(checked.diagnostics.map((d) => d.message), [
+      "the field `v` has type B, but A is expected",
+    ]);
+  });
+}

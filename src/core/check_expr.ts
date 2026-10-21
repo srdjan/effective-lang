@@ -5874,6 +5874,7 @@ class BodyChecker {
     expected: TypeRef | undefined,
     labels: readonly string[],
     literals: ReadonlyMap<string, LiteralValue>,
+    known: ReadonlyMap<string, TypeRef>,
   ): {
     readonly ref: TypeRef;
     readonly fields: readonly {
@@ -5902,7 +5903,34 @@ class BodyChecker {
           this.table.isAssignable(this.table.literal(value), field.type);
       })
     );
-    return discriminated[0] ?? fitting[0] ?? candidates[0];
+    const narrowed = (discriminated.length > 0 ? discriminated : fitting)
+      .filter(
+        (c) =>
+          [...known].every(([label, type]) => {
+            const field = c.fields.find((f) => f.name === label);
+            return field !== undefined &&
+              this.table.isAssignable(type, field.type);
+          }),
+      );
+    return narrowed[0] ?? discriminated[0] ?? fitting[0] ?? candidates[0];
+  }
+
+  /**
+   * The type of a field value that a name reference gives without context: a
+   * settled local, a value, or a provider. It records no fact and reports nothing.
+   */
+  private knownNameType(node: NodeId): TypeRef | undefined {
+    const target = this.targets.get(node);
+    if (target === undefined) return undefined;
+    let type: TypeRef | undefined;
+    if (target.kind === "local") {
+      if (!this.pendingLocals.has(target.id)) {
+        type = this.body.locals.get(target.id);
+      }
+    } else if (target.kind === "value" || target.kind === "provider") {
+      type = this.benv.values(target.id);
+    }
+    return type === undefined || type === this.table.error ? undefined : type;
   }
 
   private recordConstruction(
@@ -5915,19 +5943,30 @@ class BodyChecker {
       p.parts === undefined ? [] : [p.parts.label]
     );
     const literals = new Map<string, LiteralValue>();
+    const known = new Map<string, TypeRef>();
     for (const { parts } of parsed) {
-      if (parts?.value === undefined) continue;
+      if (parts === undefined) continue;
+      if (parts.value === undefined) {
+        const type = this.knownNameType(parts.labelNode);
+        if (type !== undefined) known.set(parts.label, type);
+        continue;
+      }
       let valueNode = parts.value;
       while (kindOf(this.tree, valueNode) === SyntaxKind.ParenExpr) {
         const inner = this.kids(valueNode)[0];
         if (inner === undefined) break;
         valueNode = inner;
       }
+      if (kindOf(this.tree, valueNode) === SyntaxKind.NameExpr) {
+        const type = this.knownNameType(valueNode);
+        if (type !== undefined) known.set(parts.label, type);
+        continue;
+      }
       if (kindOf(this.tree, valueNode) !== SyntaxKind.LiteralExpr) continue;
       const value = literalOf(this.tree, valueNode);
       if (value !== undefined) literals.set(parts.label, value);
     }
-    const target = this.recordTarget(expected, labels, literals);
+    const target = this.recordTarget(expected, labels, literals, known);
     const seen = new Set<string>();
     const infos: NodeInfo[] = [];
     const inferred: { name: string; type: TypeRef; optional: boolean }[] = [];

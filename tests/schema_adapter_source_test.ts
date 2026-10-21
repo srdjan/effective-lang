@@ -387,7 +387,7 @@ Deno.test("malformed union inputs, descriptor use, issue construction, and ungua
       initializer: 'schemaAt(true, schemaInvalid("x"))',
       expected: [[
         "type-mismatch/003",
-        "schema issue key has type boolean, but string | int is expected",
+        "schema issue key has type boolean, but int | string is expected",
         "true",
       ]],
     },

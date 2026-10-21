@@ -21,6 +21,10 @@ type Tag = Brand<string>
 type Branded = { kind: A, value: Int } | { kind: Tag, value: Text }
 type UnknownTag = { kind: A, value: Int } | { kind: unknown, value: Text }
 type LongTags = { longDiscriminatorField: "aVeryLongDiscriminatorLiteralStringToForceMultilineFormatting", value: Int } | { longDiscriminatorField: "anotherVeryLongDiscriminatorLiteralStringToForceMultilineFormatting", value: Int } | { other: Int }
+type PA = string
+type PZ = int
+type Pair = { k: PA[], v: PA } | { k: PZ[], v: PZ }
+export const pair = (x: PZ): Pair => ({ k: [], v: x })
 export const missing = (x: Missing): Int => match x { { kind: "a", ...a } => a.value, _ => 0 }
 export const optional = (x: Optional): Int => match x { { kind: "a", ...a } => a.value, { kind: "b", ...b } => b.value, _ => 0 }
 export const overlap = (x: Overlap): Int | Text => match x { { kind: "a", ...a } => a.value, _ => 0 }
@@ -68,7 +72,7 @@ export const formatted = (x: LongTags): Int => match x { { longDiscriminatorFiel
   const stdout = await runStrictTarget(
     emitted,
     `import { Effect } from "effect";
-import { missing, optional, overlap, brandedResult, unknownTag, a, b, one, make } from "./main.ts";
+import { missing, optional, overlap, brandedResult, unknownTag, a, b, one, make, pair } from "./main.ts";
 let calls = 0;
 const made = await Effect.runPromise(make(() => Effect.sync(() => { calls++; return "once"; })));
 console.log(JSON.stringify({
@@ -77,7 +81,7 @@ console.log(JSON.stringify({
   overlap: [overlap({ kind: "a", value: one }), overlap({ kind: "a", value: "open" }), overlap({ kind: "other", value: "open" })],
   brandedResult,
   unknownTag: [unknownTag({ kind: "a", value: "unknown" }), unknownTag({ kind: "other", value: "unknown" })],
-  a, b, made, calls,
+  a, b, made, calls, pair: pair(one),
 }));`,
     "effective-record-union-",
   );
@@ -91,5 +95,6 @@ console.log(JSON.stringify({
     b: { kind: "b", value: "hello" },
     made: { kind: "b", value: "once" },
     calls: 1,
+    pair: { k: [], v: 1 },
   });
 });

@@ -315,6 +315,8 @@ const MAX_DEPTH = 1536;
 export class TypeTable {
   private readonly nodes: TypeNode[] = [];
   private readonly byKey = new Map<string, TypeRef>();
+  /** The canonical IR text of a type, for the member order of unions. A node never changes, so the text is stable. */
+  private readonly irKeys = new Map<TypeRef, string>();
   private readonly aliases = new Map<TypeId, TypeRef>();
   private readonly guardedAliases = new Set<TypeId>();
   private readonly brands = new Map<TypeId, TypeRef>();
@@ -652,7 +654,9 @@ export class TypeTable {
   }
 
   /**
-   * Flattens nested unions, removes duplicates, and sorts by ref. A union of one
+   * Flattens nested unions, removes duplicates, and sorts the members by the
+   * canonical JSON of their IR, the order that `toIr` emits. The order does not
+   * depend on the order in which the table interned the types. A union of one
    * member is that member. An empty union is `never`. A union with the error type
    * is the error type.
    */
@@ -668,9 +672,20 @@ export class TypeTable {
       }
     }
     if (flat.size === 0) return this.never;
-    const sorted = [...flat].sort((a, b) => a - b);
+    const sorted = [...flat].sort((a, b) =>
+      compareText(this.irKey(a), this.irKey(b)) || a - b
+    );
     if (sorted.length === 1) return sorted[0];
     return this.intern({ kind: "union", members: sorted });
+  }
+
+  private irKey(ref: TypeRef): string {
+    let key = this.irKeys.get(ref);
+    if (key === undefined) {
+      key = canonicalJson(this.toIr(ref));
+      this.irKeys.set(ref, key);
+    }
+    return key;
   }
 
   /** Sorts and deduplicates the failure and requirement sets. */
