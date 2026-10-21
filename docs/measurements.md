@@ -4,9 +4,9 @@ The harnesses in `bench/` follow the measurement protocol of the design (section
 
 | Command                                                       | What it does                                                                                         |
 | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `deno task bench`                                             | Runs all six measurements at the quick scale. The quick scale aims at less than one minute for each. |
+| `deno task bench`                                             | Runs all seven measurements at the quick scale. The quick scale aims at less than one minute for each. |
 | `deno task bench --full`                                      | Runs the same measurements with larger iteration counts and more pairs.                              |
-| `deno task bench m1`, `m2`, `m3`, `m4`, `m5`, or `m6`         | Runs the named measurements. `m6` runs M2 and prints only the noise floor.                           |
+| `deno task bench m1`, `m2`, `m3`, `m4`, `m5`, `m6`, or `m7`   | Runs the named measurements. `m6` runs M2 and prints only the noise floor.                           |
 | `deno task bench --no-variants`                               | Skips the optional M5 variants.                                                                      |
 | `deno task bench --json <file>`                               | Also writes the raw samples to the file.                                                             |
 | `deno run --allow-write bench/generate.ts <size> <directory>` | Writes a synthetic project of the size `small`, `medium`, or `large`.                                |
@@ -29,7 +29,7 @@ M1 gets its floor from the A/B pairs of its own steps.
 
 Measure the floor again when the machine or its load changes.
 
-M1, M3, and M4 run the real language server as a subprocess through a shared edit-script implementation. M1 and M3 open the edited document; M4 holds three documents open and rotates edits between them. Servers use `writeOnSave` false and `debounceMs` 0.
+M1, M3, M4, and M7 run the real language server as a subprocess through a shared edit-script implementation. M1 and M3 open the edited document; M4 holds three documents open and rotates edits between them. M1, M3, and M4 use `writeOnSave` false and `debounceMs` 0 by default. M7 uses `writeOnSave` true, and M4 runs once more with `writeOnSave` true (see below).
 
 M1 times the path from an edit to its diagnostics. The time runs from just before the write of `textDocument/didChange` to the receipt of the matching `publishDiagnostics`. Then M1 times one hover on a fixed function name. Two server processes, A and B, run the same script, and the side that goes first alternates. M1 reports a distribution and the noise floor for each row.
 
@@ -43,7 +43,17 @@ M4 measures server memory over distinct revisions on the medium size. Each row s
 
 Before edits and after every step, M4 reads RSS, heap used and type-table size from `effective/stats`. Raw JSON retains all three metrics, the baseline, every sample and per-document counts. The text report shows baseline, peak and last values for both sessions, along with the original RSS summaries.
 
+`deno task bench` runs M4 twice. The first run uses `writeOnSave` false: the harness sends no `didSave`, so the server creates no disk program. The second run uses `writeOnSave` true. Each step then writes the edited text to disk before `didChange` and sends `didSave` after the diagnostics, so each server creates its disk program on the first step and updates it on every later step. The harness checks that the generated output of the edited module exists on disk after the run. The second report has the same columns, and its header line names `writeOnSave true`. The difference between the two reports is the memory cost of the disk program together with the file reads and writes of the saves. M4 sets no memory budget.
+
 M4 samples at step boundaries and cannot see a short peak within a step. RSS and heap reflect garbage collection and runtime allocation as well as retained compiler data; interned type-table nodes currently only grow. A finite run supplies growth evidence for revision-release decisions and does not establish bounded memory.
+
+M7 times a save round through the real language server on the three synthetic presets: small, medium, and large. The server runs with `writeOnSave` true and `debounceMs` 0 on a generated project in a temporary directory. The harness measures from just before the write of `textDocument/didSave` to the receipt of the reply to `effective/stats`. The server handles one message at a time, so it answers the stats request only after the save round has finished. The reply also comes after the flush of the overlay program that follows a round, because the server flushes a dirty project before it answers a request, or at the end of the read batch. So the time includes the round, that flush, and one stats round trip. The control row `stats only` measures the stats round trip alone, with no save. The harness never reads a log message as the signal, because the round sends the log messages in the middle of the round.
+
+Each preset has six rows. `cold` is the first round after the open, on a fresh server for each sample, so it includes the creation of the disk program. `stats only` is the control. `repeat` saves with no change on disk. `body` and `interface` write the edited text of the edit target to disk, send `didChange`, wait for the diagnostics of that change, and only then start the timer and send `didSave`. The `body` edit changes the literal in `bump`. The `interface` edit toggles the annotated type of `extra` (the `header` kind of the edit script). `save all` writes a body edit for every module of the project, with every module open in the server, sends `didSave` for each open module in one batch, and times until the last round has finished. For `save all`, the edit target gets its body edit, a feature module gets the edit of its `link` body, and `base.eff` and `app.eff` get a new revision comment. Column `saves` gives the number of `didSave` messages in one sample. The edit and its diagnostics wait are outside the timer.
+
+Two server processes, A and B, run each warm scenario with the order alternating, as in M1. The rows pool both sides, and the column `floor %` comes from the A/B pairs of the row. After each save the harness checks that the generated output of the edited module exists on disk. After a `body` save it also checks that the output holds the new literal. A failed check stops the run with an error.
+
+M7 decides the budget SV-D3 of the save plan: 100 ms at p90 for a `body` save on the large preset. The last line of the M7 report compares that row with the budget. M7 also shows how the time of `save all` grows with the number of modules, because each `didSave` runs a full round with a read of the whole workspace. If M7 misses the budget, the save plan requires a narrowing proposal before more work. The M7 numbers are not copied into any doc until the user decides what to record.
 
 ## The edit script
 
@@ -68,7 +78,7 @@ The stage `parse` includes `lex`, because the parser lexes its own input. The ro
 
 The token representation test of the design (object arrays against typed arrays) is not run. The lexer has only the typed-array form, so the comparison needs a second lexer. `docs/rejected.md` records this gap.
 
-M1 and M3 run on the examples and on the three synthetic sizes. M4 runs on the medium size. The step counts of the quick and the full profile are in `bench/profile.ts`.
+M1 and M3 run on the examples and on the three synthetic sizes. M4 runs on the medium size. M7 runs on the three synthetic sizes. The step counts of the quick and the full profile are in `bench/profile.ts`.
 
 A number from a run enters the README, the docs, or the ledger only with its noise floor, its size, and its number of samples. The user decides what to record. The timer is `performance.now()`, and the process is not pinned to a core, because macOS has no `taskset` equivalent.
 

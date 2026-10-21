@@ -139,6 +139,7 @@ Deno.test("the bench arguments select the profile, the measurements, and the opt
     "m4",
     "m5",
     "m6",
+    "m7",
   ]);
   assertEquals(defaults.value.variants, true);
   const full = parseOptions([

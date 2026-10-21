@@ -9,6 +9,7 @@ import type { M2Config, SizeConfig } from "./m2.ts";
 import type { M3Config } from "./m3.ts";
 import type { M4Config } from "./m4.ts";
 import type { M5Config } from "./m5.ts";
+import type { M7Config } from "./m7.ts";
 
 export type ProfileName = "quick" | "full";
 
@@ -38,6 +39,18 @@ interface Scale {
   >;
   /** The step counts N of the M4 rows. */
   readonly m4: readonly number[];
+  /** Cold pairs, warm-ups, steps, and Save All steps, for each M7 preset. */
+  readonly m7: Readonly<
+    Record<
+      typeof SIZE_NAMES[number],
+      {
+        coldPairs: number;
+        warmups: number;
+        steps: number;
+        saveAllSteps: number;
+      }
+    >
+  >;
 }
 
 const SCALES: Readonly<Record<ProfileName, Scale>> = {
@@ -61,6 +74,11 @@ const SCALES: Readonly<Record<ProfileName, Scale>> = {
       large: { steps: 30 },
     },
     m4: [50, 100, 200],
+    m7: {
+      small: { coldPairs: 5, warmups: 3, steps: 30, saveAllSteps: 10 },
+      medium: { coldPairs: 5, warmups: 3, steps: 30, saveAllSteps: 10 },
+      large: { coldPairs: 5, warmups: 3, steps: 30, saveAllSteps: 5 },
+    },
   },
   full: {
     m2: {
@@ -82,6 +100,11 @@ const SCALES: Readonly<Record<ProfileName, Scale>> = {
       large: { steps: 100 },
     },
     m4: [200, 500, 1000, 10000],
+    m7: {
+      small: { coldPairs: 15, warmups: 5, steps: 100, saveAllSteps: 30 },
+      medium: { coldPairs: 15, warmups: 5, steps: 100, saveAllSteps: 30 },
+      large: { coldPairs: 15, warmups: 5, steps: 100, saveAllSteps: 15 },
+    },
   },
 };
 
@@ -135,5 +158,19 @@ export function m4Config(profile: ProfileName): M4Config {
     timeoutMs: LSP_TIMEOUT_MS,
     stepCounts: SCALES[profile].m4,
     openDocuments: 3,
+  };
+}
+
+/** M4 with `writeOnSave` true: the same rows, with the disk program. */
+export function m4DiskConfig(profile: ProfileName): M4Config {
+  return { ...m4Config(profile), writeOnSave: true };
+}
+
+export function m7Config(profile: ProfileName): M7Config {
+  const scale = SCALES[profile].m7;
+  return {
+    seed: SEED,
+    timeoutMs: LSP_TIMEOUT_MS,
+    presets: SIZE_NAMES.map((size) => ({ size, ...scale[size] })),
   };
 }

@@ -21,6 +21,13 @@ export interface M4Config {
   readonly stepCounts: readonly number[];
   /** Documents held open concurrently; defaults to three. */
   readonly openDocuments?: number;
+  /**
+   * Run the servers with `writeOnSave` true. Each step then writes the edited
+   * text to disk and sends `didSave` after its diagnostics, so each server
+   * creates and updates its disk program. Default false: no save, no disk
+   * program.
+   */
+  readonly writeOnSave?: boolean;
   /** The limit of each server request or wait, in milliseconds. */
   readonly timeoutMs: number;
 }
@@ -60,6 +67,8 @@ export interface M4Result {
   readonly seed: number;
   readonly size: SizeName;
   readonly openDocuments: number;
+  /** True when the servers saved after each step. */
+  readonly writeOnSave: boolean;
   readonly rows: readonly M4Row[];
   /** The wall time of the whole measurement, in milliseconds. */
   readonly elapsedMs: number;
@@ -105,6 +114,8 @@ export async function runM4(
 ): Promise<Result<M4Result, LspBenchError>> {
   const started = performance.now();
   const openDocuments = config.openDocuments ?? 3;
+  const writeOnSave = config.writeOnSave ?? false;
+  const sessionOptions = { writeOnSave, saveOnStep: writeOnSave };
   if (
     !Number.isInteger(openDocuments) || openDocuments < 1 ||
     config.stepCounts.some((steps) => !Number.isInteger(steps) || steps < 1)
@@ -133,9 +144,19 @@ export async function runM4(
           },
         };
       }
-      const a = await workspace.open(input, config.timeoutMs, paths);
+      const a = await workspace.open(
+        input,
+        config.timeoutMs,
+        paths,
+        sessionOptions,
+      );
       if (!a.ok) return a;
-      const b = await workspace.open(input, config.timeoutMs, paths);
+      const b = await workspace.open(
+        input,
+        config.timeoutMs,
+        paths,
+        sessionOptions,
+      );
       if (!b.ok) return b;
       const firstA = await a.value.stats();
       if (!firstA.ok) return firstA;
@@ -167,6 +188,15 @@ export async function runM4(
           if (!sample.ok) return sample;
           samples.push(sample.value);
         }
+      }
+      if (writeOnSave && !(a.value.hasOutput() && b.value.hasOutput())) {
+        return {
+          ok: false,
+          error: {
+            tag: "server",
+            message: "M4 with writeOnSave: no generated output on disk",
+          },
+        };
       }
       const done = await workspace.finish();
       if (!done.ok) return done;
@@ -213,6 +243,7 @@ export async function runM4(
       seed: config.seed,
       size: config.size,
       openDocuments,
+      writeOnSave,
       rows,
       elapsedMs: performance.now() - started,
     },
@@ -223,7 +254,11 @@ const MIB = 1024 * 1024;
 
 export function formatM4(result: M4Result): string {
   const out = [
-    `M4: server memory over distinct edits, size ${result.size}, ${result.openDocuments} documents open concurrently, two server processes A and B`,
+    `M4: server memory over distinct edits, size ${result.size}, ${result.openDocuments} documents open concurrently, two server processes A and B, writeOnSave ${result.writeOnSave}${
+      result.writeOnSave
+        ? " (each step writes the text to disk and saves, so each server holds a disk program)"
+        : " (no save, no disk program)"
+    }`,
     "Edits rotate between documents. The primary cycles body, header, alias, and mode flip; companion feature modules receive body edits. Every text has a unique revision marker.",
     "Note: the peak is sampled only at step ends, so a short peak inside a step is not seen. These observations do not establish bounded memory.",
     "",

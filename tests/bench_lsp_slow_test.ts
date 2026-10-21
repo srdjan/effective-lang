@@ -8,6 +8,7 @@ import { assert, assertEquals } from "@std/assert";
 import { formatM1, runM1 } from "../bench/m1.ts";
 import { formatM3, runM3 } from "../bench/m3.ts";
 import { formatM4, runM4 } from "../bench/m4.ts";
+import { formatM7, M7_SCENARIOS, runM7 } from "../bench/m7.ts";
 import { describeLspBenchError, TEMP_PREFIX } from "../bench/lsp_script.ts";
 import { parseOptions } from "../bench/main.ts";
 
@@ -155,6 +156,50 @@ Deno.test("M4 records RSS, heap and type-table samples while editing concurrentl
   assertEquals(tempLeftovers(), before);
 });
 
+Deno.test("M7 times each save scenario with the disk program and removes its directories", async () => {
+  const before = tempLeftovers();
+  const result = await runM7({
+    seed: 1,
+    timeoutMs: TIMEOUT_MS,
+    presets: [{
+      size: "small",
+      coldPairs: 1,
+      warmups: 1,
+      steps: 2,
+      saveAllSteps: 1,
+    }],
+  });
+  assert(result.ok, result.ok ? "" : describeLspBenchError(result.error));
+  assertEquals(result.value.rows.map((r) => r.scenario), [...M7_SCENARIOS]);
+  for (const row of result.value.rows) {
+    assertEquals(row.samples.length, 2 * row.pairs.length);
+    assert(row.samples.every((ms) => ms > 0));
+  }
+  const byName = new Map(result.value.rows.map((r) => [r.scenario, r]));
+  assertEquals(byName.get("body")?.pairs.length, 2);
+  assertEquals(byName.get("save all")?.pairs.length, 1);
+  // The small preset has three modules, and Save All saves each of them.
+  assertEquals(byName.get("save all")?.saves, 3);
+  assert(formatM7(result.value).includes("small save all"));
+  assertEquals(tempLeftovers(), before);
+});
+
+Deno.test("M4 with writeOnSave saves after each step and creates the outputs", async () => {
+  const before = tempLeftovers();
+  const result = await runM4({
+    seed: 1,
+    size: "small",
+    timeoutMs: TIMEOUT_MS,
+    openDocuments: 2,
+    stepCounts: [4],
+    writeOnSave: true,
+  });
+  assert(result.ok, result.ok ? "" : describeLspBenchError(result.error));
+  assert(result.value.writeOnSave);
+  assert(formatM4(result.value).includes("writeOnSave true"));
+  assertEquals(tempLeftovers(), before);
+});
+
 Deno.test("a failed measurement removes its temporary directory", async () => {
   const before = tempLeftovers();
   // A timeout of 1 ms makes the first request fail.
@@ -173,5 +218,8 @@ Deno.test("the bench options accept m1, m3, and m4", () => {
   assertEquals(parsed.value.measurements, ["m1", "m3", "m4"]);
   const all = parseOptions([]);
   assert(all.ok);
-  assertEquals(all.value.measurements.length, 6);
+  assertEquals(all.value.measurements.length, 7);
+  const m7 = parseOptions(["m7"]);
+  assert(m7.ok);
+  assertEquals(m7.value.measurements, ["m7"]);
 });

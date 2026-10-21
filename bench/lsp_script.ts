@@ -220,6 +220,18 @@ function writeProject(
 
 // ------------------------------------------------------------------ session
 
+/** The options of one session beyond the documents it opens. */
+export interface SessionOptions {
+  /** The `writeOnSave` initialization option of the server. Default false. */
+  readonly writeOnSave?: boolean;
+  /**
+   * Save after each edit step: `step` writes the edited text to disk before
+   * its `didChange` and sends `didSave` after the diagnostics. This makes the
+   * server create and update its disk program. Needs `writeOnSave` true.
+   */
+  readonly saveOnStep?: boolean;
+}
+
 /** The numbers of one `effective/stats` reply that the measurements use. */
 export interface StepStats {
   readonly parses: number;
@@ -309,6 +321,8 @@ export class Session {
   readonly #input: LspInput;
   readonly #uri: string;
   readonly #timeoutMs: number;
+  readonly #dir: string;
+  readonly #saveOnStep: boolean;
   #text: string;
   #version = 1;
   /** Starts at 1, so the first body edit writes 2: the generated literal is 1. */
@@ -324,7 +338,11 @@ export class Session {
     input: LspInput,
     uri: string,
     timeoutMs: number,
+    dir: string,
+    saveOnStep: boolean,
   ) {
+    this.#dir = dir;
+    this.#saveOnStep = saveOnStep;
     this.#client = client;
     this.#input = input;
     this.#uri = uri;
@@ -342,9 +360,18 @@ export class Session {
     input: LspInput,
     timeoutMs: number,
     openPaths: readonly string[] = [input.editPath],
+    options: SessionOptions = {},
   ): Promise<
     Result<{ session: Session; client: LspClient }, LspBenchError>
   > {
+    const writeOnSave = options.writeOnSave ?? false;
+    const saveOnStep = options.saveOnStep ?? false;
+    if (saveOnStep && !writeOnSave) {
+      return fail({
+        tag: "setup",
+        message: "saveOnStep needs writeOnSave true",
+      });
+    }
     for (const path of openPaths) {
       if (!path.endsWith(".eff") || !input.files.has(path)) {
         return fail({ tag: "setup", message: `no source document ${path}` });
@@ -352,9 +379,16 @@ export class Session {
     }
     const client = new LspClient({ cwd: dir, timeoutMs });
     const uri = new URL(`file://${dir}/${input.editPath}`).href;
-    const session = new Session(client, input, uri, timeoutMs);
+    const session = new Session(
+      client,
+      input,
+      uri,
+      timeoutMs,
+      dir,
+      saveOnStep,
+    );
     try {
-      await client.initialize({ writeOnSave: false, debounceMs: 0 });
+      await client.initialize({ writeOnSave, debounceMs: 0 });
       for (const path of new Set([input.editPath, ...openPaths])) {
         const documentUri = new URL(`file://${dir}/${path}`).href;
         const text = input.files.get(path) ?? "";
@@ -438,6 +472,7 @@ export class Session {
     );
     waiting.catch(() => {});
     try {
+      if (this.#saveOnStep) this.#writeDisk(path, next.value);
       const start = performance.now();
       await this.#client.notify("textDocument/didChange", {
         textDocument: { uri, version },
@@ -445,6 +480,11 @@ export class Session {
       });
       const params = await waiting;
       const elapsed = performance.now() - start;
+      if (this.#saveOnStep) {
+        await this.#client.notify("textDocument/didSave", {
+          textDocument: { uri },
+        });
+      }
       if (companion === undefined) {
         this.#text = next.value;
         this.#version = version;
@@ -457,6 +497,187 @@ export class Session {
       return gate.ok ? succeed(elapsed) : gate;
     } catch (e) {
       return fail(serverError(e));
+    }
+  }
+
+  #writeDisk(path: string, text: string): void {
+    Deno.writeTextFileSync(`${this.#dir}/${path}`, text);
+  }
+
+  /**
+   * A body edit of the edited module for M7: writes the next text to disk,
+   * sends `didChange`, and waits for its diagnostics. The time is not
+   * measured. The server has finished its flush when this returns. Returns the
+   * revision that the edit carries. `kind` `header` or `body` only.
+   */
+  async editOnDisk(
+    kind: EditKind,
+  ): Promise<Result<number, LspBenchError>> {
+    const revision = ++this.#revision;
+    const next = applyEdit(this.#input, kind, this.#text, revision);
+    if (!next.ok) return next;
+    const version = this.#version + 1;
+    const waiting = this.#client.waitForDiagnostics(
+      this.#uri,
+      version,
+      this.#timeoutMs,
+    );
+    waiting.catch(() => {});
+    try {
+      this.#writeDisk(this.#input.editPath, next.value);
+      await this.#client.notify("textDocument/didChange", {
+        textDocument: { uri: this.#uri, version },
+        contentChanges: [{ text: next.value }],
+      });
+      const params = await waiting;
+      this.#text = next.value;
+      this.#version = version;
+      const gate = this.#gate(
+        params,
+        `${kind} edit on disk, version ${version}`,
+      );
+      return gate.ok ? succeed(revision) : gate;
+    } catch (e) {
+      return fail(serverError(e));
+    }
+  }
+
+  /**
+   * Edits every open module for "Save All": writes each next text to disk,
+   * sends one `didChange` for each, and waits for every diagnostics. The edit
+   * target gets a body edit. A feature companion gets its body edit, and any
+   * other module gets a new revision comment. The time is not measured.
+   */
+  async editAllOnDisk(): Promise<Result<null, LspBenchError>> {
+    const revision = ++this.#revision;
+    const edits: {
+      path: string;
+      uri: string;
+      version: number;
+      text: string;
+    }[] = [];
+    const next = applyEdit(this.#input, "body", this.#text, revision);
+    if (!next.ok) return next;
+    edits.push({
+      path: this.#input.editPath,
+      uri: this.#uri,
+      version: this.#version + 1,
+      text: next.value,
+    });
+    for (const [path, companion] of this.#companions) {
+      edits.push({
+        path,
+        uri: companion.uri,
+        version: companion.version + 1,
+        text: applyCompanionEdit(companion.text, revision),
+      });
+    }
+    const waits = edits.map((edit) => {
+      const waiting = this.#client.waitForDiagnostics(
+        edit.uri,
+        edit.version,
+        this.#timeoutMs,
+      );
+      waiting.catch(() => {});
+      return waiting;
+    });
+    try {
+      for (const edit of edits) {
+        this.#writeDisk(edit.path, edit.text);
+        await this.#client.notify("textDocument/didChange", {
+          textDocument: { uri: edit.uri, version: edit.version },
+          contentChanges: [{ text: edit.text }],
+        });
+      }
+      for (const [i, waiting] of waits.entries()) {
+        const params = await waiting;
+        const gate = this.#gate(params, `Save All edit ${i}`);
+        if (!gate.ok) return gate;
+      }
+      this.#text = edits[0]?.text ?? this.#text;
+      this.#version += 1;
+      for (const companion of this.#companions.values()) {
+        const edit = edits.find((e) => e.uri === companion.uri);
+        if (edit === undefined) continue;
+        companion.text = edit.text;
+        companion.version = edit.version;
+      }
+      return succeed(null);
+    } catch (e) {
+      return fail(serverError(e));
+    }
+  }
+
+  /** The number of documents that `saveAll` saves. */
+  get openCount(): number {
+    return 1 + this.#companions.size;
+  }
+
+  /**
+   * One save round, timed. Sends `didSave` for the edited module and then
+   * `effective/stats` for it. The server handles one message at a time, so the
+   * stats reply comes after the round and after any flush that follows it.
+   */
+  async save(): Promise<Result<number, LspBenchError>> {
+    return await this.#timedSave([this.#uri]);
+  }
+
+  /**
+   * "Save All", timed. Sends `didSave` for every open document in one batch,
+   * then `effective/stats`. Call `editAllOnDisk` first.
+   */
+  async saveAll(): Promise<Result<number, LspBenchError>> {
+    return await this.#timedSave([
+      this.#uri,
+      ...[...this.#companions.values()].map((c) => c.uri),
+    ]);
+  }
+
+  /** The time of one `effective/stats` round trip with no save. A control. */
+  async statsOnly(): Promise<Result<number, LspBenchError>> {
+    return await this.#timedSave([]);
+  }
+
+  async #timedSave(
+    uris: readonly string[],
+  ): Promise<Result<number, LspBenchError>> {
+    try {
+      const start = performance.now();
+      for (const uri of uris) {
+        await this.#client.notify("textDocument/didSave", {
+          textDocument: { uri },
+        });
+      }
+      const reply = await this.#client.request(STATS_METHOD, {
+        textDocument: { uri: this.#uri },
+      });
+      const elapsed = performance.now() - start;
+      const stats = parseStats(reply);
+      return stats.ok ? succeed(elapsed) : stats;
+    } catch (e) {
+      return fail(serverError(e));
+    }
+  }
+
+  /** True when the generated TypeScript of the edited module exists on disk. */
+  hasOutput(): boolean {
+    try {
+      return Deno.statSync(
+        `${this.#dir}/${this.#input.editPath.replace(/\.eff$/, ".ts")}`,
+      ).isFile;
+    } catch {
+      return false;
+    }
+  }
+
+  /** The text of the generated TypeScript of the edited module, or undefined. */
+  outputText(): string | undefined {
+    try {
+      return Deno.readTextFileSync(
+        `${this.#dir}/${this.#input.editPath.replace(/\.eff$/, ".ts")}`,
+      );
+    } catch {
+      return undefined;
     }
   }
 
@@ -543,6 +764,7 @@ export class Workspace {
     input: LspInput,
     timeoutMs: number,
     openPaths?: readonly string[],
+    options?: SessionOptions,
   ): Promise<Result<Session, LspBenchError>> {
     const written = writeProject(input.files);
     if (!written.ok) return written;
@@ -552,6 +774,7 @@ export class Workspace {
       input,
       timeoutMs,
       openPaths,
+      options,
     );
     if (!started.ok) return started;
     this.#clients.push(started.value.client);

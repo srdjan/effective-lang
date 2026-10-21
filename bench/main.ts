@@ -1,10 +1,10 @@
 // The entry of the measurement harnesses.
 //
-//   deno task bench [--quick|--full] [m1|m2|m3|m4|m5|m6 ...] [--no-variants] [--json <file>]
+//   deno task bench [--quick|--full] [m1|m2|m3|m4|m5|m6|m7 ...] [--no-variants] [--json <file>]
 //
-// With no measurement named, the run does all six. `m6` prints the noise
+// With no measurement named, the run does all seven. `m6` prints the noise
 // floor from the A/A pairs of M2, and of M5 when `m5` runs too. `m1`, `m3`,
-// and `m4` start the language server as a subprocess. The output is plain text
+// `m4`, and `m7` start the language server as a subprocess. The output is plain text
 // on stdout. The `--json` file holds the raw samples.
 
 import { errorMessage } from "../src/core/mod.ts";
@@ -12,6 +12,7 @@ import { formatM1, type M1Result, runM1 } from "./m1.ts";
 import { describeM2Error, formatM2, type M2Result, runM2 } from "./m2.ts";
 import { formatM3, type M3Result, runM3 } from "./m3.ts";
 import { formatM4, type M4Result, runM4 } from "./m4.ts";
+import { formatM7, type M7Result, runM7 } from "./m7.ts";
 import { describeLspBenchError } from "./lsp_script.ts";
 import { formatM5, type M5Result, runM5 } from "./m5.ts";
 import { describeM5Error } from "./m5_target.ts";
@@ -21,11 +22,13 @@ import {
   m2Config,
   m3Config,
   m4Config,
+  m4DiskConfig,
   m5Config,
+  m7Config,
   type ProfileName,
 } from "./profile.ts";
 
-export type Measurement = "m1" | "m2" | "m3" | "m4" | "m5" | "m6";
+export type Measurement = "m1" | "m2" | "m3" | "m4" | "m5" | "m6" | "m7";
 
 const MEASUREMENTS: readonly Measurement[] = [
   "m1",
@@ -34,6 +37,7 @@ const MEASUREMENTS: readonly Measurement[] = [
   "m4",
   "m5",
   "m6",
+  "m7",
 ];
 
 export interface Options {
@@ -44,11 +48,11 @@ export interface Options {
 }
 
 export const USAGE =
-  `usage: deno task bench [--quick|--full] [m1|m2|m3|m4|m5|m6 ...] [--no-variants] [--json <file>]
+  `usage: deno task bench [--quick|--full] [m1|m2|m3|m4|m5|m6|m7 ...] [--no-variants] [--json <file>]
   --quick        small scale, aimed at under one minute for each measurement (default)
   --full         larger counts of iterations, steps, warm-ups, and pairs; same sizes
-  m1 .. m6       the measurements to run (default: all six)
-                 m1, m3, and m4 run the language server as a subprocess
+  m1 .. m7       the measurements to run (default: all seven)
+                 m1, m3, m4, and m7 run the language server as a subprocess
   --no-variants  skip the optional M5 variants (tsc, language service, tsgo)
   --json <file>  write the raw samples to the file
 `;
@@ -154,6 +158,32 @@ export async function run(args: readonly string[]): Promise<number> {
     console.log(`\n${formatM4(m4)}`);
   }
 
+  let m4Disk: M4Result | undefined;
+  if (wants("m4")) {
+    const result = await runM4(m4DiskConfig(options.profile));
+    if (!result.ok) {
+      console.error(
+        `bench: M4 with writeOnSave failed: ${
+          describeLspBenchError(result.error)
+        }`,
+      );
+      return 1;
+    }
+    m4Disk = result.value;
+    console.log(`\n${formatM4(m4Disk)}`);
+  }
+
+  let m7: M7Result | undefined;
+  if (wants("m7")) {
+    const result = await runM7(m7Config(options.profile));
+    if (!result.ok) {
+      console.error(`bench: M7 failed: ${describeLspBenchError(result.error)}`);
+      return 1;
+    }
+    m7 = result.value;
+    console.log(`\n${formatM7(m7)}`);
+  }
+
   let m5: M5Result | undefined;
   if (wants("m5")) {
     const config = m5Config(options.profile, options.variants);
@@ -179,7 +209,9 @@ export async function run(args: readonly string[]): Promise<number> {
       m2: wants("m2") || wants("m6") ? m2 : undefined,
       m3,
       m4,
+      m4Disk,
       m5,
+      m7,
     };
     try {
       Deno.writeTextFileSync(options.json, JSON.stringify(document, null, 1));
