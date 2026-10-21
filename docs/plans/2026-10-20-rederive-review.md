@@ -1,6 +1,6 @@
 # Rederive review: measured re-basing plan
 
-Date: 2026-10-20. Base revision: 730977c. Status: Phase 0 accepted on 2026-10-20. The user chose option (a) for D1, D2, D3, and D4. Phases 0 to 2 are done on main. R1 to R6, R9, R10, R14, and D1 to D6 are done. R7, R8, R11 (checker and validator sides), R12 (FE-1, FE-3, FE-5), and R18 (compareText, isRecord, errorMessage, the editor search, and the dead exports) are done on main. R12 FE-1, FE-3, FE-5, and R18 were replayed in `d25a6a6..c542847`. R7 and the checker side of R11 are in `39e94ba..d858322`. R8 and the validator side of R11 are in `044c2e3..7c2d151`. R16 and R17 are done through P1 and R17 of the hardening plan. Still open: R12 FE-2 (LSP param schema kit), R13 (entry/result pairing and generation port complete; other state types and the shared mode-map remainder open), R15b (Schedule, Codec and Ref complete; other families open), R18 CHK-12 (built-in type table; its only implementation is commit `21449db`, kept by the tag `keep/chk-12`), and the R18 `isErrorId` casts (CHK-11). The R18 closing-token parser sites are done in `463b872`. R15a and C10 are complete through the shared syntax queries; A6 is complete in `docs/builtin-changes.md`. The sibling plan `2026-10-20-hardening-pruning.md` carries the remaining cleanup work.
+Date: 2026-10-20. Base revision: 730977c. Status: Phase 0 accepted on 2026-10-20. The user chose option (a) for D1, D2, D3, and D4. Phases 0 to 2 are done on main. R1 to R6, R9, R10, R14, and D1 to D6 are done. R7, R8, R11 (checker and validator sides), R12 (FE-1, FE-3, FE-5), and R18 (compareText, isRecord, errorMessage, the editor search, and the dead exports) are done on main. R12 FE-1, FE-3, FE-5, and R18 were replayed in `d25a6a6..c542847`. R7 and the checker side of R11 are in `39e94ba..d858322`. R8 and the validator side of R11 are in `044c2e3..7c2d151`. R16 and R17 are done through P1 and R17 of the hardening plan. Still open: R12 FE-2 (LSP param schema kit), R13 (entry/result pairing, generation port and validator states complete; other state types and the shared mode-map remainder open), R15b (Schedule, Codec and Ref complete; other families open), R18 CHK-12 (built-in type table; its only implementation is commit `21449db`, kept by the tag `keep/chk-12`), and the R18 `isErrorId` casts (CHK-11). The R18 closing-token parser sites are done in `463b872`. R15a and C10 are complete through the shared syntax queries; A6 is complete in `docs/builtin-changes.md`. The sibling plan `2026-10-20-hardening-pruning.md` carries the remaining cleanup work.
 
 This document is a plan, not a change. It ranks the weak units of the transpiler by measured leverage. For each rederived unit, it gives the contract to keep, the judging tests, and the verification. The evidence is in `docs/plans/rederive-review-evidence/`. Each finding ID (for example CHK-2) points to a section of a scout report in that directory. The scratch paths under `/tmp/rederive/` in those reports are not kept.
 
@@ -200,7 +200,7 @@ The 17 sites are of three kinds. The 3 emitter walker defaults are part of R3, w
 
 #### R13. Tagged unions for states with optional fields
 
-- VAL-6. `validate/expr.ts` Comp encodes three states with optional fields and carries 17 dead fields.
+- VAL-6. Complete: validator results distinguish derived types, locally checked types and poisoned recovery. Checked results carry only active effects; poisoned results carry no ignored type or effect metadata.
 - CHK-8. The checker schema `TypeNode` has 3 exclusive flags: 8 states are representable and 4 are legal. 11 sites pass them as positional booleans. `ir.ts` does not change.
 - CHK-13. Entry/result pairing completed on 2026-10-21: tagged function/constant entries travel with their matching run results, removing the two signature casts and positional result pairing. The solver and value lookup still share the `modes` map; that remainder stays open.
 - FE-9. `lsp/projects.ts` ProjectState has 4 independent mutable fields and 3 illegal states.
@@ -571,3 +571,13 @@ in the ready variant. It retains silent diagnostic skips, exact notes,
 continuation after errors, dry runs and changed-file-only writes. The public
 `Revision` API is unchanged. Failure injection uses the port and a structural
 query adapter without casts. Verification is in the evidence ledger.
+
+VAL-6 replaces `Comp`'s optional-field encoding with derived, checked and
+poisoned variants. Derived results require a type and comparison rule;
+checked results carry only recomputed effects; poisoned recovery uses the
+recorded sets. The factories retain exact/fit comparisons and `finish` retains
+type-identity checks and diagnostic order. The unbrand path explicitly returns
+a checked result when a base type cannot be found, after its existing report.
+The independent validator shares no checker code. All 209 focused validation
+tests pass, and TypeScript rejects three forged invalid result states in a
+separate compile check. Full gate and capture evidence follow in the ledger.

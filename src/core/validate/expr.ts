@@ -78,14 +78,29 @@ interface Out extends Active {
 }
 
 /** The recomputed annotation of a node. */
-interface Comp {
-  /** The recomputed type. Undefined: the node validated its type itself, or it cannot be recomputed. */
-  readonly type: Type | undefined;
-  /** Exact: the recorded type must equal it. Fit: the recomputed type must fit the recorded type. */
-  readonly match: "exact" | "fit";
-  readonly active: Active;
-  /** The sets could not be recomputed. The recorded sets stand. */
-  readonly poisoned?: boolean;
+type Comp =
+  | {
+    readonly kind: "derived";
+    readonly type: Type;
+    /** Exact equality, or assignability to the recorded type. */
+    readonly match: "exact" | "fit";
+    readonly active: Active;
+  }
+  /** The node checks its own type, or reports why it cannot be recomputed. */
+  | { readonly kind: "checked"; readonly active: Active }
+  /** Effects cannot be recomputed; the recorded sets stand. */
+  | { readonly kind: "poisoned" };
+
+function derivedResult(
+  type: Type,
+  active: Active,
+  match: "exact" | "fit" = "exact",
+): Comp {
+  return { kind: "derived", type, active, match };
+}
+
+function checkedResult(active: Active): Comp {
+  return { kind: "checked", active };
 }
 
 /** The Stream operators that run a Stream to one value, with the result type. */
@@ -815,7 +830,7 @@ export class BodyValidator {
     const env = this.env;
     const typeOk = checkTypeIds(this.ctx, e.type, `${path}.type`, e.span);
     let type = e.type;
-    if (comp.type !== undefined && typeOk) {
+    if (comp.kind === "derived" && typeOk) {
       const good = comp.match === "exact"
         ? same(env, comp.type, e.type)
         : fits(env, comp.type, e.type);
@@ -838,7 +853,7 @@ export class BodyValidator {
       requirements: sortedUnique(e.effects.requirements),
       execution: e.execution,
     };
-    if (comp.poisoned === true) return { ...recorded, type };
+    if (comp.kind === "poisoned") return { ...recorded, type };
     const active = comp.active;
     if (!sameSet(recorded.failures, active.failures)) {
       this.add(
@@ -872,7 +887,7 @@ export class BodyValidator {
   }
 
   private poison(): Comp {
-    return { type: undefined, match: "exact", active: QUIET, poisoned: true };
+    return { kind: "poisoned" };
   }
 
   /** Reports a concurrency limit that is neither `unbounded` nor a positive safe integer. */
@@ -896,17 +911,13 @@ export class BodyValidator {
   private compute(e: Expr, path: string, callee: boolean): Comp {
     switch (e.kind) {
       case "null":
-        return {
-          type: { kind: "literal", value: null },
-          match: "exact",
-          active: QUIET,
-        };
+        return derivedResult({ kind: "literal", value: null }, QUIET);
       case "literal":
-        return {
-          type: e.value === null ? UNIT : { kind: "literal", value: e.value },
-          match: "fit",
-          active: QUIET,
-        };
+        return derivedResult(
+          e.value === null ? UNIT : { kind: "literal", value: e.value },
+          QUIET,
+          "fit",
+        );
       case "reference":
         return this.reference(e.target, e.span, path, callee);
       case "record":
@@ -925,18 +936,14 @@ export class BodyValidator {
         return this.unbrand(e, path);
       case "some": {
         const v = this.check(e.value, `${path}.value`);
-        return {
-          type: { kind: "option", element: v.type },
-          match: "fit",
-          active: combine([v]),
-        };
+        return derivedResult(
+          { kind: "option", element: v.type },
+          combine([v]),
+          "fit",
+        );
       }
       case "none":
-        return {
-          type: { kind: "option", element: NEVER },
-          match: "fit",
-          active: QUIET,
-        };
+        return derivedResult({ kind: "option", element: NEVER }, QUIET, "fit");
       case "error":
         return this.errorConstruction(e, path);
       case "closure":
@@ -958,11 +965,7 @@ export class BodyValidator {
       case "fork-scoped":
         return this.forkScoped(e, path);
       case "make-scope":
-        return {
-          type: { kind: "closeable-scope" },
-          match: "exact",
-          active: EFFECT_ONLY,
-        };
+        return derivedResult({ kind: "closeable-scope" }, EFFECT_ONLY);
       case "provide-scope":
       case "add-scope-finalizer":
       case "close-scope":
@@ -1124,7 +1127,7 @@ export class BodyValidator {
         span,
       );
     }
-    return { type, match: "exact", active: QUIET };
+    return derivedResult(type, QUIET);
   }
 
   /** Checks field values against declared fields. Used by records, updates, and errors. */
@@ -1210,7 +1213,7 @@ export class BodyValidator {
         `the record type ${show(e.type)}`,
       );
     }
-    return { type: undefined, match: "exact", active: combine(outs) };
+    return checkedResult(combine(outs));
   }
 
   private arrayLike(
@@ -1242,7 +1245,7 @@ export class BodyValidator {
         }
       });
     }
-    return { type: undefined, match: "exact", active: combine(outs) };
+    return checkedResult(combine(outs));
   }
 
   private tupleLike(
@@ -1276,7 +1279,7 @@ export class BodyValidator {
         }
       });
     }
-    return { type: undefined, match: "exact", active: combine(outs) };
+    return checkedResult(combine(outs));
   }
 
   private get(e: Extract<Expr, { kind: "get" }>, path: string): Comp {
@@ -1295,17 +1298,16 @@ export class BodyValidator {
             : `the type ${show(member)} has no field ${e.field}`,
           e.span,
         );
-        return { type: undefined, match: "exact", active: combine([base]) };
+        return checkedResult(combine([base]));
       }
       if (field.optional) optional = true;
       types.push(field.type);
     }
     const type = unionOf(this.env, types);
-    return {
-      type: optional ? { kind: "option", element: type } : type,
-      match: "exact",
-      active: combine([base]),
-    };
+    return derivedResult(
+      optional ? { kind: "option", element: type } : type,
+      combine([base]),
+    );
   }
 
   private update(e: Extract<Expr, { kind: "update" }>, path: string): Comp {
@@ -1327,7 +1329,7 @@ export class BodyValidator {
         }`,
         e.span,
       );
-      return { type: undefined, match: "exact", active };
+      return checkedResult(active);
     }
     this.checkFieldValues(
       e.fields,
@@ -1338,7 +1340,7 @@ export class BodyValidator {
       false,
       `the record type ${show(base.type)}`,
     );
-    return { type: base.type, match: "exact", active };
+    return derivedResult(base.type, active);
   }
 
   private brand(e: Extract<Expr, { kind: "brand" }>, path: string): Comp {
@@ -1351,7 +1353,7 @@ export class BodyValidator {
         `the brand ${e.brand} is not a declared type`,
         e.span,
       );
-      return { type: undefined, match: "exact", active: combine([v]) };
+      return checkedResult(combine([v]));
     }
     if (decl.definition.kind !== "brand") {
       this.add(
@@ -1377,11 +1379,7 @@ export class BodyValidator {
         e.value.span,
       );
     }
-    return {
-      type: { kind: "named", id: e.brand },
-      match: "exact",
-      active: combine([v]),
-    };
+    return derivedResult({ kind: "named", id: e.brand }, combine([v]));
   }
 
   private unbrand(e: Extract<Expr, { kind: "unbrand" }>, path: string): Comp {
@@ -1409,8 +1407,9 @@ export class BodyValidator {
         `unbrand needs a brand value, but the value has type ${show(v.type)}`,
         e.value.span,
       );
+      return checkedResult(combine([v]));
     }
-    return { type: base, match: "exact", active: combine([v]) };
+    return derivedResult(base, combine([v]));
   }
 
   private errorConstruction(
@@ -1428,7 +1427,7 @@ export class BodyValidator {
         "reserved Schema errors cannot be constructed as source errors",
         e.span,
       );
-      return { type: undefined, match: "exact", active };
+      return checkedResult(active);
     }
     const decl = this.ctx.world.errors.get(e.error);
     if (decl === undefined) {
@@ -1438,7 +1437,7 @@ export class BodyValidator {
         `the error ${e.error} is not declared`,
         e.span,
       );
-      return { type: undefined, match: "exact", active };
+      return checkedResult(active);
     }
     this.checkFieldValues(
       e.fields,
@@ -1449,11 +1448,7 @@ export class BodyValidator {
       true,
       `the error ${e.error}`,
     );
-    return {
-      type: { kind: "named", id: e.error },
-      match: "exact",
-      active,
-    };
+    return derivedResult({ kind: "named", id: e.error }, active);
   }
 
   // -------------------------------------------------------------- functions
@@ -1472,7 +1467,7 @@ export class BodyValidator {
         `a closure has a function type, recorded ${show(e.type)}`,
         e.span,
       );
-      return { type: undefined, match: "exact", active: QUIET };
+      return checkedResult(QUIET);
     }
     this.checkParameterTypes(
       e.parameters,
@@ -1513,7 +1508,7 @@ export class BodyValidator {
     }
     this.checkExecution(fn, body, path, e.span);
     // Construction evaluates no part of the body: closure construction is pure.
-    return { type: undefined, match: "exact", active: QUIET };
+    return checkedResult(QUIET);
   }
 
   private checkArguments(
@@ -1575,11 +1570,7 @@ export class BodyValidator {
         `the callee has type ${show(callee.type)}, which is not a function`,
         e.callee.span,
       );
-      return {
-        type: undefined,
-        match: "exact",
-        active: combine([callee, ...outs]),
-      };
+      return checkedResult(combine([callee, ...outs]));
     }
     const builtin = e.callee.kind === "reference"
       ? this.ctx.world.builtins.get(e.callee.target)?.split("/")[1]
@@ -1647,11 +1638,10 @@ export class BodyValidator {
         );
       }
     }
-    return {
-      type: fn.result,
-      match: "exact",
-      active: combine([callee, ...outs, invocationOf(fn)]),
-    };
+    return derivedResult(
+      fn.result,
+      combine([callee, ...outs, invocationOf(fn)]),
+    );
   }
 
   private perform(e: Extract<Expr, { kind: "perform" }>, path: string): Comp {
@@ -1677,15 +1667,14 @@ export class BodyValidator {
       e.span,
       undefined,
     );
-    return {
-      type: fn.result,
-      match: "exact",
-      active: combine([
+    return derivedResult(
+      fn.result,
+      combine([
         ...outs,
         invocationOf(fn),
         { failures: [], requirements: [e.capability], execution: "effect" },
       ]),
-    };
+    );
   }
 
   // -------------------------------------------------------------- control flow
@@ -1715,11 +1704,7 @@ export class BodyValidator {
       });
       return this.check(e.result, `${path}.result`);
     });
-    return {
-      type: result.type,
-      match: "exact",
-      active: combine([...parts, result]),
-    };
+    return derivedResult(result.type, combine([...parts, result]));
   }
 
   private branchFits(
@@ -1755,11 +1740,7 @@ export class BodyValidator {
     const elseOut = this.check(e.else, `${path}.else`);
     this.branchFits(thenOut, e.type, `${path}.then`, e.then.span, AREA.types);
     this.branchFits(elseOut, e.type, `${path}.else`, e.else.span, AREA.types);
-    return {
-      type: undefined,
-      match: "exact",
-      active: combine([cond, thenOut, elseOut]),
-    };
+    return checkedResult(combine([cond, thenOut, elseOut]));
   }
 
   private matchExpr(e: Extract<Expr, { kind: "match" }>, path: string): Comp {
@@ -1773,7 +1754,7 @@ export class BodyValidator {
       parts.push(body);
       this.branchFits(body, e.type, `${at}.body`, arm.body.span, AREA.types);
     });
-    return { type: undefined, match: "exact", active: combine(parts) };
+    return checkedResult(combine(parts));
   }
 
   /** Checks one pattern against the subject type and declares its bindings. */
@@ -1869,10 +1850,9 @@ export class BodyValidator {
         e.error.span,
       );
     }
-    return {
-      type: NEVER,
-      match: "exact",
-      active: combine([
+    return derivedResult(
+      NEVER,
+      combine([
         err,
         {
           failures,
@@ -1880,7 +1860,7 @@ export class BodyValidator {
           execution: "effect",
         },
       ]),
-    };
+    );
   }
 
   private catchExpr(e: Extract<Expr, { kind: "catch" }>, path: string): Comp {
@@ -1943,11 +1923,7 @@ export class BodyValidator {
       requirements: body.requirements,
       execution: body.execution,
     };
-    return {
-      type: undefined,
-      match: "exact",
-      active: combine([remaining, ...outs, EFFECT_ONLY]),
-    };
+    return checkedResult(combine([remaining, ...outs, EFFECT_ONLY]));
   }
 
   /**
@@ -1994,11 +1970,10 @@ export class BodyValidator {
       );
     }
     if (fn === undefined) return this.poison();
-    return {
-      type: fn.result,
-      match: "exact",
-      active: combine([job, invocationOf(fn), EFFECT_ONLY]),
-    };
+    return derivedResult(
+      fn.result,
+      combine([job, invocationOf(fn), EFFECT_ONLY]),
+    );
   }
 
   private retrySchedule(
@@ -2044,11 +2019,10 @@ export class BodyValidator {
         e.step.span,
       );
     }
-    return {
-      type: { kind: "retry-schedule", error: fn.parameters[0] },
-      match: "exact",
-      active: combine([step]),
-    };
+    return derivedResult(
+      { kind: "retry-schedule", error: fn.parameters[0] },
+      combine([step]),
+    );
   }
 
   private retryWithSchedule(
@@ -2084,11 +2058,10 @@ export class BodyValidator {
       }
     }
     if (fn === undefined) return this.poison();
-    return {
-      type: fn.result,
-      match: "exact",
-      active: combine([job, options, invocationOf(fn), EFFECT_ONLY]),
-    };
+    return derivedResult(
+      fn.result,
+      combine([job, options, invocationOf(fn), EFFECT_ONLY]),
+    );
   }
 
   private codec(e: Extract<Expr, { kind: "codec" }>, path: string): Comp {
@@ -2138,11 +2111,11 @@ export class BodyValidator {
         e.span,
       );
     }
-    return {
-      type: { kind: "codec", decoded: d.result, encoded: d.parameters[0] },
-      match: "fit",
-      active: combine([decode, encode]),
-    };
+    return derivedResult(
+      { kind: "codec", decoded: d.result, encoded: d.parameters[0] },
+      combine([decode, encode]),
+      "fit",
+    );
   }
 
   /**
@@ -2331,7 +2304,7 @@ export class BodyValidator {
   }
 
   private schemaResult(call: SchemaCall, type: Type): Comp {
-    return { type, match: "exact", active: combine(call.args) };
+    return derivedResult(type, combine(call.args));
   }
 
   private schemaInvalid(call: SchemaCall): Comp {
@@ -2382,7 +2355,7 @@ export class BodyValidator {
         "schema() needs an identity data Schema with no services",
       );
     }
-    return { type: hint, match: "exact", active: QUIET };
+    return derivedResult(hint, QUIET);
   }
 
   private schemaConstructorDefault(call: SchemaCall): Comp {
@@ -2925,10 +2898,9 @@ export class BodyValidator {
         e.input.span,
       );
     }
-    return {
-      type: e.kind === "schema-encode" ? type.encoded : type.decoded,
-      match: "exact",
-      active: combine([schema, input, {
+    return derivedResult(
+      e.kind === "schema-encode" ? type.encoded : type.decoded,
+      combine([schema, input, {
         execution: "effect",
         failures: [
           e.kind === "schema-make" ? SCHEMA_ISSUE_ID : SCHEMA_ERROR_ID,
@@ -2939,7 +2911,7 @@ export class BodyValidator {
           ? type.decodeRequirements
           : type.encodeRequirements,
       }]),
-    };
+    );
   }
 
   private codecOperation(
@@ -2966,14 +2938,10 @@ export class BodyValidator {
         e.input.span,
       );
     }
-    return {
-      type: {
-        kind: "option",
-        element: e.kind === "decode" ? type.decoded : type.encoded,
-      },
-      match: "exact",
-      active: combine([codec, input]),
-    };
+    return derivedResult({
+      kind: "option",
+      element: e.kind === "decode" ? type.decoded : type.encoded,
+    }, combine([codec, input]));
   }
 
   private withFiber(
@@ -3019,10 +2987,9 @@ export class BodyValidator {
       );
     }
     this.fiberReferences(e.use.body, e.useBinding, `${path}.use.body`);
-    return {
-      type: fn.result,
-      match: "exact",
-      active: combine([
+    return derivedResult(
+      fn.result,
+      combine([
         job,
         use,
         {
@@ -3033,7 +3000,7 @@ export class BodyValidator {
         invocationOf(fn),
         EFFECT_ONLY,
       ]),
-    };
+    );
   }
 
   private fiberOperation(
@@ -3051,16 +3018,15 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    return {
-      type: e.kind === "join-fiber" ? type.result : UNIT,
-      match: "exact",
-      active: combine([
+    return derivedResult(
+      e.kind === "join-fiber" ? type.result : UNIT,
+      combine([
         fiber,
         e.kind === "join-fiber"
           ? { failures: type.failures, requirements: [], execution: "effect" }
           : EFFECT_ONLY,
       ]),
-    };
+    );
   }
 
   private fiberReferences(body: Expr, id: string, path: string): void {
@@ -3087,11 +3053,11 @@ export class BodyValidator {
     const job = this.check(e.job, `${path}.job`);
     const fn = this.jobFunction(job, `${path}.job`, e.job.span, "defer");
     if (fn === undefined) return this.poison();
-    return {
-      type: { kind: "effect", result: fn.result, effects: fn.effects },
-      match: "exact",
-      active: combine([job]),
-    };
+    return derivedResult({
+      kind: "effect",
+      result: fn.result,
+      effects: fn.effects,
+    }, combine([job]));
   }
 
   private run(e: Extract<Expr, { kind: "run" }>, path: string): Comp {
@@ -3108,10 +3074,9 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    return {
-      type: type.result,
-      match: "exact",
-      active: combine([
+    return derivedResult(
+      type.result,
+      combine([
         value,
         {
           failures: type.effects.failures,
@@ -3119,7 +3084,7 @@ export class BodyValidator {
           execution: "effect",
         },
       ]),
-    };
+    );
   }
 
   private partitionAll(
@@ -3145,21 +3110,20 @@ export class BodyValidator {
       this.env,
       job.effects.failures.map((id) => ({ kind: "named", id })),
     );
-    return {
-      type: {
+    return derivedResult(
+      {
         kind: "tuple",
         elements: [
           { kind: "array", element: job.result },
           { kind: "array", element: errors },
         ],
       },
-      match: "exact",
-      active: combine([jobs, {
+      combine([jobs, {
         failures: [],
         requirements: job.effects.requirements,
         execution: "effect",
       }]),
-    };
+    );
   }
 
   private validateAll(
@@ -3202,15 +3166,14 @@ export class BodyValidator {
       return this.poison();
     }
     this.checkConcurrency(e, path, "validateAll");
-    return {
-      type: { kind: "array", element: job.result },
-      match: "exact",
-      active: combine([jobs, onErrors, {
+    return derivedResult(
+      { kind: "array", element: job.result },
+      combine([jobs, onErrors, {
         failures: [failure.id as ErrorId],
         requirements: job.effects.requirements,
         execution: "effect",
       }]),
-    };
+    );
   }
 
   private allResults(
@@ -3294,15 +3257,14 @@ export class BodyValidator {
         })),
       }
       : { kind: "array", element: outcomes[0] };
-    return {
-      type: result,
-      match: "exact",
-      active: combine([jobs, {
+    return derivedResult(
+      result,
+      combine([jobs, {
         failures: [],
         requirements,
         execution: "effect",
       }]),
-    };
+    );
   }
 
   private scoped(e: Extract<Expr, { kind: "scoped" }>, path: string): Comp {
@@ -3312,15 +3274,14 @@ export class BodyValidator {
       this.add(AREA.control, path, "scoped needs an Effect value", e.span);
       return this.poison();
     }
-    return {
-      type: effect.result,
-      match: "exact",
-      active: combine([value, {
+    return derivedResult(
+      effect.result,
+      combine([value, {
         failures: effect.effects.failures,
         requirements: minus(effect.effects.requirements, [SCOPE_CAPABILITY]),
         execution: "effect",
       }]),
-    };
+    );
   }
 
   private forkScoped(
@@ -3341,15 +3302,14 @@ export class BodyValidator {
         e.span,
       );
     }
-    return {
-      type: UNIT,
-      match: "exact",
-      active: combine([job, {
+    return derivedResult(
+      UNIT,
+      combine([job, {
         failures: [],
         requirements: [...effect.effects.requirements, SCOPE_CAPABILITY],
         execution: "effect",
       }]),
-    };
+    );
   }
 
   private explicitScope(
@@ -3369,11 +3329,7 @@ export class BodyValidator {
       );
     }
     if (e.kind === "close-scope") {
-      return {
-        type: UNIT,
-        match: "exact",
-        active: combine([owner, EFFECT_ONLY]),
-      };
+      return derivedResult(UNIT, combine([owner, EFFECT_ONLY]));
     }
     const job = this.check(e.job, `${path}.job`);
     const effect = unfold(this.env, job.type);
@@ -3395,17 +3351,16 @@ export class BodyValidator {
         e.span,
       );
     }
-    return {
-      type: e.kind === "provide-scope" ? effect.result : UNIT,
-      match: "exact",
-      active: combine([owner, job, {
+    return derivedResult(
+      e.kind === "provide-scope" ? effect.result : UNIT,
+      combine([owner, job, {
         failures: e.kind === "provide-scope" ? effect.effects.failures : [],
         requirements: e.kind === "provide-scope"
           ? minus(effect.effects.requirements, [SCOPE_CAPABILITY])
           : effect.effects.requirements,
         execution: "effect",
       }]),
-    };
+    );
   }
 
   private checkOperationRecord(type: Type, path: string, span: Span): void {
@@ -3547,10 +3502,9 @@ export class BodyValidator {
         `${path}.release.body`,
       );
     }
-    return {
-      type: u.result,
-      match: "exact",
-      active: combine([
+    return derivedResult(
+      u.result,
+      combine([
         acquire,
         use,
         release,
@@ -3559,7 +3513,7 @@ export class BodyValidator {
         invocationOf(r),
         EFFECT_ONLY,
       ]),
-    };
+    );
   }
 
   private borrowedReferences(body: Expr, id: string, path: string): void {
@@ -3646,11 +3600,11 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    return {
-      type: { kind: "stream", element: pair.elements[0], effects: fn.effects },
-      match: "exact",
-      active: combine([seed, next]),
-    };
+    return derivedResult({
+      kind: "stream",
+      element: pair.elements[0],
+      effects: fn.effects,
+    }, combine([seed, next]));
   }
 
   private mapElements(e: StreamMap, path: string): Comp {
@@ -3677,17 +3631,13 @@ export class BodyValidator {
       this.add(AREA.types, path, row.needs, e.span);
       return this.poison();
     }
-    return {
-      type: {
-        kind: "stream",
-        element: fn.result,
-        effects: row.pure
-          ? source.effects
-          : { ...unionEffects(source.effects, fn.effects) },
-      },
-      match: "exact",
-      active: combine([stream, transform]),
-    };
+    return derivedResult({
+      kind: "stream",
+      element: fn.result,
+      effects: row.pure
+        ? source.effects
+        : { ...unionEffects(source.effects, fn.effects) },
+    }, combine([stream, transform]));
   }
 
   private accumulateStream(e: StreamAccumulator, path: string): Comp {
@@ -3737,26 +3687,21 @@ export class BodyValidator {
       );
     }
     if (row.terminal) {
-      return {
-        type: seed.type,
-        match: "exact",
-        active: combine([stream, seed, update, {
+      return derivedResult(
+        seed.type,
+        combine([stream, seed, update, {
           ...(row.pure
             ? source.effects
             : unionEffects(source.effects, fn.effects)),
           execution: "effect",
         }]),
-      };
+      );
     }
-    return {
-      type: {
-        kind: "stream",
-        element: output?.kind === "array" ? output.element : seed.type,
-        effects: source.effects,
-      },
-      match: "exact",
-      active: combine([stream, seed, update]),
-    };
+    return derivedResult({
+      kind: "stream",
+      element: output?.kind === "array" ? output.element : seed.type,
+      effects: source.effects,
+    }, combine([stream, seed, update]));
   }
 
   private streamTerminal(e: StreamTerminal, path: string): Comp {
@@ -3772,15 +3717,14 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    return {
-      type: row.result(source.element),
-      match: "exact",
-      active: combine([stream, {
+    return derivedResult(
+      row.result(source.element),
+      combine([stream, {
         failures: source.effects.failures,
         requirements: source.effects.requirements,
         execution: "effect",
       }]),
-    };
+    );
   }
 
   private mapStreams(e: StreamFlatten, path: string): Comp {
@@ -3813,17 +3757,13 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    return {
-      type: {
-        kind: "stream",
-        element: inner.element,
-        effects: {
-          ...unionEffects(source.effects, inner.effects),
-        },
+    return derivedResult({
+      kind: "stream",
+      element: inner.element,
+      effects: {
+        ...unionEffects(source.effects, inner.effects),
       },
-      match: "exact",
-      active: combine([stream, transform]),
-    };
+    }, combine([stream, transform]));
   }
 
   private catchStream(
@@ -3865,21 +3805,17 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    return {
-      type: {
-        kind: "stream",
-        element: unionOf(this.env, [source.element, replacement.element]),
-        effects: {
-          failures: replacement.effects.failures,
-          requirements: sortedUnique([
-            ...source.effects.requirements,
-            ...replacement.effects.requirements,
-          ]),
-        },
+    return derivedResult({
+      kind: "stream",
+      element: unionOf(this.env, [source.element, replacement.element]),
+      effects: {
+        failures: replacement.effects.failures,
+        requirements: sortedUnique([
+          ...source.effects.requirements,
+          ...replacement.effects.requirements,
+        ]),
       },
-      match: "exact",
-      active: combine([stream, recover]),
-    };
+    }, combine([stream, recover]));
   }
 
   private retryStream(
@@ -3917,11 +3853,7 @@ export class BodyValidator {
         e.policy.span,
       );
     }
-    return {
-      type: source,
-      match: "exact",
-      active: combine([stream, policy]),
-    };
+    return derivedResult(source, combine([stream, policy]));
   }
 
   private debounceStream(
@@ -3942,7 +3874,7 @@ export class BodyValidator {
         e.span,
       );
     }
-    return { type: source, match: "exact", active: combine([stream]) };
+    return derivedResult(source, combine([stream]));
   }
 
   private throttleStream(
@@ -3967,7 +3899,7 @@ export class BodyValidator {
         e.span,
       );
     }
-    return { type: source, match: "exact", active: combine([stream]) };
+    return derivedResult(source, combine([stream]));
   }
 
   private streamCount(e: StreamCount, path: string): Comp {
@@ -3992,11 +3924,7 @@ export class BodyValidator {
         e.count.span,
       );
     }
-    return {
-      type: source,
-      match: "exact",
-      active: combine([stream, count]),
-    };
+    return derivedResult(source, combine([stream, count]));
   }
 
   private pureStreamPredicate(e: PureStreamPredicate, path: string): Comp {
@@ -4028,11 +3956,7 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    return {
-      type: source,
-      match: "exact",
-      active: combine([stream, predicate]),
-    };
+    return derivedResult(source, combine([stream, predicate]));
   }
 
   private effectStreamPredicate(
@@ -4074,17 +3998,13 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    return {
-      type: {
-        kind: "stream",
-        element: source.element,
-        effects: {
-          ...unionEffects(source.effects, fn.effects),
-        },
+    return derivedResult({
+      kind: "stream",
+      element: source.element,
+      effects: {
+        ...unionEffects(source.effects, fn.effects),
       },
-      match: "exact",
-      active: combine([stream, predicate]),
-    };
+    }, combine([stream, predicate]));
   }
 
   private sinkForEach(
@@ -4113,16 +4033,12 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    return {
-      type: {
-        kind: "sink",
-        input: fn.parameters[0],
-        result: UNIT,
-        effects: fn.effects,
-      },
-      match: "exact",
-      active: combine([consume]),
-    };
+    return derivedResult({
+      kind: "sink",
+      input: fn.parameters[0],
+      result: UNIT,
+      effects: fn.effects,
+    }, combine([consume]));
   }
 
   private takeSink(
@@ -4142,17 +4058,13 @@ export class BodyValidator {
       this.add(AREA.types, path, "takeSink needs a Sink annotation", e.span);
       return this.poison();
     }
-    return {
-      type: {
-        kind: "sink",
-        input: sink.input,
-        result: { kind: "array", element: sink.input },
-        leftover: sink.input,
-        effects: { failures: [], requirements: [] },
-      },
-      match: "exact",
-      active: QUIET,
-    };
+    return derivedResult({
+      kind: "sink",
+      input: sink.input,
+      result: { kind: "array", element: sink.input },
+      leftover: sink.input,
+      effects: { failures: [], requirements: [] },
+    }, QUIET);
   }
 
   private mapGroups(
@@ -4217,22 +4129,18 @@ export class BodyValidator {
       );
     }
     this.groupReferences(e.use.body, e.groupBinding, `${path}.use.body`);
-    return {
-      type: {
-        kind: "stream",
-        element: consumer.result,
-        effects: {
-          ...unionEffects(source.effects, {
-            failures: consumer.effects.failures,
-            requirements: minus(consumer.effects.requirements, [
-              SCOPE_CAPABILITY,
-            ]),
-          }),
-        },
+    return derivedResult({
+      kind: "stream",
+      element: consumer.result,
+      effects: {
+        ...unionEffects(source.effects, {
+          failures: consumer.effects.failures,
+          requirements: minus(consumer.effects.requirements, [
+            SCOPE_CAPABILITY,
+          ]),
+        }),
       },
-      match: "exact",
-      active: combine([stream, key, use]),
-    };
+    }, combine([stream, key, use]));
   }
 
   private groupKeyClass(type: Type, depth = 0): string | undefined {
@@ -4360,16 +4268,12 @@ export class BodyValidator {
     ) {
       this.add(AREA.types, path, "invalid schedule argument", argument.span);
     }
-    return {
-      type: {
-        kind: "schedule",
-        output: INT,
-        input: { kind: "primitive", name: "unknown" },
-        effects: { failures: [], requirements: [] },
-      },
-      match: "exact",
-      active: combine([value]),
-    };
+    return derivedResult({
+      kind: "schedule",
+      output: INT,
+      input: { kind: "primitive", name: "unknown" },
+      effects: { failures: [], requirements: [] },
+    }, combine([value]));
   }
 
   private scheduleFromStep(
@@ -4418,18 +4322,14 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    return {
-      type: {
-        kind: "schedule",
-        output,
-        input,
-        effects: {
-          ...unionEffects(factory.effects, step.effects),
-        },
+    return derivedResult({
+      kind: "schedule",
+      output,
+      input,
+      effects: {
+        ...unionEffects(factory.effects, step.effects),
       },
-      match: "exact",
-      active: combine([initial, decide]),
-    };
+    }, combine([initial, decide]));
   }
 
   private scheduleMap(
@@ -4469,18 +4369,14 @@ export class BodyValidator {
         e.span,
       );
     }
-    return {
-      type: {
-        kind: "schedule",
-        output: fn.result,
-        input: policy.input,
-        effects: {
-          ...unionEffects(policy.effects, fn.effects),
-        },
+    return derivedResult({
+      kind: "schedule",
+      output: fn.result,
+      input: policy.input,
+      effects: {
+        ...unionEffects(policy.effects, fn.effects),
       },
-      match: "exact",
-      active: combine([schedule, transform]),
-    };
+    }, combine([schedule, transform]));
   }
 
   private scheduleCompose(
@@ -4519,20 +4415,16 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    return {
-      type: {
-        kind: "schedule",
-        output: e.kind === "schedule-concat"
-          ? unionOf(this.env, [first.output, second.output])
-          : NUMBER,
-        input,
-        effects: {
-          ...unionEffects(first.effects, second.effects),
-        },
+    return derivedResult({
+      kind: "schedule",
+      output: e.kind === "schedule-concat"
+        ? unionOf(this.env, [first.output, second.output])
+        : NUMBER,
+      input,
+      effects: {
+        ...unionEffects(first.effects, second.effects),
       },
-      match: "exact",
-      active: combine([left, right]),
-    };
+    }, combine([left, right]));
   }
 
   private aggregateWithinStream(
@@ -4567,17 +4459,13 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    return {
-      type: {
-        kind: "stream",
-        element: consumer.result,
-        effects: {
-          ...unionEffects(source.effects, consumer.effects, policy.effects),
-        },
+    return derivedResult({
+      kind: "stream",
+      element: consumer.result,
+      effects: {
+        ...unionEffects(source.effects, consumer.effects, policy.effects),
       },
-      match: "exact",
-      active: combine([stream, sink, schedule]),
-    };
+    }, combine([stream, sink, schedule]));
   }
 
   private sinkTransformStream(
@@ -4602,17 +4490,13 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    return {
-      type: {
-        kind: "stream",
-        element: consumer.result,
-        effects: {
-          ...unionEffects(source.effects, consumer.effects),
-        },
+    return derivedResult({
+      kind: "stream",
+      element: consumer.result,
+      effects: {
+        ...unionEffects(source.effects, consumer.effects),
       },
-      match: "exact",
-      active: combine([stream, sink]),
-    };
+    }, combine([stream, sink]));
   }
 
   private runStream(
@@ -4635,14 +4519,13 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    return {
-      type: consumer.result,
-      match: "exact",
-      active: combine([stream, sink, {
+    return derivedResult(
+      consumer.result,
+      combine([stream, sink, {
         ...unionEffects(source.effects, consumer.effects),
         execution: "effect",
       }]),
-    };
+    );
   }
 
   private bufferStream(
@@ -4663,7 +4546,7 @@ export class BodyValidator {
         e.span,
       );
     }
-    return { type: source, match: "exact", active: combine([stream]) };
+    return derivedResult(source, combine([stream]));
   }
 
   private mergeStreams(
@@ -4693,17 +4576,13 @@ export class BodyValidator {
         e.span,
       );
     }
-    return {
-      type: {
-        kind: "stream",
-        element: aFitsB ? b.element : a.element,
-        effects: {
-          ...unionEffects(a.effects, b.effects),
-        },
+    return derivedResult({
+      kind: "stream",
+      element: aFitsB ? b.element : a.element,
+      effects: {
+        ...unionEffects(a.effects, b.effects),
       },
-      match: "exact",
-      active: combine([left, right]),
-    };
+    }, combine([left, right]));
   }
 
   private zipStreams(
@@ -4718,17 +4597,13 @@ export class BodyValidator {
       this.add(AREA.types, path, "zipStreams needs two Stream values", e.span);
       return this.poison();
     }
-    return {
-      type: {
-        kind: "stream",
-        element: { kind: "tuple", elements: [a.element, b.element] },
-        effects: {
-          ...unionEffects(a.effects, b.effects),
-        },
+    return derivedResult({
+      kind: "stream",
+      element: { kind: "tuple", elements: [a.element, b.element] },
+      effects: {
+        ...unionEffects(a.effects, b.effects),
       },
-      match: "exact",
-      active: combine([left, right]),
-    };
+    }, combine([left, right]));
   }
 
   private concatStreams(
@@ -4748,17 +4623,13 @@ export class BodyValidator {
       );
       return this.poison();
     }
-    return {
-      type: {
-        kind: "stream",
-        element: unionOf(this.env, [a.element, b.element]),
-        effects: {
-          ...unionEffects(a.effects, b.effects),
-        },
+    return derivedResult({
+      kind: "stream",
+      element: unionOf(this.env, [a.element, b.element]),
+      effects: {
+        ...unionEffects(a.effects, b.effects),
       },
-      match: "exact",
-      active: combine([left, right]),
-    };
+    }, combine([left, right]));
   }
 
   private race(e: Extract<Expr, { kind: "race" }>, path: string): Comp {
@@ -4775,17 +4646,13 @@ export class BodyValidator {
     if (!aFitsB && !bFitsA) {
       this.add(AREA.types, path, "race needs compatible success types", e.span);
     }
-    return {
-      type: {
-        kind: "effect",
-        result: aFitsB ? b.result : a.result,
-        effects: {
-          ...unionEffects(a.effects, b.effects),
-        },
+    return derivedResult({
+      kind: "effect",
+      result: aFitsB ? b.result : a.result,
+      effects: {
+        ...unionEffects(a.effects, b.effects),
       },
-      match: "exact",
-      active: combine([left, right]),
-    };
+    }, combine([left, right]));
   }
 
   private refOperation(
@@ -4797,11 +4664,10 @@ export class BodyValidator {
   ): Comp {
     if (e.kind === "make-ref") {
       const value = this.check(e.value, `${path}.value`);
-      return {
-        type: { kind: "ref", element: this.streamState(value.type) },
-        match: "exact",
-        active: combine([value, EFFECT_ONLY]),
-      };
+      return derivedResult({
+        kind: "ref",
+        element: this.streamState(value.type),
+      }, combine([value, EFFECT_ONLY]));
     }
     const ref = this.check(e.ref, `${path}.ref`);
     const type = unfold(this.env, ref.type);
@@ -4810,11 +4676,7 @@ export class BodyValidator {
       return this.poison();
     }
     if (e.kind === "get-ref") {
-      return {
-        type: type.element,
-        match: "exact",
-        active: combine([ref, EFFECT_ONLY]),
-      };
+      return derivedResult(type.element, combine([ref, EFFECT_ONLY]));
     }
     if (e.kind === "set-ref") {
       const value = this.check(e.value, `${path}.value`);
@@ -4826,11 +4688,7 @@ export class BodyValidator {
           e.value.span,
         );
       }
-      return {
-        type: UNIT,
-        match: "exact",
-        active: combine([ref, value, EFFECT_ONLY]),
-      };
+      return derivedResult(UNIT, combine([ref, value, EFFECT_ONLY]));
     }
     const transform = this.check(e.transform, `${path}.transform`);
     const fn = asFunction(this.env, transform.type);
@@ -4847,11 +4705,7 @@ export class BodyValidator {
         e.transform.span,
       );
     }
-    return {
-      type: UNIT,
-      match: "exact",
-      active: combine([ref, transform, EFFECT_ONLY]),
-    };
+    return derivedResult(UNIT, combine([ref, transform, EFFECT_ONLY]));
   }
 
   private layer(e: Extract<Expr, { kind: "layer" }>, path: string): Comp {
@@ -4906,15 +4760,11 @@ export class BodyValidator {
         e.span,
       );
     }
-    return {
-      type: {
-        kind: "provider",
-        provides,
-        acquisition: { execution: "effect", effects: fn.effects },
-      },
-      match: "exact",
-      active: combine([acquire]),
-    };
+    return derivedResult({
+      kind: "provider",
+      provides,
+      acquisition: { execution: "effect", effects: fn.effects },
+    }, combine([acquire]));
   }
 
   private mergeLayers(
@@ -4942,20 +4792,16 @@ export class BodyValidator {
         e.span,
       );
     }
-    return {
-      type: {
-        kind: "provider",
-        provides: sortedUnique([...a.provides, ...b.provides]),
-        acquisition: {
-          execution: "effect",
-          effects: {
-            ...unionEffects(a.acquisition.effects, b.acquisition.effects),
-          },
+    return derivedResult({
+      kind: "provider",
+      provides: sortedUnique([...a.provides, ...b.provides]),
+      acquisition: {
+        execution: "effect",
+        effects: {
+          ...unionEffects(a.acquisition.effects, b.acquisition.effects),
         },
       },
-      match: "exact",
-      active: combine([left, right]),
-    };
+    }, combine([left, right]));
   }
 
   private provide(e: Extract<Expr, { kind: "provide" }>, path: string): Comp {
@@ -4986,16 +4832,15 @@ export class BodyValidator {
       requirements: providerType.acquisition.effects.requirements,
       execution: "effect",
     };
-    return {
-      type: fn.result,
-      match: "exact",
-      active: combine([
+    return derivedResult(
+      fn.result,
+      combine([
         combine([provider, job]),
         invocation,
         acquisition,
         EFFECT_ONLY,
       ]),
-    };
+    );
   }
 
   // -------------------------------------------------------------- operators
@@ -5014,7 +4859,7 @@ export class BodyValidator {
         } and ${show(right.type)}`,
         e.span,
       );
-      return { type: undefined, match: "exact", active };
+      return checkedResult(active);
     };
     // Two values of one numeric brand compare, add, and subtract (D32).
     const leftBrand = numericBrandOf(env, left.type);
@@ -5025,7 +4870,7 @@ export class BodyValidator {
       case "&&":
       case "||":
         return isBooleanLike(env, left.type) && isBooleanLike(env, right.type)
-          ? { type: BOOLEAN, match: "exact", active }
+          ? derivedResult(BOOLEAN, active)
           : mismatch();
       case "<":
       case "<=":
@@ -5033,7 +4878,7 @@ export class BodyValidator {
       case ">=":
         return brand !== undefined ||
             isNumeric(env, left.type) && isNumeric(env, right.type)
-          ? { type: BOOLEAN, match: "exact", active }
+          ? derivedResult(BOOLEAN, active)
           : mismatch();
       case "===":
       case "!==": {
@@ -5047,7 +4892,7 @@ export class BodyValidator {
           (isNull(left.type) && fits(env, left.type, right.type)) ||
           (isNull(right.type) && fits(env, right.type, left.type));
         return nullable || l !== undefined && l === r
-          ? { type: BOOLEAN, match: "exact", active }
+          ? derivedResult(BOOLEAN, active)
           : mismatch();
       }
       case "+":
@@ -5055,22 +4900,18 @@ export class BodyValidator {
       case "*":
       case "/": {
         if (brand !== undefined && (e.operator === "+" || e.operator === "-")) {
-          return { type: brand, match: "exact", active };
+          return derivedResult(brand, active);
         }
         if (isNumeric(env, left.type) && isNumeric(env, right.type)) {
           const integral = e.operator !== "/" && fits(env, left.type, INT) &&
             fits(env, right.type, INT);
-          return {
-            type: integral ? INT : NUMBER,
-            match: "exact",
-            active,
-          };
+          return derivedResult(integral ? INT : NUMBER, active);
         }
         if (
           e.operator === "+" && isStringLike(env, left.type) &&
           isStringLike(env, right.type)
         ) {
-          return { type: STRING, match: "exact", active };
+          return derivedResult(STRING, active);
         }
         return mismatch();
       }
