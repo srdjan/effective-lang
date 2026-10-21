@@ -14,7 +14,7 @@ export interface Arg {
   readonly pre?: NodeInfo;
 }
 
-/** The eight shared operations needed by the Schedule family. */
+/** Shared operations needed by the extracted builtin families. */
 export interface BuiltinContext {
   readonly table: TypeTable;
   argInfo(arg: Arg, expected?: TypeRef): NodeInfo;
@@ -36,5 +36,7 @@ export interface BuiltinContext {
     ref: TypeRef,
   ): Extract<TypeNode, { readonly kind: "function" }> | undefined;
   inlineStreamCallback(name: string, arg: Arg): void;
+  isError(ref: TypeRef): boolean;
   report(code: DiagnosticCode, message: string, node: NodeId): void;
+  widen(ref: TypeRef): TypeRef;
 }

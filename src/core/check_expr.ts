@@ -83,6 +83,7 @@ import {
 } from "./types.ts";
 import { isErrorId, isTypeId, serviceOfCapability, shortName } from "./ids.ts";
 import type { Arg, BuiltinContext } from "./check_builtins/context.ts";
+import { codecCall, codecOperation } from "./check_builtins/codec.ts";
 import {
   scheduleComposeCall,
   scheduleFromStepCall,
@@ -554,7 +555,7 @@ class BodyChecker implements BuiltinContext {
     return this.table.show(ref);
   }
 
-  private isError(ref: TypeRef): boolean {
+  isError(ref: TypeRef): boolean {
     return this.table.node(ref).kind === "error";
   }
 
@@ -599,7 +600,7 @@ class BodyChecker implements BuiltinContext {
   }
 
   /** Literal types of a fresh value become their primitive. Declared types stay. */
-  private widen(ref: TypeRef): TypeRef {
+  widen(ref: TypeRef): TypeRef {
     const node = this.table.node(ref);
     if (node.kind === "literal") return this.primitiveOf(node.value);
     if (node.kind === "union" && node.members.some((m) => this.isLiteral(m))) {
@@ -1214,7 +1215,7 @@ class BodyChecker implements BuiltinContext {
     retry: (c, node, _name, args) => c.retryCall(node, args),
     retrySchedule: (c, node, _name, args, expected) =>
       c.retryScheduleCall(node, args, expected),
-    codec: (c, node, _name, args) => c.codecCall(node, args),
+    codec: (c, node, _name, args) => codecCall(c, node, args),
     schema: BodyChecker.schemaBuiltin,
     schemaArray: BodyChecker.schemaBuiltin,
     schemaStruct: BodyChecker.schemaBuiltin,
@@ -1234,8 +1235,8 @@ class BodyChecker implements BuiltinContext {
     schemaInvalid: BodyChecker.schemaBuiltin,
     schemaAt: BodyChecker.schemaBuiltin,
     schemaBoth: BodyChecker.schemaBuiltin,
-    decode: (c, node, name, args) => c.codecOperation(node, name, args),
-    encode: (c, node, name, args) => c.codecOperation(node, name, args),
+    decode: (c, node, name, args) => codecOperation(c, node, name, args),
+    encode: (c, node, name, args) => codecOperation(c, node, name, args),
     withFiber: (c, node, _name, args, expected) =>
       c.withFiberCall(node, args, expected),
     joinFiber: (c, node, name, args) => c.fiberOperation(node, name, args),
@@ -1903,61 +1904,6 @@ class BodyChecker implements BuiltinContext {
       ? this.table.retrySchedule(fn.parameters[0])
       : this.table.error;
     return this.finish(node, type, combine([info]));
-  }
-
-  private codecCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const decode = this.argInfo(args[0]);
-    const encode = this.argInfo(args[1]);
-    const d = this.functionOf(decode.type);
-    const e = this.functionOf(encode.type);
-    if (
-      d === undefined || e === undefined || d.parameters.length !== 1 ||
-      e.parameters.length !== 1
-    ) {
-      this.report(
-        "type-mismatch/010",
-        "`codec` needs two single-argument functions",
-        node,
-      );
-      return this.finish(node, this.table.error, combine([decode, encode]));
-    }
-    if (
-      d.execution !== "pure" || e.execution !== "pure" || d.failures.length ||
-      d.requirements.length || e.failures.length || e.requirements.length
-    ) {
-      this.report(
-        "execution-mode/001",
-        "codec transformations must be pure",
-        node,
-      );
-    }
-    const decoded = this.widen(d.result);
-    const encoded = this.widen(d.parameters[0]);
-    if (
-      !this.table.isAssignable(decoded, e.parameters[0]) ||
-      !this.table.isAssignable(e.result, encoded)
-    ) {
-      this.report(
-        "type-mismatch/003",
-        "codec encode transformation must reverse the decode types",
-        args[1].node,
-      );
-    }
-    if (
-      !dataOnly(this.table, decoded, "codec", true) ||
-      !dataOnly(this.table, encoded, "codec", true)
-    ) {
-      this.report(
-        "type-mismatch/010",
-        "codec types need compiler-derived schemas",
-        node,
-      );
-    }
-    return this.finish(
-      node,
-      this.table.codec(decoded, encoded),
-      combine([decode, encode]),
-    );
   }
 
   /** The Schema operation that the prologue recorded for a Schema builtin call. */
@@ -3015,33 +2961,6 @@ class BodyChecker implements BuiltinContext {
       return this.kids(part).every((child) => visit(child, guarded));
     };
     return visit(body, finiteChoice) && found;
-  }
-
-  private codecOperation(
-    node: NodeId,
-    name: "decode" | "encode",
-    args: readonly Arg[],
-  ): NodeInfo {
-    const codec = this.argInfo(args[0]);
-    const type = this.table.node(this.table.unfold(codec.type));
-    if (type.kind !== "codec" && !this.isError(codec.type)) {
-      this.report(
-        "type-mismatch/010",
-        `\`${name}\` needs a Codec value`,
-        args[0].node,
-      );
-    }
-    const input = this.argInfo(
-      args[1],
-      name === "encode" && type.kind === "codec" ? type.decoded : undefined,
-    );
-    if (name === "encode" && type.kind === "codec") {
-      this.fits(args[1].node, input.type, type.decoded, "the codec input");
-    }
-    const result = type.kind === "codec"
-      ? this.table.option(name === "decode" ? type.decoded : type.encoded)
-      : this.table.error;
-    return this.finish(node, result, combine([codec, input]));
   }
 
   private withFiberCall(
