@@ -900,7 +900,7 @@ class BodyChecker {
         if (this.pendingLocals.has(target.id)) {
           this.report(
             "execution-mode/003",
-            "a local function cannot refer to itself; version 0 requires recursive functions to be module-level functions with explicit signatures",
+            "a local function cannot refer to itself; a recursive function must be a module-level function with an explicit signature",
             node,
           );
           return this.errorInfo(node);
