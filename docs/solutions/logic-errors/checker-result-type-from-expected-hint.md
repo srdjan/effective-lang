@@ -2,7 +2,7 @@
 title: The checker must not take a builtin result type from the expected hint when the validator derives it
 date: 2026-10-19
 category: logic-errors
-module: src/core/check_expr.ts and src/core/validate/expr.ts
+module: src/core/check_builtins/schedule.ts and src/core/validate/expr.ts
 problem_type: logic_error
 component: type_checker
 symptoms:
@@ -52,7 +52,7 @@ export const wide: Schedule<Millis> = scheduleFromStep(
 ## Solution
 
 The checker now always derives the output from the decision callback
-(the `scheduleFromStepCall` handler in `src/core/check_expr.ts`). The `expected` parameter of
+(the `scheduleFromStepCall` handler in `src/core/check_builtins/schedule.ts`). The `expected` parameter of
 `scheduleFromStepCall` was removed, because the checker no longer reads it.
 The binding annotation is checked by ordinary assignability. Schedule output
 is covariant in `TypeTable.assignable` (`src/core/types.ts`, the `schedule`
@@ -75,8 +75,8 @@ After:
 // The output comes from the decision callback only. An annotation then
 // checks through Schedule covariance, as the validator does.
 const output = outputs.length > 0
-  ? this.table.union(outputs)
-  : this.table.error;
+  ? c.table.union(outputs)
+  : c.table.error;
 ```
 
 Tests: `tests/schedule_check_test.ts` covers the widened program, an

@@ -21,6 +21,9 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
   types.ts       Interned types, compatibility, IR conversion, canonical JSON.
   check.ts       Declaration checker: type lowering, signatures, providers.
   check_expr.ts  Body checker: expressions, calls, patterns, contracts.
+  check_builtins/ Source-checker builtin families; arity, pipeline rules and facts stay in check_expr.ts.
+    context.ts     The argument shape and the eight shared members used by the Schedule handlers.
+    schedule.ts    General Schedule construction, mapping and comparable-input composition.
   check_project.ts Project driver: paired declaration entries and body results, modes, interfaces, the shared per-module step, and effectText.
   tables.ts      Side tables of a body: node info and lowering facts.
   patterns.ts    Pattern domains of match subjects.

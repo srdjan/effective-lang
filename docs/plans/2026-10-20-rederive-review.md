@@ -1,6 +1,6 @@
 # Rederive review: measured re-basing plan
 
-Date: 2026-10-20. Base revision: 730977c. Status: Phase 0 accepted on 2026-10-20. The user chose option (a) for D1, D2, D3, and D4. Phases 0 to 2 are done on main. R1 to R6, R9, R10, R14, and D1 to D6 are done. R7, R8, R11 (checker and validator sides), R12 (FE-1, FE-3, FE-5), and R18 (compareText, isRecord, errorMessage, the editor search, and the dead exports) are done on main. R12 FE-1, FE-3, FE-5, and R18 were replayed in `d25a6a6..c542847`. R7 and the checker side of R11 are in `39e94ba..d858322`. R8 and the validator side of R11 are in `044c2e3..7c2d151`. R16 and R17 are done through P1 and R17 of the hardening plan. Still open: R12 FE-2 (LSP param schema kit), R13 (entry/result pairing complete; other state types and the shared mode-map remainder open), R15b (not started), R18 CHK-12 (built-in type table; its only implementation is commit `21449db`, kept by the tag `keep/chk-12`), and the R18 `isErrorId` casts (CHK-11). The R18 closing-token parser sites are done in `463b872`. R15a and C10 are complete through the shared syntax queries; A6 is complete in `docs/builtin-changes.md`. The sibling plan `2026-10-20-hardening-pruning.md` carries the remaining cleanup work.
+Date: 2026-10-20. Base revision: 730977c. Status: Phase 0 accepted on 2026-10-20. The user chose option (a) for D1, D2, D3, and D4. Phases 0 to 2 are done on main. R1 to R6, R9, R10, R14, and D1 to D6 are done. R7, R8, R11 (checker and validator sides), R12 (FE-1, FE-3, FE-5), and R18 (compareText, isRecord, errorMessage, the editor search, and the dead exports) are done on main. R12 FE-1, FE-3, FE-5, and R18 were replayed in `d25a6a6..c542847`. R7 and the checker side of R11 are in `39e94ba..d858322`. R8 and the validator side of R11 are in `044c2e3..7c2d151`. R16 and R17 are done through P1 and R17 of the hardening plan. Still open: R12 FE-2 (LSP param schema kit), R13 (entry/result pairing complete; other state types and the shared mode-map remainder open), R15b (Schedule pilot complete; other families open), R18 CHK-12 (built-in type table; its only implementation is commit `21449db`, kept by the tag `keep/chk-12`), and the R18 `isErrorId` casts (CHK-11). The R18 closing-token parser sites are done in `463b872`. R15a and C10 are complete through the shared syntax queries; A6 is complete in `docs/builtin-changes.md`. The sibling plan `2026-10-20-hardening-pruning.md` carries the remaining cleanup work.
 
 This document is a plan, not a change. It ranks the weak units of the transpiler by measured leverage. For each rederived unit, it gives the contract to keep, the judging tests, and the verification. The evidence is in `docs/plans/rederive-review-evidence/`. Each finding ID (for example CHK-2) points to a section of a scout report in that directory. The scratch paths under `/tmp/rederive/` in those reports are not kept.
 
@@ -504,8 +504,8 @@ the expression checker. `shortName` and `decodeString` keep the shared owners
 established by P5. No public core export, IR shape, checker policy or validator
 code changes. A6 is the [builtin-change checklist](../builtin-changes.md).
 
-Verification is recorded in the rederive evidence ledger. R15b remains outside
-this batch; its old family/context size estimates require fresh measurement.
+Verification is recorded in the rederive evidence ledger. That batch left
+R15b open; its old family/context size estimates required fresh measurement.
 
 The second cleanup unit completes CHK-13 entry/result pairing: separate
 function and constant entries carry only their applicable syntax node, and
@@ -513,3 +513,20 @@ each run owns the matching entry. Recursive-group result publication uses
 those pairs instead of parallel array positions. The existing SCC solver,
 shared mode map, diagnostic order and public checked-body types are unchanged.
 The rest of R13 remains open.
+
+The next bounded unit implements the R15b Schedule pilot. Four handlers for
+seven general Schedule builtins move to `src/core/check_builtins/schedule.ts`.
+They use eight members of `BuiltinContext`: the type table, argument checking,
+callback checking, result recording, assignability diagnostics, function-type
+lookup, inline-arrow checking and diagnostic reporting. `BodyChecker` implements
+that interface directly; no wrapper object or bound callback is allocated for
+each call. The argument shape moves unchanged to `check_builtins/context.ts`.
+Prelude dispatch, arity and pipeline checks, lowering facts, retry schedules,
+stream aggregation and independent validation retain their existing owners.
+
+This is a module-boundary change, not a branch reduction: the measured branch
+delta is zero. `check_expr.ts` goes from 6929 to 6750 raw lines; the three
+affected source files together add 42 filtered lines for imports and contracts.
+The four handler bodies have identical token sequences after replacing their
+`this` receiver with the context parameter. The other R15b families remain open;
+the original whole-checker size target is still unmeasured.

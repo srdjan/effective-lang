@@ -82,6 +82,13 @@ import {
   type TypeTable,
 } from "./types.ts";
 import { isErrorId, isTypeId, serviceOfCapability, shortName } from "./ids.ts";
+import type { Arg, BuiltinContext } from "./check_builtins/context.ts";
+import {
+  scheduleComposeCall,
+  scheduleFromStepCall,
+  scheduleMapCall,
+  simpleScheduleCall,
+} from "./check_builtins/schedule.ts";
 
 // ------------------------------------------------------------------ environment
 
@@ -126,12 +133,6 @@ export interface ConstantRun {
   /** The binding annotation, or the widened type of the initializer. */
   readonly type: TypeRef;
   readonly diagnostics: readonly Diagnostic[];
-}
-
-interface Arg {
-  readonly node: NodeId;
-  /** The value of a pipeline's left side, which is evaluated once before the stage. */
-  readonly pre?: NodeInfo;
 }
 
 /** One use of a local in a body. */
@@ -510,12 +511,13 @@ function invocationOf(fn: FunctionNode | undefined): EffectSet {
 
 // ------------------------------------------------------------------ the checker
 
-class BodyChecker {
+// Shared members are exposed only through BuiltinContext to family handlers.
+class BodyChecker implements BuiltinContext {
   readonly sink: Diagnostic[] = [];
   readonly body: BodyTable;
   private readonly lowerer: TypeLowerer;
   private readonly tree: SyntaxTree;
-  private readonly table: TypeTable;
+  readonly table: TypeTable;
   private readonly targets: ReadonlyMap<NodeId, Target>;
   /** Block-local functions whose bodies are being checked. */
   private readonly pendingLocals = new Set<LocalId>();
@@ -544,7 +546,7 @@ class BodyChecker {
     return nodeSpan(this.tree, node);
   }
 
-  private report(code: DiagnosticCode, message: string, node: NodeId): void {
+  report(code: DiagnosticCode, message: string, node: NodeId): void {
     this.sink.push(makeDiagnostic(code, message, this.span(node)));
   }
 
@@ -556,7 +558,7 @@ class BodyChecker {
     return this.table.node(ref).kind === "error";
   }
 
-  private finish(node: NodeId, type: TypeRef, eff: EffectSet): NodeInfo {
+  finish(node: NodeId, type: TypeRef, eff: EffectSet): NodeInfo {
     const info: NodeInfo = {
       type,
       failures: eff.failures,
@@ -577,7 +579,7 @@ class BodyChecker {
   }
 
   /** Reports a mismatch when `found` does not fit `expected`. Returns true when it fits. */
-  private fits(
+  fits(
     node: NodeId,
     found: TypeRef,
     expected: TypeRef | undefined,
@@ -617,7 +619,7 @@ class BodyChecker {
     return Number.isSafeInteger(value) ? this.table.int : this.table.number;
   }
 
-  private functionOf(ref: TypeRef): FunctionNode | undefined {
+  functionOf(ref: TypeRef): FunctionNode | undefined {
     const node = this.table.node(this.table.unfold(ref));
     return node.kind === "function" ? node : undefined;
   }
@@ -780,7 +782,7 @@ class BodyChecker {
     }
   }
 
-  private argInfo(arg: Arg, expected?: TypeRef): NodeInfo {
+  argInfo(arg: Arg, expected?: TypeRef): NodeInfo {
     return arg.pre ?? this.expr(arg.node, expected);
   }
 
@@ -1294,19 +1296,19 @@ class BodyChecker {
     aggregateWithinStream: (c, node, _name, args) =>
       c.aggregateWithinStreamCall(node, args),
     scheduleFromStep: (c, node, _name, args) =>
-      c.scheduleFromStepCall(node, args),
+      scheduleFromStepCall(c, node, args),
     scheduleRecurs: (c, node, name, args) =>
-      c.simpleScheduleCall(node, args, name),
+      simpleScheduleCall(c, node, args, name),
     scheduleSpaced: (c, node, name, args) =>
-      c.simpleScheduleCall(node, args, name),
+      simpleScheduleCall(c, node, args, name),
     scheduleMap: (c, node, _name, args, expected) =>
-      c.scheduleMapCall(node, args, expected),
+      scheduleMapCall(c, node, args, expected),
     scheduleMax: (c, node, name, args) =>
-      c.scheduleComposeCall(node, args, name),
+      scheduleComposeCall(c, node, args, name),
     scheduleMin: (c, node, name, args) =>
-      c.scheduleComposeCall(node, args, name),
+      scheduleComposeCall(c, node, args, name),
     scheduleConcat: (c, node, name, args) =>
-      c.scheduleComposeCall(node, args, name),
+      scheduleComposeCall(c, node, args, name),
     runStream: (c, node, _name, args) => c.runStreamCall(node, args),
     bufferStream: (c, node, _name, args) => c.bufferStreamCall(node, args),
     mergeStreams: (c, node, name, args) => c.streamPairCall(node, name, args),
@@ -3562,7 +3564,7 @@ class BodyChecker {
     }
   }
 
-  private inlineStreamCallback(name: string, arg: Arg): void {
+  inlineStreamCallback(name: string, arg: Arg): void {
     if (
       arg.pre !== undefined ||
       kindOf(this.tree, arg.node) !== SyntaxKind.ArrowExpr
@@ -4367,187 +4369,6 @@ class BodyChecker {
     );
   }
 
-  private simpleScheduleCall(
-    node: NodeId,
-    args: readonly Arg[],
-    name: "scheduleRecurs" | "scheduleSpaced",
-  ): NodeInfo {
-    const value = this.argInfo(args[0]);
-    this.fits(
-      args[0].node,
-      value.type,
-      name === "scheduleRecurs" ? this.table.int : this.table.number,
-      "the schedule argument",
-    );
-    return this.finish(
-      node,
-      this.table.schedule(this.table.int, this.table.unknown, [], []),
-      combine([value]),
-    );
-  }
-
-  private scheduleFromStepCall(
-    node: NodeId,
-    args: readonly Arg[],
-  ): NodeInfo {
-    this.inlineStreamCallback("scheduleFromStep", args[0]);
-    this.inlineStreamCallback("scheduleFromStep", args[1]);
-    const initial = this.argInfo(args[0]);
-    const decide = this.argInfo(args[1]);
-    const factory = this.functionOf(initial.type);
-    const step = this.functionOf(decide.type);
-    if (
-      factory === undefined || factory.parameters.length !== 0 ||
-      step === undefined || step.parameters.length !== 2
-    ) {
-      this.report(
-        "type-mismatch/010",
-        "`scheduleFromStep` needs a nullary state factory and a two-parameter decision callback",
-        node,
-      );
-      return this.finish(node, this.table.error, combine([initial, decide]));
-    }
-    const state = factory.result;
-    this.fits(args[1].node, state, step.parameters[0], "the schedule state");
-    const metadata = this.table.node(this.table.unfold(step.parameters[1]));
-    const input = metadata.kind === "record"
-      ? metadata.fields.find((field) => field.name === "input")?.type
-      : undefined;
-    if (
-      input === undefined ||
-      !this.table.isAssignable(
-        this.table.scheduleInput(input),
-        step.parameters[1],
-      )
-    ) {
-      this.report(
-        "type-mismatch/010",
-        "the decision callback needs ScheduleInput<Input>",
-        args[1].node,
-      );
-    }
-    const outputs: TypeRef[] = [];
-    for (const member of flattenMembers(this.table, step.result)) {
-      const variant = this.table.node(this.table.unfold(member));
-      if (variant.kind !== "record") continue;
-      const output = variant.fields.find((field) => field.name === "output");
-      if (output !== undefined) outputs.push(output.type);
-    }
-    // The output comes from the decision callback only. An annotation then
-    // checks through Schedule covariance, as the validator does.
-    const output = outputs.length > 0
-      ? this.table.union(outputs)
-      : this.table.error;
-    if (
-      outputs.length === 0 ||
-      !this.table.isAssignable(
-        step.result,
-        this.table.scheduleDecision(state, output),
-      )
-    ) {
-      this.report(
-        "type-mismatch/010",
-        "the decision callback must return ScheduleDecision<State, Output>",
-        args[1].node,
-      );
-    }
-    return this.finish(
-      node,
-      this.table.schedule(output, input ?? this.table.error, [
-        ...factory.failures,
-        ...step.failures,
-      ], [...factory.requirements, ...step.requirements]),
-      combine([initial, decide]),
-    );
-  }
-
-  private scheduleMapCall(
-    node: NodeId,
-    args: readonly Arg[],
-    expected: TypeRef | undefined,
-  ): NodeInfo {
-    this.inlineStreamCallback("scheduleMap", args[1]);
-    const schedule = this.argInfo(args[0]);
-    const policy = this.table.node(this.table.unfold(schedule.type));
-    if (policy.kind !== "schedule") {
-      this.report(
-        "type-mismatch/010",
-        "`scheduleMap` needs a Schedule",
-        args[0].node,
-      );
-      return this.finish(
-        node,
-        this.table.error,
-        combine([schedule, this.argInfo(args[1])]),
-      );
-    }
-    const hint = expected === undefined
-      ? undefined
-      : this.table.node(this.table.unfold(expected));
-    const mapped = this.callback(
-      "scheduleMap",
-      args[1],
-      [this.table.scheduleMetadata(policy.output, policy.input)],
-      hint?.kind === "schedule" ? hint.output : undefined,
-      true,
-    );
-    const fn = this.functionOf(mapped.info.type);
-    return this.finish(
-      node,
-      this.table.schedule(mapped.result, policy.input, [
-        ...policy.failures,
-        ...(fn?.failures ?? []),
-      ], [...policy.requirements, ...(fn?.requirements ?? [])]),
-      combine([schedule, mapped.info]),
-    );
-  }
-
-  private scheduleComposeCall(
-    node: NodeId,
-    args: readonly Arg[],
-    name: "scheduleMax" | "scheduleMin" | "scheduleConcat",
-  ): NodeInfo {
-    const left = this.argInfo(args[0]);
-    const right = this.argInfo(args[1]);
-    const first = this.table.node(this.table.unfold(left.type));
-    const second = this.table.node(this.table.unfold(right.type));
-    if (first.kind !== "schedule" || second.kind !== "schedule") {
-      this.report(
-        "type-mismatch/010",
-        `\`${name}\` needs two Schedule values`,
-        node,
-      );
-      return this.finish(node, this.table.error, combine([left, right]));
-    }
-    const accepts = (input: TypeRef, offered: TypeRef): boolean =>
-      this.table.unfold(input) === this.table.unknown ||
-      this.table.isAssignable(offered, input);
-    const input = accepts(second.input, first.input)
-      ? first.input
-      : accepts(first.input, second.input)
-      ? second.input
-      : undefined;
-    if (input === undefined) {
-      this.report(
-        "type-mismatch/010",
-        `\`${name}\` needs comparable Schedule input types`,
-        node,
-      );
-      return this.finish(node, this.table.error, combine([left, right]));
-    }
-    const output = name === "scheduleConcat"
-      ? this.table.union([first.output, second.output])
-      : this.table.number;
-    return this.finish(
-      node,
-      this.table.schedule(output, input, [
-        ...first.failures,
-        ...second.failures,
-      ], [...first.requirements, ...second.requirements]),
-      combine([left, right]),
-    );
-  }
-
   private aggregateWithinStreamCall(
     node: NodeId,
     args: readonly Arg[],
@@ -5067,7 +4888,7 @@ class BodyChecker {
    * Checks a collection callback. An inline arrow receives its parameter
    * types from the context. Only traverse permits invocation effects.
    */
-  private callback(
+  callback(
     name: string,
     arg: Arg,
     parameters: readonly TypeRef[],
