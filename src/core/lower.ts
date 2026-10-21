@@ -51,6 +51,7 @@ import { TokenKind } from "./lex.ts";
 import type { ModuleInfo } from "./project.ts";
 import type { ModuleResolution, Target } from "./resolve.ts";
 import { sha256Hex } from "./sha256.ts";
+import { compareText } from "./util.ts";
 import {
   kindOf,
   type NodeId,
@@ -1684,10 +1685,6 @@ function targetId(target: Target | undefined): DeclarationId | undefined {
     default:
       return undefined;
   }
-}
-
-function compareText(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function lowerImports(

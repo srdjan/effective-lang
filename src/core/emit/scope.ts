@@ -23,6 +23,7 @@ import {
   serviceOfCapability as coreServiceOfCapability,
 } from "../ids.ts";
 import { normalizeRelative, type ProjectConfig } from "../project.ts";
+import { compareText } from "../util.ts";
 import { collectBinderNames } from "./walk.ts";
 
 /** The imports from the `effect` package. */
@@ -162,10 +163,6 @@ export function methodOfCapability(capability: CapabilityId): string {
     throw internal(`malformed capability ${capability}`);
   }
   return method;
-}
-
-function compareText(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /** The order of `deno fmt` for named imports: case-insensitive, then by code unit. */
