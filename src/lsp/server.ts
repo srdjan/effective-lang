@@ -253,6 +253,7 @@ export class LanguageServer {
         this.#notify("textDocument/publishDiagnostics", params),
       log: (type, message) => this.#log(type, message),
       stderr: (text) => this.#stderr(text),
+      writeOnSave: () => this.#options.writeOnSave,
       flushed: (project, revision) => this.#flushed(project, revision),
     });
     const currentOptions = (): InitializationOptions => this.#options;

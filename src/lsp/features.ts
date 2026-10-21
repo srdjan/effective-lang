@@ -6,7 +6,6 @@
 // This file imports only types from `server.ts`. The server imports the values
 // of this file, so a value import back would form a cycle.
 
-import { writeGenerated } from "../host/outputs.ts";
 import {
   definitionAt,
   documentSymbols,
@@ -283,21 +282,16 @@ export function generatedTypeScriptRequest(
 // ---- Save -------------------------------------------------------------------
 
 /**
- * `textDocument/didSave` (plan 5.9). Writes the files of the saved `.eff`
- * module when `writeOnSave` is true. A module with errors keeps its last good
- * files, because `writeGenerated` skips it.
+ * `textDocument/didSave` (plan 5.9, plan SV). A save of a `.eff` or `.effi`
+ * document of a known project starts a save round, which brings every output
+ * of the project up to date from the disk texts. The round does nothing when
+ * `writeOnSave` is false.
  */
 export function didSave(params: TextDocumentParams, ctx: ServerContext): void {
-  if (!ctx.options.writeOnSave) return;
-  const found = ctx.projects.forRequest(params.textDocument.uri);
-  if (found === undefined || !found.path.endsWith(".eff")) return;
-  const { project, path } = found;
-  const revision = project.lastGood;
-  if (project.configError !== undefined || revision === undefined) return;
-  const name = effModuleOf(revision, path);
-  if (name === undefined) return;
-  const outputs = writeGenerated(ctx.fs, project.root, revision, [name], true);
-  for (const note of outputs.notes) ctx.log(1, note);
+  const found = ctx.projects.lookup(params.textDocument.uri);
+  if (found === undefined) return;
+  if (!found.path.endsWith(".eff") && !found.path.endsWith(".effi")) return;
+  ctx.projects.saveRound(found.project);
 }
 
 // ---- Stats ------------------------------------------------------------------

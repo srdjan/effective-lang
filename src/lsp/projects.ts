@@ -8,6 +8,11 @@
 // wrapper is the only exception boundary.
 
 import type { CliFs } from "../host/io.ts";
+import {
+  removeStaleOutputs,
+  writableModules,
+  writeGenerated,
+} from "../host/outputs.ts";
 import { isSourcePath, readWorkspace } from "../host/workspace.ts";
 import {
   compareText,
@@ -72,6 +77,18 @@ export class ProjectState {
 
   readonly program: Program;
 
+  /**
+   * The disk program of the save round. It sees disk texts only. Created on the
+   * first round, and only when `writeOnSave` is true.
+   */
+  diskProgram: Program | undefined;
+  /** The texts that the last round gave to `diskProgram`, whether or not that update succeeded. */
+  diskInputs: ReadonlyMap<string, string> = new Map();
+  /** The `.eff` module names of the last successful round, plus names whose removal failed. */
+  diskModules: readonly string[] = [];
+  /** The reason last logged for each held module, so that a repeat stays silent. */
+  readonly heldReasons = new Map<string, string>();
+
   constructor(readonly root: string) {
     this.program = new Program(root);
   }
@@ -100,8 +117,19 @@ interface ProjectSetPorts {
   log(type: LogType, message: string): void;
   /** Writes a line to stderr. The set adds the line end. */
   stderr(text: string): void;
+  /** The `writeOnSave` option of the client. It does not change after `initialize`. */
+  writeOnSave(): boolean;
   /** Called after each flush whose `Program.update` gave a revision, after the diagnostics went out. */
   flushed(project: ProjectState, revision: Revision): void;
+}
+
+function sameTexts(
+  a: ReadonlyMap<string, string>,
+  b: ReadonlyMap<string, string>,
+): boolean {
+  if (a.size !== b.size) return false;
+  for (const [path, text] of a) if (b.get(path) !== text) return false;
+  return true;
 }
 
 function parentOf(dir: string): string {
@@ -160,6 +188,28 @@ function groupDiagnostics(
     else list.push(converted);
   }
   return groups;
+}
+
+/** Why a module is not written, for the log. */
+function heldReason(
+  revision: Revision,
+  name: string,
+  writable: ReadonlySet<string>,
+): string {
+  const lowered = revision.lowered(name);
+  if (lowered !== undefined && !lowered.ok) {
+    if (lowered.error.tag === "diagnostics") {
+      return `${name} is not written: it has ${lowered.error.count} diagnostics`;
+    }
+  }
+  const { graph, modules } = revision.project;
+  const blocker = (graph.get(name) ?? []).find((target) =>
+    modules.get(target)?.mode === "eff" && !writable.has(target)
+  );
+  if (blocker !== undefined) {
+    return `${name} is not written: it imports ${blocker}, which is not written`;
+  }
+  return `${name} is not written: it cannot be lowered`;
 }
 
 export class ProjectSet {
@@ -313,6 +363,9 @@ export class ProjectSet {
    * project root, passes `isSourcePath`, and is not an open document.
    */
   didChangeWatchedFiles(events: readonly FileEvent[]): void {
+    // The projects whose `effective.json` changed. The client sends no
+    // `didSave` for that file, so each of them gets a save round.
+    const reconfigured = new Set<ProjectState>();
     for (const event of events) {
       const absolute = uriToPath(event.uri);
       if (absolute === undefined) continue;
@@ -328,8 +381,100 @@ export class ProjectSet {
           this.#reread(project, path);
         }
         project.dirty = true;
+        if (path === CONFIG_FILE) reconfigured.add(project);
       }
     }
+    for (const project of reconfigured) this.saveRound(project);
+  }
+
+  // ---- Save round ---------------------------------------------------------
+
+  /**
+   * One save round (plan SV, section 3.2): reads the workspace from disk,
+   * brings the disk program up to date, removes the outputs of deleted
+   * modules, and writes the outputs of every writable module that the project
+   * owns. Does nothing when `writeOnSave` is false.
+   */
+  saveRound(project: ProjectState): void {
+    if (!this.ports.writeOnSave()) return;
+    const { fs, log } = this.ports;
+    const read = readWorkspace(fs, project.root);
+    if (!read.ok) {
+      log(1, `cannot read the project ${project.root}: ${read.error}`);
+      return;
+    }
+    const workspace = read.value;
+    if (!sameTexts(project.disk, workspace)) {
+      // The overlay program must see the new disk text at the next flush.
+      project.disk = workspace;
+      project.dirty = true;
+    }
+    const program = project.diskProgram ??= new Program(project.root);
+    const { set, remove } = diffFiles(project.diskInputs, workspace);
+    const updated = program.update({ set, remove });
+    project.diskInputs = workspace;
+    if (!updated.ok) {
+      log(1, describeConfigError(updated.error));
+      return;
+    }
+    const revision = updated.value;
+    const owns = (name: string): boolean => this.#owns(project, name);
+
+    const names = revision.effModuleNames();
+    const present = new Set(names);
+    const kept: string[] = [];
+    for (const name of project.diskModules) {
+      if (present.has(name) || !owns(name)) continue;
+      const removal = removeStaleOutputs(fs, project.root, [name]);
+      for (const path of removal.removed) log(4, `removed ${path}`);
+      for (const note of removal.notes) log(1, note);
+      if (removal.notes.length > 0) kept.push(name);
+    }
+    project.diskModules = [...names, ...kept];
+
+    const writable = writableModules(revision);
+    // `writableModules` also keeps a module whose own lowering failed, and
+    // `writeGenerated` skips it. A module is written only when it lowered.
+    const writableSet = new Set(
+      writable.filter((name) => revision.lowered(name)?.ok === true),
+    );
+    const outputs = writeGenerated(
+      fs,
+      project.root,
+      revision,
+      writable.filter(owns),
+      true,
+    );
+    for (const path of outputs.written) log(4, `wrote ${path}`);
+    for (const note of outputs.notes) log(1, note);
+
+    const held = new Set<string>();
+    for (const name of names) {
+      if (writableSet.has(name) || !owns(name)) continue;
+      held.add(name);
+      const reason = heldReason(revision, name, writableSet);
+      if (project.heldReasons.get(name) === reason) continue;
+      project.heldReasons.set(name, reason);
+      log(3, reason);
+    }
+    for (const name of [...project.heldReasons.keys()]) {
+      if (!held.has(name)) project.heldReasons.delete(name);
+    }
+  }
+
+  /**
+   * True when no directory between the root and the module's directory has its
+   * own `effective.json`. The root itself does not count.
+   */
+  #owns(project: ProjectState, name: string): boolean {
+    const parts = name.split("/").slice(0, -1);
+    for (let n = 1; n <= parts.length; n++) {
+      const dir = joinPath(project.root, parts.slice(0, n).join("/"));
+      if (this.ports.fs.kind(joinPath(dir, CONFIG_FILE)) === "file") {
+        return false;
+      }
+    }
+    return true;
   }
 
   // ---- Discovery ----------------------------------------------------------

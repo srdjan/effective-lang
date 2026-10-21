@@ -3,6 +3,8 @@
 // TypeScript, save, and stats.
 
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import { Program } from "../src/core/mod.ts";
+import { isSourcePath } from "../src/host/workspace.ts";
 import type { ResponseMessage } from "../src/lsp/jsonrpc.ts";
 import type {
   DocumentSymbol,
@@ -427,15 +429,48 @@ function save(uri: string): unknown {
   return notification("textDocument/didSave", { textDocument: { uri } });
 }
 
-Deno.test("didSave writes the saved module and its map only", () => {
+/** Sets the disk text of a project file, as an editor save does before `didSave`. */
+function onDisk(h: Harness, path: string, text: string): void {
+  h.files.set(`${ROOT}/${path}`, text);
+}
+
+function typeLogs(h: Harness, type: number): string[] {
+  return h.logs().filter((l) => l.type === type).map((l) => l.message);
+}
+
+/** The text of `main.ts` or `users.ts` that a fresh build of the disk texts writes. */
+function freshOutput(h: Harness, name: string): string {
+  const set = new Map<string, string>();
+  for (const [full, text] of h.files) {
+    const path = full.slice(ROOT.length + 1);
+    if (full.startsWith(`${ROOT}/`) && isSourcePath(path)) set.set(path, text);
+  }
+  const updated = new Program(ROOT).update({ set });
+  assert(updated.ok);
+  const emitted = updated.value.emitted(name);
+  assert(emitted?.ok);
+  return emitted.value.text;
+}
+
+const USERS_PURE = USERS_TEXT.replace(
+  /export const displayName[\s\S]*?\n\n/,
+  "export const displayName = (id: UserId): Name => id\n\n",
+);
+
+Deno.test("the first didSave writes main.ts and users.ts with their maps", () => {
   const h = started();
   const before = new Set(h.files.keys());
   h.deliver(didOpen(MAIN, 1, MAIN_TEXT), save(MAIN));
-  const added = [...h.files.keys()].filter((path) => !before.has(path)).sort();
-  assertEquals(added, [MAIN_TS, `${MAIN_TS}.map`]);
-  assertEquals(h.logs(), []);
-  const emitted = generated(h, 1);
-  assertEquals(h.files.get(MAIN_TS), emitted?.text);
+  const added = [...h.files.keys()].filter((path) => !before.has(path));
+  for (
+    const name of ["main", "users", "collections", "log", "pay"]
+  ) {
+    assert(added.includes(`${ROOT}/${name}.ts`), name);
+    assert(added.includes(`${ROOT}/${name}.ts.map`), name);
+  }
+  assertEquals(typeLogs(h, 1), []);
+  assert(typeLogs(h, 4).includes("wrote main.ts"));
+  assertEquals(h.files.get(MAIN_TS), generated(h, 1)?.text);
 });
 
 Deno.test("didSave writes nothing when writeOnSave is false", () => {
@@ -443,6 +478,18 @@ Deno.test("didSave writes nothing when writeOnSave is false", () => {
   const before = new Set(h.files.keys());
   h.deliver(didOpen(MAIN, 1, MAIN_TEXT), save(MAIN));
   assertEquals(new Set(h.files.keys()), before);
+  assertEquals(h.logs(), []);
+});
+
+Deno.test("didSave of a document outside a project does nothing", () => {
+  const h = started();
+  const loose = uriOf("/elsewhere/loose.eff");
+  h.deliver(didOpen(loose, 1, MAIN_TEXT));
+  h.clearSent();
+  const before = new Map(h.files);
+  h.deliver(save(loose));
+  assertEquals(h.files, before);
+  assertEquals(h.logs(), []);
 });
 
 Deno.test("didSave of a module with an error keeps the old files", () => {
@@ -451,44 +498,51 @@ Deno.test("didSave of a module with an error keeps the old files", () => {
   const old = h.files.get(MAIN_TS);
   const oldMap = h.files.get(`${MAIN_TS}.map`);
   assert(old !== undefined && oldMap !== undefined);
+  onDisk(h, "main.eff", MAIN_BROKEN);
   h.deliver(didChangeFull(MAIN, 2, MAIN_BROKEN), save(MAIN));
   assertEquals(h.files.get(MAIN_TS), old);
   assertEquals(h.files.get(`${MAIN_TS}.map`), oldMap);
-  assertEquals(h.logs(), []);
+  assertEquals(typeLogs(h, 1), []);
+  assert(typeLogs(h, 3).includes("main is not written: it has 1 diagnostics"));
 });
 
-Deno.test("didSave of a new module with an error writes nothing", () => {
+Deno.test("didSave of a new module with an error writes no file for it", () => {
   const h = started();
-  const before = new Set(h.files.keys());
+  onDisk(h, "main.eff", MAIN_BROKEN);
   h.deliver(didOpen(MAIN, 1, MAIN_BROKEN), save(MAIN));
-  assertEquals(new Set(h.files.keys()), before);
+  assert(!h.files.has(MAIN_TS) && !h.files.has(`${MAIN_TS}.map`));
 });
 
-Deno.test("didSave of a host interface file writes nothing", () => {
+Deno.test("didSave of a host interface file runs the round and writes no file for it", () => {
   const h = started();
   h.deliver(didOpen(MAIN, 1, MAIN_TEXT), didOpen(PROVIDERS, 1, PROVIDERS_TEXT));
-  const before = new Set(h.files.keys());
   h.deliver(save(PROVIDERS));
-  assertEquals(new Set(h.files.keys()), before);
+  assert(h.files.has(MAIN_TS));
+  assert(!h.files.has(`${ROOT}/host/providers.ts`));
+  const before = new Map(h.files);
+  h.deliver(save(PROVIDERS));
+  assertEquals(h.files, before);
 });
 
-Deno.test("didSave during a configuration error writes nothing", () => {
+Deno.test("didSave during a configuration error writes nothing and logs type 1", () => {
   const h = started();
   h.deliver(didOpen(MAIN, 1, MAIN_TEXT));
-  h.files.set(`${ROOT}/effective.json`, "{");
+  onDisk(h, "effective.json", "{");
   h.deliver(watched({ uri: uriOf(`${ROOT}/effective.json`), type: 2 }));
-  const before = new Set(h.files.keys());
+  h.clearSent();
+  const before = new Map(h.files);
   h.deliver(save(MAIN));
-  assertEquals(new Set(h.files.keys()), before);
+  assertEquals(h.files, before);
+  assertEquals(typeLogs(h, 1).length, 1);
 });
 
 Deno.test("a write failure on save goes to window/logMessage with type 1", () => {
   const h = started();
   h.unwritable.add(MAIN_TS);
   h.deliver(didOpen(MAIN, 1, MAIN_TEXT), save(MAIN));
-  const logs = h.logs().filter((l) => l.type === 1);
+  const logs = typeLogs(h, 1);
   assertEquals(logs.length, 1);
-  assertStringIncludes(logs[0].message, "cannot write main.ts");
+  assertStringIncludes(logs[0], "cannot write main.ts");
   // The map was still written.
   assert(h.files.has(`${MAIN_TS}.map`));
 });
@@ -497,6 +551,86 @@ Deno.test("didSave of a closed document still writes", () => {
   const h = started();
   h.deliver(didOpen(MAIN, 1, MAIN_TEXT), didClose(MAIN), save(MAIN));
   assert(h.files.has(MAIN_TS));
+});
+
+Deno.test("gap A: a save with an error in users.eff on disk does not write main.ts", () => {
+  const h = started();
+  onDisk(h, "users.eff", USERS_BROKEN);
+  h.deliver(didOpen(MAIN, 1, MAIN_TEXT), save(MAIN));
+  assert(!h.files.has(MAIN_TS) && !h.files.has(`${ROOT}/users.ts`));
+  assert(
+    typeLogs(h, 3).includes(
+      "main is not written: it imports users, which is not written",
+    ),
+  );
+  assertEquals(typeLogs(h, 1), []);
+});
+
+Deno.test("gap B: a mode flip in users.eff updates main.ts on the save of users.eff", () => {
+  const h = started();
+  h.deliver(didOpen(MAIN, 1, MAIN_TEXT), save(MAIN));
+  const before = h.files.get(MAIN_TS);
+  assert(USERS_PURE !== USERS_TEXT);
+  h.deliver(didOpen(USERS, 1, USERS_TEXT), didChangeFull(USERS, 2, USERS_PURE));
+  onDisk(h, "users.eff", USERS_PURE);
+  h.deliver(save(USERS));
+  const after = h.files.get(MAIN_TS);
+  assert(after !== before);
+  assertEquals(after, freshOutput(h, "main"));
+  assertEquals(h.files.get(`${ROOT}/users.ts`), freshOutput(h, "users"));
+});
+
+Deno.test("gap C: a save removes the outputs of a module deleted from the disk", () => {
+  const h = started();
+  const solo = "export const solo = (): Int => 1\n\ntype Int = int\n";
+  onDisk(h, "solo.eff", solo);
+  h.deliver(didOpen(MAIN, 1, MAIN_TEXT), save(MAIN));
+  assert(h.files.has(`${ROOT}/solo.ts`) && h.files.has(`${ROOT}/solo.ts.map`));
+  h.files.delete(`${ROOT}/solo.eff`);
+  h.deliver(save(MAIN));
+  assert(
+    !h.files.has(`${ROOT}/solo.ts`) && !h.files.has(`${ROOT}/solo.ts.map`),
+  );
+  assert(h.files.has(MAIN_TS));
+});
+
+Deno.test("gap D: unsaved text of an open module does not reach main.ts", () => {
+  const h = started();
+  h.deliver(didOpen(MAIN, 1, MAIN_TEXT), didOpen(USERS, 1, USERS_TEXT));
+  h.deliver(didChangeFull(USERS, 2, USERS_PURE));
+  h.deliver(save(MAIN));
+  assertEquals(h.files.get(MAIN_TS), freshOutput(h, "main"));
+  const saved = h.files.get(MAIN_TS);
+  h.deliver(didClose(USERS), save(MAIN));
+  assertEquals(h.files.get(MAIN_TS), saved);
+});
+
+Deno.test("a watched event for effective.json runs a round, and other events run none", () => {
+  const h = started();
+  h.deliver(didOpen(MAIN, 1, MAIN_TEXT));
+  h.clearSent();
+  // A source file event runs no round, even though the disk changed.
+  onDisk(h, "users.eff", USERS_PURE);
+  h.deliver(watched({ uri: USERS, type: 2 }));
+  assert(!h.files.has(MAIN_TS));
+  assertEquals(typeLogs(h, 4), []);
+  // The configuration event runs the round for the project.
+  h.deliver(watched({ uri: uriOf(`${ROOT}/effective.json`), type: 2 }));
+  assertEquals(h.files.get(MAIN_TS), freshOutput(h, "main"));
+  assert(typeLogs(h, 4).includes("wrote main.ts"));
+  // A delete event for the configuration runs a round as well.
+  h.clearSent();
+  h.files.delete(`${ROOT}/effective.json`);
+  h.deliver(watched({ uri: uriOf(`${ROOT}/effective.json`), type: 3 }));
+  assertEquals(typeLogs(h, 4), []);
+});
+
+Deno.test("a watched effective.json event with writeOnSave false runs no round", () => {
+  const h = started({ writeOnSave: false });
+  h.deliver(didOpen(MAIN, 1, MAIN_TEXT));
+  h.deliver(watched({ uri: uriOf(`${ROOT}/effective.json`), type: 2 }));
+  assert(!h.files.has(MAIN_TS));
+  assertEquals(h.logs(), []);
 });
 
 // ---- Stats ------------------------------------------------------------------

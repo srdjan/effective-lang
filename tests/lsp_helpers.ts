@@ -79,6 +79,8 @@ export interface Harness {
   readonly files: Map<string, string>;
   /** Paths whose read throws. */
   readonly throwOnRead: Set<string>;
+  /** Paths whose read gives an `unreadable` error value. */
+  readonly unreadable: Set<string>;
   /** Paths whose write fails. */
   readonly unwritable: Set<string>;
   /** Frames the messages, decodes them, calls `handle` for each, then `afterBatch`. */
@@ -129,11 +131,18 @@ export function exampleFilesAt(root: string): Record<string, string> {
 export function makeHarness(options: HarnessOptions = {}): Harness {
   const memory = memoryIo(options.files ?? exampleFilesAt(ROOT));
   const throwOnRead = new Set<string>();
+  const unreadable = new Set<string>();
   const baseFs = memory.io.fs;
   const fs: CliFs = {
     ...baseFs,
     readText(path: string): Result<string, ReadError> {
       if (throwOnRead.has(path)) throw new Error(`disk failure at ${path}`);
+      if (unreadable.has(path)) {
+        return {
+          ok: false,
+          error: { tag: "unreadable", path, message: "disk failure" },
+        };
+      }
       return baseFs.readText(path);
     },
   };
@@ -175,6 +184,7 @@ export function makeHarness(options: HarnessOptions = {}): Harness {
     timers,
     files: memory.files,
     throwOnRead,
+    unreadable,
     unwritable: memory.unwritable,
     deliver(...messages) {
       const decoder = new FrameDecoder();
