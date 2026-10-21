@@ -73,7 +73,7 @@ RS25 (playground config constant). `playground/src/app.ts:32` declares `CONFIG_F
 ## 4. Out of scope
 
 - C7 (stream effect ternaries, 25 sites): the gain needs measurement after RS2 and RS4.
-- C10 (syntax selectors `arrowBody`, `initOf`, and the `TypeLowerer` copies of `kidsOf` and `literalOf`): do it with R15a, because `check.ts` cannot import `check_expr.ts` without a cycle.
+- C10 (syntax selectors `arrowBody`, `initOf`, and the `TypeLowerer` copies of `kidsOf` and `literalOf`): completed with R15a on 2026-10-21 in the checker-independent `src/core/syntax_queries.ts`.
 - F3 (one path-to-module lookup for `editor.ts`, `lsp/features.ts`, and the playground): it adds a lazy cache to `Revision` across three layers. Reconsider with R13.
 - F9b (one hover constant): it adds an export to the published `mod.ts` surface.
 - The `fit` closure reorder in `emit/expr.ts:817-819`: it renames emitted temporaries, so it is a behavior change.

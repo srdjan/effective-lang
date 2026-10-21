@@ -12,6 +12,7 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
   diagnostics.ts Diagnostic type, the registry of codes, sort and dedupe.
   lex.ts         Lexer: typed arrays of tokens plus trivia.
   syntax.ts      Syntax tree types and the printer.
+  syntax_queries.ts Pure child, literal, operator, arrow-body and initializer queries shared by the front end.
   parse.ts       Parser with recovery.
   hash.ts        Synchronous content hash (FNV-1a 64).
   index.ts       Declaration index of one file: names, kinds, spans, hashes.
@@ -393,3 +394,5 @@ Run `deno task playground:serve` and open `http://127.0.0.1:8790/`. The task bui
 The build uses `deno bundle` with the CodeMirror 6 packages that `deno.json` pins. The highlighter uses the core lexer, so the page and the compiler agree on each token. Below 720 pixels, the page shows one region at a time. The URL hash holds the active file, for example `#host/providers.effi`.
 
 Fast tests cover the compile facade, the highlighter, and the page model without a browser. The slow test `tests/playground_build_slow_test.ts` runs the build. No automated test covers the page in a browser. On 2026-10-16, a manual browser review at 375 and 1280 pixels passed the checks in `docs/archive/plans/2026-10-16-playground.md`, section 7. Three later commits changed the page: the 720 pixel threshold, the hover feedback, and the wrap indent. No review ran after them.
+
+The [builtin-change checklist](builtin-changes.md) traces recognition, source checking, facts, lowering, independent validation, emission and verification for one builtin change.

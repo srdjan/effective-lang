@@ -1,6 +1,6 @@
 # Rederive review: measured re-basing plan
 
-Date: 2026-10-20. Base revision: 730977c. Status: Phase 0 accepted on 2026-10-20. The user chose option (a) for D1, D2, D3, and D4. Phases 0 to 2 are done on main. R1 to R6, R9, R10, R14, and D1 to D6 are done. R7, R8, R11 (checker and validator sides), R12 (FE-1, FE-3, FE-5), and R18 (compareText, isRecord, errorMessage, the editor search, and the dead exports) are done on main. R12 FE-1, FE-3, FE-5, and R18 were replayed in `d25a6a6..c542847`. R7 and the checker side of R11 are in `39e94ba..d858322`. R8 and the validator side of R11 are in `044c2e3..7c2d151`. R16 and R17 are done through P1 and R17 of the hardening plan. Still open: R12 FE-2 (LSP param schema kit), R13, R15 (R15a in part, because P5 moved `shortName`; R15b not started), R18 CHK-12 (built-in type table; its only implementation is commit `21449db`, kept by the tag `keep/chk-12`), and the R18 `isErrorId` casts (CHK-11). The R18 closing-token parser sites are done in `463b872`. The sibling plan `2026-10-20-hardening-pruning.md` carries the cleanup work that runs next.
+Date: 2026-10-20. Base revision: 730977c. Status: Phase 0 accepted on 2026-10-20. The user chose option (a) for D1, D2, D3, and D4. Phases 0 to 2 are done on main. R1 to R6, R9, R10, R14, and D1 to D6 are done. R7, R8, R11 (checker and validator sides), R12 (FE-1, FE-3, FE-5), and R18 (compareText, isRecord, errorMessage, the editor search, and the dead exports) are done on main. R12 FE-1, FE-3, FE-5, and R18 were replayed in `d25a6a6..c542847`. R7 and the checker side of R11 are in `39e94ba..d858322`. R8 and the validator side of R11 are in `044c2e3..7c2d151`. R16 and R17 are done through P1 and R17 of the hardening plan. Still open: R12 FE-2 (LSP param schema kit), R13, R15b (not started), R18 CHK-12 (built-in type table; its only implementation is commit `21449db`, kept by the tag `keep/chk-12`), and the R18 `isErrorId` casts (CHK-11). The R18 closing-token parser sites are done in `463b872`. R15a and C10 are complete through the shared syntax queries; A6 is complete in `docs/builtin-changes.md`. The sibling plan `2026-10-20-hardening-pruning.md` carries the remaining cleanup work.
 
 This document is a plan, not a change. It ranks the weak units of the transpiler by measured leverage. For each rederived unit, it gives the contract to keep, the judging tests, and the verification. The evidence is in `docs/plans/rederive-review-evidence/`. Each finding ID (for example CHK-2) points to a section of a scout report in that directory. The scratch paths under `/tmp/rederive/` in those reports are not kept.
 
@@ -494,3 +494,15 @@ D6. A pure function value from an effect-mode expression in an effect function s
 - Effect. The comparison is a multiset difference. When a clean program gains a diagnostic, one `[]` record goes missing. A new test with a clean program adds a `[]` record, and the loss is hidden. A commit that adds tests can therefore hide a behavior change.
 - Phase 2 check. The coordinator captured the Phase 2 source with the Phase 1 test set, so that no new test is in the comparison.
 - Proposal, before Phase 3. Add the input to each `check`, `program`, and `validate` record: the module path and a hash of its source text. This is a test infrastructure change in `scripts/behavior_capture.ts` only.
+
+## Architectural cleanup on 2026-10-21
+
+R15a and the deferred C10 now use `src/core/syntax_queries.ts` for child,
+literal, operator, arrow-body, initializer and type-kind queries. That module
+depends only on the lexer and lossless syntax tree. Lowering no longer imports
+the expression checker. `shortName` and `decodeString` keep the shared owners
+established by P5. No public core export, IR shape, checker policy or validator
+code changes. A6 is the [builtin-change checklist](../builtin-changes.md).
+
+Verification is recorded in the rederive evidence ledger. R15b remains outside
+this batch; its old family/context size estimates require fresh measurement.

@@ -85,6 +85,35 @@ exists to judge refactors that agents implement, and claims from the
 implementer are not evidence. A false alarm that only the implementer can
 explain defeats that purpose.
 
+## Read-only subprocesses in an instrumented tree
+
+The cold-chain test starts its child with `--allow-read` only. The ordinary
+suite passes, but an instrumented baseline fails when the child cannot append
+to `capture.records`. This is a capture permission failure, not evidence that
+the candidate changed compiler behavior. A focused baseline probe reproduced
+the failure and passed after granting write access to that one record file.
+
+For that comparison, apply the following verification-only overlay to both
+exported test trees after instrumentation. Here `tree` and `records` are the
+paths already created by `captureRevision`:
+
+```ts
+const path = `${tree}/tests/parse_chain_slow_test.ts`;
+const text = Deno.readTextFileSync(path);
+const anchor = '"--allow-read",';
+if (text.split(anchor).length !== 2) throw new Error("permission anchor changed");
+Deno.writeTextFileSync(
+  path,
+  text.replace(anchor, anchor + "\n      " + JSON.stringify(`--allow-write=${records}`) + ","),
+);
+```
+
+Use the exact record path from the hook. Keep the repository test permissions,
+test inputs and assertions unchanged. Do not skip the cold test or suppress a
+failed record write. Record the overlay with the comparison results so a later
+reviewer can distinguish the standard capture command from this instrumented
+verification run.
+
 ## When to Apply
 
 - Before you accept any refactor commit that deletes, moves, merges, or

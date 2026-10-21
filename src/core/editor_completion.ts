@@ -2,7 +2,7 @@ import { isErrorId, isTypeId } from "./ids.ts";
 import { TokenKind } from "./lex.ts";
 import type { Revision } from "./db.ts";
 import { declarationOf, occurrenceAt, symbolIndex } from "./editor_index.ts";
-import { isTypeKind } from "./index.ts";
+import { isTypeKind } from "./syntax_queries.ts";
 import { BUILTIN_TYPE_NAMES, PRELUDE_NAMES } from "./resolve.ts";
 import type { Span } from "./source.ts";
 import { kindOf, type NodeId, SyntaxKind, type SyntaxTree } from "./syntax.ts";

@@ -29,7 +29,6 @@ import {
   checkFunctionBody,
   type ConstantRun,
   type FunctionRun,
-  kidsOf,
 } from "./check_expr.ts";
 import {
   type Diagnostic,
@@ -37,7 +36,7 @@ import {
   normalizeDiagnostics,
 } from "./diagnostics.ts";
 import { serviceOfCapability, shortName } from "./ids.ts";
-import { isTypeKind } from "./index.ts";
+import { arrowBody, initOf } from "./syntax_queries.ts";
 import {
   buildInitializationGraph,
   type InitializationGraph,
@@ -174,22 +173,11 @@ function collectEntries(args: CheckArguments): Entry[] {
   const entries: Entry[] = [];
   for (const signature of declarations.values.values()) {
     if (signature.kind === "provider") continue;
-    const rest = kidsOf(tree, signature.node).filter((k) =>
-      k !== signature.nameNode
-    );
-    const initNode = rest.filter((k) => !isTypeKind(kindOf(tree, k))).pop();
-    let bodyNode: NodeId | undefined;
-    if (
-      signature.kind === "function" && initNode !== undefined &&
-      kindOf(tree, initNode) === SyntaxKind.ArrowExpr
-    ) {
-      bodyNode = kidsOf(tree, initNode).filter((k) => {
-        const kind = kindOf(tree, k);
-        return kind !== SyntaxKind.ParamList &&
-          kind !== SyntaxKind.FailsClause && kind !== SyntaxKind.UsesClause &&
-          !isTypeKind(kind);
-      }).pop();
-    }
+    const initNode = initOf(tree, signature.node, signature.nameNode);
+    const bodyNode = signature.kind === "function" && initNode !== undefined &&
+        kindOf(tree, initNode) === SyntaxKind.ArrowExpr
+      ? arrowBody(tree, initNode)
+      : undefined;
     const references = new Set<ValueId>();
     if (initNode !== undefined) {
       walk(tree, initNode, (node) => {

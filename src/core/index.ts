@@ -83,28 +83,6 @@ export interface FileIndex {
   readonly imports: readonly ImportEntry[];
 }
 
-const TYPE_KINDS: ReadonlySet<SyntaxKind> = new Set([
-  SyntaxKind.NamedType,
-  SyntaxKind.EffectType,
-  SyntaxKind.StreamType,
-  SyntaxKind.SinkType,
-  SyntaxKind.ScheduleType,
-  SyntaxKind.SchemaType,
-  SyntaxKind.LayerType,
-  SyntaxKind.LiteralType,
-  SyntaxKind.RecordType,
-  SyntaxKind.TupleType,
-  SyntaxKind.ArrayType,
-  SyntaxKind.UnionType,
-  SyntaxKind.FunctionType,
-  SyntaxKind.ParenType,
-]);
-
-/** True for the syntax kinds of type nodes. */
-export function isTypeKind(kind: SyntaxKind): boolean {
-  return TYPE_KINDS.has(kind);
-}
-
 function tokenKindOf(tree: SyntaxTree, node: NodeId): TokenKind | undefined {
   return kindOf(tree, node) === SyntaxKind.Token
     ? tree.lexed.kinds[tree.tokens[node]] as TokenKind

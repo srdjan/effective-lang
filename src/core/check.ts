@@ -22,7 +22,7 @@ import {
   makeDiagnostic,
   normalizeDiagnostics,
 } from "./diagnostics.ts";
-import { type DeclEntry, isTypeKind, nameTextOf } from "./index.ts";
+import { type DeclEntry, nameTextOf } from "./index.ts";
 import type {
   CapabilityId,
   DeclarationId,
@@ -47,7 +47,6 @@ import type { Target } from "./resolve.ts";
 import type { Result, Span } from "./source.ts";
 import {
   childrenOf,
-  decodeString,
   kindOf,
   type NodeId,
   nodeSpan,
@@ -72,6 +71,7 @@ import {
   isTypeId,
   serviceOfCapability,
 } from "./ids.ts";
+import { initOf, isTypeKind, kidsOf, literalOf } from "./syntax_queries.ts";
 import { compareText } from "./util.ts";
 
 // ------------------------------------------------------------------ shapes
@@ -300,14 +300,7 @@ export class TypeLowerer {
 
   /** Child nodes that are not tokens or Missing nodes. */
   kids(node: NodeId): NodeId[] {
-    const result: NodeId[] = [];
-    for (const child of childrenOf(this.tree, node)) {
-      const kind = kindOf(this.tree, child);
-      if (kind !== SyntaxKind.Token && kind !== SyntaxKind.Missing) {
-        result.push(child);
-      }
-    }
-    return result;
+    return kidsOf(this.tree, node);
   }
 
   kidsOfKind(node: NodeId, kind: SyntaxKind): NodeId[] {
@@ -386,24 +379,10 @@ export class TypeLowerer {
   }
 
   private literal(node: NodeId): Lowered {
-    const table = this.env.table;
-    for (const child of childrenOf(this.tree, node)) {
-      if (kindOf(this.tree, child) !== SyntaxKind.Token) continue;
-      const kind = this.tree.lexed.kinds[this.tree.tokens[child]] as TokenKind;
-      const text = nodeText(this.tree, child);
-      let value: string | number | boolean | null | undefined;
-      if (kind === TokenKind.String) value = decodeString(text);
-      else if (kind === TokenKind.Number) value = Number(text);
-      else if (kind === TokenKind.KwTrue) value = true;
-      else if (kind === TokenKind.KwFalse) value = false;
-      else if (kind === TokenKind.KwNull) value = null;
-      if (value === undefined) return this.errorLowered();
-      if (typeof value === "number" && !Number.isFinite(value)) {
-        return this.errorLowered();
-      }
-      return { ref: table.literal(value), ir: { kind: "literal", value } };
-    }
-    return this.errorLowered();
+    const value = literalOf(this.tree, node);
+    return value === undefined
+      ? this.errorLowered()
+      : { ref: this.env.table.literal(value), ir: { kind: "literal", value } };
   }
 
   private named(node: NodeId): Lowered {
@@ -1590,7 +1569,7 @@ class ModuleChecker {
       k !== entry.nameNode
     );
     const bindingNode = rest.find((k) => isTypeKind(kindOf(this.tree, k)));
-    const init = rest.filter((k) => !isTypeKind(kindOf(this.tree, k))).pop();
+    const init = initOf(this.tree, entry.node, entry.nameNode);
     const binding = bindingNode === undefined
       ? undefined
       : this.lowerer.lower(bindingNode);

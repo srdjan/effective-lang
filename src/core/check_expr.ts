@@ -17,7 +17,15 @@ import {
   type DiagnosticCode,
   makeDiagnostic,
 } from "./diagnostics.ts";
-import { isTypeKind, nameTextOf } from "./index.ts";
+import { nameTextOf } from "./index.ts";
+import {
+  arrowBody,
+  initOf,
+  isTypeKind,
+  kidsOf,
+  literalOf,
+  operatorOf,
+} from "./syntax_queries.ts";
 import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID, SCOPE_CAPABILITY } from "./ir.ts";
 import type {
   CapabilityId,
@@ -29,16 +37,12 @@ import type {
   TypeId,
   ValueId,
 } from "./ir.ts";
-import { TokenKind } from "./lex.ts";
 import type { PreludeName, Target } from "./resolve.ts";
 import type { Span } from "./source.ts";
 import {
-  childrenOf,
-  decodeString,
   kindOf,
   type NodeId,
   nodeSpan,
-  nodeText,
   SyntaxKind,
   type SyntaxTree,
 } from "./syntax.ts";
@@ -150,35 +154,6 @@ interface ArrowContext {
   readonly result: TypeRef | undefined;
 }
 
-export type BinaryOperator =
-  | "+"
-  | "-"
-  | "*"
-  | "/"
-  | "==="
-  | "!=="
-  | "<"
-  | "<="
-  | ">"
-  | ">="
-  | "&&"
-  | "||";
-
-const OPERATORS: ReadonlyMap<TokenKind, BinaryOperator> = new Map([
-  [TokenKind.Plus, "+"],
-  [TokenKind.Minus, "-"],
-  [TokenKind.Star, "*"],
-  [TokenKind.Slash, "/"],
-  [TokenKind.EqEqEq, "==="],
-  [TokenKind.BangEqEq, "!=="],
-  [TokenKind.Lt, "<"],
-  [TokenKind.LtEq, "<="],
-  [TokenKind.Gt, ">"],
-  [TokenKind.GtEq, ">="],
-  [TokenKind.AmpAmp, "&&"],
-  [TokenKind.PipePipe, "||"],
-]);
-
 const PATTERN_KINDS: ReadonlySet<SyntaxKind> = new Set([
   SyntaxKind.WildcardPattern,
   SyntaxKind.LiteralPattern,
@@ -187,53 +162,8 @@ const PATTERN_KINDS: ReadonlySet<SyntaxKind> = new Set([
   SyntaxKind.RecordPattern,
 ]);
 
-/** Child nodes of a node that are not tokens or Missing nodes. */
-export function kidsOf(tree: SyntaxTree, node: NodeId): NodeId[] {
-  const result: NodeId[] = [];
-  for (const child of childrenOf(tree, node)) {
-    const kind = kindOf(tree, child);
-    if (kind !== SyntaxKind.Token && kind !== SyntaxKind.Missing) {
-      result.push(child);
-    }
-  }
-  return result;
-}
-
 function names(ids: readonly string[]): string {
   return ids.map(shortName).join(", ");
-}
-
-export function literalOf(
-  tree: SyntaxTree,
-  node: NodeId,
-): LiteralValue | undefined {
-  for (const child of childrenOf(tree, node)) {
-    if (kindOf(tree, child) !== SyntaxKind.Token) continue;
-    const kind = tree.lexed.kinds[tree.tokens[child]] as TokenKind;
-    const text = nodeText(tree, child);
-    if (kind === TokenKind.String) return decodeString(text);
-    if (kind === TokenKind.Number) {
-      const value = Number(text);
-      return Number.isFinite(value) ? value : undefined;
-    }
-    if (kind === TokenKind.KwTrue) return true;
-    if (kind === TokenKind.KwFalse) return false;
-    if (kind === TokenKind.KwNull) return null;
-  }
-  return undefined;
-}
-
-export function operatorOf(
-  tree: SyntaxTree,
-  node: NodeId,
-): BinaryOperator | undefined {
-  for (const child of childrenOf(tree, node)) {
-    if (kindOf(tree, child) !== SyntaxKind.Token) continue;
-    const kind = tree.lexed.kinds[tree.tokens[child]] as TokenKind;
-    const operator = OPERATORS.get(kind);
-    if (operator !== undefined) return operator;
-  }
-  return undefined;
 }
 
 interface MatchState {
@@ -6315,11 +6245,7 @@ class BodyChecker {
     const usesNode = parts.find((k) =>
       kindOf(this.tree, k) === SyntaxKind.UsesClause
     );
-    const bodyNode = parts.filter((k) => {
-      const kind = kindOf(this.tree, k);
-      return k !== paramList && kind !== SyntaxKind.FailsClause &&
-        kind !== SyntaxKind.UsesClause && !isTypeKind(kind);
-    }).pop();
+    const bodyNode = arrowBody(this.tree, node);
     const contract: Contract = {
       result: resultNode === undefined
         ? undefined
@@ -6369,9 +6295,7 @@ class BodyChecker {
       kindOf(this.tree, k) === SyntaxKind.Name
     );
     const typeNode = parts.find((k) => isTypeKind(kindOf(this.tree, k)));
-    const init = parts.filter((k) =>
-      k !== nameNode && !isTypeKind(kindOf(this.tree, k))
-    ).pop();
+    const init = initOf(this.tree, node, nameNode);
     const target = nameNode === undefined
       ? undefined
       : this.targets.get(nameNode);

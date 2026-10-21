@@ -15,12 +15,8 @@ import {
   makeDiagnostic,
   normalizeDiagnostics,
 } from "./diagnostics.ts";
-import {
-  type DeclEntry,
-  isTypeKind,
-  type MethodEntry,
-  nameTextOf,
-} from "./index.ts";
+import { type DeclEntry, type MethodEntry, nameTextOf } from "./index.ts";
+import { isTypeKind } from "./syntax_queries.ts";
 import { declarationId, type DeclarationPrefix } from "./ids.ts";
 import type {
   CapabilityId,

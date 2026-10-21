@@ -11,11 +11,14 @@
 // an `internal` error value.
 
 import {
+  arrowBody,
   type BinaryOperator,
+  initOf,
+  isTypeKind,
   kidsOf,
   literalOf,
   operatorOf,
-} from "./check_expr.ts";
+} from "./syntax_queries.ts";
 import { signatureType } from "./check.ts";
 import type {
   CheckedModule,
@@ -23,7 +26,7 @@ import type {
   ConstantBody,
   FunctionBody,
 } from "./check_project.ts";
-import { isTypeKind, nameTextOf } from "./index.ts";
+import { nameTextOf } from "./index.ts";
 import type {
   Annotation,
   Arm,
@@ -736,22 +739,13 @@ class BodyLowerer {
         this.span(this.required(params[i], "a parameter", node)),
       )
     );
-    const bodyNode = this.arrowBody(node);
+    const bodyNode = arrowBody(this.ctx.tree, node);
     return {
       kind: "closure",
       parameters,
       body: this.expr(this.required(bodyNode, "the arrow body", node)),
       ...this.annotation(node),
     };
-  }
-
-  /** The body of an arrow: the last child that is no parameter list, clause, or type. */
-  private arrowBody(node: NodeId): NodeId | undefined {
-    return this.kids(node).filter((k) => {
-      const kind = kindOf(this.ctx.tree, k);
-      return kind !== SyntaxKind.ParamList && kind !== SyntaxKind.FailsClause &&
-        kind !== SyntaxKind.UsesClause && !isTypeKind(kind);
-    }).pop();
   }
 
   private call(node: NodeId): Expr {
@@ -1534,9 +1528,7 @@ class BodyLowerer {
       node,
     );
     const typeNode = parts.find((k) => isTypeKind(kindOf(this.ctx.tree, k)));
-    const init = parts.filter((k) =>
-      k !== nameNode && !isTypeKind(kindOf(this.ctx.tree, k))
-    ).pop();
+    const init = initOf(this.ctx.tree, node, nameNode);
     const name = this.span(nameNode);
     const end = typeNode === undefined ? name.end : this.span(typeNode).end;
     return {
