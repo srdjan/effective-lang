@@ -5724,3 +5724,41 @@ const ISSUE_AND_HINT_CASES: readonly SchemaCase[] = [
 Deno.test("issue builders and expected-type Schema forms keep their diagnostics", () => {
   assertSchemaCases(ISSUE_AND_HINT_CASES);
 });
+
+Deno.test("the seeded stream operations report an effectful seed with their own name", () => {
+  const cases = [
+    {
+      name: "scanStream",
+      use:
+        "const bad = scanStream(source, Seed.next(), (total, n) => total + n)",
+    },
+    {
+      name: "mapAccumStream",
+      use:
+        "const bad = mapAccumStream(source, Seed.next(), (total, n): [Int, Int[]] => [total + n, [n]])",
+    },
+    {
+      name: "foldStream",
+      use:
+        "const bad = (): Int uses Seed.next => foldStream(source, Seed.next(), (total, n) => total + n)",
+    },
+    {
+      name: "foldEffectStream",
+      use:
+        "const bad = (): Int uses Seed.next => foldEffectStream(source, Seed.next(), (total, n) => total + n)",
+    },
+  ];
+  for (const { name, use } of cases) {
+    const project = checkText(`
+type Int = int
+service Seed { next(): Int }
+const source = unfold(0, (n): Option<[Int, Int]> => None)
+${use}
+`);
+    assertEquals(
+      messages(project).filter((m) => m.startsWith("execution-mode/001")),
+      [`execution-mode/001 \`${name}\` seed must be pure`],
+      messages(project).join("\n"),
+    );
+  }
+});
