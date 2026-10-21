@@ -10,7 +10,7 @@
 // names and sends `effective/generatedChanged` after a flush.
 
 import type { CliFs } from "../host/io.ts";
-import { errorMessage, type Result } from "../core/mod.ts";
+import { errorMessage, type Result, type Revision } from "../core/mod.ts";
 import {
   definitionRequest,
   didSave,
@@ -45,12 +45,7 @@ import {
   SERVER_CAPABILITIES,
 } from "./protocol.ts";
 import { GENERATED_TYPESCRIPT_METHOD, STATS_METHOD } from "./methods.ts";
-import {
-  type FlushOutcome,
-  type LogType,
-  ProjectSet,
-  type ProjectState,
-} from "./projects.ts";
+import { type LogType, ProjectSet, type ProjectState } from "./projects.ts";
 
 /** The ports of the server. */
 export interface ServerPorts {
@@ -225,7 +220,7 @@ export class LanguageServer {
         this.#notify("textDocument/publishDiagnostics", params),
       log: (type, message) => this.#log(type, message),
       stderr: (text) => this.#stderr(text),
-      flushed: (project, outcome) => this.#flushed(project, outcome),
+      flushed: (project, revision) => this.#flushed(project, revision),
     });
     const currentOptions = (): InitializationOptions => this.#options;
     this.#context = {
@@ -406,10 +401,10 @@ export class LanguageServer {
   }
 
   /** Sends `effective/generatedChanged` for the subscribed modules that changed. */
-  #flushed(project: ProjectState, outcome: FlushOutcome): void {
+  #flushed(project: ProjectState, revision: Revision): void {
     this.#generated.afterFlush(
       project,
-      outcome,
+      revision,
       (method, params) => this.#notify(method, params),
     );
   }

@@ -33,7 +33,7 @@ import type {
 } from "./protocol.ts";
 import { GENERATED_CHANGED_METHOD } from "./methods.ts";
 import { SymbolKind } from "./protocol.ts";
-import type { FlushOutcome, ProjectState } from "./projects.ts";
+import type { ProjectState } from "./projects.ts";
 import type { RequestFailure, ServerContext } from "./server.ts";
 
 type Answer = Result<unknown, RequestFailure>;
@@ -246,17 +246,16 @@ export class GeneratedTexts {
     return result;
   }
 
-  /** Called after a flush. A configuration error sends nothing. */
+  /** Called after a flush that produced a revision. */
   afterFlush(
     project: ProjectState,
-    outcome: FlushOutcome,
+    revision: Revision,
     notify: (method: string, params: unknown) => void,
   ): void {
-    if (outcome.tag !== "revision") return;
     const entries = this.#entries.get(project);
     if (entries === undefined) return;
     for (const [path, entry] of entries) {
-      const result = this.#current(outcome.revision, path, entry);
+      const result = this.#current(revision, path, entry);
       if (result === null) continue;
       const before = entry.received;
       if (

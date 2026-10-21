@@ -91,15 +91,6 @@ interface DocumentRef {
   readonly path: string;
 }
 
-/** What a flush that ran `Program.update` produced. */
-export type FlushOutcome =
-  | {
-    readonly tag: "revision";
-    readonly revision: Revision;
-    readonly delta: RevisionDelta;
-  }
-  | { readonly tag: "config-error"; readonly error: ConfigError };
-
 /** The ports of the set. */
 interface ProjectSetPorts {
   readonly fs: CliFs;
@@ -110,7 +101,7 @@ interface ProjectSetPorts {
   /** Writes a line to stderr. The set adds the line end. */
   stderr(text: string): void;
   /** Called after each flush that ran `Program.update`, after the diagnostics went out. */
-  flushed(project: ProjectState, outcome: FlushOutcome): void;
+  flushed(project: ProjectState, revision: Revision): void;
 }
 
 function parentOf(dir: string): string {
@@ -384,19 +375,16 @@ export class ProjectSet {
     project.started = true;
     const updated = project.program.update({ set, remove });
     project.current = wanted;
-    let outcome: FlushOutcome;
     if (updated.ok) {
       const delta = revisionDelta(project.lastGood, updated.value);
       project.lastDelta = delta;
       project.lastGood = updated.value;
       project.configError = undefined;
-      outcome = { tag: "revision", revision: updated.value, delta };
     } else {
       project.configError = updated.error;
-      outcome = { tag: "config-error", error: updated.error };
     }
     this.#publish(project, wanted);
-    this.ports.flushed(project, outcome);
+    if (updated.ok) this.ports.flushed(project, updated.value);
   }
 
   #publish(project: ProjectState, wanted: ReadonlyMap<string, string>): void {
