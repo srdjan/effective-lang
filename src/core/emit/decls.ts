@@ -1,3 +1,4 @@
+import { fieldKey, sensitiveField } from "./fields.ts";
 // Declarations and their order (plan section 6.5), and the export rule (I8).
 
 import type {
@@ -392,7 +393,7 @@ export class DeclarationEmitter {
     const fields = d.fields.map((f) => {
       const inner = schemaDoc(this.scope, f.type);
       return property(
-        f.name,
+        fieldKey(f.name),
         f.optional ? member(schema, "optionalKey", callWith("", inner)) : inner,
       );
     });
@@ -412,6 +413,50 @@ export class DeclarationEmitter {
       typeArguments([d.name]),
       "()",
     ];
+    let body: Doc = " {}";
+    if (
+      d.fields.some((f) =>
+        (f.optional && sensitiveField(f.name)) || f.name === "__proto__"
+      )
+    ) {
+      const presence = this.scope.fieldHelper("suppliedFields");
+      const shape: Type = { kind: "record", fields: d.fields };
+      body = [
+        " ",
+        braces([[
+          "constructor(fields: ",
+          typeDoc(this.scope, shape),
+          d.fields.every((f) => f.optional)
+            ? [
+              " = ",
+              this.scope.fieldHelper("record"),
+              "<",
+              typeDoc(this.scope, shape),
+              ">({})",
+            ]
+            : "",
+          ") ",
+          braces([
+            [
+              "super(",
+              this.scope.fieldHelper("record"),
+              "<",
+              typeDoc(this.scope, shape),
+              ">(fields));",
+            ],
+            "globalThis.Object.setPrototypeOf(this, new.target.prototype);",
+            ...d.fields.filter((f) => sensitiveField(f.name)).map((f) =>
+              `if (globalThis.Object.hasOwn(fields, ${
+                JSON.stringify(f.name)
+              })) globalThis.Object.defineProperty(this, ${
+                JSON.stringify(f.name)
+              }, { value: fields.${f.name}, enumerable: true, configurable: true, writable: true });`
+            ),
+            `globalThis.Object.defineProperty(this, ${presence}, { value: new globalThis.Set(globalThis.Object.keys(fields)) });`,
+          ]),
+        ]]),
+      ];
+    }
     // `deno fmt` moves `extends` to its own line when the first line is too wide.
     if (
       `${keyword}class ${d.name} extends ${schema}.TaggedError<${d.name}>()(`
@@ -419,10 +464,10 @@ export class DeclarationEmitter {
     ) {
       return [
         `${keyword}class ${d.name}`,
-        indent([hard, "extends ", heritage, args, " {}"]),
+        indent([hard, "extends ", heritage, args, body]),
       ];
     }
-    return [`${keyword}class ${d.name} extends `, heritage, args, " {}"];
+    return [`${keyword}class ${d.name} extends `, heritage, args, body];
   }
 
   private serviceDeclaration(d: ServiceDecl): Doc {

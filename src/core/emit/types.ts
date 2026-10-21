@@ -1,3 +1,4 @@
+import { fieldKey } from "./fields.ts";
 // The type printer and the schema printer (plan sections 6.5 and 6.6).
 //
 // `typeDoc` prints a TypeScript type. `schemaDoc` prints the Effect Schema
@@ -464,7 +465,7 @@ export function schemaDoc(scope: Scope, type: Type, recursiveId?: string): Doc {
       const fields = type.fields.map((f) => {
         const inner = schemaDoc(scope, f.type, recursiveId);
         return property(
-          f.name,
+          fieldKey(f.name),
           f.optional
             ? member(schema, "optionalKey", callWith("", inner))
             : inner,

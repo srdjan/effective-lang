@@ -1,3 +1,10 @@
+import {
+  fieldAdapter,
+  fieldKey,
+  needsFieldAdapter,
+  prototypeField,
+  sensitiveField,
+} from "./fields.ts";
 // The expression scheme (plan sections 6.1 to 6.4): `pure`, `inGen`, and
 // `asEffect`, the leaf and hoist rules, the control forms, and the parentheses
 // around `yield*`.
@@ -838,13 +845,21 @@ export class ExprEmitter {
         return emitted(this.literal(e.value));
       case "reference":
         return emitted(this.reference(e.target));
-      case "record":
-        return this.objectLiteral(
+      case "record": {
+        const shape = expected ?? e.type;
+        const object = this.objectLiteral(
           e.fields.map((f) =>
-            this.field(f.name, f.value, kid, this.fieldType(e.type, f.name))
+            this.field(
+              f.name,
+              f.value,
+              kid,
+              this.fieldType(expected ?? e.type, f.name),
+            )
           ),
           [],
         );
+        return this.safeRecord(object, shape);
+      }
       case "array":
       case "tuple":
         return emitted(
@@ -857,11 +872,14 @@ export class ExprEmitter {
       case "update": {
         const base = kid(e.record);
         const spread: Doc = ["...", at(base, PREC.member)];
-        return this.objectLiteral(
-          e.fields.map((f) =>
-            this.field(f.name, f.value, kid, this.fieldType(e.type, f.name))
+        return this.safeRecord(
+          this.objectLiteral(
+            e.fields.map((f) =>
+              this.field(f.name, f.value, kid, this.fieldType(e.type, f.name))
+            ),
+            [spread],
           ),
-          [spread],
+          expected ?? e.type,
         );
       }
       case "brand":
@@ -891,22 +909,30 @@ export class ExprEmitter {
         const option = this.scope.effect("Option");
         return emitted(`${option}.none()`);
       }
-      case "error":
+      case "error": {
+        const declaration = this.scope.typeLevelDeclaration(e.error);
+        const shape: Type | undefined = declaration?.kind === "error"
+          ? { kind: "record", fields: declaration.fields }
+          : undefined;
+        const object = this.objectLiteral(
+          e.fields.map((f) =>
+            this.field(
+              f.name,
+              f.value,
+              kid,
+              this.errorFieldType(e.error, f.name),
+            )
+          ),
+          [],
+        );
         return emitted([
           "new ",
           this.scope.nameOf(e.error),
-          callArguments([this.objectLiteral(
-            e.fields.map((f) =>
-              this.field(
-                f.name,
-                f.value,
-                kid,
-                this.errorFieldType(e.error, f.name),
-              )
-            ),
-            [],
-          )]),
+          callArguments([
+            shape === undefined ? object : this.safeRecord(object, shape),
+          ]),
         ]);
+      }
       case "closure":
         return this.closure(e, true);
       case "defer": {
@@ -1272,17 +1298,24 @@ export class ExprEmitter {
           `${schema}.decodeUnknownOption(`,
           encodedSchema,
           ")(",
-          input,
+          free(
+            this.adaptedInput(emitted(input), type.encoded, "encoded", true),
+          ),
           "), (",
           value,
           ") => ",
           `${schema}.decodeUnknownOption(`,
           decodedSchema,
           ")(",
-          at(decode, PREC.member),
-          "(",
-          value,
-          "))); } catch { return ",
+          free(
+            this.adaptedInput(
+              emitted([at(decode, PREC.member), "(", value, ")"]),
+              type.decoded,
+              "decoded",
+              true,
+            ),
+          ),
+          ")); } catch { return ",
           `${option}.none()`,
           "; } }, ",
           "encode: (",
@@ -1294,17 +1327,24 @@ export class ExprEmitter {
           `${schema}.decodeUnknownOption(`,
           decodedSchema,
           ")(",
-          input,
+          free(
+            this.adaptedInput(emitted(input), type.decoded, "decoded", true),
+          ),
           "), (",
           value,
           ") => ",
           `${schema}.decodeUnknownOption(`,
           encodedSchema,
           ")(",
-          at(encode, PREC.member),
-          "(",
-          value,
-          "))); } catch { return ",
+          free(
+            this.adaptedInput(
+              emitted([at(encode, PREC.member), "(", value, ")"]),
+              type.encoded,
+              "encoded",
+              true,
+            ),
+          ),
+          ")); } catch { return ",
           `${option}.none()`,
           "; } } }",
         ]);
@@ -1785,7 +1825,7 @@ export class ExprEmitter {
       const body = source.execution === "pure"
         ? emitted([`${effect}.succeed`, callArguments([invoke])])
         : invoke;
-      return [method.name, ": ", this.arrow(parameters, body)];
+      return [fieldKey(method.name), ": ", this.arrow(parameters, body)];
     });
     const assembled = this.objectLiteral(fields, []);
     const mapped = emitted([
@@ -1831,9 +1871,9 @@ export class ExprEmitter {
       value.kind === "reference" && isLocalId(value.target) &&
       this.scope.locals.get(value.target) === name
     ) {
-      return name;
+      return name === "__proto__" ? property(fieldKey(name), name) : name;
     }
-    return property(name, free(kid(value, expected)));
+    return property(fieldKey(name), free(kid(value, expected)));
   }
 
   /** The declared type of a field of a record type or of a brand of a record. */
@@ -1863,6 +1903,36 @@ export class ExprEmitter {
     return declaration.fields.find((f) => f.name === name)?.type;
   }
 
+  private safeRecord(object: Emitted, type: Type): Emitted {
+    if (!this.recordFieldsOf(type)?.some((f) => prototypeField(f.name))) {
+      return object;
+    }
+    return emitted([
+      this.scope.fieldHelper("record"),
+      "<",
+      typeDoc(this.scope, type),
+      ">",
+      callArguments([object]),
+    ]);
+  }
+
+  private adaptedInput(
+    input: Emitted,
+    type: Type,
+    direction: "decoded" | "encoded" | "make",
+    unknownInput = false,
+  ): Emitted {
+    if (!needsFieldAdapter(this.scope, type)) return input;
+    const adapter = fieldAdapter(this.scope, type, direction);
+    return unknownInput ? emitted([adapter, callArguments([input])]) : emitted([
+      this.scope.fieldHelper("record"),
+      "<",
+      typeDoc(this.scope, type),
+      ">",
+      callArguments([input, emitted(adapter)]),
+    ]);
+  }
+
   private objectLiteral(
     fields: readonly Doc[],
     spreads: readonly Doc[],
@@ -1885,9 +1955,15 @@ export class ExprEmitter {
     const access = member(at(record, PREC.member), e.field);
     if (this.isOptionalField(e.record.type, e.field)) {
       const option = this.scope.effect("Option");
+      if (!sensitiveField(e.field)) {
+        return emitted([
+          `${option}.fromUndefinedOr`,
+          callArguments([emitted(access)]),
+        ]);
+      }
       return emitted([
-        `${option}.fromUndefinedOr`,
-        callArguments([emitted(access)]),
+        this.scope.fieldHelper("optionalField"),
+        callArguments([record, emitted(JSON.stringify(e.field))]),
       ]);
     }
     return emitted(access, PREC.member, {
@@ -2568,17 +2644,31 @@ export class ExprEmitter {
           return emitted(member(
             at(children[0], PREC.member),
             "makeEffect",
-            callArguments([children[1]]),
+            callArguments([
+              this.adaptedInput(children[1], e.input.type, "make"),
+            ]),
           ));
         }
         const schema = this.scope.effect("Schema");
+        const schemaType = this.scope.resolve(e.schema.type);
+        const inputType = schemaType.kind === "schema"
+          ? (e.kind === "schema-decode"
+            ? schemaType.encoded
+            : schemaType.decoded)
+          : e.input.type;
+        const input = this.adaptedInput(
+          children[1],
+          inputType,
+          e.kind === "schema-decode" ? "encoded" : "decoded",
+          e.kind === "schema-decode",
+        );
         return emitted([
           `${schema}.${
             e.kind === "schema-decode" ? "decodeUnknownEffect" : "encodeEffect"
           }(`,
           free(children[0]),
           ")(",
-          free(children[1]),
+          free(input),
           ")",
         ]);
       }

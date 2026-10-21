@@ -1,3 +1,4 @@
+import { fieldHelperDeclarations } from "./fields.ts";
 // The Effect-TS emitter (plan section 6, part A6a). `emitModule` turns one
 // `ModuleIR` into the text of one TypeScript module. It reads only the IR and
 // the project configuration. It is synchronous and pure: the caller writes files.
@@ -126,6 +127,8 @@ function build(ir: ModuleIR, context: EmitContext): EmittedModule {
   if (scope.usesIntFunction()) helpers.push([emitter.intFunctionDeclaration()]);
   const hostAssertions = emitter.hostAssertions();
   if (scope.usesScopeRuntime()) helpers.push([scopeRuntimeDeclaration(scope)]);
+
+  helpers.push(fieldHelperDeclarations(scope));
 
   const effectNames = scope.effectImports().map((n) =>
     n.exported === n.local ? n.exported : `${n.exported} as ${n.local}`

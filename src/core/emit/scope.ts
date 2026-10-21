@@ -262,6 +262,25 @@ export class Scope {
     Map<string, ImportedName>
   >();
   private readonly effectAliases = new Map<EffectModule, string>();
+  readonly fieldHelpers = new Map<string, string>();
+  readonly fieldAdapters = new Map<
+    string,
+    {
+      readonly name: string;
+      readonly type: Type;
+      readonly direction: "decoded" | "encoded" | "make";
+    }
+  >();
+
+  fieldHelper(key: string): string {
+    let name = this.fieldHelpers.get(key);
+    if (name === undefined) {
+      name = this.fresh(`$${key}`);
+      this.fieldHelpers.set(key, name);
+    }
+    return name;
+  }
+
   private intHelper: string | undefined;
   private intSchema: string | undefined;
   private serviceName: string | undefined;
