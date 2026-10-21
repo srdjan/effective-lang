@@ -468,6 +468,12 @@ function piped<K extends PreludeCallName>(
   return { arity, bail, pipeline: "any", ...facts };
 }
 
+/** True when a checked expression is pure and has no failures or requirements. */
+function isPureInfo(info: NodeInfo): boolean {
+  return info.mode === "pure" && info.failures.length === 0 &&
+    info.requirements.length === 0;
+}
+
 // ------------------------------------------------------------------ the checker
 
 class BodyChecker {
@@ -1222,10 +1228,14 @@ class BodyChecker {
     foldStream: (c, node, _name, args) => c.foldStreamCall(node, args),
     foldEffectStream: (c, node, _name, args) =>
       c.foldEffectStreamCall(node, args),
-    collectStream: (c, node, _name, args) => c.collectStreamCall(node, args),
-    headStream: (c, node, _name, args) => c.headStreamCall(node, args),
-    lastStream: (c, node, _name, args) => c.lastStreamCall(node, args),
-    drainStream: (c, node, _name, args) => c.drainStreamCall(node, args),
+    collectStream: (c, node, name, args) =>
+      c.terminalStreamCall(node, name, args, (e) => c.table.array(e)),
+    headStream: (c, node, name, args) =>
+      c.terminalStreamCall(node, name, args, (e) => c.table.option(e)),
+    lastStream: (c, node, name, args) =>
+      c.terminalStreamCall(node, name, args, (e) => c.table.option(e)),
+    drainStream: (c, node, name, args) =>
+      c.terminalStreamCall(node, name, args, () => c.table.unit),
     flatMapStreams: (c, node, _name, args) => c.flatMapStreamsCall(node, args),
     switchMapStreams: (c, node, _name, args) =>
       c.switchMapStreamsCall(node, args),
@@ -1233,8 +1243,10 @@ class BodyChecker {
     retryStream: (c, node, _name, args) => c.retryStreamCall(node, args),
     debounceStream: (c, node, _name, args) => c.debounceStreamCall(node, args),
     throttleStream: (c, node, _name, args) => c.throttleStreamCall(node, args),
-    takeStream: (c, node, _name, args) => c.takeStreamCall(node, args),
-    dropStream: (c, node, _name, args) => c.dropStreamCall(node, args),
+    takeStream: (c, node, name, args) =>
+      c.countStreamCall(node, name, args, "take"),
+    dropStream: (c, node, name, args) =>
+      c.countStreamCall(node, name, args, "drop"),
     filterEffectStream: (c, node, name, args) =>
       c.effectStreamPredicateCall(node, args, name),
     takeWhileEffectStream: (c, node, name, args) =>
@@ -1246,10 +1258,10 @@ class BodyChecker {
     sinkForEach: (c, node, _name, args) => c.sinkForEachCall(node, args),
     takeSink: (c, node, _name, args, expected) =>
       c.takeSinkCall(node, args, expected),
-    transduceStream: (c, node, _name, args) =>
-      c.transduceStreamCall(node, args),
-    aggregateStream: (c, node, _name, args) =>
-      c.aggregateStreamCall(node, args),
+    transduceStream: (c, node, name, args) =>
+      c.sinkTransformStreamCall(node, args, name),
+    aggregateStream: (c, node, name, args) =>
+      c.sinkTransformStreamCall(node, args, name),
     aggregateWithinStream: (c, node, _name, args) =>
       c.aggregateWithinStreamCall(node, args),
     scheduleFromStep: (c, node, _name, args) =>
@@ -1437,6 +1449,36 @@ class BodyChecker {
     }),
     mergeLayers: direct(2, "pure", { fact: { kind: "merge-layers" } }),
   };
+
+  /**
+   * The Stream shape of a checked argument. When it is neither a Stream nor an
+   * error, this reports `type-mismatch/010` and returns the other shape.
+   */
+  private streamOf(name: string, arg: Arg, info: NodeInfo): TypeNode {
+    const source = this.table.node(this.table.unfold(info.type));
+    if (source.kind !== "stream" && !this.isError(info.type)) {
+      this.report(
+        "type-mismatch/010",
+        `\`${name}\` needs a Stream value`,
+        arg.node,
+      );
+    }
+    return source;
+  }
+
+  /** Checks an argument that must be a Stream and gives its shape and element type. */
+  private streamArg(
+    name: string,
+    arg: Arg,
+  ): { info: NodeInfo; source: TypeNode; element: TypeRef } {
+    const info = this.argInfo(arg);
+    const source = this.streamOf(name, arg, info);
+    return {
+      info,
+      source,
+      element: source.kind === "stream" ? source.element : this.table.error,
+    };
+  }
 
   /** Reports a wrong argument count for a prelude call. Returns true when the count is right. */
   private arity(
@@ -3379,18 +3421,10 @@ class BodyChecker {
       : this.concurrencyBound(args[2], "mapEffect");
     this.noPipeline("mapEffect", args);
     this.inlineStreamCallback("mapEffect", args[1]);
-    const stream = this.argInfo(args[0]);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream" && !this.isError(stream.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`mapEffect` needs a Stream value",
-        args[0].node,
-      );
-    }
-    const element = source.kind === "stream"
-      ? source.element
-      : this.table.error;
+    const { info: stream, source, element } = this.streamArg(
+      "mapEffect",
+      args[0],
+    );
     const transform = this.callback(
       "mapEffect",
       args[1],
@@ -3438,18 +3472,10 @@ class BodyChecker {
       "bufferSize",
     );
     this.fact(node, { kind: "map-groups", bufferSize });
-    const stream = this.argInfo(args[0]);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream" && !this.isError(stream.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`mapGroups` needs a Stream value",
-        args[0].node,
-      );
-    }
-    const element = source.kind === "stream"
-      ? source.element
-      : this.table.error;
+    const { info: stream, source, element } = this.streamArg(
+      "mapGroups",
+      args[0],
+    );
     const key = this.callback("mapGroups key", args[1], [element], undefined);
     if (
       this.groupKeyClass(key.result) === undefined && !this.isError(key.result)
@@ -3608,18 +3634,12 @@ class BodyChecker {
     this.inlineStreamCallback("scanStream", args[2]);
     const stream = this.argInfo(args[0]);
     const seed = this.argInfo(args[1]);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream" && !this.isError(stream.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`scanStream` needs a Stream value",
-        args[0].node,
-      );
-    }
-    if (
-      seed.mode !== "pure" || seed.failures.length > 0 ||
-      seed.requirements.length > 0
-    ) {
+    const source = this.streamOf(
+      "scanStream",
+      args[0],
+      stream,
+    );
+    if (!isPureInfo(seed)) {
       this.report(
         "execution-mode/001",
         "`scanStream` seed must be pure",
@@ -3663,18 +3683,12 @@ class BodyChecker {
     }
     const stream = this.argInfo(args[0]);
     const seed = this.argInfo(args[1]);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream" && !this.isError(stream.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`mapAccumStream` needs a Stream value",
-        args[0].node,
-      );
-    }
-    if (
-      seed.mode !== "pure" || seed.failures.length > 0 ||
-      seed.requirements.length > 0
-    ) {
+    const source = this.streamOf(
+      "mapAccumStream",
+      args[0],
+      stream,
+    );
+    if (!isPureInfo(seed)) {
       this.report(
         "execution-mode/001",
         "`mapAccumStream` seed must be pure",
@@ -3719,18 +3733,12 @@ class BodyChecker {
     this.inlineStreamCallback("foldStream", args[2]);
     const stream = this.argInfo(args[0]);
     const seed = this.argInfo(args[1]);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream" && !this.isError(stream.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`foldStream` needs a Stream value",
-        args[0].node,
-      );
-    }
-    if (
-      seed.mode !== "pure" || seed.failures.length > 0 ||
-      seed.requirements.length > 0
-    ) {
+    const source = this.streamOf(
+      "foldStream",
+      args[0],
+      stream,
+    );
+    if (!isPureInfo(seed)) {
       this.report(
         "execution-mode/001",
         "`foldStream` seed must be pure",
@@ -3767,18 +3775,12 @@ class BodyChecker {
     this.inlineStreamCallback("foldEffectStream", args[2]);
     const stream = this.argInfo(args[0]);
     const seed = this.argInfo(args[1]);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream" && !this.isError(stream.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`foldEffectStream` needs a Stream value",
-        args[0].node,
-      );
-    }
-    if (
-      seed.mode !== "pure" || seed.failures.length > 0 ||
-      seed.requirements.length > 0
-    ) {
+    const source = this.streamOf(
+      "foldEffectStream",
+      args[0],
+      stream,
+    );
+    if (!isPureInfo(seed)) {
       this.report(
         "execution-mode/001",
         "`foldEffectStream` seed must be pure",
@@ -3819,115 +3821,6 @@ class BodyChecker {
     );
   }
 
-  private collectStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const stream = this.argInfo(args[0]);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream") {
-      if (!this.isError(stream.type)) {
-        this.report(
-          "type-mismatch/010",
-          "`collectStream` needs a Stream value",
-          args[0].node,
-        );
-      }
-      return this.finish(
-        node,
-        this.table.error,
-        combine([stream, EFFECT_ONLY]),
-      );
-    }
-    return this.finish(
-      node,
-      this.table.array(source.element),
-      combine([stream, {
-        failures: source.failures,
-        requirements: source.requirements,
-        mode: "effect",
-      }]),
-    );
-  }
-  private headStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const stream = this.argInfo(args[0]);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream") {
-      if (!this.isError(stream.type)) {
-        this.report(
-          "type-mismatch/010",
-          "`headStream` needs a Stream value",
-          args[0].node,
-        );
-      }
-      return this.finish(
-        node,
-        this.table.error,
-        combine([stream, EFFECT_ONLY]),
-      );
-    }
-    return this.finish(
-      node,
-      this.table.option(source.element),
-      combine([stream, {
-        failures: source.failures,
-        requirements: source.requirements,
-        mode: "effect",
-      }]),
-    );
-  }
-  private lastStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const stream = this.argInfo(args[0]);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream") {
-      if (!this.isError(stream.type)) {
-        this.report(
-          "type-mismatch/010",
-          "`lastStream` needs a Stream value",
-          args[0].node,
-        );
-      }
-      return this.finish(
-        node,
-        this.table.error,
-        combine([stream, EFFECT_ONLY]),
-      );
-    }
-    return this.finish(
-      node,
-      this.table.option(source.element),
-      combine([stream, {
-        failures: source.failures,
-        requirements: source.requirements,
-        mode: "effect",
-      }]),
-    );
-  }
-  private drainStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const stream = this.argInfo(args[0]);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream") {
-      if (!this.isError(stream.type)) {
-        this.report(
-          "type-mismatch/010",
-          "`drainStream` needs a Stream value",
-          args[0].node,
-        );
-      }
-      return this.finish(
-        node,
-        this.table.error,
-        combine([stream, EFFECT_ONLY]),
-      );
-    }
-    return this.finish(
-      node,
-      this.table.unit,
-      combine([stream, {
-        failures: source.failures,
-        requirements: source.requirements,
-        mode: "effect",
-      }]),
-    );
-  }
-
   private flatMapStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
     if (args.length !== 2 && args.length !== 3) {
       this.report(
@@ -3947,18 +3840,10 @@ class BodyChecker {
     this.fact(node, { kind: "flat-map-streams", concurrency });
     this.noPipeline("flatMapStreams", args);
     this.inlineStreamCallback("flatMapStreams", args[1]);
-    const stream = this.argInfo(args[0]);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream" && !this.isError(stream.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`flatMapStreams` needs a Stream value",
-        args[0].node,
-      );
-    }
-    const element = source.kind === "stream"
-      ? source.element
-      : this.table.error;
+    const { info: stream, source, element } = this.streamArg(
+      "flatMapStreams",
+      args[0],
+    );
     const transform = this.callback(
       "flatMapStreams",
       args[1],
@@ -3998,18 +3883,10 @@ class BodyChecker {
   private switchMapStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
     this.fact(node, { kind: "switch-map-streams" });
     this.inlineStreamCallback("switchMapStreams", args[1]);
-    const stream = this.argInfo(args[0]);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream" && !this.isError(stream.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`switchMapStreams` needs a Stream value",
-        args[0].node,
-      );
-    }
-    const element = source.kind === "stream"
-      ? source.element
-      : this.table.error;
+    const { info: stream, source, element } = this.streamArg(
+      "switchMapStreams",
+      args[0],
+    );
     const transform = this.callback(
       "switchMapStreams",
       args[1],
@@ -4041,15 +3918,10 @@ class BodyChecker {
   private catchStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
     this.fact(node, { kind: "catch-stream" });
     this.inlineStreamCallback("catchStream", args[1]);
-    const stream = this.argInfo(args[0]);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream" && !this.isError(stream.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`catchStream` needs a Stream value",
-        args[0].node,
-      );
-    }
+    const { info: stream, source } = this.streamArg(
+      "catchStream",
+      args[0],
+    );
     const errors = source.kind === "stream"
       ? this.table.union(source.failures.map((id) => this.table.named(id)))
       : this.table.error;
@@ -4080,15 +3952,12 @@ class BodyChecker {
     this.fact(node, { kind: "retry-stream" });
     const stream = this.argInfo(args[0]);
     const policy = this.argInfo(args[1]);
-    const source = this.table.node(this.table.unfold(stream.type));
+    const source = this.streamOf(
+      "retryStream",
+      args[0],
+      stream,
+    );
     const schedule = this.table.node(this.table.unfold(policy.type));
-    if (source.kind !== "stream" && !this.isError(stream.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`retryStream` needs a Stream value",
-        args[0].node,
-      );
-    }
     if (schedule.kind !== "retry-schedule" && !this.isError(policy.type)) {
       this.report(
         "type-mismatch/010",
@@ -4109,10 +3978,7 @@ class BodyChecker {
         }
       }
     }
-    if (
-      policy.mode !== "pure" || policy.failures.length > 0 ||
-      policy.requirements.length > 0
-    ) {
+    if (!isPureInfo(policy)) {
       this.report(
         "execution-mode/001",
         "`retryStream` policy must be pure",
@@ -4130,15 +3996,10 @@ class BodyChecker {
   }
 
   private debounceStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const stream = this.argInfo(args[0]);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream" && !this.isError(stream.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`debounceStream` needs a Stream value",
-        args[0].node,
-      );
-    }
+    const { info: stream } = this.streamArg(
+      "debounceStream",
+      args[0],
+    );
     const delayNode = args[1].node;
     const delay = args[1].pre === undefined &&
         kindOf(this.tree, delayNode) === SyntaxKind.LiteralExpr
@@ -4162,15 +4023,10 @@ class BodyChecker {
   }
 
   private throttleStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const stream = this.argInfo(args[0]);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream" && !this.isError(stream.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`throttleStream` needs a Stream value",
-        args[0].node,
-      );
-    }
+    const { info: stream } = this.streamArg(
+      "throttleStream",
+      args[0],
+    );
     const options = this.streamThrottleOptions(args[1]);
     this.fact(node, {
       kind: "throttle-stream",
@@ -4257,50 +4113,48 @@ class BodyChecker {
     };
   }
 
-  private takeStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+  /** A terminal over a Stream: it runs the Stream and gives `result(element)`. */
+  private terminalStreamCall(
+    node: NodeId,
+    name: "collectStream" | "headStream" | "lastStream" | "drainStream",
+    args: readonly Arg[],
+    result: (element: TypeRef) => TypeRef,
+  ): NodeInfo {
     const stream = this.argInfo(args[0]);
-    const count = this.argInfo(args[1], this.table.int);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream" && !this.isError(stream.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`takeStream` needs a Stream value",
-        args[0].node,
+    const source = this.streamOf(name, args[0], stream);
+    if (source.kind !== "stream") {
+      return this.finish(
+        node,
+        this.table.error,
+        combine([stream, EFFECT_ONLY]),
       );
     }
-    this.fits(args[1].node, count.type, this.table.int, "the take count");
-    if (
-      count.mode !== "pure" || count.failures.length > 0 ||
-      count.requirements.length > 0
-    ) {
-      this.report(
-        "execution-mode/001",
-        "`takeStream` count must be pure",
-        args[1].node,
-      );
-    }
-    return this.finish(node, stream.type, combine([stream, count]));
+    return this.finish(
+      node,
+      result(source.element),
+      combine([stream, {
+        failures: source.failures,
+        requirements: source.requirements,
+        mode: "effect",
+      }]),
+    );
   }
 
-  private dropStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
+  /** `takeStream` and `dropStream`: a Stream and a pure Int count. `label` names the count. */
+  private countStreamCall(
+    node: NodeId,
+    name: "takeStream" | "dropStream",
+    args: readonly Arg[],
+    label: "take" | "drop",
+  ): NodeInfo {
     const stream = this.argInfo(args[0]);
     const count = this.argInfo(args[1], this.table.int);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream" && !this.isError(stream.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`dropStream` needs a Stream value",
-        args[0].node,
-      );
-    }
-    this.fits(args[1].node, count.type, this.table.int, "the drop count");
-    if (
-      count.mode !== "pure" || count.failures.length > 0 ||
-      count.requirements.length > 0
-    ) {
+    this.streamOf(name, args[0], stream);
+    this.fits(args[1].node, count.type, this.table.int, `the ${label} count`);
+    if (!isPureInfo(count)) {
       this.report(
         "execution-mode/001",
-        "`dropStream` count must be pure",
+        `\`${name}\` count must be pure`,
         args[1].node,
       );
     }
@@ -4443,14 +4297,6 @@ class BodyChecker {
       ),
       PURE_EFFECTS,
     );
-  }
-
-  private transduceStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    return this.sinkTransformStreamCall(node, args, "transduceStream");
-  }
-
-  private aggregateStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    return this.sinkTransformStreamCall(node, args, "aggregateStream");
   }
 
   private simpleScheduleCall(
@@ -4826,15 +4672,10 @@ class BodyChecker {
   }
 
   private bufferStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const stream = this.argInfo(args[0]);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream" && !this.isError(stream.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`bufferStream` needs a Stream value",
-        args[0].node,
-      );
-    }
+    const { info: stream } = this.streamArg(
+      "bufferStream",
+      args[0],
+    );
     const capacity = this.streamBufferCapacity(args[1]);
     this.fact(node, { kind: "buffer-stream", capacity });
     return this.finish(node, stream.type, stream);
