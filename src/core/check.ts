@@ -181,6 +181,8 @@ export interface ModuleDeclarations {
 
 /** The execution mode of each function whose mode the sets do not decide. */
 export type ModeMap = ReadonlyMap<ValueId, Execution>;
+/** Mode consumers can look up a mode without owning or mutating the map. */
+export type ModeLookup = Pick<ModeMap, "get">;
 
 type SignatureError =
   | { readonly tag: "missing-mode"; readonly id: ValueId }
@@ -199,7 +201,7 @@ export function isPendingMode(signature: FunctionSignature): boolean {
  */
 export function executionOf(
   signature: FunctionSignature,
-  modes: ModeMap,
+  modes: ModeLookup,
 ): Result<Execution, SignatureError> {
   if (signature.contract !== "explicit") {
     return { ok: false, error: { tag: "inferred-contract", id: signature.id } };
@@ -221,7 +223,7 @@ interface SignatureType {
 export function signatureType(
   table: TypeTable,
   signature: FunctionSignature,
-  modes: ModeMap,
+  modes: ModeLookup,
 ): Result<SignatureType, SignatureError> {
   const execution = executionOf(signature, modes);
   if (!execution.ok) return execution;

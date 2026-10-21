@@ -17,6 +17,7 @@ import {
   type ConstantSignature,
   type FunctionSignature,
   isPendingMode,
+  type ModeLookup,
   type ModeMap,
   type ModuleDeclarations,
   signatureType,
@@ -257,7 +258,7 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
   const modes = new Map<ValueId, Execution>();
   const inferred = new Map<ValueId, TypeRef>();
   const constantTypes = new Map<ValueId, TypeRef>();
-  const values = (id: ValueId): TypeRef => {
+  const values = (view: ModeLookup) => (id: ValueId): TypeRef => {
     const signature: ValueSignature | undefined = declarations.values.get(id);
     if (signature === undefined) return importedValues.get(id) ?? table.error;
     switch (signature.kind) {
@@ -265,7 +266,7 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
         if (signature.contract === "inferred") {
           return inferred.get(id) ?? table.error;
         }
-        const type = signatureType(table, signature, modes);
+        const type = signatureType(table, signature, view);
         return type.ok ? type.value.ref : table.error;
       }
       case "constant":
@@ -274,11 +275,11 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
         return signature.type.ref;
     }
   };
-  const benv: BodyEnv = {
+  const environment = (view: ModeLookup): BodyEnv => ({
     env: declarations.env,
-    values,
+    values: values(view),
     methodType,
-  };
+  });
 
   const entries = collectEntries(args);
   const position = new Map<ValueId, number>();
@@ -293,7 +294,7 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
   const constants = new Map<ValueId, ConstantBody>();
   const diagnostics: Diagnostic[] = [];
 
-  const runEntry = (entry: Entry): Run =>
+  const runEntry = (entry: Entry, benv: BodyEnv): Run =>
     entry.kind === "function"
       ? {
         kind: "function",
@@ -347,7 +348,7 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
     const recursive = members.length > 1 ||
       edges[component[0]].includes(component[0]);
     if (!recursive) {
-      commit(runEntry(members[0]), false);
+      commit(runEntry(members[0], environment(modes)), false);
       continue;
     }
     for (const member of members) {
@@ -368,8 +369,11 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
       }
     }
     const solution = solveModeGroup(pending, (assumed) => {
-      for (const [id, mode] of assumed) modes.set(id, mode);
-      const runs = members.map(runEntry);
+      // Solver assumptions overlay settled modes without publishing into them.
+      const benv = environment({
+        get: (id) => assumed.get(id) ?? modes.get(id),
+      });
+      const runs = members.map((entry) => runEntry(entry, benv));
       const computed = new Map<ValueId, Execution>();
       runs.forEach((run) => {
         if (
