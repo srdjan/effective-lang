@@ -2,7 +2,7 @@
   "name": "effective-vscode",
   "displayName": "Effective",
   "description": "Language support for Effective: diagnostics, hover, definitions, and generated TypeScript.",
-  "version": "0.1.0",
+  "version": "0.5.1",
   "publisher": "local",
   "private": true,
   "license": "UNLICENSED",
