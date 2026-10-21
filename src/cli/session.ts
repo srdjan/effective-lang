@@ -4,7 +4,6 @@
 // one-based lines and columns.
 
 import {
-  type ConfigError,
   describeConfigError,
   diffFiles,
   Program,
@@ -25,11 +24,7 @@ export type SyncResult =
   /** A file could not be read. */
   | { readonly tag: "read-error"; readonly message: string }
   /** The project file is missing or invalid. */
-  | {
-    readonly tag: "config-error";
-    readonly message: string;
-    readonly error: ConfigError;
-  }
+  | { readonly tag: "config-error"; readonly message: string }
   | { readonly tag: "revision"; readonly revision: Revision };
 
 export class Session {
@@ -64,7 +59,6 @@ export class Session {
       return {
         tag: "config-error",
         message: describeConfigError(updated.error),
-        error: updated.error,
       };
     }
     return { tag: "revision", revision: updated.value };

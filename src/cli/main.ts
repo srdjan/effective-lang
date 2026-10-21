@@ -10,6 +10,7 @@
 // error is an unexpected throw. It gets its own code so that it never reads as
 // a diagnostic.
 
+import { errorMessage } from "../core/mod.ts";
 import { parseArgs, type ProjectCommand, USAGE } from "./args.ts";
 import type { BuildOptions, BuildOutcome } from "./build.ts";
 import { denoIo } from "../host/deno_io.ts";
@@ -97,8 +98,7 @@ export async function main(
   try {
     return await execute(args, io);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    io.stderr(`effective: internal error: ${message}\n`);
+    io.stderr(`effective: internal error: ${errorMessage(error)}\n`);
     return EXIT_INTERNAL;
   }
 }
@@ -125,21 +125,15 @@ async function execute(
 
   const session = new Session(io, root);
   const options = optionsOf(command);
-  if (command.kind === "watch") {
-    // A project that cannot start is a configuration error. A later break only prints.
-    const first = session.sync();
-    if (isSyncFailure(first)) {
-      io.stderr(`effective: ${first.message}\n`);
-      return EXIT_USAGE;
-    }
-    await watchLoop(io, session, first, io.watch(root), options);
-    return EXIT_OK;
-  }
-
+  // A project that cannot start is a configuration error. A later break in watch mode only prints.
   const synced = session.sync();
   if (isSyncFailure(synced)) {
     io.stderr(`effective: ${synced.message}\n`);
     return EXIT_USAGE;
+  }
+  if (command.kind === "watch") {
+    await watchLoop(io, session, synced, io.watch(root), options);
+    return EXIT_OK;
   }
   if (synced.tag === "unchanged") return EXIT_OK;
   const outcome = await session.build(synced.revision, options);
