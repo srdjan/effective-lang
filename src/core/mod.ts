@@ -10,6 +10,26 @@ export { diffFiles } from "./file_diff.ts";
 export type { FileDiff } from "./file_diff.ts";
 
 // The editor queries.
+export { occurrenceAt, referencesAt, symbolIndex } from "./editor_index.ts";
+export type {
+  LocalScope,
+  SymbolIndex,
+  SymbolOccurrence,
+} from "./editor_index.ts";
+export {
+  applySourceEdits,
+  prepareRenameAt,
+  renameAt,
+} from "./editor_rename.ts";
+export type { RenameTarget, SourceEdit } from "./editor_rename.ts";
+export { completionsAt } from "./editor_completion.ts";
+export type { Completion } from "./editor_completion.ts";
+export {
+  SEMANTIC_TOKEN_MODIFIERS,
+  SEMANTIC_TOKEN_TYPES,
+  semanticClassifications,
+} from "./editor_tokens.ts";
+export type { SemanticClassification } from "./editor_tokens.ts";
 export { definitionAt, documentSymbols, hoverAt } from "./editor.ts";
 export type {
   EditorSymbol,
@@ -96,3 +116,6 @@ export { BUILTIN_TYPE_NAMES, PRELUDE_NAMES } from "./resolve.ts";
 
 // The IR types.
 export type * from "./ir.ts";
+
+export { contractActionsAt } from "./editor_actions.ts";
+export type { ContractAction } from "./editor_actions.ts";

@@ -4,7 +4,7 @@ Accepted plan based on `4235bd7`; execute after the correctness fixes.
 
 | ID | Work | State |
 | --- | --- | --- |
-| ER1 | Revision-scoped resolver-identity occurrence index and protocol-neutral queries with unsaved overlays and parser recovery; no stale edits. | Pending |
+| ER1 | Revision-scoped resolver-identity occurrence index and protocol-neutral queries with unsaved overlays and parser recovery; no stale edits. | Complete |
 | ER2 | References; prepare-rename and validated versioned edits; scoped completion without auto-imports; full semantic tokens and lexical fallback; validated missing `fails`/`uses` actions from checked effects. | Pending |
 | ER3 | Self-contained VSIX with bundled server closure and client runtime; default bundled server and explicit checkout override; Deno 2.9.7 checks; standalone CLI bundle, local install instructions, reproducible commands and isolated offline empty-cache smoke test. Local artifacts only. | Pending |
 | ER4 | Loopback HTTP and file-backed `node:sqlite` acceptance through service-workflow `.eff` orchestration and typed host boundary: persistence, invalid input/HTTP, permanent DB failure, rollback, cancellation and cleanup with explicit synchronization. | Pending |
@@ -21,3 +21,13 @@ Language extensions, external package imports, source formatting, cross-language
 rename and R13/R15 remain outside scope. Publishing is excluded. Make no
 bounded-memory, distributed-transaction, ambiguous-commit or exactly-once claim
 without evidence.
+
+## ER1 evidence
+
+The revision-scoped index and pure editor queries are documented in
+[editor queries](../editor.md). `tests/editor_queries_test.ts` covers imports,
+service capabilities, separate local scopes, recoverable malformed text,
+identity-preserving rename and shorthand expansion, capture/conflict/reserved
+name rejection, host-origin rejection, contextual completion, UTF-16 spans,
+semantic fallback and checked-effect contract actions. The checker and
+independent validator remain separate and unchanged.
