@@ -97,4 +97,15 @@ The main session writes the ledger rows and this progress section after each lan
 
 ## 7. Progress
 
-Not started.
+Status on 2026-10-21: all 25 items are done on `main`. Three Sonnet implementers worked in separate worktrees, one for each lane, and the plan owner reviewed each diff line by line before landing it.
+
+- Done: lane A, RS1 to RS9 (`01d64f9` to `34a5309`), fast-forwarded.
+- Done: lane B, RS10 to RS17 (`af42d75` to `c56cb70`), cherry-picked.
+- Done: lane C, RS18 to RS25, cherry-picked, plus one comment fix for the `flushed` port after RS22.
+- Measured: 8525 to 8407 branches (-118) and 37225 to 36905 lines (-320) over `src/` and `playground/src`. The ledger has one row for each lane.
+- RS14 also removed two `required(...)` guards. The checker fixes arity 1 for those stages, so the guards could not fire.
+
+Found during the pass, not fixed (outside refactor scope):
+
+- `deno task lex:update` reads the gitignored probe directories under `docs/plans/`. Their content has changed since the committed snapshot was made, so the task now rewrites `fixtures/lex/snapshot.json` in the main checkout, and a fresh worktree gives yet another result. The base and new scripts give the same output, so this drift existed before the pass. The snapshot input set needs a decision.
+- The probable short write in `src/host/deno_io.ts` (section 4) is still open.
