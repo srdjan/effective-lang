@@ -24,6 +24,7 @@ import type {
   ErrorId,
   Execution,
   LocalId,
+  Result,
   ServiceId,
   TypeId,
   ValueId,
@@ -128,6 +129,12 @@ interface Arg {
   readonly node: NodeId;
   /** The value of a pipeline's left side, which is evaluated once before the stage. */
   readonly pre?: NodeInfo;
+}
+
+/** One `name: literal` field of an option record. */
+interface LiteralField {
+  readonly node: NodeId;
+  readonly value: unknown;
 }
 
 interface ArrowContext {
@@ -1578,36 +1585,63 @@ class BodyChecker {
     return this.finish(node, type, combine(infos));
   }
 
+  /**
+   * Reads an option record of exactly `count` fields, each `name: literal`, and
+   * gives the fields by name. It fails with "shape" for a pipeline left side, a
+   * value that is not a record, another field count, a field of another form,
+   * or a repeated name. It reports nothing and records nothing.
+   */
+  private literalRecord(
+    arg: Arg,
+    count: number,
+  ): Result<ReadonlyMap<string, LiteralField>, "shape"> {
+    const shape = { ok: false, error: "shape" } as const;
+    if (
+      arg.pre !== undefined ||
+      kindOf(this.tree, arg.node) !== SyntaxKind.RecordExpr
+    ) return shape;
+    const fields = this.kids(arg.node);
+    if (fields.length !== count) return shape;
+    const values = new Map<string, LiteralField>();
+    for (const field of fields) {
+      if (kindOf(this.tree, field) !== SyntaxKind.RecordField) return shape;
+      const parts = this.kids(field);
+      const label = parts.find((part) =>
+        kindOf(this.tree, part) === SyntaxKind.Name
+      );
+      const valueNode = parts.find((part) => part !== label);
+      if (
+        label === undefined || valueNode === undefined ||
+        kindOf(this.tree, valueNode) !== SyntaxKind.LiteralExpr
+      ) return shape;
+      const name = nameTextOf(this.tree, label);
+      if (name === undefined || values.has(name)) return shape;
+      values.set(name, {
+        node: valueNode,
+        value: literalOf(this.tree, valueNode),
+      });
+    }
+    return { ok: true, value: values };
+  }
+
   /** The literal count of `{ times: N }`, or undefined after a diagnostic. */
   private retryTimes(arg: Arg): number | undefined {
-    const bad = (): undefined => {
+    const record = this.literalRecord(arg, 1);
+    const times = record.ok ? record.value.get("times") : undefined;
+    const value = times?.value;
+    if (
+      times === undefined || typeof value !== "number" ||
+      !Number.isSafeInteger(value) || value < 0
+    ) {
       this.report(
         "type-mismatch/010",
         "`retry` needs `{ times: N }`, where N is a finite nonnegative safe integer literal",
         arg.node,
       );
       return undefined;
-    };
-    if (arg.pre !== undefined) return bad();
-    if (kindOf(this.tree, arg.node) !== SyntaxKind.RecordExpr) return bad();
-    const fields = this.kids(arg.node);
-    if (fields.length !== 1) return bad();
-    const field = fields[0];
-    if (kindOf(this.tree, field) !== SyntaxKind.RecordField) return bad();
-    const parts = this.kids(field);
-    const label = parts.find((k) => kindOf(this.tree, k) === SyntaxKind.Name);
-    const valueNode = parts.find((k) => k !== label);
-    if (
-      label === undefined || valueNode === undefined ||
-      nameTextOf(this.tree, label) !== "times" ||
-      kindOf(this.tree, valueNode) !== SyntaxKind.LiteralExpr
-    ) return bad();
-    const value = literalOf(this.tree, valueNode);
-    if (
-      typeof value !== "number" || !Number.isSafeInteger(value) || value < 0
-    ) return bad();
+    }
     this.finish(
-      valueNode,
+      times.node,
       this.table.int,
       PURE_EFFECTS,
     );
@@ -4042,42 +4076,11 @@ class BodyChecker {
   ):
     | { units: number; durationMs: number; strategy: "shape" | "enforce" }
     | undefined {
-    const bad = (): undefined => {
-      this.report(
-        "type-mismatch/010",
-        '`throttleStream` needs { units: U, durationMs: M, strategy: "shape" | "enforce" } with positive safe integer literals',
-        arg.node,
-      );
-      return undefined;
-    };
-    if (
-      arg.pre !== undefined ||
-      kindOf(this.tree, arg.node) !== SyntaxKind.RecordExpr
-    ) return bad();
-    const fields = this.kids(arg.node);
-    if (fields.length !== 3) return bad();
-    const values = new Map<string, { node: NodeId; value: unknown }>();
-    for (const field of fields) {
-      if (kindOf(this.tree, field) !== SyntaxKind.RecordField) return bad();
-      const parts = this.kids(field);
-      const label = parts.find((part) =>
-        kindOf(this.tree, part) === SyntaxKind.Name
-      );
-      const valueNode = parts.find((part) => part !== label);
-      if (
-        label === undefined || valueNode === undefined ||
-        kindOf(this.tree, valueNode) !== SyntaxKind.LiteralExpr
-      ) return bad();
-      const name = nameTextOf(this.tree, label);
-      if (name === undefined || values.has(name)) return bad();
-      values.set(name, {
-        node: valueNode,
-        value: literalOf(this.tree, valueNode),
-      });
-    }
-    const units = values.get("units");
-    const duration = values.get("durationMs");
-    const strategy = values.get("strategy");
+    const record = this.literalRecord(arg, 3);
+    const values = record.ok ? record.value : undefined;
+    const units = values?.get("units");
+    const duration = values?.get("durationMs");
+    const strategy = values?.get("strategy");
     if (
       units === undefined || duration === undefined || strategy === undefined ||
       typeof units.value !== "number" ||
@@ -4085,7 +4088,14 @@ class BodyChecker {
       typeof duration.value !== "number" ||
       !Number.isSafeInteger(duration.value) || duration.value <= 0 ||
       (strategy.value !== "shape" && strategy.value !== "enforce")
-    ) return bad();
+    ) {
+      this.report(
+        "type-mismatch/010",
+        '`throttleStream` needs { units: U, durationMs: M, strategy: "shape" | "enforce" } with positive safe integer literals',
+        arg.node,
+      );
+      return undefined;
+    }
     this.finish(units.node, this.table.int, PURE_EFFECTS);
     this.finish(duration.node, this.table.int, PURE_EFFECTS);
     this.finish(
@@ -4686,36 +4696,21 @@ class BodyChecker {
     operation = "bufferStream",
     fieldName = "capacity",
   ): number | undefined {
-    const bad = (): undefined => {
+    const record = this.literalRecord(arg, 1);
+    const capacity = record.ok ? record.value.get(fieldName) : undefined;
+    const value = capacity?.value;
+    if (
+      capacity === undefined || typeof value !== "number" ||
+      !Number.isSafeInteger(value) || value <= 0
+    ) {
       this.report(
         "type-mismatch/010",
         `\`${operation}\` needs \`{ ${fieldName}: N }\` with a positive safe integer literal`,
         arg.node,
       );
       return undefined;
-    };
-    if (
-      arg.pre !== undefined ||
-      kindOf(this.tree, arg.node) !== SyntaxKind.RecordExpr
-    ) return bad();
-    const fields = this.kids(arg.node);
-    if (
-      fields.length !== 1 ||
-      kindOf(this.tree, fields[0]) !== SyntaxKind.RecordField
-    ) return bad();
-    const parts = this.kids(fields[0]);
-    const label = parts.find((k) => kindOf(this.tree, k) === SyntaxKind.Name);
-    const valueNode = parts.find((k) => k !== label);
-    if (
-      label === undefined || valueNode === undefined ||
-      nameTextOf(this.tree, label) !== fieldName ||
-      kindOf(this.tree, valueNode) !== SyntaxKind.LiteralExpr
-    ) return bad();
-    const value = literalOf(this.tree, valueNode);
-    if (
-      typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0
-    ) return bad();
-    this.finish(valueNode, this.table.int, PURE_EFFECTS);
+    }
+    this.finish(capacity.node, this.table.int, PURE_EFFECTS);
     this.finish(
       arg.node,
       this.table.record([{
@@ -5125,37 +5120,21 @@ class BodyChecker {
       | "mapEffect"
       | "flatMapStreams" = "traverse",
   ): number | "unbounded" | undefined {
-    const bad = (): undefined => {
-      this.report(
-        "type-mismatch/010",
-        `\`${operation}\` needs \`{ concurrency: N }\` with a positive safe integer literal, or \`{ concurrency: "unbounded" }\``,
-        arg.node,
-      );
-      return undefined;
-    };
-    if (
-      arg.pre !== undefined ||
-      kindOf(this.tree, arg.node) !== SyntaxKind.RecordExpr
-    ) return bad();
-    const fields = this.kids(arg.node);
-    if (
-      fields.length !== 1 ||
-      kindOf(this.tree, fields[0]) !== SyntaxKind.RecordField
-    ) return bad();
-    const parts = this.kids(fields[0]);
-    const name = parts.find((p) => kindOf(this.tree, p) === SyntaxKind.Name);
-    const value = parts.find((p) => p !== name);
-    if (
-      name === undefined || value === undefined ||
-      nameTextOf(this.tree, name) !== "concurrency" ||
-      kindOf(this.tree, value) !== SyntaxKind.LiteralExpr
-    ) return bad();
-    const literal = literalOf(this.tree, value);
+    const record = this.literalRecord(arg, 1);
+    const literal = record.ok
+      ? record.value.get("concurrency")?.value
+      : undefined;
     if (literal === "unbounded") return literal;
-    return typeof literal === "number" && Number.isSafeInteger(literal) &&
-        literal > 0
-      ? literal
-      : bad();
+    if (
+      typeof literal === "number" && Number.isSafeInteger(literal) &&
+      literal > 0
+    ) return literal;
+    this.report(
+      "type-mismatch/010",
+      `\`${operation}\` needs \`{ concurrency: N }\` with a positive safe integer literal, or \`{ concurrency: "unbounded" }\``,
+      arg.node,
+    );
+    return undefined;
   }
 
   private allCall(node: NodeId, args: readonly Arg[]): NodeInfo {
