@@ -60,6 +60,13 @@ async function watchLoop(
       case "config-error":
         io.stderr(`error: ${synced.message}\n`);
         return;
+      case "host-change": {
+        if (!options.tsc) return;
+        const outcome = await session.build(synced.revision, options);
+        io.stderr("host inputs changed; rechecked: (none)\n");
+        printOutcome(io, outcome, synced.revision.effModuleNames().length);
+        return;
+      }
       case "revision": {
         const names = new Set(synced.revision.effModuleNames());
         const stale = removeStaleOutputs(
@@ -137,7 +144,11 @@ async function execute(
     return EXIT_USAGE;
   }
 
-  const session = new Session(io, root);
+  const session = new Session(
+    io,
+    root,
+    command.kind === "watch" && command.tsc,
+  );
   const options = optionsOf(command);
   // A project that cannot start is a configuration error. A later break in watch mode only prints.
   const synced = session.sync();

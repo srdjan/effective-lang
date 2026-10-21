@@ -53,6 +53,7 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
     doc.ts         The printer: documents, layout at 80 columns, span tags.
     scope.ts       Names, fresh names, imports, host bindings, specifiers.
     calls.ts       The simple calls: tables of the structural and leaf kinds that print as callee(operands).
+    fields.ts      Own-field construction, optional reads and declared schema input adapters.
     shape.ts       The shape table of every IR expression kind: children, deferred children, and leaf effects.
     explicit_scope.ts Shared scope representation, service capture, and close completion.
     types.ts       The type printer and the schema printer.
@@ -293,7 +294,7 @@ A line that belongs to no diagnostic goes to stderr. Any `deno check` diagnostic
 
 `watch` reads the root again after each batch of file events and every second as a fallback when the platform does not deliver events. It gives the program the files that changed. When no file changed, it prints nothing. A batch joins the events that arrive within 100 milliseconds of the previous event.
 
-After each build, `watch` prints `rechecked: <modules>` to stderr, then the diagnostics. A broken `effective.json` prints an error, and the loop goes on. At start, a broken `effective.json` gives exit code 2. The loop takes its event source as a parameter, so a fast test drives it with a fake source.
+After each build, `watch` prints `rechecked: <modules>` to stderr, then the diagnostics. A broken `effective.json` prints an error, and the loop goes on. At start, a broken `effective.json` gives exit code 2. With `--tsc`, local TypeScript and JavaScript dependencies and Deno, TypeScript, import-map and package configuration files also trigger target checking. These inputs are compared separately: a host-only change reuses the source revision and prints `host inputs changed; rechecked: (none)`. Generated modules, dot directories and `node_modules` are excluded. Additions, removals and polling scans follow the same rule. Source or project-configuration errors continue to prevent target checking. The loop takes its event source as a parameter, so a fast test drives it with a fake source.
 
 `main(args, io)` in `src/cli/main.ts` returns the exit code. The `io` value gives the stdout and stderr writers, the file system, the `deno check` runner, and the watch source. The fast tests in `tests/cli_test.ts` run `main` with in-memory doubles from `tests/cli_helpers.ts`. The slow tests in `tests/cli_slow_test.ts` run the real tool.
 

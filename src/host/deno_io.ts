@@ -12,7 +12,7 @@ import type {
   DirectoryEntry,
   FileFailure,
 } from "./io.ts";
-import { isSourcePath } from "./workspace.ts";
+import { isSourcePath, isTargetPath } from "./workspace.ts";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -150,7 +150,7 @@ async function* sourceEvents(root: string): AsyncGenerator<readonly string[]> {
       const relative = result.value.paths
         .filter((path) => path.startsWith(prefix))
         .map((path) => path.slice(prefix.length))
-        .filter(isSourcePath);
+        .filter((path) => isSourcePath(path) || isTargetPath(path));
       if (relative.length > 0) yield relative;
     }
   } finally {

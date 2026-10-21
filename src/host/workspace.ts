@@ -41,6 +41,7 @@ function realPath(fs: CliFs, path: string): string | undefined {
 export function readWorkspace(
   fs: CliFs,
   root: string,
+  accepts: (path: string) => boolean = isSourcePath,
 ): Result<ReadonlyMap<string, string>, string> {
   const files = new Map<string, string>();
   let failure: string | undefined;
@@ -71,7 +72,7 @@ export function readWorkspace(
       const child = relative === "" ? entry.name : `${relative}/${entry.name}`;
       if (entry.isDirectory) {
         if (!skippedDirectory(entry.name)) visit(child);
-      } else if (isSourcePath(child)) {
+      } else if (accepts(child)) {
         const read = fs.readText(joinPath(root, child));
         if (read.ok) files.set(child, read.value);
         else if (read.error.tag === "unreadable") {
@@ -85,4 +86,30 @@ export function readWorkspace(
   return failure === undefined
     ? { ok: true, value: files }
     : { ok: false, error: failure };
+}
+
+/** Local target-check inputs; generated modules are filtered after reading. */
+export function isTargetPath(path: string): boolean {
+  const parts = path.split("/");
+  if (parts.slice(0, -1).some(skippedDirectory)) return false;
+  return /\.(?:[cm]?[jt]sx?|jsonc?)$/.test(path) ||
+    /(?:^|\/)(?:deno\.jsonc?|deno\.lock|tsconfig(?:\.[^/]+)?\.json|import[-_]map\.json|package(?:-lock)?\.json)$/
+      .test(path);
+}
+
+export function readTargetInputs(
+  fs: CliFs,
+  root: string,
+): Result<ReadonlyMap<string, string>, string> {
+  const read = readWorkspace(fs, root, isTargetPath);
+  if (!read.ok) return read;
+  return {
+    ok: true,
+    value: new Map(
+      [...read.value].filter(([, text]) =>
+        !/^\/\/ Generated from .+\.eff by the Effective compiler\. Do not edit\./
+          .test(text)
+      ),
+    ),
+  };
 }
