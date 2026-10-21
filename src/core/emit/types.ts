@@ -95,15 +95,9 @@ export function effectTypeDoc(
   result: Doc,
   effects: Effects,
 ): Doc {
-  const failures = failureUnion(scope, effects.failures);
-  const requirements = requirementUnion(scope, effects.requirements);
-  const args: Doc[] = [result];
-  if (failures !== undefined || requirements !== undefined) {
-    args.push(failures ?? "never");
-  }
-  if (requirements !== undefined) args.push(requirements);
+  const args = deferredArguments(scope, [result], effects);
   const effect = scope.effect("Effect");
-  return [`${effect}.Effect`, typeArguments(args)];
+  return [`${effect}.Effect`, args];
 }
 
 function deferredArguments(
@@ -128,15 +122,9 @@ function layerTypeDoc(
   acquisition: Effects,
 ): Doc {
   const services = servicesOf(provides).map((id) => scope.nameOf(id));
-  const failures = failureUnion(scope, acquisition.failures);
-  const requirements = requirementUnion(scope, acquisition.requirements);
-  const args: Doc[] = [unionDoc(services)];
-  if (failures !== undefined || requirements !== undefined) {
-    args.push(failures ?? "never");
-  }
-  if (requirements !== undefined) args.push(requirements);
+  const args = deferredArguments(scope, [unionDoc(services)], acquisition);
   const layer = scope.effect("Layer");
-  return [`${layer}.Layer`, typeArguments(args)];
+  return [`${layer}.Layer`, args];
 }
 
 function functionTypeDoc(scope: Scope, type: FunctionType): Doc {
