@@ -1,0 +1,488 @@
+{
+  "date": "2026-10-21T18:59:09.424Z",
+  "browser": "156.0.8078.47",
+  "automation": "Playwright 1.64.1",
+  "url": "http://127.0.0.1:8790/",
+  "viewportHeight": 900,
+  "gitHead": "6fbf57dfeda0c29258017b79410b11fbed73f92d",
+  "builtAssetSha256": {
+    "app.js": "429b408bbf42d74cd12313eb352bb4909bf92dcca1760f1927f43c5af03e4c61",
+    "app.css": "a468dae45627cf8668ede20b58c2a486925bf4fb849bd56b619e799025a4759c",
+    "examples.json": "91cef152dc24249e9540909789b0faf5657afbc83da290d0f2da297ea9876544"
+  },
+  "results": [
+    {
+      "width": 375,
+      "errors": [],
+      "screenshots": [
+        "playground-375-ready.png",
+        "playground-375-keyboard-files.png",
+        "playground-375-output.png",
+        "playground-375-error.png",
+        "playground-375-stale-output.png",
+        "playground-375-syntax-error.png",
+        "playground-375-recovered.png"
+      ],
+      "assertions": [
+        "loads example project without diagnostics; correct responsive mode; no horizontal document overflow",
+        "file tabs support Home/End/ArrowRight, one selected tab, focus visibility and scroll focused tab into view",
+        "Tab navigation reaches labelled source editor",
+        "narrow view tabs support arrow keys and Home with correct visible tabpanel",
+        "invalid integer argument produces source diagnostic and retains previous generated TypeScript with stale banner",
+        "keyboard activation of diagnostic focuses its source location",
+        "generated TypeScript is read-only and labelled",
+        "malformed source produces parser diagnostics, preserves last good output and recovers after correction",
+        "correcting input clears diagnostic and stale state, restores generated output; no browser errors"
+      ],
+      "focus": [
+        {
+          "tag": "BUTTON",
+          "id": "view-tab-source",
+          "role": "tab",
+          "label": null,
+          "text": "Source",
+          "focusVisible": true
+        },
+        {
+          "tag": "DIV",
+          "id": "",
+          "role": "textbox",
+          "label": "Source code",
+          "text": "import { displayName, Name, StoreUnavailable } from \"./users.eff\"import { UsersL",
+          "focusVisible": true
+        },
+        {
+          "tag": "BODY",
+          "id": "",
+          "role": null,
+          "label": null,
+          "text": "\n    The Effective playground needs JavaScript.\n    \n      Effective playground\n",
+          "focusVisible": false
+        },
+        {
+          "tag": "A",
+          "id": "",
+          "role": null,
+          "label": null,
+          "text": "\n        Read the book\n      ",
+          "focusVisible": true
+        },
+        {
+          "tag": "BUTTON",
+          "id": "file-tab-2",
+          "role": "tab",
+          "label": null,
+          "text": "main.eff",
+          "focusVisible": true
+        }
+      ],
+      "initial": {
+        "viewport": 375,
+        "document": 375,
+        "body": 375,
+        "mode": "narrow",
+        "panels": [
+          {
+            "id": "source-region",
+            "hidden": false,
+            "width": 375,
+            "left": 0,
+            "right": 375
+          },
+          {
+            "id": "problems-region",
+            "hidden": true,
+            "width": 0,
+            "left": 0,
+            "right": 0
+          },
+          {
+            "id": "output-region",
+            "hidden": true,
+            "width": 0,
+            "left": 0,
+            "right": 0
+          }
+        ],
+        "tabs": {
+          "width": 375,
+          "scroll": 651
+        },
+        "selected": [
+          "main.eff",
+          "Source"
+        ],
+        "status": "compiled in 18.6 ms"
+      },
+      "fileTabFocus": {
+        "text": "host/providers.effi",
+        "tabIndex": 0,
+        "focusVisible": true,
+        "outline": "rgb(31, 43, 77) solid 3px",
+        "rect": {
+          "left": 202.203125,
+          "right": 369.078125
+        },
+        "scrollLeft": 276
+      },
+      "diagnostics": [
+        "main.eff:6:40 type-mismatch/003 argument 1 has type int, but UserId is expected"
+      ],
+      "staleOutput": "// Generated from main.eff by the Effective compiler. Do not edit.import { Effect, Layer } from \"effect\";import { displayName, Name, StoreUnavailable, Users } from \"./users.ts\";import { UsersLive } from \"./users-live.ts\";const UsersLive$host: Layer.Layer<Users> = UsersLive;export const main = (): Effect.Effect<Name, StoreUnavailable> =>  Effect.provide(Effect.suspend(() => displayName(\"u1\")), UsersLive$host);//# sourceMappingURL=main.ts.map",
+      "cursor": "",
+      "syntaxDiagnostics": [
+        "main.eff:1:22 syntax/008 expected an expression, found end of file"
+      ],
+      "final": {
+        "viewport": 375,
+        "document": 375,
+        "body": 375,
+        "mode": "narrow",
+        "panels": [
+          {
+            "id": "source-region",
+            "hidden": false,
+            "width": 375,
+            "left": 0,
+            "right": 375
+          },
+          {
+            "id": "problems-region",
+            "hidden": true,
+            "width": 0,
+            "left": 0,
+            "right": 0
+          },
+          {
+            "id": "output-region",
+            "hidden": true,
+            "width": 0,
+            "left": 0,
+            "right": 0
+          }
+        ],
+        "tabs": {
+          "width": 375,
+          "scroll": 651
+        },
+        "selected": [
+          "main.eff",
+          "Source"
+        ],
+        "status": "compiled in 1.1 ms"
+      }
+    },
+    {
+      "width": 720,
+      "errors": [],
+      "screenshots": [
+        "playground-720-ready.png",
+        "playground-720-keyboard-files.png",
+        "playground-720-error.png",
+        "playground-720-syntax-error.png",
+        "playground-720-recovered.png"
+      ],
+      "assertions": [
+        "loads example project without diagnostics; correct responsive mode; no horizontal document overflow",
+        "file tabs support Home/End/ArrowRight, one selected tab, focus visibility and scroll focused tab into view",
+        "Tab navigation reaches labelled source editor",
+        "invalid integer argument produces source diagnostic and retains previous generated TypeScript with stale banner",
+        "keyboard activation of diagnostic focuses its source location",
+        "generated TypeScript is read-only and labelled",
+        "malformed source produces parser diagnostics, preserves last good output and recovers after correction",
+        "correcting input clears diagnostic and stale state, restores generated output; no browser errors"
+      ],
+      "focus": [
+        {
+          "tag": "DIV",
+          "id": "",
+          "role": "textbox",
+          "label": "Source code",
+          "text": "import { displayName, Name, StoreUnavailable } from \"./users.eff\"import { UsersL",
+          "focusVisible": true
+        },
+        {
+          "tag": "DIV",
+          "id": "",
+          "role": "textbox",
+          "label": "Generated TypeScript",
+          "text": "// Generated from main.eff by the Effective compiler. Do not edit.import { Effec",
+          "focusVisible": true
+        },
+        {
+          "tag": "BODY",
+          "id": "",
+          "role": null,
+          "label": null,
+          "text": "\n    The Effective playground needs JavaScript.\n    \n      Effective playground\n",
+          "focusVisible": false
+        },
+        {
+          "tag": "A",
+          "id": "",
+          "role": null,
+          "label": null,
+          "text": "\n        Read the book\n      ",
+          "focusVisible": true
+        },
+        {
+          "tag": "BUTTON",
+          "id": "file-tab-2",
+          "role": "tab",
+          "label": null,
+          "text": "main.eff",
+          "focusVisible": true
+        }
+      ],
+      "initial": {
+        "viewport": 720,
+        "document": 720,
+        "body": 720,
+        "mode": "wide",
+        "panels": [
+          {
+            "id": "source-region",
+            "hidden": false,
+            "width": 336,
+            "left": 16,
+            "right": 352
+          },
+          {
+            "id": "problems-region",
+            "hidden": false,
+            "width": 336,
+            "left": 368,
+            "right": 704
+          },
+          {
+            "id": "output-region",
+            "hidden": false,
+            "width": 336,
+            "left": 368,
+            "right": 704
+          }
+        ],
+        "tabs": {
+          "width": 720,
+          "scroll": 720
+        },
+        "selected": [
+          "main.eff"
+        ],
+        "status": "compiled in 17.8 ms"
+      },
+      "fileTabFocus": {
+        "text": "host/providers.effi",
+        "tabIndex": 0,
+        "focusVisible": true,
+        "outline": "rgb(31, 43, 77) solid 3px",
+        "rect": {
+          "left": 478.203125,
+          "right": 645.078125
+        },
+        "scrollLeft": 0
+      },
+      "diagnostics": [
+        "main.eff:6:40 type-mismatch/003 argument 1 has type int, but UserId is expected"
+      ],
+      "staleOutput": "// Generated from main.eff by the Effective compiler. Do not edit.import { Effect, Layer } from \"effect\";import { displayName, Name, StoreUnavailable, Users } from \"./users.ts\";import { UsersLive } from \"./users-live.ts\";const UsersLive$host: Layer.Layer<Users> = UsersLive;export const main = (): Effect.Effect<Name, StoreUnavailable> =>  Effect.provide(Effect.suspend(() => displayName(\"u1\")), UsersLive$host);//# sourceMappingURL=main.ts.map",
+      "cursor": "",
+      "syntaxDiagnostics": [
+        "main.eff:1:22 syntax/008 expected an expression, found end of file"
+      ],
+      "final": {
+        "viewport": 720,
+        "document": 720,
+        "body": 720,
+        "mode": "wide",
+        "panels": [
+          {
+            "id": "source-region",
+            "hidden": false,
+            "width": 336,
+            "left": 16,
+            "right": 352
+          },
+          {
+            "id": "problems-region",
+            "hidden": false,
+            "width": 336,
+            "left": 368,
+            "right": 704
+          },
+          {
+            "id": "output-region",
+            "hidden": false,
+            "width": 336,
+            "left": 368,
+            "right": 704
+          }
+        ],
+        "tabs": {
+          "width": 720,
+          "scroll": 720
+        },
+        "selected": [
+          "main.eff"
+        ],
+        "status": "compiled in 1.1 ms"
+      }
+    },
+    {
+      "width": 1280,
+      "errors": [],
+      "screenshots": [
+        "playground-1280-ready.png",
+        "playground-1280-keyboard-files.png",
+        "playground-1280-error.png",
+        "playground-1280-syntax-error.png",
+        "playground-1280-recovered.png"
+      ],
+      "assertions": [
+        "loads example project without diagnostics; correct responsive mode; no horizontal document overflow",
+        "file tabs support Home/End/ArrowRight, one selected tab, focus visibility and scroll focused tab into view",
+        "Tab navigation reaches labelled source editor",
+        "invalid integer argument produces source diagnostic and retains previous generated TypeScript with stale banner",
+        "keyboard activation of diagnostic focuses its source location",
+        "generated TypeScript is read-only and labelled",
+        "malformed source produces parser diagnostics, preserves last good output and recovers after correction",
+        "correcting input clears diagnostic and stale state, restores generated output; no browser errors"
+      ],
+      "focus": [
+        {
+          "tag": "DIV",
+          "id": "",
+          "role": "textbox",
+          "label": "Source code",
+          "text": "import { displayName, Name, StoreUnavailable } from \"./users.eff\"import { UsersL",
+          "focusVisible": true
+        },
+        {
+          "tag": "DIV",
+          "id": "",
+          "role": "textbox",
+          "label": "Generated TypeScript",
+          "text": "// Generated from main.eff by the Effective compiler. Do not edit.import { Effec",
+          "focusVisible": true
+        },
+        {
+          "tag": "BODY",
+          "id": "",
+          "role": null,
+          "label": null,
+          "text": "\n    The Effective playground needs JavaScript.\n    \n      Effective playground\n",
+          "focusVisible": false
+        },
+        {
+          "tag": "A",
+          "id": "",
+          "role": null,
+          "label": null,
+          "text": "\n        Read the book\n      ",
+          "focusVisible": true
+        },
+        {
+          "tag": "BUTTON",
+          "id": "file-tab-2",
+          "role": "tab",
+          "label": null,
+          "text": "main.eff",
+          "focusVisible": true
+        }
+      ],
+      "initial": {
+        "viewport": 1280,
+        "document": 1280,
+        "body": 1280,
+        "mode": "wide",
+        "panels": [
+          {
+            "id": "source-region",
+            "hidden": false,
+            "width": 616,
+            "left": 16,
+            "right": 632
+          },
+          {
+            "id": "problems-region",
+            "hidden": false,
+            "width": 616,
+            "left": 648,
+            "right": 1264
+          },
+          {
+            "id": "output-region",
+            "hidden": false,
+            "width": 616,
+            "left": 648,
+            "right": 1264
+          }
+        ],
+        "tabs": {
+          "width": 1280,
+          "scroll": 1280
+        },
+        "selected": [
+          "main.eff"
+        ],
+        "status": "compiled in 19.2 ms"
+      },
+      "fileTabFocus": {
+        "text": "host/providers.effi",
+        "tabIndex": 0,
+        "focusVisible": true,
+        "outline": "rgb(31, 43, 77) solid 3px",
+        "rect": {
+          "left": 478.203125,
+          "right": 645.078125
+        },
+        "scrollLeft": 0
+      },
+      "diagnostics": [
+        "main.eff:6:40 type-mismatch/003 argument 1 has type int, but UserId is expected"
+      ],
+      "staleOutput": "// Generated from main.eff by the Effective compiler. Do not edit.import { Effect, Layer } from \"effect\";import { displayName, Name, StoreUnavailable, Users } from \"./users.ts\";import { UsersLive } from \"./users-live.ts\";const UsersLive$host: Layer.Layer<Users> = UsersLive;export const main = (): Effect.Effect<Name, StoreUnavailable> =>  Effect.provide(Effect.suspend(() => displayName(\"u1\")), UsersLive$host);//# sourceMappingURL=main.ts.map",
+      "cursor": "",
+      "syntaxDiagnostics": [
+        "main.eff:1:22 syntax/008 expected an expression, found end of file"
+      ],
+      "final": {
+        "viewport": 1280,
+        "document": 1280,
+        "body": 1280,
+        "mode": "wide",
+        "panels": [
+          {
+            "id": "source-region",
+            "hidden": false,
+            "width": 616,
+            "left": 16,
+            "right": 632
+          },
+          {
+            "id": "problems-region",
+            "hidden": false,
+            "width": 616,
+            "left": 648,
+            "right": 1264
+          },
+          {
+            "id": "output-region",
+            "hidden": false,
+            "width": 616,
+            "left": 648,
+            "right": 1264
+          }
+        ],
+        "tabs": {
+          "width": 1280,
+          "scroll": 1280
+        },
+        "selected": [
+          "main.eff"
+        ],
+        "status": "compiled in 0.8 ms"
+      }
+    }
+  ]
+}

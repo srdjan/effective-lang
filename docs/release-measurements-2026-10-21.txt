@@ -1,0 +1,80 @@
+effective-lang measurements, profile full
+deno 2.9.7, v8 15.0.245.2-rusty, typescript 6.0.3, aarch64-apple-darwin
+logical cores 14, timer performance.now(), single thread, not pinned
+No number below is a claim. Read each number with the noise floor of its row.
+
+M1: edit latency through the language server (ms), two server processes A and B
+change: from just before the write of didChange to the receipt of the matching publishDiagnostics. hover: one hover round trip on a fixed function name.
+n counts the runs of both sides. The floor is the p90 of |A/B - 1| in percent over the A/B step pairs of the row. Call a later A/B difference below the floor null.
+Server options: writeOnSave false, debounceMs 0. Only the edited document is open. Warm-up steps are dropped. examples: 5 warm-up and 100 timed steps per kind; small: 5 warm-up and 100 timed steps per kind; medium: 5 warm-up and 100 timed steps per kind; large: 5 warm-up and 100 timed steps per kind.
+
+input edit metric       n     min     p10  median     p90     max  floor %
+--------------------  ---  ------  ------  ------  ------  ------  -------
+examples body change  200   0.458   0.551   0.679   0.871   1.412     18.8
+examples body hover   200   0.261   0.333   0.405   0.508   1.187     23.4
+small body change     200   1.026   1.089   1.307   1.773   3.716     25.1
+small body hover      200   0.586   0.699   0.868   1.137   2.297     29.2
+small header change   200   0.980   1.079   1.215   1.433   1.811     19.7
+small header hover    200   0.554   0.646   0.752   1.059   1.285     42.0
+small alias change    200   0.947   1.021   1.133   1.350   2.134     20.4
+small alias hover     200   0.551   0.609   0.695   0.933   1.679     44.2
+small flip change     200   0.909   0.998   1.103   1.237   1.706     15.4
+small flip hover      200   0.552   0.612   0.690   0.889   1.440     20.8
+medium body change    200   2.356   2.581   2.845   3.522   4.671     10.3
+medium body hover     200   1.000   1.156   1.339   1.709   3.066     25.8
+medium header change  200   4.540   4.873   5.317   5.917   6.599     15.7
+medium header hover   200   0.954   1.103   1.220   1.447   2.476     25.0
+medium alias change   200   4.415   4.839   5.217   5.723   6.552     15.2
+medium alias hover    200   0.953   1.122   1.216   1.445   2.501     24.9
+medium flip change    200   4.368   4.595   4.915   5.347   8.712     13.2
+medium flip hover     200   0.989   1.076   1.189   1.401   3.465     30.3
+large body change     200   9.748  10.177  10.922  11.770  22.562     10.9
+large body hover      200   1.135   1.258   1.388   2.024   4.954     32.6
+large header change   200  51.464  52.927  54.451  57.817  88.614      6.4
+large header hover    200   1.238   1.307   1.397   1.657   2.757     36.8
+large alias change    200  51.648  52.749  58.301  73.923  89.972     22.2
+large alias hover     200   1.204   1.309   1.453   1.872   4.262     42.2
+large flip change     200  52.231  52.892  54.189  56.096  85.678      5.7
+large flip hover      200   1.194   1.300   1.360   1.528   2.939     45.8
+
+elapsed 47.7 s
+
+M3: work per edit in the language server, from effective/stats
+Counts are exact and have no noise floor. Each cell is the median or the maximum of the per-step delta of the cumulative count. The last two columns are the fraction of steps with a module in the interface delta and in the mode delta.
+No hover runs in M3, so the counts show the flush alone. Warm-up steps are not dropped, because counts do not depend on timing.
+
+input edit       n  parses med  parses max  checks med  checks max  lowerings med  lowerings max  emits med  emits max  iface frac  mode frac
+-------------  ---  ----------  ----------  ----------  ----------  -------------  -------------  ---------  ---------  ----------  ---------
+examples body  100         1.0           1         1.0           1            0.0              0        0.0          0        0.00       0.00
+small body     100         1.0           1         1.0           1            0.0              0        0.0          0        0.00       0.00
+small header   100         1.0           1         2.0           2            0.0              0        0.0          0        1.00       0.00
+small alias    100         1.0           1         2.0           2            0.0              0        0.0          0        1.00       0.00
+small flip     100         1.0           1         2.0           2            0.0              0        0.0          0        1.00       1.00
+medium body    100         1.0           1         1.0           1            0.0              0        0.0          0        0.00       0.00
+medium header  100         1.0           1         4.0           4            0.0              0        0.0          0        1.00       0.00
+medium alias   100         1.0           1         4.0           4            0.0              0        0.0          0        1.00       0.00
+medium flip    100         1.0           1         4.0           4            0.0              0        0.0          0        1.00       1.00
+large body     100         1.0           1         1.0           1            0.0              0        0.0          0        0.00       0.00
+large header   100         1.0           1        26.0          26            0.0              0        0.0          0        1.00       0.00
+large alias    100         1.0           1        26.0          26            0.0              0        0.0          0        1.00       0.00
+large flip     100         1.0           1        26.0          26            0.0              0        0.0          0        1.00       1.00
+
+elapsed 20.5 s
+
+M4: server memory over distinct edits, size medium, 3 documents open concurrently, two server processes A and B
+Edits rotate between documents. The primary cycles body, header, alias, and mode flip; companion feature modules receive body edits. Every text has a unique revision marker.
+Note: the peak is sampled only at step ends, so a short peak inside a step is not seen. These observations do not establish bounded memory.
+
+N steps  RSS peak A/B MiB  RSS last A/B MiB  heap last A/B MiB  types start A/B  types last A/B
+-------  ----------------  ----------------  -----------------  ---------------  --------------
+200           201.5/205.1       201.5/205.1          69.7/60.4          174/174         176/176
+500           200.0/200.5       200.0/200.5          30.3/32.5          174/174         176/176
+1000          203.0/213.2       203.0/213.2          70.3/83.3          174/174         176/176
+10000         216.4/228.0       200.1/205.3          79.3/37.1          174/174         176/176
+
+200 steps: distinct edits A/B 200/200; m02.eff 67/67 (body/header/alias/flip), m00.eff 67/67 (body), m01.eff 66/66 (body)
+500 steps: distinct edits A/B 500/500; m02.eff 167/167 (body/header/alias/flip), m00.eff 167/167 (body), m01.eff 166/166 (body)
+1000 steps: distinct edits A/B 1000/1000; m02.eff 334/334 (body/header/alias/flip), m00.eff 333/333 (body), m01.eff 333/333 (body)
+10000 steps: distinct edits A/B 10000/10000; m02.eff 3334/3334 (body/header/alias/flip), m00.eff 3333/3333 (body), m01.eff 3333/3333 (body)
+
+elapsed 72.5 s

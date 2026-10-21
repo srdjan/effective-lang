@@ -8,7 +8,7 @@ Accepted plan based on `4235bd7`; execute after the correctness fixes.
 | ER2 | References; prepare-rename and validated versioned edits; scoped completion without auto-imports; full semantic tokens and lexical fallback; validated missing `fails`/`uses` actions from checked effects. | Complete |
 | ER3 | Self-contained VSIX with bundled server closure and client runtime; default bundled server and explicit checkout override; Deno 2.9.7 checks; standalone CLI bundle, local install instructions, reproducible commands and isolated offline empty-cache smoke test. Local artifacts only. | Complete |
 | ER4 | Loopback HTTP and file-backed `node:sqlite` acceptance through service-workflow `.eff` orchestration and typed host boundary: persistence, invalid input/HTTP, permanent DB failure, rollback, cancellation and cleanup with explicit synchronization. | Complete |
-| ER5 | Full M1/M3/M4 against 100 ms p90 diagnostics budget; multiple documents and 10,000 distinct edits with RSS, heap and type-table growth; installed VSIX behavior; playground at 375/720/1280 with keyboard/error recovery. Separate automated evidence from manual acceptance. | Pending |
+| ER5 | Full M1/M3/M4 against 100 ms p90 diagnostics budget; multiple documents and 10,000 distinct edits with RSS, heap and type-table growth; installed VSIX behavior; playground at 375/720/1280 with keyboard/error recovery. Separate automated evidence from manual acceptance. | Automated complete; user manual acceptance pending |
 
 Test cross-module identity, shadowing, unsaved/malformed text, UTF-16, rename
 capture/conflicts and stale versions. Pure/protocol tests stay fast; subprocess,
@@ -58,3 +58,28 @@ boundaries. The slow wrapper independently validates and strictly checks emitted
 TypeScript before runtime tests. Cancellation waits for request receipt or a
 post-insert gate; reopened database connections verify commit and rollback.
 Existing deterministic tests retain retry and cleanup-defect coverage.
+
+## ER5 evidence
+
+The installed VSIX rerun passed all new providers, generated output, save, error
+recovery and a fresh-process restart; [artifact hashes and phase results](../release-assets/installed-vscode-review.json)
+record the final byte-identical local package. The [playground review](../playground-review-2026-10-21.md)
+passed on frozen release source at 375, 720 and 1280 pixels with keyboard
+navigation and type/syntax error recovery. User manual acceptance remains pending.
+
+M4 now rotates distinct edits across three simultaneously open documents and
+records every step's RSS, heap and type-table size for two fresh sessions at
+200, 500, 1,000 and 10,000 edits. It does not accumulate source comments or claim
+that step-end samples measure within-step peaks. Focused regressions preserve
+M1/M3 behavior and validate distinct revisions and numeric memory metrics.
+
+The [full release measurements](../release-measurements.md) meet the unchanged
+100 ms large-input p90 diagnostics budget and retain raw M1/M3/M4 evidence.
+Both sessions completed 10,000 distinct edits across three open documents.
+Measured growth establishes no memory bound.
+
+Final verification: `deno task check` passed formatting, lint, type checking,
+1,786 fast tests and 174 slow tests with zero failures. That gate includes the
+portable installation smoke and the real integration wrapper. The separate
+installed VSIX rerun, browser review and full benchmark also passed. Local
+artifacts are in `dist/`; publishing remains outside scope.

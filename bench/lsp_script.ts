@@ -1,7 +1,7 @@
 // The edit script and the server session that M1, M3, and M4 share (plan
 // section 8). An input is a project: the five examples or a synthetic size. A
 // session is one server process on a temporary copy of the project. It opens
-// only the edited document, waits for its first diagnostics, and then replays
+// the requested documents, waits for their first diagnostics, and then replays
 // one edit per step as a full-text `didChange`.
 //
 // Gate: after every step the diagnostics of the edited file must be an empty
@@ -174,7 +174,23 @@ export function applyEdit(
   }
   return next === text
     ? fail({ tag: "edit", kind, message: "the edit did not change the text" })
-    : succeed(next);
+    : succeed(markRevision(next, revision));
+}
+
+/** One marker per document makes every submitted revision distinct without growing its text. */
+function markRevision(text: string, revision: number): string {
+  const body = text.replace(/\n\/\/ effective-bench revision \d+\n?$/, "");
+  return `${body}\n// effective-bench revision ${revision}\n`;
+}
+
+/** Companion feature modules have a fixed, annotated `link` body we can edit. */
+export function applyCompanionEdit(text: string, revision: number): string {
+  const next = text.replace(
+    /(export const link\d+ = \(n: Int\): Int => n \+ )\d+/,
+    `$1${revision}`,
+  );
+  // Small inputs also open base/app modules without that body; their edits are comments.
+  return markRevision(next, revision);
 }
 
 // ------------------------------------------------------------------ temporary projects
@@ -215,6 +231,9 @@ export interface StepStats {
   /** The number of modules in the mode delta of the last flush. */
   readonly modeChanged: number;
   readonly rss: number;
+  /** Null only for older stats producers that omit this metric. */
+  readonly heapUsed: number | null;
+  readonly typeTableSize: number | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -230,20 +249,37 @@ export function parseStats(value: unknown): Result<StepStats, LspBenchError> {
   const bad = (message: string) =>
     fail<StepStats>({ tag: "protocol", message });
   if (!isRecord(value)) return bad("stats is not an object");
-  const { counts, delta, memory } = value;
+  const { counts, delta, memory, typeTableSize } = value;
   if (!isRecord(counts) || !isRecord(delta) || !isRecord(memory)) {
     return bad("stats lacks counts, delta, or memory");
   }
   const { parses, checks, lowerings, emits } = counts;
   const { interfaceChanged, modeChanged } = delta;
-  const { rss } = memory;
+  const { rss, heapUsed } = memory;
   if (
     typeof parses !== "number" || typeof checks !== "number" ||
     typeof lowerings !== "number" || typeof emits !== "number" ||
-    typeof rss !== "number" || !isStringArray(interfaceChanged) ||
+    typeof rss !== "number" || !Number.isFinite(rss) || rss < 0 ||
+    !isStringArray(interfaceChanged) ||
     !isStringArray(modeChanged)
   ) {
     return bad("stats has a field of the wrong type");
+  }
+  for (
+    const [name, metric] of [["heapUsed", heapUsed], [
+      "typeTableSize",
+      typeTableSize,
+    ]]
+  ) {
+    if (
+      metric !== undefined &&
+      (typeof metric !== "number" || !Number.isFinite(metric) || metric < 0)
+    ) {
+      return bad(`stats ${name} is not a finite nonnegative number`);
+    }
+  }
+  if (typeof typeTableSize === "number" && !Number.isInteger(typeTableSize)) {
+    return bad("stats typeTableSize is not an integer");
   }
   return succeed({
     parses,
@@ -253,6 +289,8 @@ export function parseStats(value: unknown): Result<StepStats, LspBenchError> {
     interfaceChanged: interfaceChanged.length,
     modeChanged: modeChanged.length,
     rss,
+    heapUsed: typeof heapUsed === "number" ? heapUsed : null,
+    typeTableSize: typeof typeTableSize === "number" ? typeTableSize : null,
   });
 }
 
@@ -275,6 +313,11 @@ export class Session {
   #version = 1;
   /** Starts at 1, so the first body edit writes 2: the generated literal is 1. */
   #revision = 1;
+  readonly #companions = new Map<
+    string,
+    { uri: string; text: string; version: number }
+  >();
+  readonly #editCounts = new Map<string, number>();
 
   private constructor(
     client: LspClient,
@@ -287,38 +330,56 @@ export class Session {
     this.#uri = uri;
     this.#timeoutMs = timeoutMs;
     this.#text = input.files.get(input.editPath) ?? "";
+    this.#editCounts.set(input.editPath, 0);
   }
 
   /**
-   * Starts a server on the project at `dir`, initializes it, opens the edited
-   * document, and waits for its first diagnostics. The caller owns `dir`.
+   * Starts a server on the project at `dir`, initializes it, opens all requested
+   * documents, and waits for each one's first diagnostics. The caller owns `dir`.
    */
   static async start(
     dir: string,
     input: LspInput,
     timeoutMs: number,
+    openPaths: readonly string[] = [input.editPath],
   ): Promise<
     Result<{ session: Session; client: LspClient }, LspBenchError>
   > {
+    for (const path of openPaths) {
+      if (!path.endsWith(".eff") || !input.files.has(path)) {
+        return fail({ tag: "setup", message: `no source document ${path}` });
+      }
+    }
     const client = new LspClient({ cwd: dir, timeoutMs });
     const uri = new URL(`file://${dir}/${input.editPath}`).href;
     const session = new Session(client, input, uri, timeoutMs);
     try {
       await client.initialize({ writeOnSave: false, debounceMs: 0 });
-      const first = client.waitForDiagnostics(uri, 1, timeoutMs);
-      first.catch(() => {});
-      await client.notify("textDocument/didOpen", {
-        textDocument: {
-          uri,
-          languageId: "effective",
-          version: 1,
-          text: session.#text,
-        },
-      });
-      const gate = session.#gate(await first, "the first diagnostics");
-      if (!gate.ok) {
-        await client.dispose();
-        return gate;
+      for (const path of new Set([input.editPath, ...openPaths])) {
+        const documentUri = new URL(`file://${dir}/${path}`).href;
+        const text = input.files.get(path) ?? "";
+        const first = client.waitForDiagnostics(documentUri, 1, timeoutMs);
+        first.catch(() => {});
+        await client.notify("textDocument/didOpen", {
+          textDocument: {
+            uri: documentUri,
+            languageId: "effective",
+            version: 1,
+            text,
+          },
+        });
+        const gate = session.#gate(
+          await first,
+          `the first diagnostics of ${path}`,
+        );
+        if (!gate.ok) {
+          await client.dispose();
+          return gate;
+        }
+        if (path !== input.editPath) {
+          session.#companions.set(path, { uri: documentUri, text, version: 1 });
+          session.#editCounts.set(path, 0);
+        }
       }
       return succeed({ session, client });
     } catch (e) {
@@ -349,12 +410,29 @@ export class Session {
    * returns the time in milliseconds from just before the write to the receipt
    * of the matching `publishDiagnostics`.
    */
-  async step(kind: EditKind): Promise<Result<number, LspBenchError>> {
-    const next = applyEdit(this.#input, kind, this.#text, ++this.#revision);
+  async step(
+    kind: EditKind,
+    path = this.#input.editPath,
+  ): Promise<Result<number, LspBenchError>> {
+    const companion = this.#companions.get(path);
+    if (
+      path !== this.#input.editPath &&
+      (companion === undefined || kind !== "body")
+    ) {
+      return fail({
+        tag: "edit",
+        kind,
+        message: `no ${kind} edit for ${path}`,
+      });
+    }
+    const next = companion === undefined
+      ? applyEdit(this.#input, kind, this.#text, ++this.#revision)
+      : succeed(applyCompanionEdit(companion.text, ++this.#revision));
     if (!next.ok) return next;
-    const version = this.#version + 1;
+    const version = (companion?.version ?? this.#version) + 1;
+    const uri = companion?.uri ?? this.#uri;
     const waiting = this.#client.waitForDiagnostics(
-      this.#uri,
+      uri,
       version,
       this.#timeoutMs,
     );
@@ -362,18 +440,29 @@ export class Session {
     try {
       const start = performance.now();
       await this.#client.notify("textDocument/didChange", {
-        textDocument: { uri: this.#uri, version },
+        textDocument: { uri, version },
         contentChanges: [{ text: next.value }],
       });
       const params = await waiting;
       const elapsed = performance.now() - start;
-      this.#text = next.value;
-      this.#version = version;
+      if (companion === undefined) {
+        this.#text = next.value;
+        this.#version = version;
+      } else {
+        companion.text = next.value;
+        companion.version = version;
+      }
+      this.#editCounts.set(path, (this.#editCounts.get(path) ?? 0) + 1);
       const gate = this.#gate(params, `${kind} edit, version ${version}`);
       return gate.ok ? succeed(elapsed) : gate;
     } catch (e) {
       return fail(serverError(e));
     }
+  }
+
+  /** Successful submissions, each with a unique global revision marker. */
+  get editCounts(): ReadonlyMap<string, number> {
+    return this.#editCounts;
   }
 
   /** One hover round trip on the fixed function name. The result must not be null. */
@@ -453,11 +542,17 @@ export class Workspace {
   async open(
     input: LspInput,
     timeoutMs: number,
+    openPaths?: readonly string[],
   ): Promise<Result<Session, LspBenchError>> {
     const written = writeProject(input.files);
     if (!written.ok) return written;
     this.#dirs.push(written.value);
-    const started = await Session.start(written.value, input, timeoutMs);
+    const started = await Session.start(
+      written.value,
+      input,
+      timeoutMs,
+      openPaths,
+    );
     if (!started.ok) return started;
     this.#clients.push(started.value.client);
     this.#sessions.push(started.value.session);

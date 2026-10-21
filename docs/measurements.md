@@ -29,7 +29,7 @@ M1 gets its floor from the A/B pairs of its own steps.
 
 Measure the floor again when the machine or its load changes.
 
-M1, M3, and M4 run the real language server as a subprocess. All three replay the same edit script. The harness opens only the edited document. It starts the server with `writeOnSave` false and `debounceMs` 0.
+M1, M3, and M4 run the real language server as a subprocess through a shared edit-script implementation. M1 and M3 open the edited document; M4 holds three documents open and rotates edits between them. Servers use `writeOnSave` false and `debounceMs` 0.
 
 M1 times the path from an edit to its diagnostics. The time runs from just before the write of `textDocument/didChange` to the receipt of the matching `publishDiagnostics`. Then M1 times one hover on a fixed function name. Two server processes, A and B, run the same script, and the side that goes first alternates. M1 reports a distribution and the noise floor for each row.
 
@@ -39,9 +39,11 @@ M3 counts the work that one edit causes. After each step, the client sends `effe
 
 M3 runs no hover, so the counts show the compile alone. The counts are exact, so M3 has no noise floor. M3 shows whether the recheck of whole modules causes a miss of the D9 budget. It also informs the later review of the mode firewall (D8).
 
-M4 measures the memory of the server over a long script. It runs two servers, A and B, on the medium size. The script repeats the four edit kinds for N steps, and each row starts a new pair of servers. After each step, the client reads `rss` from `effective/stats`. A row shows the peak `rss` of each side and the `rss` after the last step.
+M4 measures server memory over distinct revisions on the medium size. Each row starts fresh servers A and B with three concurrently open documents: the main edit target and two existing feature modules. It rotates documents, cycling the four edit kinds on the main target and changing annotated body literals in the companions. Each edit carries a unique, replaced revision marker; source text does not accumulate comments. Each row records per-document edit counts and distinct submitted texts. The full profile uses 200, 500, 1,000 and 10,000 edits per server.
 
-M4 samples `rss` only at the end of a step, so it does not see a short peak inside a step. M4 decides the release policy for old revisions: whether the memory of a long session stays flat or grows.
+Before edits and after every step, M4 reads RSS, heap used and type-table size from `effective/stats`. Raw JSON retains all three metrics, the baseline, every sample and per-document counts. The text report shows baseline, peak and last values for both sessions, along with the original RSS summaries.
+
+M4 samples at step boundaries and cannot see a short peak within a step. RSS and heap reflect garbage collection and runtime allocation as well as retained compiler data; interned type-table nodes currently only grow. A finite run supplies growth evidence for revision-release decisions and does not establish bounded memory.
 
 ## The edit script
 
@@ -69,3 +71,5 @@ The token representation test of the design (object arrays against typed arrays)
 M1 and M3 run on the examples and on the three synthetic sizes. M4 runs on the medium size. The step counts of the quick and the full profile are in `bench/profile.ts`.
 
 A number from a run enters the README, the docs, or the ledger only with its noise floor, its size, and its number of samples. The user decides what to record. The timer is `performance.now()`, and the process is not pinned to a core, because macOS has no `taskset` equivalent.
+
+The [2026-10-21 release measurements](release-measurements.md) preserve the full M1/M3/M4 report and raw samples against the unchanged 100 ms p90 diagnostics budget.

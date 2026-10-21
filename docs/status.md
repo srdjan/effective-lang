@@ -10,11 +10,11 @@ All three application gates pass with existing language forms. The stopping rule
 
 ## Application dispositions
 
-Each application uses existing Effective forms. No compiler, IR, builtin, or syntax change was selected for any of them. The drivers record calls in memory and perform no external I/O. The fixture README of each application gives the build and run commands.
+Each application uses existing Effective forms. No compiler, IR, builtin, or syntax change was selected for any of them. The original deterministic drivers record calls in memory. A separate service-workflow acceptance driver now uses loopback HTTP and file-backed SQLite; [integration evidence](integration.md) records its narrower guarantees. The fixture README of each application gives the build and run commands.
 
 | Application | Gate result | Limits |
 | --- | --- | --- |
-| [Service workflow](../fixtures/applications/service-workflow/README.md) | Passes with a registered atomic SQL adapter and fifteen compiled runtime cases. Source owns validation, catalog use, retry selection, and the exported contract. The adapter owns one atomic save and its connection lifecycle. | No check covers external database behavior, source-authored transaction callbacks, idempotency, or exactly-once submission. An ambiguous commit stays Permanent, because a retry could duplicate a committed write. The simulated COMMIT error proves no retry, not real ambiguous-commit behavior. Plan: [service workflow](archive/plans/2026-10-19-service-workflow-application.md#disposition-and-limits). |
+| [Service workflow](../fixtures/applications/service-workflow/README.md) | Passes with a registered atomic SQL adapter and fifteen compiled runtime cases. Source owns validation, catalog use, retry selection, and the exported contract. The adapter owns one atomic save and its connection lifecycle. | Separate [HTTP/SQLite checks](integration.md) cover local persistence, rollback, cancellation and cleanup. Source-authored transaction callbacks, idempotency and exactly-once submission remain outside the witness. An ambiguous commit stays Permanent, because a retry could duplicate a committed write. The simulated COMMIT error proves no retry, not real ambiguous-commit behavior. Plan: [service workflow](archive/plans/2026-10-19-service-workflow-application.md#disposition-and-limits). |
 | [Scheduled worker](../fixtures/applications/scheduled-worker/README.md) | Passes with ten compiled runtime cases. A source-authored concrete policy owns repetition, transient retry, and resource release. The runtime entry point owns whole-worker interruption. | General opaque Schedule consumers remain an API gap. The native reference comparison covers the selected fixed policy, timing, and results only. A future application that needs opaque policies, richer scheduling, or an in-source shutdown protocol must supply its own blocker witness. Plan: [scheduled worker](archive/plans/2026-10-19-scheduled-worker-application.md#disposition-and-limits). |
 | [Stream processor](../fixtures/applications/stream-processor/README.md) | Passes with ordered concurrent mapping, backpressure, selective fallback, and thirteen compiled runtime cases. Source owns the whole pipeline and the session lifetime. | The application promises no rollback, no exactly-once delivery, no recovery of arbitrary mixed causes, and no global memory bound from one queue capacity. Native `catchTags` can hide an accompanying defect. Plan: [stream processor](archive/plans/2026-10-19-stream-processor-application.md#disposition-and-limits). |
 
@@ -72,7 +72,7 @@ external integration coverage.
 | Transaction cancellation | Body interruption awaits rollback and release. Interruption after COMMIT starts can preserve a committed row. The simulated COMMIT error proves no retry, not actual ambiguous-commit behavior. |
 | Stream failure and buffering | Native transduction can emit a partial batch before upstream failure. The pinned backpressure trace establishes no global memory bound. |
 | Delivery guarantees | The applications promise neither exactly-once delivery nor rollback of earlier successful batches. |
-| External services | Recording drivers and local adapters perform no external HTTP, database, RPC, AI or telemetry integration acceptance checks. |
+| External services | Seven [loopback HTTP and file-backed SQLite checks](integration.md) cover the service workflow. Remote services, RPC, AI and telemetry acceptance remain outside that coverage. |
 
 The [service workflow](archive/plans/2026-10-19-service-workflow-application.md#disposition-and-limits)
 and [stream processor](archive/plans/2026-10-19-stream-processor-application.md#disposition-and-limits)
@@ -81,9 +81,10 @@ record these boundaries with compiled checks.
 ### Separate release acceptance
 
 Editor behavior, packaging, performance and external integration acceptance
-remain separate work. Passing the application gates does not establish their
-completion or declare existing editor and packaging implementations absent.
-This gap record selects no release task or additional language implementation.
+are tracked separately from the application gates. The selected automated
+release checks now pass; user manual editor and playground acceptance remains
+pending.
+The accepted [editor and release plan](plans/2026-10-21-editor-release.md) selects editor capabilities, local installation, HTTP/SQLite integration and automated release checks. It selects no new language forms. The [correctness plan](archive/plans/2026-10-21-correctness-fixes.md) records the prerequisite fixes.
 
 ## Open items
 
@@ -91,11 +92,11 @@ The hardening plan [section 9](plans/2026-10-20-hardening-pruning.md) tracks the
 
 | Item | State | Owner |
 | --- | --- | --- |
-| Hand test of the VS Code client | Acceptance check 5 of the [language server plan](archive/plans/2026-10-16-lsp.md) is not done. | User |
-| Playground acceptance | The user has not accepted the page (acceptance check 5 of the [playground plan](archive/plans/2026-10-16-playground.md)). A manual browser review on 2026-10-16 passed at 375 and 1280 pixels. Three later commits changed the page: the 720 pixel threshold, the hover feedback, and the wrap indent. No review ran after them. | User |
+| Hand test of the VS Code client | The installed VSIX passed automated references, rename, completion, semantic tokens, contract quick fixes, generated output, save, error recovery and restart on 2026-10-21; [installation evidence](installation.md). User acceptance check 5 of the [language server plan](archive/plans/2026-10-16-lsp.md) remains pending. | User |
+| Playground acceptance | The user has not accepted the page (acceptance check 5 of the [playground plan](archive/plans/2026-10-16-playground.md)). An [automated browser review on 2026-10-21](playground-review-2026-10-21.md) passed at 375, 720 and 1280 pixels, including keyboard navigation, type/syntax error recovery and screenshot inspection. It does not replace the user’s manual acceptance. | User |
 | Audit fix batch | Items AU1 to AU8 of the [audit fix plan](plans/2026-10-21-audit-fixes.md) are on `main`. Its Progress section lists the open follow-ups. | Plan owner |
 | Open rederive items | R12 FE-2, R13 (all parts), the R15a remainder, R15b, CHK-11, CHK-12 (kept by the tag `keep/chk-12`), A6, ARC-5, and VAL-8 of the [rederive review](plans/2026-10-20-rederive-review.md) are open. The refactor plan defers C7, C10, F3, and F9b. No item has an owner. | User |
-| Measured numbers | Two documents hold bench numbers as evidence for one decision each: `rejected.md` (the lexer split) and the audit fix plan (AU1). The design and measurement documents hold none. The user decides which numbers enter them. | User |
+| Measured numbers | Earlier evidence remains in `rejected.md` (the lexer split) and the audit fix plan (AU1). The [full release measurements](release-measurements.md) meet the unchanged 100 ms large-input p90 diagnostics budget and include three open documents with 10,000 distinct edits. Raw RSS, heap and type-table samples record growth; they establish no memory bound. | User |
 
 ## Implementation parts
 

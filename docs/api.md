@@ -29,6 +29,11 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
   analyze.ts     Public entry: load a project, resolve it, collect diagnostics.
   db.ts          Program: revisions, parse memo, check memo with module cutoff, lazy IR, text, and maps.
   editor.ts      hoverAt, definitionAt, and documentSymbols over a revision.
+  editor_index.ts Revision-scoped resolver identities, occurrences and lexical scopes.
+  editor_rename.ts References, prepare-rename and re-resolved rename edits.
+  editor_completion.ts Visible names, record fields and service-method completion.
+  editor_tokens.ts Semantic classifications with lexical recovery.
+  editor_actions.ts Validated missing fails/uses actions from checked body effects.
   ids.ts         Parts of a declaration identity: module, name, and method.
   util.ts        Small pure helpers of the front end and the edges: compareText, errorMessage, and isRecord.
   mod.ts         The public API of the core: a list of re-exports.
@@ -71,7 +76,7 @@ src/cli/       The command-line tool. Deno APIs stay here, in src/host/, src/lsp
 src/host/      The host adapters that the command-line tool and the language server share.
   io.ts          The ports: file system, deno check runner, and watch source.
   deno_io.ts     The real ports: Deno file system, subprocess, and Deno.watchFs.
-  workspace.ts   The walk over the root: .eff and .effi files and effective.json.
+  workspace.ts   Source/configuration walks and separate local target-check inputs.
   events.ts      Debouncing of file system events.
   outputs.ts     writeGenerated: the write of the .ts and .ts.map files, shared by build and the language server.
 src/lsp/       The language server. See "Language server".
@@ -79,6 +84,7 @@ src/lsp/       The language server. See "Language server".
   server.ts      LanguageServer: lifecycle, dispatch, and the flush schedule.
   projects.ts    Project discovery, the open-document overlay, and the flush of a project.
   features.ts    The handlers: hover, definition, symbols, generated text, save, and stats.
+  editor_features.ts References, validated versioned rename/actions, completion and full semantic tokens.
   jsonrpc.ts     Content-Length frames and the message shapes.
   protocol.ts    The subset of the protocol: types and the narrowing of incoming params.
   positions.ts   Positions, ranges, and the conversion between URIs and paths.
@@ -92,6 +98,8 @@ scripts/       Scripts that the tasks run. golden_update.ts writes the golden fi
                measure.ts counts branches and cyclomatic complexity of the files given.
                measure_functions.ts counts the same for each function.
                measure_kernel.ts holds the counting rules that both measure scripts share.
+               package.ts builds deterministic local CLI/server bundles and a complete VSIX.
+               package_vscode_smoke.ts tests the installed VSIX in isolated editor directories.
 tests/         Deno tests and test helpers.
 fixtures/      Input files for the tests.
   examples/      The five example programs, the host interface file, and users-live.ts.
@@ -111,7 +119,7 @@ bench/         The measurement harnesses of parts A8 and L5. They are not part o
   generate.ts    The synthetic module generator and the edit scripts.
   m1.ts          M1: edit latency through the language server.
   m3.ts          M3: work per edit, from the stats of the server.
-  m4.ts          M4: server memory over a long edit script.
+  m4.ts          M4: three open documents, distinct edits, and RSS/heap/type-table growth.
   lsp_client.ts  A client over a spawned server process.
   lsp_script.ts  The inputs, the edit script, and the server session of M1, M3, and M4.
   m2.ts          M2: time per stage and the incremental path, with the checksum gate.

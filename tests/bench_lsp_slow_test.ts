@@ -101,24 +101,57 @@ Deno.test("M3 returns exact count deltas for each input and edit kind", async ()
   assertEquals(tempLeftovers(), before);
 });
 
-Deno.test("M4 returns the rss peak and the last rss of each side for each step count", async () => {
+Deno.test("M4 records RSS, heap and type-table samples while editing concurrently open documents", async () => {
   const before = tempLeftovers();
   const result = await runM4({
     seed: 1,
-    size: "small",
+    size: "medium",
     timeoutMs: TIMEOUT_MS,
-    stepCounts: [4, 5],
+    openDocuments: 3,
+    // Thirteen steps exercise every primary edit kind with companion edits between them.
+    stepCounts: [4, 13],
   });
   assert(result.ok, result.ok ? "" : describeLspBenchError(result.error));
-  assertEquals(result.value.rows.map((r) => r.steps), [4, 5]);
+  assertEquals(result.value.rows.map((r) => r.steps), [4, 13]);
+  assertEquals(result.value.openDocuments, 3);
   for (const row of result.value.rows) {
     assertEquals(row.samplesA.length, row.steps);
     assertEquals(row.samplesB.length, row.steps);
     assert(row.peakA >= row.lastA && row.lastA > 0);
     assert(row.peakB >= row.lastB && row.lastB > 0);
+    assertEquals(row.memorySamplesA.map((s) => s.rss), row.samplesA);
+    assertEquals(row.memorySamplesB.map((s) => s.rss), row.samplesB);
+    for (const sample of [...row.memorySamplesA, ...row.memorySamplesB]) {
+      assert(sample.rss > 0 && sample.heapUsed > 0 && sample.typeTableSize > 0);
+      assert(Number.isInteger(sample.typeTableSize));
+    }
+    assertEquals(row.distinctEditsA, row.steps);
+    assertEquals(row.distinctEditsB, row.steps);
+    assertEquals(row.documents.length, 3);
+    assertEquals(row.documents.map((document) => document.edit), [
+      "body/header/alias/flip",
+      "body",
+      "body",
+    ]);
+    assert(
+      row.documents.every((document) =>
+        document.editsA > 0 && document.editsB > 0
+      ),
+    );
+    assertEquals(
+      row.documents.reduce((sum, document) => sum + document.editsA, 0),
+      row.steps,
+    );
+    assertEquals(
+      row.documents.map((document) => document.editsA),
+      row.documents.map((document) => document.editsB),
+    );
   }
   const text = formatM4(result.value);
   assert(text.includes("sampled only at step ends"));
+  assert(text.includes("3 documents open concurrently"));
+  assert(text.includes("heap last"));
+  assert(text.includes("types last"));
   assertEquals(tempLeftovers(), before);
 });
 

@@ -81,7 +81,7 @@ const SCALES: Readonly<Record<ProfileName, Scale>> = {
       medium: { steps: 100 },
       large: { steps: 100 },
     },
-    m4: [200, 500, 1000],
+    m4: [200, 500, 1000, 10000],
   },
 };
 
@@ -134,5 +134,6 @@ export function m4Config(profile: ProfileName): M4Config {
     size: "medium",
     timeoutMs: LSP_TIMEOUT_MS,
     stepCounts: SCALES[profile].m4,
+    openDocuments: 3,
   };
 }

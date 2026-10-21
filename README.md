@@ -6,7 +6,7 @@ The design is in [docs/transpiler-design.md](docs/transpiler-design.md). The imp
 
 ## Status
 
-All parts of the Phase A plan, the language server plan, and the playground plan exist. The three application gates pass with existing language forms. The project status, the application stopping rule, the open items, and the deferred gaps are in [docs/status.md](docs/status.md).
+All parts of the Phase A plan, the language server plan, and the playground plan exist. The three application gates pass with existing language forms. Editor references, rename, completion, full semantic tokens and contract quick fixes are implemented. Local CLI/VSIX installation and real loopback HTTP/SQLite acceptance are documented below. The project status, the application stopping rule, the open items, and the deferred gaps are in [docs/status.md](docs/status.md).
 
 ## Requirements
 
@@ -32,6 +32,9 @@ Run every command from the repository root.
 | `deno task bench`             | Runs the measurement harnesses. See [Measurements](docs/measurements.md).                                                                               |
 | `deno task playground:build`  | Writes the playground page to `playground/dist/`. See [Playground](docs/api.md#playground).                                                             |
 | `deno task playground:serve`  | Builds the playground page, then serves it on `http://127.0.0.1:8790/`.                                                                                 |
+| `deno task package`           | Builds standalone CLI/server bundles and the complete local VSIX. See [installation](docs/installation.md).                                             |
+| `deno task test:installation` | Checks reproducible packaging and isolated offline installation.                                                                                        |
+| `deno task test:vscode`       | Runs installed VSIX acceptance in a local VS Code application.                                                                                          |
 | `deno task fmt`               | Formats the source files.                                                                                                                               |
 | `deno task lint`              | Runs the linter.                                                                                                                                        |
 
@@ -93,15 +96,20 @@ The files `fixtures/parse/recovery-*.eff` use the same markers. The files `fixtu
 
 ## Where to read more
 
-| Topic                                                          | Document                                               |
-| -------------------------------------------------------------- | ------------------------------------------------------ |
-| Design of the transpiler                                       | [docs/transpiler-design.md](docs/transpiler-design.md) |
-| Language rules that the implementation chose                   | [docs/language-rules.md](docs/language-rules.md)       |
-| Project status and open items                                  | [docs/status.md](docs/status.md)                       |
-| API, command line, language server, VS Code client, playground | [docs/api.md](docs/api.md)                             |
-| Measurement harnesses and protocol                             | [docs/measurements.md](docs/measurements.md)           |
-| Rejected ideas                                                 | [docs/rejected.md](docs/rejected.md)                   |
-| Solved problems                                                | `docs/solutions/`                                      |
-| Finished plans and ledgers                                     | `docs/archive/`                                        |
-| Live plans                                                     | `docs/plans/`                                          |
-| Shared terms                                                   | [CONCEPTS.md](CONCEPTS.md)                             |
+| Topic                                                          | Document                                                                     |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Design of the transpiler                                       | [docs/transpiler-design.md](docs/transpiler-design.md)                       |
+| Language rules that the implementation chose                   | [docs/language-rules.md](docs/language-rules.md)                             |
+| Project status and open items                                  | [docs/status.md](docs/status.md)                                             |
+| API, command line, language server, VS Code client, playground | [docs/api.md](docs/api.md)                                                   |
+| Measurement harnesses and protocol                             | [docs/measurements.md](docs/measurements.md)                                 |
+| Rejected ideas                                                 | [docs/rejected.md](docs/rejected.md)                                         |
+| Solved problems                                                | `docs/solutions/`                                                            |
+| Finished plans and ledgers                                     | `docs/archive/`                                                              |
+| Live plans                                                     | `docs/plans/`                                                                |
+| Editor queries and rename boundaries                           | [docs/editor.md](docs/editor.md)                                             |
+| Local installation and artifacts                               | [docs/installation.md](docs/installation.md)                                 |
+| HTTP/SQLite integration acceptance                             | [docs/integration.md](docs/integration.md)                                   |
+| Playground browser acceptance                                  | [docs/playground-review-2026-10-21.md](docs/playground-review-2026-10-21.md) |
+| Release benchmark results                                      | [docs/release-measurements.md](docs/release-measurements.md)                 |
+| Shared terms                                                   | [CONCEPTS.md](CONCEPTS.md)                                                   |
