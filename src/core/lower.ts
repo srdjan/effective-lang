@@ -1215,15 +1215,6 @@ class BodyLowerer {
           EFFECT_ONLY,
         ]);
       }
-      case "retry-schedule":
-        return combine([
-          setOf(this.required(args[0], "the retry schedule step", stage)),
-        ]);
-      case "codec":
-      case "schema":
-      case "decode":
-      case "encode":
-        return combine(args.map((a) => setOf(a)));
       case "retry-with-schedule": {
         const fn = this.functionOf(leftInfo.type);
         return combine([
@@ -1237,10 +1228,6 @@ class BodyLowerer {
           EFFECT_ONLY,
         ]);
       }
-      case "defer":
-        return combine([
-          setOf(this.required(args[0], "the deferred job", stage)),
-        ]);
       case "close-scope":
         return combine([...parts, EFFECT_ONLY]);
       case "provide-scope":
@@ -1301,6 +1288,12 @@ class BodyLowerer {
           EFFECT_ONLY,
         ]);
       }
+      case "retry-schedule":
+      case "codec":
+      case "schema":
+      case "decode":
+      case "encode":
+      case "defer":
       case "error-construction":
       case "brand-construction":
       case "unbrand":
