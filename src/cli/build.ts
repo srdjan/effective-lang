@@ -12,7 +12,7 @@ import {
 } from "../core/mod.ts";
 import { formatDiagnostics, type TextOf } from "./format.ts";
 import type { CliIo } from "../host/io.ts";
-import { writeGenerated } from "../host/outputs.ts";
+import { writableModules, writeGenerated } from "../host/outputs.ts";
 import { runTsc } from "./tsc.ts";
 
 export interface BuildOptions {
@@ -74,40 +74,11 @@ export async function buildRevision(
   let generated: string[] = [];
   let tables = new Map<string, SpanTable>();
   if (wanted) {
-    // A module that lowered and failed validation is reported, and not written.
-    // A module that imports a module that is not written is not written either,
-    // because its generated import would not load.
-    const passed = new Set(names.filter((name) => {
-      const lowered = revision.lowered(name);
-      return lowered === undefined || !lowered.ok ||
-        (validation.get(name) ?? []).length === 0;
-    }));
-    const { graph, modules } = revision.project;
-    const writable = (name: string): boolean => {
-      const lowered = revision.lowered(name);
-      return lowered !== undefined && lowered.ok && passed.has(name);
-    };
-    // A fixpoint, because one forward pass is wrong inside an import cycle.
-    // The graph also holds host interface targets, which the build does not write.
-    for (let changed = true; changed;) {
-      changed = false;
-      for (const name of [...passed]) {
-        const imports = graph.get(name) ?? [];
-        if (
-          imports.some((target) =>
-            modules.get(target)?.mode === "eff" && !writable(target)
-          )
-        ) {
-          passed.delete(name);
-          changed = true;
-        }
-      }
-    }
     const outputs = writeGenerated(
       io.fs,
       root,
       revision,
-      [...passed],
+      writableModules(revision, validation),
       options.write,
     );
     written.push(...outputs.written);

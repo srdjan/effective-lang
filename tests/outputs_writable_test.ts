@@ -1,0 +1,57 @@
+// Fast tests of `writableModules`: which modules a build writes. They use
+// `Program` over in-memory files.
+
+import { assertEquals } from "@std/assert";
+import { Program } from "../src/core/mod.ts";
+import { writableModules } from "../src/host/outputs.ts";
+
+function writable(files: Readonly<Record<string, string>>): string[] {
+  const revision = new Program().update({
+    set: { "effective.json": "{}", ...files },
+  });
+  if (!revision.ok) throw new Error(JSON.stringify(revision));
+  return writableModules(revision.value);
+}
+
+Deno.test("writableModules writes no member of an import cycle with an error", () => {
+  assertEquals(
+    writable({
+      "c.eff":
+        'import { d } from "./d.eff"\ntype I = int\nexport const c = (): I => "text"\n',
+      "d.eff":
+        'import { c } from "./c.eff"\ntype I = int\nexport const d = (): I => c()\n',
+    }),
+    [],
+  );
+});
+
+Deno.test("writableModules ignores a host interface target", () => {
+  const read = (path: string) =>
+    Deno.readTextFileSync(
+      new URL(`../fixtures/examples/${path}`, import.meta.url),
+    );
+  const revision = new Program().update({
+    set: {
+      "effective.json": read("effective.json"),
+      "users.eff": read("users.eff"),
+      "host/providers.effi": read("host/providers.effi"),
+      "main.eff": read("main.eff"),
+    },
+  });
+  if (!revision.ok) throw new Error(JSON.stringify(revision));
+  assertEquals(revision.value.diagnostics.map((d) => d.code), []);
+  assertEquals(writableModules(revision.value).sort(), ["main", "users"]);
+});
+
+Deno.test("writableModules writes every module of a clean chain", () => {
+  assertEquals(
+    writable({
+      "a.eff":
+        'import { b } from "./b.eff"\ntype I = int\nexport const a = (): I => b()\n',
+      "b.eff":
+        'import { c } from "./c.eff"\ntype I = int\nexport const b = (): I => c()\n',
+      "c.eff": "type I = int\nexport const c = (): I => 1\n",
+    }).sort(),
+    ["a", "b", "c"],
+  );
+});

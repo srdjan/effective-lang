@@ -3,6 +3,7 @@
 // generated file and the map when their text changed.
 
 import {
+  type Diagnostic,
   joinPath,
   type LowerError,
   type Revision,
@@ -37,6 +38,47 @@ function describeLowerError(error: LowerError): string {
     case "internal":
       return `${error.module}: ${error.message}`;
   }
+}
+
+/**
+ * The modules that a build writes, in the order of `revision.effModuleNames()`.
+ * A module that lowered and failed validation is reported, and not written.
+ * A module that imports a module that is not written is not written either,
+ * because its generated import would not load.
+ */
+export function writableModules(
+  revision: Revision,
+  validation: ReadonlyMap<string, readonly Diagnostic[]> = new Map(),
+): string[] {
+  const passed = new Set(
+    revision.effModuleNames().filter((name) => {
+      const lowered = revision.lowered(name);
+      return lowered === undefined || !lowered.ok ||
+        (validation.get(name) ?? []).length === 0;
+    }),
+  );
+  const { graph, modules } = revision.project;
+  const writable = (name: string): boolean => {
+    const lowered = revision.lowered(name);
+    return lowered !== undefined && lowered.ok && passed.has(name);
+  };
+  // A fixpoint, because one forward pass is wrong inside an import cycle.
+  // The graph also holds host interface targets, which the build does not write.
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const name of [...passed]) {
+      const imports = graph.get(name) ?? [];
+      if (
+        imports.some((target) =>
+          modules.get(target)?.mode === "eff" && !writable(target)
+        )
+      ) {
+        passed.delete(name);
+        changed = true;
+      }
+    }
+  }
+  return [...passed];
 }
 
 /**
