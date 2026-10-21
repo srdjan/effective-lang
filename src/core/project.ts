@@ -487,23 +487,27 @@ interface GraphResult {
 function linkModules(
   modules: ReadonlyMap<string, ModuleInfo>,
 ): GraphResult {
-  const names = [...modules.keys()].sort(compareText);
+  const sorted = [...modules].sort(([a], [b]) => compareText(a, b));
+  const names = sorted.map(([name]) => name);
   const graph = new Map<string, readonly string[]>();
-  for (const name of names) {
+  const targetLists: (readonly string[])[] = [];
+  for (const [name, info] of sorted) {
     const targets = new Set<string>();
-    for (const link of modules.get(name)?.links ?? []) {
+    for (const link of info.links) {
       if (link.target !== undefined && modules.has(link.target)) {
         targets.add(link.target);
       }
     }
-    graph.set(name, [...targets].sort(compareText));
+    const list = [...targets].sort(compareText);
+    graph.set(name, list);
+    targetLists.push(list);
   }
 
   // Module names are sorted, so ascending indexes keep the order of `names`.
   const position = new Map<string, number>();
   names.forEach((name, i) => position.set(name, i));
-  const edges = names.map((name) =>
-    (graph.get(name) ?? []).flatMap((target) => position.get(target) ?? [])
+  const edges = targetLists.map((targets) =>
+    targets.flatMap((target) => position.get(target) ?? [])
   );
   const order: string[] = [];
   const diagnostics: Diagnostic[] = [];
@@ -511,7 +515,7 @@ function linkModules(
     const component = indexes.map((i) => names[i]);
     order.push(...component);
     const selfLoop = component.length === 1 &&
-      (graph.get(component[0]) ?? []).includes(component[0]);
+      targetLists[indexes[0]].includes(component[0]);
     if (component.length > 1 || selfLoop) {
       diagnostics.push(cycleDiagnostic(modules, component));
     }

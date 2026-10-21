@@ -157,12 +157,7 @@ export class Revision {
     readonly rechecked: readonly string[],
     private readonly entries: ReadonlyMap<string, Entry>,
     private readonly texts: ReadonlyMap<string, string>,
-    private readonly counters: Counters = {
-      parses: 0,
-      checks: 0,
-      lowerings: 0,
-      emits: 0,
-    },
+    private readonly counters: Counters,
   ) {}
 
   /** All diagnostics of the project, sorted and without duplicates. */

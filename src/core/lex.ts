@@ -146,7 +146,7 @@ const RESERVED_WORDS: ReadonlySet<string> = new Set([
   "eval",
 ]);
 
-const TOKEN_NAMES: Readonly<Record<number, string>> = {
+const TOKEN_NAMES: Readonly<Record<TokenKind, string>> = {
   [TokenKind.Eof]: "end of file",
   [TokenKind.Newline]: "end of line",
   [TokenKind.Ident]: "name",
@@ -197,7 +197,7 @@ const TOKEN_NAMES: Readonly<Record<number, string>> = {
 
 /** A short name for messages. */
 export function describeTokenKind(kind: TokenKind): string {
-  return TOKEN_NAMES[kind] ?? "token";
+  return TOKEN_NAMES[kind];
 }
 
 /** True when token `index` is an identifier that spells `word`. */
