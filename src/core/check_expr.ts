@@ -4033,42 +4033,16 @@ class BodyChecker {
       : this.concurrencyBound(args[2], "flatMapStreams");
     this.fact(node, { kind: "flat-map-streams", concurrency });
     this.noPipeline("flatMapStreams", args);
-    this.inlineStreamCallback("flatMapStreams", args[1]);
-    const { info: stream, source, element } = this.streamArg(
+    const { stream, transform, type } = this.innerStreams(
       "flatMapStreams",
-      args[0],
-    );
-    const transform = this.callback(
-      "flatMapStreams",
-      args[1],
-      [element],
-      undefined,
-    );
-    const inner = this.table.node(this.table.unfold(transform.result));
-    if (inner.kind !== "stream" && !this.isError(transform.result)) {
-      this.report(
-        "type-mismatch/010",
-        "`flatMapStreams` callback must return a Stream value",
-        args[1].node,
-      );
-    }
-    const type = this.table.stream(
-      inner.kind === "stream" ? inner.element : this.table.error,
-      [
-        ...(source.kind === "stream" ? source.failures : []),
-        ...(inner.kind === "stream" ? inner.failures : []),
-      ],
-      [
-        ...(source.kind === "stream" ? source.requirements : []),
-        ...(inner.kind === "stream" ? inner.requirements : []),
-      ],
+      args,
     );
     return this.finish(
       node,
       type,
       combine([
         stream,
-        transform.info,
+        transform,
         ...(args[2] === undefined ? [] : [this.argInfo(args[2])]),
       ]),
     );
@@ -4076,13 +4050,28 @@ class BodyChecker {
 
   private switchMapStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
     this.fact(node, { kind: "switch-map-streams" });
-    this.inlineStreamCallback("switchMapStreams", args[1]);
-    const { info: stream, source, element } = this.streamArg(
+    const { stream, transform, type } = this.innerStreams(
       "switchMapStreams",
+      args,
+    );
+    return this.finish(node, type, combine([stream, transform]));
+  }
+
+  /**
+   * The shared part of flatMapStreams and switchMapStreams: each element maps
+   * to an inner Stream, and the result joins the channels of both.
+   */
+  private innerStreams(
+    name: "flatMapStreams" | "switchMapStreams",
+    args: readonly Arg[],
+  ): { stream: NodeInfo; transform: NodeInfo; type: TypeRef } {
+    this.inlineStreamCallback(name, args[1]);
+    const { info: stream, source, element } = this.streamArg(
+      name,
       args[0],
     );
     const transform = this.callback(
-      "switchMapStreams",
+      name,
       args[1],
       [element],
       undefined,
@@ -4091,7 +4080,7 @@ class BodyChecker {
     if (inner.kind !== "stream" && !this.isError(transform.result)) {
       this.report(
         "type-mismatch/010",
-        "`switchMapStreams` callback must return a Stream value",
+        `\`${name}\` callback must return a Stream value`,
         args[1].node,
       );
     }
@@ -4106,7 +4095,7 @@ class BodyChecker {
         ...(inner.kind === "stream" ? inner.requirements : []),
       ],
     );
-    return this.finish(node, type, combine([stream, transform.info]));
+    return { stream, transform: transform.info, type };
   }
 
   private catchStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
