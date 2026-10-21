@@ -17,7 +17,7 @@ Build writes generated TypeScript beside the source files. The repository test
 runs the same compilation and application checks in a temporary directory.
 
 ```sh
-deno test --allow-all tests/application_worker_test.ts tests/application_worker_slow_test.ts
+deno test --allow-all tests/application_worker_test.ts tests/application_slow_test.ts
 ```
 
 Policy fields are safe nonnegative integers. Validation precedes all work,

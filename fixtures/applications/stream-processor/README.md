@@ -17,7 +17,7 @@ Build writes generated TypeScript beside the source files. The repository
 harness runs compilation and application checks in a temporary directory.
 
 ```sh
-deno test --allow-all tests/application_stream_processor_test.ts tests/application_stream_processor_slow_test.ts
+deno test --allow-all tests/application_stream_processor_test.ts tests/application_slow_test.ts
 ```
 
 runProcessor retains InputFailure, TransformFailure and OutputFailure channels
