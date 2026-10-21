@@ -161,8 +161,9 @@ function generatedHeader(module: string): string {
  * Removes the outputs of modules that left the project. Each named module has
  * a `<module>.ts` and a `<module>.ts.map`. A `.ts` file goes only when its
  * first line is the emitter header of that module, so a hand-written file at
- * the same path stays. The map goes only together with its `.ts` file. Returns
- * the root-relative paths that it removed, and messages for stderr.
+ * the same path stays. The map goes only together with its `.ts` file, and
+ * before it. Returns the root-relative paths that it removed, and messages for
+ * stderr.
  */
 export function removeStaleOutputs(
   fs: CliFs,
@@ -181,10 +182,14 @@ export function removeStaleOutputs(
       continue;
     }
     if (read.value.split("\n", 1)[0] !== generatedHeader(module)) continue;
-    for (const target of [path, `${path}.map`]) {
-      const result = fs.remove(joinPath(root, target));
+    // The map goes first. When it fails, the `.ts` file keeps the header that
+    // proves ownership, so a later call can retry. A missing file counts as removed.
+    for (const target of [`${path}.map`, path]) {
+      const full = joinPath(root, target);
+      const existed = fs.kind(full) !== "missing";
+      const result = fs.remove(full);
       if (result.ok) {
-        removed.push(target);
+        if (existed) removed.push(target);
       } else {
         notes.push(`error: cannot remove ${target}: ${result.error.message}`);
         break;

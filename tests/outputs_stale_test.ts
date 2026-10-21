@@ -1,0 +1,34 @@
+// Fast tests of `removeStaleOutputs` over the in-memory file system.
+
+import { assertEquals } from "@std/assert";
+import { removeStaleOutputs } from "../src/host/outputs.ts";
+import { memoryIo } from "./cli_helpers.ts";
+
+const ROOT = "/proj";
+const HEADER =
+  "// Generated from gone.eff by the Effective compiler. Do not edit.";
+
+Deno.test("removeStaleOutputs keeps the .ts file when its map cannot be removed", () => {
+  const m = memoryIo({
+    [`${ROOT}/gone.ts`]: `${HEADER}\nexport {}\n`,
+    [`${ROOT}/gone.ts.map`]: "{}",
+  });
+  m.unwritable.add(`${ROOT}/gone.ts.map`);
+  const first = removeStaleOutputs(m.io.fs, ROOT, ["gone"]);
+  assertEquals(first.removed, []);
+  assertEquals(first.notes.length, 1);
+  assertEquals(m.files.has(`${ROOT}/gone.ts`), true);
+  m.unwritable.delete(`${ROOT}/gone.ts.map`);
+  const second = removeStaleOutputs(m.io.fs, ROOT, ["gone"]);
+  assertEquals(second.removed, ["gone.ts.map", "gone.ts"]);
+  assertEquals(second.notes, []);
+  assertEquals(m.files.size, 0);
+});
+
+Deno.test("removeStaleOutputs removes the .ts file when its map is missing", () => {
+  const m = memoryIo({ [`${ROOT}/gone.ts`]: `${HEADER}\nexport {}\n` });
+  const result = removeStaleOutputs(m.io.fs, ROOT, ["gone"]);
+  assertEquals(result.removed, ["gone.ts"]);
+  assertEquals(result.notes, []);
+  assertEquals(m.files.size, 0);
+});
