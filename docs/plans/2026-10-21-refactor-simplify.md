@@ -97,6 +97,8 @@ The main session writes the ledger rows and this progress section after each lan
 
 ## 7. Progress
 
+In this section, D1, D2, and D3 are decisions of this plan. They are not the D1 to D6 of the rederive review. Commit `4ffe6cc` names D2 of this plan.
+
 Status on 2026-10-21: all 25 items are done on `main`. Three Sonnet implementers worked in separate worktrees, one for each lane, and the plan owner reviewed each diff line by line before landing it.
 
 - Done: lane A, RS1 to RS9 (`01d64f9` to `34a5309`), fast-forwarded.

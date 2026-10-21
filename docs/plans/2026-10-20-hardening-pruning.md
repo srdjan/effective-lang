@@ -4,7 +4,7 @@ Date: 2026-10-20. Base: `9adc5cd` plus the uncommitted disagreements work. Statu
 
 Website rule. The user asked to keep the website in `../effective` current. A commit that changes the language surface (S1, S2, S4) or the project status also updates `../effective/public/effective-spec.html`, `effective-validation.txt`, `index.html`, and the examples, as a separate commit in that repository. Do not edit old draft-history lines in the spec. Add a new draft line that records the change.
 
-This list is the cleanup step before more features. Its goal is a smaller design with the same functionality. It is a sibling of `2026-10-20-rederive-review.md`, not a replacement. That plan keeps its open items R7, R8, R11, R12, R13, R15, R16, R17, and R18. This list refers to them by number and does not restate them. Section 9 of that plan ("What not to touch") also applies here.
+This list is the cleanup step before more features. Its goal is a smaller design with the same functionality. It is a sibling of `2026-10-20-rederive-review.md`, not a replacement. That plan kept its open items R7, R8, R11, R12, R13, R15, R16, R17, and R18. On 2026-10-21, R7, R8, R11, R16, and R17 are done, and R12, R13, R15, and R18 keep open parts. This list refers to them by number and does not restate them. Section 9 of that plan ("What not to touch") also applies here.
 
 Four read-only scouts collected the evidence on 2026-10-20: language surface, docs, tests and tooling, and remaining code. "M" marks a measured count from grep, wc, or git. "I" marks an inference from reading code. An item with "needs measurement" has no measured delta.
 

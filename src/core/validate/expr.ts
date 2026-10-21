@@ -1,11 +1,11 @@
 // Bottom-up recomputation of the annotations of one declaration body. For each
-// node the checker recomputes the type, the failure set, the requirement set,
+// node the validator recomputes the type, the failure set, the requirement set,
 // and the execution mode from the children and from the identities in scope.
 // It then compares the result with the recorded annotation.
 //
-// After a disagreement the checker continues with the recomputed value, so one
+// After a disagreement the validator continues with the recomputed value, so one
 // bad node gives one diagnostic and its parents stay consistent. When a node
-// cannot be recomputed (an unknown identity), the checker continues with the
+// cannot be recomputed (an unknown identity), the validator continues with the
 // recorded annotation.
 //
 // The equations come from the spec, "Equations and validation".
