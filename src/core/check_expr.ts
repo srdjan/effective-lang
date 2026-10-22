@@ -237,6 +237,13 @@ type PreludeHandler<K extends PreludeCallName> = (
 /** One handler for each prelude name except `None`. A missing name is a compile error. */
 type PreludeHandlers = { readonly [K in PreludeCallName]: PreludeHandler<K> };
 
+/** Camel case to kebab case at the type level: `retrySchedule` gives `retry-schedule`. */
+type Kebab<S extends string> = S extends `${infer Head}${infer Tail}`
+  ? `${Head extends Lowercase<Head> ? Head : `-${Lowercase<Head>}`}${Kebab<
+    Tail
+  >}`
+  : S;
+
 /**
  * The facts of a prologue. `fact` is recorded before the argument count is
  * tested, so a call with a wrong count keeps it. `bailFact` is recorded only
@@ -244,9 +251,9 @@ type PreludeHandlers = { readonly [K in PreludeCallName]: PreludeHandler<K> };
  */
 interface PrologueFacts<K extends PreludeCallName> {
   readonly fact?:
-    | NodeFact
+    | NodeFact & { readonly kind: Kebab<K> }
     | ((checker: BodyChecker, name: K, args: readonly Arg[]) => NodeFact);
-  readonly bailFact?: NodeFact;
+  readonly bailFact?: NodeFact & { readonly kind: Kebab<K> };
 }
 
 /**
@@ -266,14 +273,30 @@ interface Prologue<K extends PreludeCallName> extends PrologueFacts<K> {
   readonly usage?: string;
 }
 
-/** A prologue row for each prelude name whose handler may assume a right count. */
-type PreludePrologues = { readonly [K in PreludeCallName]?: Prologue<K> };
+/**
+ * A prologue row for each prelude call name. The row `"own-arity"` marks a
+ * handler that tests its own argument count. A missing row is a compile error.
+ */
+type PreludePrologues = {
+  readonly [K in PreludeCallName]: Prologue<K> | "own-arity";
+};
+
+/** A prologue that many names share, so its `fact` is a function of the name and it has no `bailFact`. */
+type SharedPrologue<K extends PreludeCallName> =
+  & Omit<Prologue<K>, "fact" | "bailFact">
+  & {
+    readonly fact: (
+      checker: BodyChecker,
+      name: K,
+      args: readonly Arg[],
+    ) => NodeFact;
+  };
 
 /** A prologue that rejects a pipeline left side. */
 function direct<K extends PreludeCallName>(
   arity: number,
   bail: "pure" | "effect",
-  facts: PrologueFacts<K> = {},
+  facts: PrologueFacts<NoInfer<K>> = {},
 ): Prologue<K> {
   return { arity, bail, pipeline: "direct", ...facts };
 }
@@ -282,7 +305,7 @@ function direct<K extends PreludeCallName>(
 function piped<K extends PreludeCallName>(
   arity: number,
   bail: "pure" | "effect",
-  facts: PrologueFacts<K> = {},
+  facts: PrologueFacts<NoInfer<K>> = {},
 ): Prologue<K> {
   return { arity, bail, pipeline: "any", ...facts };
 }
@@ -979,8 +1002,9 @@ class BodyChecker
     args: readonly Arg[],
     expected: TypeRef | undefined,
   ): NodeInfo {
-    const prologue = BodyChecker.PRELUDE_PROLOGUES[name];
-    if (prologue !== undefined) {
+    const prologue: Prologue<K> | "own-arity" =
+      BodyChecker.PRELUDE_PROLOGUES[name];
+    if (prologue !== "own-arity") {
       const bailed = this.runPrologue(node, name, args, prologue);
       if (bailed !== undefined) return bailed;
     }
@@ -1155,7 +1179,7 @@ class BodyChecker
       collectionCall(c, node, name, args, expected),
   };
 
-  private static readonly schemaPrologue: Prologue<SchemaBuiltinName> = {
+  private static readonly schemaPrologue: SharedPrologue<SchemaBuiltinName> = {
     arity: (name, args) => {
       const builtin: SchemaBuiltin = SCHEMA_BUILTINS[name];
       return builtin.acceptsOptions === true && args.length === 3
@@ -1174,7 +1198,7 @@ class BodyChecker
   };
 
   /**
-   * The prologue of each prelude name that has one. A name without a row
+   * The prologue of each prelude call name. A name with the row `"own-arity"`
    * tests its own argument count. A name with an optional last argument uses
    * `optionalLast`, which also gives the message of a wrong count.
    */
@@ -1329,6 +1353,9 @@ class BodyChecker
     map: piped(2, "pure"),
     filter: piped(2, "pure"),
     fold: piped(3, "pure"),
+    fail: "own-arity",
+    Some: "own-arity",
+    unbrand: "own-arity",
   };
 
   /** Reports a wrong argument count for a prelude call. Returns true when the count is right. */
