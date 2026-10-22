@@ -16,6 +16,7 @@ import {
 } from "../src/core/lower.ts";
 import { serializeModule } from "../src/core/serialize.ts";
 import { memoryHost } from "../src/core/source.ts";
+import { validateModule } from "../src/core/validate/index.ts";
 import { diskHost, EXAMPLE_ENTRIES, FIXTURES } from "./helpers.ts";
 
 // ------------------------------------------------------------------ helpers
@@ -724,4 +725,88 @@ Deno.test("serialization rejects a number literal that is not finite", () => {
     assert(!result.ok);
     assertEquals(result.error.tag, "non-finite-number");
   }
+});
+
+Deno.test("stream builtin names retain callback-dependent lowering kinds", () => {
+  const cases = [
+    ["mapEffect", "(n) => n + 1", "", "map-stream"],
+    ["mapEffect", "(n) => Probe.next(n)", "", "map-effect"],
+    ["mapEffect", "(n) => n + 1", ", { concurrency: 1 }", "map-effect"],
+    ["filterEffectStream", "(n) => n < 3", "", "filter-stream"],
+    [
+      "filterEffectStream",
+      "(n) => Probe.accept(n)",
+      "",
+      "filter-effect-stream",
+    ],
+    ["takeWhileEffectStream", "(n) => n < 3", "", "take-while-stream"],
+    [
+      "takeWhileEffectStream",
+      "(n) => Probe.accept(n)",
+      "",
+      "take-while-effect-stream",
+    ],
+    ["takeUntilEffectStream", "(n) => n < 3", "", "take-until-stream"],
+    [
+      "takeUntilEffectStream",
+      "(n) => Probe.accept(n)",
+      "",
+      "take-until-effect-stream",
+    ],
+    ["dropWhileEffectStream", "(n) => n < 3", "", "drop-while-stream"],
+    [
+      "dropWhileEffectStream",
+      "(n) => Probe.accept(n)",
+      "",
+      "drop-while-effect-stream",
+    ],
+  ] as const;
+  for (const [name, callback, options, kind] of cases) {
+    const text = `type Int = int
+type Bool = boolean
+service Probe { next(n: Int): Int; accept(n: Int): Bool }
+const source = unfold(0, (n): Option<[Int, Int]> => None)
+const probe = () => ${name}(source, ${callback}${options})
+`;
+    const checked = checkText(text);
+    assertEquals(checked.diagnostics, [], name);
+    const targets = checked.analysis.resolutions.get("m")?.targets;
+    assert(targets !== undefined);
+    assert(
+      [...targets.values()].some((t) =>
+        t.kind === "builtin" && t.name === name
+      ),
+    );
+    const ir = lowered(checked, "m");
+    assertEquals(
+      functionBody(ir, "probe").kind,
+      kind,
+      `${name}: ${callback}${options}`,
+    );
+    assertEquals(validateModule(ir, new Map([["m.eff", text]])), []);
+  }
+});
+
+Deno.test("retry lowers counted and scheduled policies from the same resolved builtin", () => {
+  const text = `type Int = int
+error Stop = {}
+service Jobs { next(): Int fails Stop }
+const policy: RetrySchedule<Stop> = retrySchedule((e: Stop, attempt: Int): Option<Int> => None)
+const counted = () => retry(() => Jobs.next(), { times: 2 })
+const scheduled = () => retry(() => Jobs.next(), { schedule: policy })
+`;
+  const checked = checkText(text);
+  assertEquals(checked.diagnostics, []);
+  const targets = checked.analysis.resolutions.get("m")?.targets;
+  assert(targets !== undefined);
+  assertEquals(
+    [...targets.values()].filter((t) =>
+      t.kind === "builtin" && t.name === "retry"
+    ).length,
+    2,
+  );
+  const ir = lowered(checked, "m");
+  assertEquals(functionBody(ir, "counted").kind, "retry");
+  assertEquals(functionBody(ir, "scheduled").kind, "retry-with-schedule");
+  assertEquals(validateModule(ir, new Map([["m.eff", text]])), []);
 });

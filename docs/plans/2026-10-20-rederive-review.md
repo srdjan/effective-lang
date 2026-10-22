@@ -253,7 +253,7 @@ The 17 sites are of three kinds. The 3 emitter walker defaults are part of R3, w
 
 ### 3.6 Deferred: needs measurement before ranking
 
-- ARC-5 (44 payload-free check-to-lower facts). First confirm that each fact maps 1:1 from the resolved builtin name.
+- ARC-5 (payload-free check-to-lower facts). Assessed and declined as proposed: the name-only prerequisite fails. The current union has 90 kinds, 66 payload-free: 54 fixed builtin call tags, ten contextual builtin tags, ordinary `call`, and the `None` value tag. Six resolved names select different kinds from callback modes or options. Two regression tests pin 13 counterexamples through resolution, lowering and independent validation; all 231 focused tests pass. Checker, fact-table and lowering code stays unchanged. A selective rewrite of fixed tags has no measured benefit and is not accepted work. See [the inventory and counterexamples](rederive-review-evidence/arc-5-builtin-facts.md).
 - ARC-6 (13 `unsupported` throws, 12 never run). P0-9 classifies each site first. Then each site becomes `internal`, or a diagnostic with a fixture.
 - VAL-8 (the builtin name is a string parsed twice in the validator). Deferred: medium risk, and 61 of 176 lines of checkBuiltinShape are uncovered. A rewrite must keep the current malformed-payload behavior: buildWorld records every prelude value as a builtin, even when its id fails BUILTIN_ID.
 
