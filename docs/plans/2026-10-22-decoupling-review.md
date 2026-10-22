@@ -304,3 +304,12 @@ No message, code, span, or order changes. Keep the order: the SCC runs first, th
 ### Review and handoff
 
 The implementer commits each unit after `deno task check`, and does not push. The coordinator reviews each commit diff line by line, runs `deno task check` and each capture, and records the result in this section. A failed unit goes back to the implementer with exact findings.
+
+### Phase 1 results (2026-10-22)
+
+The five units are on local `main`: IC5 `7b49fc0`, ED6 `47c6e05`, CK8 `32da06a`, CK1a `b7a405c`, and ED2 step 1 `16efd9d`. The implementer ran `deno task check` before each commit; the last gate passed 1837 fast and 177 slow tests. The coordinator reviewed each diff line by line. CK1a also took the optional `Kebab` restriction, so a static `fact` or `bailFact` with a wrong kind is now a compile error. The shared Schema prologue has its own type, `SharedPrologue`, because about 18 names share one row with a function fact.
+
+Captures used temporary commits with the documented write overlay for `tests/parse_chain_slow_test.ts` on both sides, and one test set on both sides:
+
+- IC5, ED6, CK8, and CK1a: source of `924f9aa` against source of `b7a405c`, both with the `924f9aa` tests. Each side had 9082 records, with 0 new and 0 missing.
+- ED2 step 1: source of `b7a405c` against source of `16efd9d`, both with the `b7a405c` tests. Single-revision captures gave 679 `program` records on each side. Exactly 11 records differ, all `program`, and they pair one to one by diagnostic hash. So only the input hashes of the speculative rename and action programs changed, as planned. A first two-revision run also lost 4 `program` records that both single runs contain; that loss is run variance, probably from a timing-dependent slow test (not confirmed).
