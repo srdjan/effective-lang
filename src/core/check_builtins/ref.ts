@@ -4,6 +4,7 @@
 import type { NodeId } from "../syntax.ts";
 import { combine, EFFECT_ONLY, type NodeInfo } from "../tables.ts";
 import type { Arg, BuiltinContext } from "./context.ts";
+import { direct, type PreludeCallName, type Rows } from "./rows.ts";
 
 export function refCall(
   c: BuiltinContext,
@@ -48,3 +49,23 @@ export function refCall(
     combine([first, transform.info, EFFECT_ONLY]),
   );
 }
+
+/** The rows of the Ref builtins. */
+export const REF_ROWS = {
+  makeRef: {
+    prologue: direct(1, "effect", { fact: { kind: "make-ref" } }),
+    handle: (c, node, name, args) => refCall(c, node, name, args),
+  },
+  getRef: {
+    prologue: direct(1, "effect", { fact: { kind: "get-ref" } }),
+    handle: (c, node, name, args) => refCall(c, node, name, args),
+  },
+  setRef: {
+    prologue: direct(2, "effect", { fact: { kind: "set-ref" } }),
+    handle: (c, node, name, args) => refCall(c, node, name, args),
+  },
+  updateRef: {
+    prologue: direct(2, "effect", { fact: { kind: "update-ref" } }),
+    handle: (c, node, name, args) => refCall(c, node, name, args),
+  },
+} satisfies Partial<Rows<PreludeCallName, BuiltinContext>>;

@@ -15,6 +15,7 @@ import { dataOnly, type TypeNode, type TypeRef } from "../types.ts";
 import type {
   Arg,
   BuiltinContext,
+  ConcurrencyOperation,
   FactView,
   FactWriter,
   LiteralField,
@@ -22,6 +23,12 @@ import type {
   ResolveView,
   SyntaxView,
 } from "./context.ts";
+import {
+  direct,
+  optionalLast,
+  type PreludeCallName,
+  type Rows,
+} from "./rows.ts";
 export interface StreamContext
   extends
     BuiltinContext,
@@ -36,7 +43,7 @@ export interface StreamContext
   ): Result<ReadonlyMap<string, LiteralField>, "shape">;
   concurrencyBound(
     arg: Arg,
-    name: "mapEffect" | "flatMapStreams",
+    name: Extract<ConcurrencyOperation, "mapEffect" | "flatMapStreams">,
   ): number | "unbounded" | undefined;
   noPipeline(name: string, args: readonly Arg[]): void;
 }
@@ -1176,3 +1183,183 @@ function streamBufferCapacity(
   );
   return value;
 }
+
+/** The rows of the Stream and Sink builtins. */
+export const STREAM_ROWS = {
+  unfold: {
+    prologue: direct(2, "pure", { fact: { kind: "unfold" } }),
+    handle: (c, node, _name, args) => unfoldCall(c, node, args),
+  },
+  mapEffect: {
+    prologue: optionalLast(
+      2,
+      "`mapEffect` takes a Stream, a callback, and an optional concurrency record",
+    ),
+    handle: (c, node, _name, args) => mapEffectCall(c, node, args),
+  },
+  mapGroups: {
+    prologue: direct(4, "pure", {
+      fact: { kind: "map-groups", bufferSize: undefined },
+    }),
+    handle: (c, node, _name, args) => mapGroupsCall(c, node, args),
+  },
+  scanStream: {
+    prologue: direct(3, "pure", { fact: { kind: "scan-stream" } }),
+    handle: (c, node, _name, args) => scanStreamCall(c, node, args),
+  },
+  mapAccumStream: {
+    prologue: direct(3, "pure", { fact: { kind: "map-accum-stream" } }),
+    handle: (c, node, _name, args) => mapAccumStreamCall(c, node, args),
+  },
+  foldStream: {
+    prologue: direct(3, "effect", { fact: { kind: "fold-stream" } }),
+    handle: (c, node, _name, args) => foldStreamCall(c, node, args),
+  },
+  foldEffectStream: {
+    prologue: direct(3, "effect", { fact: { kind: "fold-effect-stream" } }),
+    handle: (c, node, _name, args) => foldEffectStreamCall(c, node, args),
+  },
+  collectStream: {
+    prologue: direct(1, "effect", { fact: { kind: "collect-stream" } }),
+    handle: (c, node, name, args) =>
+      terminalStreamCall(c, node, name, args, (e) => c.table.array(e)),
+  },
+  headStream: {
+    prologue: direct(1, "effect", { fact: { kind: "head-stream" } }),
+    handle: (c, node, name, args) =>
+      terminalStreamCall(c, node, name, args, (e) => c.table.option(e)),
+  },
+  lastStream: {
+    prologue: direct(1, "effect", { fact: { kind: "last-stream" } }),
+    handle: (c, node, name, args) =>
+      terminalStreamCall(c, node, name, args, (e) => c.table.option(e)),
+  },
+  drainStream: {
+    prologue: direct(1, "effect", { fact: { kind: "drain-stream" } }),
+    handle: (c, node, name, args) =>
+      terminalStreamCall(c, node, name, args, () => c.table.unit),
+  },
+  flatMapStreams: {
+    prologue: optionalLast(
+      2,
+      "`flatMapStreams` takes a Stream, a callback, and an optional concurrency record",
+    ),
+    handle: (c, node, _name, args) => flatMapStreamsCall(c, node, args),
+  },
+  switchMapStreams: {
+    prologue: direct(2, "pure"),
+    handle: (c, node, _name, args) => switchMapStreamsCall(c, node, args),
+  },
+  catchStream: {
+    prologue: direct(2, "pure"),
+    handle: (c, node, _name, args) => catchStreamCall(c, node, args),
+  },
+  retryStream: {
+    prologue: direct(2, "pure"),
+    handle: (c, node, _name, args) => retryStreamCall(c, node, args),
+  },
+  debounceStream: {
+    prologue: direct(2, "pure", {
+      bailFact: { kind: "debounce-stream", delayMs: undefined },
+    }),
+    handle: (c, node, _name, args) => debounceStreamCall(c, node, args),
+  },
+  throttleStream: {
+    prologue: direct(2, "pure", {
+      bailFact: {
+        kind: "throttle-stream",
+        units: undefined,
+        durationMs: undefined,
+        strategy: undefined,
+      },
+    }),
+    handle: (c, node, _name, args) => throttleStreamCall(c, node, args),
+  },
+  takeStream: {
+    prologue: direct(2, "pure", { fact: { kind: "take-stream" } }),
+    handle: (c, node, name, args) =>
+      countStreamCall(c, node, name, args, "take"),
+  },
+  dropStream: {
+    prologue: direct(2, "pure", { fact: { kind: "drop-stream" } }),
+    handle: (c, node, name, args) =>
+      countStreamCall(c, node, name, args, "drop"),
+  },
+  filterEffectStream: {
+    prologue: direct(2, "pure", {
+      bailFact: { kind: STREAM_PREDICATE_FACTS.filterEffectStream.effect },
+    }),
+    handle: (c, node, name, args) =>
+      effectStreamPredicateCall(c, node, args, name),
+  },
+  takeWhileEffectStream: {
+    prologue: direct(2, "pure", {
+      bailFact: { kind: STREAM_PREDICATE_FACTS.takeWhileEffectStream.effect },
+    }),
+    handle: (c, node, name, args) =>
+      effectStreamPredicateCall(c, node, args, name),
+  },
+  takeUntilEffectStream: {
+    prologue: direct(2, "pure", {
+      bailFact: { kind: STREAM_PREDICATE_FACTS.takeUntilEffectStream.effect },
+    }),
+    handle: (c, node, name, args) =>
+      effectStreamPredicateCall(c, node, args, name),
+  },
+  dropWhileEffectStream: {
+    prologue: direct(2, "pure", {
+      bailFact: { kind: STREAM_PREDICATE_FACTS.dropWhileEffectStream.effect },
+    }),
+    handle: (c, node, name, args) =>
+      effectStreamPredicateCall(c, node, args, name),
+  },
+  sinkForEach: {
+    prologue: direct(1, "pure", { fact: { kind: "sink-for-each" } }),
+    handle: (c, node, _name, args) => sinkForEachCall(c, node, args),
+  },
+  takeSink: {
+    prologue: direct(1, "pure", {
+      fact: { kind: "take-sink", count: undefined },
+    }),
+    handle: (c, node, _name, args, expected) =>
+      takeSinkCall(c, node, args, expected),
+  },
+  transduceStream: {
+    prologue: direct(2, "pure", { fact: { kind: "transduce-stream" } }),
+    handle: (c, node, name, args) =>
+      sinkTransformStreamCall(c, node, args, name),
+  },
+  aggregateStream: {
+    prologue: direct(2, "pure", { fact: { kind: "aggregate-stream" } }),
+    handle: (c, node, name, args) =>
+      sinkTransformStreamCall(c, node, args, name),
+  },
+  aggregateWithinStream: {
+    prologue: direct(3, "pure", {
+      fact: { kind: "aggregate-within-stream" },
+    }),
+    handle: (c, node, _name, args) => aggregateWithinStreamCall(c, node, args),
+  },
+  runStream: {
+    prologue: direct(2, "effect", { fact: { kind: "run-stream" } }),
+    handle: (c, node, _name, args) => runStreamCall(c, node, args),
+  },
+  bufferStream: {
+    prologue: direct(2, "pure", {
+      bailFact: { kind: "buffer-stream", capacity: undefined },
+    }),
+    handle: (c, node, _name, args) => bufferStreamCall(c, node, args),
+  },
+  mergeStreams: {
+    prologue: direct(2, "pure", { fact: { kind: "merge-streams" } }),
+    handle: (c, node, name, args) => streamPairCall(c, node, name, args),
+  },
+  zipStreams: {
+    prologue: direct(2, "pure", { fact: { kind: "zip-streams" } }),
+    handle: (c, node, name, args) => streamPairCall(c, node, name, args),
+  },
+  concatStreams: {
+    prologue: direct(2, "pure", { fact: { kind: "concat-streams" } }),
+    handle: (c, node, name, args) => streamPairCall(c, node, name, args),
+  },
+} satisfies Partial<Rows<PreludeCallName, StreamContext>>;

@@ -3,7 +3,18 @@ import type { NodeId } from "../syntax.ts";
 import { isErrorId } from "../ids.ts";
 import { combine, type NodeInfo } from "../tables.ts";
 import type { TypeRef } from "../types.ts";
-import type { Arg, BuiltinContext, FactWriter } from "./context.ts";
+import type {
+  Arg,
+  BuiltinContext,
+  ConcurrencyOperation,
+  FactWriter,
+} from "./context.ts";
+import {
+  optionalLast,
+  piped,
+  type PreludeCallName,
+  type Rows,
+} from "./rows.ts";
 
 export interface CollectionContext extends
   Pick<
@@ -22,12 +33,10 @@ export interface CollectionContext extends
   noPipeline(name: string, args: readonly Arg[]): void;
   concurrencyBound(
     arg: Arg,
-    operation?:
-      | "traverse"
-      | "all"
-      | "partitionAll"
-      | "validateAll"
-      | "allResults",
+    operation?: Extract<
+      ConcurrencyOperation,
+      "traverse" | "all" | "partitionAll" | "validateAll" | "allResults"
+    >,
   ): number | "unbounded" | undefined;
 }
 
@@ -453,3 +462,58 @@ function pureFunction(
     requirements: [],
   });
 }
+
+/** The rows of the collection builtins. */
+export const COLLECTION_ROWS = {
+  all: {
+    prologue: optionalLast(
+      1,
+      "`all` takes an Effect collection and an optional concurrency record",
+    ),
+    handle: (c, node, _name, args) => allCall(c, node, args),
+  },
+  partitionAll: {
+    prologue: optionalLast(
+      1,
+      "`partitionAll` takes an Effect array and an optional concurrency record",
+    ),
+    handle: (c, node, _name, args) => partitionAllCall(c, node, args),
+  },
+  validateAll: {
+    prologue: optionalLast(
+      2,
+      "`validateAll` takes an Effect array, an error wrapper, and an optional concurrency record",
+    ),
+    handle: (c, node, _name, args) => validateAllCall(c, node, args),
+  },
+  allResults: {
+    prologue: optionalLast(
+      1,
+      "`allResults` takes an Effect collection and an optional concurrency record",
+    ),
+    handle: (c, node, _name, args) => allResultsCall(c, node, args),
+  },
+  traverse: {
+    prologue: optionalLast(
+      2,
+      "`traverse` takes two arguments and an optional concurrency record",
+    ),
+    handle: (c, node, name, args, expected) =>
+      collectionCall(c, node, name, args, expected),
+  },
+  map: {
+    prologue: piped(2, "pure"),
+    handle: (c, node, name, args, expected) =>
+      collectionCall(c, node, name, args, expected),
+  },
+  filter: {
+    prologue: piped(2, "pure"),
+    handle: (c, node, name, args, expected) =>
+      collectionCall(c, node, name, args, expected),
+  },
+  fold: {
+    prologue: piped(3, "pure"),
+    handle: (c, node, name, args, expected) =>
+      collectionCall(c, node, name, args, expected),
+  },
+} satisfies Partial<Rows<PreludeCallName, CollectionContext>>;

@@ -5,6 +5,7 @@ import type { NodeId } from "../syntax.ts";
 import { combine, type NodeInfo } from "../tables.ts";
 import { dataOnly } from "../types.ts";
 import type { Arg, BuiltinContext } from "./context.ts";
+import { direct, type PreludeCallName, type Rows } from "./rows.ts";
 
 export function codecCall(
   c: BuiltinContext,
@@ -92,3 +93,19 @@ export function codecOperation(
     : c.table.error;
   return c.finish(node, result, combine([codec, input]));
 }
+
+/** The rows of the codec builtins. */
+export const CODEC_ROWS = {
+  codec: {
+    prologue: direct(2, "pure", { fact: { kind: "codec" } }),
+    handle: (c, node, _name, args) => codecCall(c, node, args),
+  },
+  decode: {
+    prologue: direct(2, "pure", { fact: { kind: "decode" } }),
+    handle: (c, node, name, args) => codecOperation(c, node, name, args),
+  },
+  encode: {
+    prologue: direct(2, "pure", { fact: { kind: "encode" } }),
+    handle: (c, node, name, args) => codecOperation(c, node, name, args),
+  },
+} satisfies Partial<Rows<PreludeCallName, BuiltinContext>>;

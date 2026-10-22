@@ -20,6 +20,7 @@ import {
   type LiteralField,
   type SyntaxView,
 } from "./context.ts";
+import { direct, piped, type PreludeCallName, type Rows } from "./rows.ts";
 export interface EffectContext extends
   Pick<
     BuiltinContext,
@@ -325,3 +326,34 @@ function retryScheduleOption(c: EffectContext, arg: Arg): boolean {
   );
   return name !== undefined && nameTextOf(c.tree, name) === "schedule";
 }
+
+/** The rows of the Effect builtins. */
+export const EFFECT_ROWS = {
+  fail: {
+    prologue: "own-arity",
+    handle: (c, node, _name, args) => failCall(c, node, args),
+  },
+  retry: {
+    prologue: piped(2, "effect", {
+      bailFact: { kind: "retry", times: undefined },
+    }),
+    handle: (c, node, _name, args) => retryCall(c, node, args),
+  },
+  retrySchedule: {
+    prologue: piped(1, "pure", { fact: { kind: "retry-schedule" } }),
+    handle: (c, node, _name, args, expected) =>
+      retryScheduleCall(c, node, args, expected),
+  },
+  defer: {
+    prologue: piped(1, "pure", { fact: { kind: "defer" } }),
+    handle: (c, node, _name, args) => deferCall(c, node, args),
+  },
+  run: {
+    prologue: piped(1, "effect", { fact: { kind: "run" } }),
+    handle: (c, node, _name, args) => runCall(c, node, args),
+  },
+  race: {
+    prologue: direct(2, "pure", { fact: { kind: "race" } }),
+    handle: (c, node, _name, args) => raceCall(c, node, args),
+  },
+} satisfies Partial<Rows<PreludeCallName, EffectContext>>;

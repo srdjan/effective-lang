@@ -21,6 +21,16 @@ export interface Arg {
   readonly pre?: NodeInfo;
 }
 
+/** The builtins that take a concurrency option record. */
+export type ConcurrencyOperation =
+  | "traverse"
+  | "all"
+  | "partitionAll"
+  | "validateAll"
+  | "allResults"
+  | "mapEffect"
+  | "flatMapStreams";
+
 /** Shared operations needed by the extracted builtin families. */
 export interface BuiltinContext {
   readonly table: TypeTable;

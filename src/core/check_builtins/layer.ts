@@ -19,6 +19,7 @@ import type {
   ResolveView,
   SyntaxView,
 } from "./context.ts";
+import { direct, piped, type PreludeCallName, type Rows } from "./rows.ts";
 export interface LayerContext extends
   Pick<
     BuiltinContext,
@@ -190,3 +191,23 @@ export function mergeLayersCall(
   });
   return c.finish(node, type, combine([left, right]));
 }
+
+/** The rows of the Layer builtins. */
+export const LAYER_ROWS = {
+  provide: {
+    prologue: piped(2, "effect", {
+      bailFact: { kind: "provide", provider: undefined },
+    }),
+    handle: (c, node, _name, args) => provideCall(c, node, args),
+  },
+  layer: {
+    prologue: direct(2, "pure", {
+      bailFact: { kind: "layer", service: undefined },
+    }),
+    handle: (c, node, _name, args) => layerCall(c, node, args),
+  },
+  mergeLayers: {
+    prologue: direct(2, "pure", { fact: { kind: "merge-layers" } }),
+    handle: (c, node, _name, args) => mergeLayersCall(c, node, args),
+  },
+} satisfies Partial<Rows<PreludeCallName, LayerContext>>;

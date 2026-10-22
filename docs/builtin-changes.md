@@ -22,16 +22,16 @@ confirm the resolver identity and specialization that lowering needs.
 | Stage | Inspect | Preserve or verify |
 | --- | --- | --- |
 | Recognition | `src/core/resolve.ts`: `PRELUDE`, derived prelude sets and shadowing flag. Type syntax also involves `TYPE_WORDS` in `syntax.ts`, builtin type names in `resolve.ts` and `TypeLowerer` in `check.ts`. | Legal names, local shadowing and existing grammar. Ordinary builtin calls need no parser change. |
-| Source checking | `src/core/check_expr.ts`: `PRELUDE_PROLOGUES`, `PRELUDE_HANDLERS` and the family handler. Family handlers live in `src/core/check_builtins/`: Schedule, Codec, Ref, collections, Effect, Layer, Fiber, Scope, Stream/Sink and Schema. `context.ts` owns shared shapes and ten operations; family contexts select the operations and read views they need. `schema.ts` owns `SCHEMA_BUILTINS` and the exhaustive `SCHEMA_HANDLERS` table. Shared dispatch and body-table writes remain in the body checker. | Arity and pipeline rejection order, expected types, sorted effects, callback invocation and lifetime rules. New table keys must remain exhaustive. |
+| Source checking | `src/core/check_builtins/`: the family file that owns the builtin (Schedule, Codec, Ref, collections, Effect, Layer, Fiber, Scope, Stream/Sink, Schema). Add one row to the `*_ROWS` constant of that file. A row holds the `prologue` and the `handle` arrow. `rows.ts` defines the row shapes and the `direct`, `piped` and `optionalLast` helpers. `registry.ts` composes the family rows, so a new builtin in an existing family does not change `check_expr.ts`. `schema.ts` owns `SCHEMA_BUILTINS` and the exhaustive `SCHEMA_HANDLERS` table. `context.ts` owns the shared shapes and the operations that family contexts select. | Arity and pipeline rejection order, expected types, sorted effects, callback invocation and lifetime rules. Each name in `PRELUDE` needs exactly one row, and `tests/builtin_rows_test.ts` checks it. A builtin that calls a private `BodyChecker` member goes in `CORE_ROWS` in `check_expr.ts` and in `CoreRowName` in `registry.ts`. |
 | Checking facts | `src/core/tables.ts`: `NodeInfo`, `NodeFact` and callback/pattern facts. | The checked type, mode and sets, plus the facts lowering cannot recover from syntax alone. |
 | Lowering | `src/core/lower.ts`: fact dispatch, structural builders and builtin specialization. | Operands, deferred callbacks, specialization identity, source spans and pipeline effects after moving the left value. |
 | Independent validation | `src/core/validate/expr.ts`, `world.ts` and `typing.ts`. | Independently recompute types, effects and modes. Reject forged payloads with the existing diagnostic code, path and message. Never import checker policy or handler code. |
 | Emission | `src/core/emit/shape.ts`, `calls.ts`, `expr.ts`, `types.ts` and `scope.ts`, as applicable. | Evaluated and deferred children, free variables, source maps, helper-name collisions, target imports and strict TypeScript types. |
 | User-facing queries and docs | `docs/language-rules.md`, `docs/api.md`, editor queries and the sibling website/spec when source forms or status change. | Contracts and completion/classification derived from the current prelude and checked types. Update the owning reference rather than adding another feature list. |
 
-For example, `getRef` is recognized in `resolve.ts`; its prologue records a
-`get-ref` fact and effect mode, and its handler in `check_builtins/ref.ts`
-checks the Ref element type.
+For example, `getRef` is recognized in `resolve.ts`; its row in `REF_ROWS`
+(`check_builtins/ref.ts`) holds a prologue that records a `get-ref` fact and
+effect mode, and a handler that checks the Ref element type.
 `tables.ts` declares that fact. `lower.ts` builds its operand, the independent
 validator recomputes the element and effects, `emit/shape.ts` records its child,
 and `emit/calls.ts` selects `Ref.get`. Arity and wrong-input regressions live in

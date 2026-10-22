@@ -6,6 +6,7 @@ import type { NodeId } from "../syntax.ts";
 import { combine, type NodeInfo } from "../tables.ts";
 import type { TypeRef } from "../types.ts";
 import type { Arg, BuiltinContext } from "./context.ts";
+import { direct, type PreludeCallName, type Rows } from "./rows.ts";
 
 export function simpleScheduleCall(
   c: BuiltinContext,
@@ -189,3 +190,36 @@ export function scheduleComposeCall(
     combine([left, right]),
   );
 }
+
+/** The rows of the Schedule builtins. */
+export const SCHEDULE_ROWS = {
+  scheduleFromStep: {
+    prologue: direct(2, "pure", { fact: { kind: "schedule-from-step" } }),
+    handle: (c, node, _name, args) => scheduleFromStepCall(c, node, args),
+  },
+  scheduleRecurs: {
+    prologue: direct(1, "pure", { fact: { kind: "schedule-recurs" } }),
+    handle: (c, node, name, args) => simpleScheduleCall(c, node, args, name),
+  },
+  scheduleSpaced: {
+    prologue: direct(1, "pure", { fact: { kind: "schedule-spaced" } }),
+    handle: (c, node, name, args) => simpleScheduleCall(c, node, args, name),
+  },
+  scheduleMap: {
+    prologue: direct(2, "pure", { fact: { kind: "schedule-map" } }),
+    handle: (c, node, _name, args, expected) =>
+      scheduleMapCall(c, node, args, expected),
+  },
+  scheduleMax: {
+    prologue: direct(2, "pure", { fact: { kind: "schedule-max" } }),
+    handle: (c, node, name, args) => scheduleComposeCall(c, node, args, name),
+  },
+  scheduleMin: {
+    prologue: direct(2, "pure", { fact: { kind: "schedule-min" } }),
+    handle: (c, node, name, args) => scheduleComposeCall(c, node, args, name),
+  },
+  scheduleConcat: {
+    prologue: direct(2, "pure", { fact: { kind: "schedule-concat" } }),
+    handle: (c, node, name, args) => scheduleComposeCall(c, node, args, name),
+  },
+} satisfies Partial<Rows<PreludeCallName, BuiltinContext>>;

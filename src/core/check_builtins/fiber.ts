@@ -17,6 +17,7 @@ import {
   type ResolveView,
   type SyntaxView,
 } from "./context.ts";
+import { direct, piped, type PreludeCallName, type Rows } from "./rows.ts";
 
 export interface FiberContext extends
   Pick<
@@ -154,3 +155,20 @@ function scopedFiberUses(c: FiberContext, body: NodeId, id: LocalId): void {
     }
   }
 }
+
+/** The rows of the Fiber builtins. */
+export const FIBER_ROWS = {
+  withFiber: {
+    prologue: direct(2, "effect", { fact: { kind: "with-fiber" } }),
+    handle: (c, node, _name, args, expected) =>
+      withFiberCall(c, node, args, expected),
+  },
+  joinFiber: {
+    prologue: piped(1, "effect", { fact: { kind: "join-fiber" } }),
+    handle: (c, node, name, args) => fiberOperation(c, node, name, args),
+  },
+  interruptFiber: {
+    prologue: piped(1, "effect", { fact: { kind: "interrupt-fiber" } }),
+    handle: (c, node, name, args) => fiberOperation(c, node, name, args),
+  },
+} satisfies Partial<Rows<PreludeCallName, FiberContext>>;

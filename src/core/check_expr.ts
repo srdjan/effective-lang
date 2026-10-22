@@ -13,69 +13,6 @@
 // no diagnostic. Diagnostics go to `sink`; the driver decides when to publish.
 
 import {
-  defaultKeyOp,
-  SCHEMA_BUILTINS,
-  type SchemaBuiltin,
-  type SchemaBuiltinName,
-  schemaCall,
-  type SchemaContext,
-} from "./check_builtins/schema.ts";
-import {
-  aggregateWithinStreamCall,
-  bufferStreamCall,
-  catchStreamCall,
-  countStreamCall,
-  debounceStreamCall,
-  effectStreamPredicateCall,
-  flatMapStreamsCall,
-  foldEffectStreamCall,
-  foldStreamCall,
-  mapAccumStreamCall,
-  mapEffectCall,
-  mapGroupsCall,
-  retryStreamCall,
-  runStreamCall,
-  scanStreamCall,
-  sinkForEachCall,
-  sinkTransformStreamCall,
-  STREAM_PREDICATE_FACTS,
-  type StreamContext,
-  streamPairCall,
-  switchMapStreamsCall,
-  takeSinkCall,
-  terminalStreamCall,
-  throttleStreamCall,
-  unfoldCall,
-} from "./check_builtins/stream.ts";
-import {
-  type FiberContext,
-  fiberOperation,
-  withFiberCall,
-} from "./check_builtins/fiber.ts";
-import {
-  checkBorrowedParameter,
-  forkScopedCall,
-  scopeCall,
-  type ScopeContext,
-  scopedCall,
-  withResourceCall,
-} from "./check_builtins/scope.ts";
-import {
-  deferCall,
-  type EffectContext,
-  failCall,
-  raceCall,
-  retryCall,
-  retryScheduleCall,
-  runCall,
-} from "./check_builtins/effect.ts";
-import {
-  layerCall,
-  type LayerContext,
-  mergeLayersCall,
-  provideCall,
-} from "./check_builtins/layer.ts";
-import {
   type Diagnostic,
   type DiagnosticCode,
   makeDiagnostic,
@@ -143,27 +80,29 @@ import { isErrorId, isTypeId, shortName } from "./ids.ts";
 import {
   type Arg,
   type BuiltinContext,
+  type ConcurrencyOperation,
   type FunctionNode,
   invocationOf,
   type LiteralField,
   type LocalUse,
 } from "./check_builtins/context.ts";
+import type { CollectionContext } from "./check_builtins/collections.ts";
+import type { EffectContext } from "./check_builtins/effect.ts";
+import type { FiberContext } from "./check_builtins/fiber.ts";
+import type { LayerContext } from "./check_builtins/layer.ts";
+import { type CoreRowName, FAMILY_ROWS } from "./check_builtins/registry.ts";
+import type {
+  BuiltinRow,
+  PreludeCallName,
+  Prologue,
+  Rows,
+} from "./check_builtins/rows.ts";
+import type { SchemaContext } from "./check_builtins/schema.ts";
 import {
-  allCall,
-  allResultsCall,
-  collectionCall,
-  type CollectionContext,
-  partitionAllCall,
-  validateAllCall,
-} from "./check_builtins/collections.ts";
-import { codecCall, codecOperation } from "./check_builtins/codec.ts";
-import { refCall } from "./check_builtins/ref.ts";
-import {
-  scheduleComposeCall,
-  scheduleFromStepCall,
-  scheduleMapCall,
-  simpleScheduleCall,
-} from "./check_builtins/schedule.ts";
+  checkBorrowedParameter,
+  type ScopeContext,
+} from "./check_builtins/scope.ts";
+import type { StreamContext } from "./check_builtins/stream.ts";
 
 // ------------------------------------------------------------------ environment
 
@@ -226,107 +165,6 @@ interface MatchState {
   readonly covered: Set<string>;
   /** The discriminator field of a tagged match, once an arm names it. */
   tagField: string | undefined;
-}
-
-/** The prelude names that have a handler. `None` is a value, so it has none. */
-type PreludeCallName = Exclude<PreludeName, "None">;
-
-type PreludeHandler<K extends PreludeCallName> = (
-  checker: BodyChecker,
-  node: NodeId,
-  name: K,
-  args: readonly Arg[],
-  expected: TypeRef | undefined,
-) => NodeInfo;
-
-/** One handler for each prelude name except `None`. A missing name is a compile error. */
-type PreludeHandlers = { readonly [K in PreludeCallName]: PreludeHandler<K> };
-
-/** Camel case to kebab case at the type level: `retrySchedule` gives `retry-schedule`. */
-type Kebab<S extends string> = S extends `${infer Head}${infer Tail}`
-  ? `${Head extends Lowercase<Head> ? Head : `-${Lowercase<Head>}`}${Kebab<
-    Tail
-  >}`
-  : S;
-
-/**
- * The facts of a prologue. `fact` is recorded before the argument count is
- * tested, so a call with a wrong count keeps it. `bailFact` is recorded only
- * after a wrong count, for a handler that records another fact after its checks.
- */
-interface PrologueFacts<K extends PreludeCallName> {
-  readonly fact?:
-    | NodeFact & { readonly kind: Kebab<K> }
-    | ((checker: BodyChecker, name: K, args: readonly Arg[]) => NodeFact);
-  readonly bailFact?: NodeFact & { readonly kind: Kebab<K> };
-}
-
-/**
- * What a prelude call needs before its handler runs. The dispatcher runs these
- * steps in order: record `fact`, test the argument count, and on a wrong count
- * record `bailFact` and give the error type. A right count is followed by the
- * `pipeline` rule. The handler then runs and may assume the right count.
- * - `bail` "pure": a wrong count gives the effects of the arguments only.
- *   "effect": a wrong count adds `EFFECT_ONLY` to them.
- * - `pipeline` "direct": a pipeline left side is rejected. "any": it is allowed.
- */
-interface Prologue<K extends PreludeCallName> extends PrologueFacts<K> {
-  readonly arity: number | ((name: K, args: readonly Arg[]) => number);
-  readonly bail: "pure" | "effect";
-  readonly pipeline: "direct" | "any";
-  /** The message of a wrong count, instead of the counted form. */
-  readonly usage?: string;
-}
-
-/**
- * A prologue row for each prelude call name. The row `"own-arity"` marks a
- * handler that tests its own argument count. A missing row is a compile error.
- */
-type PreludePrologues = {
-  readonly [K in PreludeCallName]: Prologue<K> | "own-arity";
-};
-
-/** A prologue that many names share, so its `fact` is a function of the name and it has no `bailFact`. */
-type SharedPrologue<K extends PreludeCallName> =
-  & Omit<Prologue<K>, "fact" | "bailFact">
-  & {
-    readonly fact: (
-      checker: BodyChecker,
-      name: K,
-      args: readonly Arg[],
-    ) => NodeFact;
-  };
-
-/** A prologue that rejects a pipeline left side. */
-function direct<K extends PreludeCallName>(
-  arity: number,
-  bail: "pure" | "effect",
-  facts: PrologueFacts<NoInfer<K>> = {},
-): Prologue<K> {
-  return { arity, bail, pipeline: "direct", ...facts };
-}
-
-/** A prologue that allows a pipeline left side. */
-function piped<K extends PreludeCallName>(
-  arity: number,
-  bail: "pure" | "effect",
-  facts: PrologueFacts<NoInfer<K>> = {},
-): Prologue<K> {
-  return { arity, bail, pipeline: "any", ...facts };
-}
-
-/** A prologue for a call that takes `required` arguments and one optional last argument. */
-function optionalLast<K extends PreludeCallName>(
-  required: number,
-  usage: string,
-): Prologue<K> {
-  return {
-    arity: (_name, args) =>
-      args.length === required + 1 ? required + 1 : required,
-    bail: "pure",
-    pipeline: "any",
-    usage,
-  };
 }
 
 // ------------------------------------------------------------------ the checker
@@ -999,14 +837,12 @@ class BodyChecker
     args: readonly Arg[],
     expected: TypeRef | undefined,
   ): NodeInfo {
-    const prologue: Prologue<K> | "own-arity" =
-      BodyChecker.PRELUDE_PROLOGUES[name];
-    if (prologue !== "own-arity") {
-      const bailed = this.runPrologue(node, name, args, prologue);
+    const row: BuiltinRow<K, BodyChecker> = BodyChecker.PRELUDE_ROWS[name];
+    if (row.prologue !== "own-arity") {
+      const bailed = this.runPrologue(node, name, args, row.prologue);
       if (bailed !== undefined) return bailed;
     }
-    const handler: PreludeHandler<K> = BodyChecker.PRELUDE_HANDLERS[name];
-    return handler(this, node, name, args, expected);
+    return row.handle(this, node, name, args, expected);
   }
 
   /** Runs a prologue. Returns the result of a wrong argument count, or undefined. */
@@ -1014,7 +850,7 @@ class BodyChecker
     node: NodeId,
     name: K,
     args: readonly Arg[],
-    prologue: Prologue<K>,
+    prologue: Prologue<K, BodyChecker>,
   ): NodeInfo | undefined {
     const { fact, bailFact } = prologue;
     if (fact !== undefined) {
@@ -1039,320 +875,28 @@ class BodyChecker
     return undefined;
   }
 
-  private static readonly schemaBuiltin: PreludeHandler<SchemaBuiltinName> = (
-    c,
-    node,
-    name,
-    args,
-    expected,
-  ) => schemaCall(c, node, name, args, expected);
-
-  private static readonly PRELUDE_HANDLERS: PreludeHandlers = {
-    fail: (c, node, _name, args) => failCall(c, node, args),
-    retry: (c, node, _name, args) => retryCall(c, node, args),
-    retrySchedule: (c, node, _name, args, expected) =>
-      retryScheduleCall(c, node, args, expected),
-    codec: (c, node, _name, args) => codecCall(c, node, args),
-    schema: BodyChecker.schemaBuiltin,
-    schemaArray: BodyChecker.schemaBuiltin,
-    schemaStruct: BodyChecker.schemaBuiltin,
-    schemaOptionalKey: BodyChecker.schemaBuiltin,
-    schemaNullToMissingKey: BodyChecker.schemaBuiltin,
-    schemaOptionFromOptionalKey: BodyChecker.schemaBuiltin,
-    schemaDefaultKey: BodyChecker.schemaBuiltin,
-    schemaConstructorDefault: BodyChecker.schemaBuiltin,
-    schemaOptionalTransform: BodyChecker.schemaBuiltin,
-    schemaOptionalFromRequired: BodyChecker.schemaBuiltin,
-    schemaUnion: BodyChecker.schemaBuiltin,
-    schemaTransform: BodyChecker.schemaBuiltin,
-    schemaRecursive: BodyChecker.schemaBuiltin,
-    schemaDecode: BodyChecker.schemaBuiltin,
-    schemaEncode: BodyChecker.schemaBuiltin,
-    schemaMake: BodyChecker.schemaBuiltin,
-    schemaInvalid: BodyChecker.schemaBuiltin,
-    schemaAt: BodyChecker.schemaBuiltin,
-    schemaBoth: BodyChecker.schemaBuiltin,
-    decode: (c, node, name, args) => codecOperation(c, node, name, args),
-    encode: (c, node, name, args) => codecOperation(c, node, name, args),
-    withFiber: (c, node, _name, args, expected) =>
-      withFiberCall(c, node, args, expected),
-    joinFiber: (c, node, name, args) => fiberOperation(c, node, name, args),
-    interruptFiber: (c, node, name, args) =>
-      fiberOperation(c, node, name, args),
-    provide: (c, node, _name, args) => provideCall(c, node, args),
-    defer: (c, node, _name, args) => deferCall(c, node, args),
-    run: (c, node, _name, args) => runCall(c, node, args),
-    scoped: (c, node, _name, args) => scopedCall(c, node, args),
-    forkScoped: (c, node, _name, args) => forkScopedCall(c, node, args),
-    makeScope: (c, node, name, args) => scopeCall(c, node, name, args),
-    provideScope: (c, node, name, args) => scopeCall(c, node, name, args),
-    addScopeFinalizer: (c, node, name, args) => scopeCall(c, node, name, args),
-    closeScope: (c, node, name, args) => scopeCall(c, node, name, args),
-    withResource: (c, node, _name, args, expected) =>
-      withResourceCall(c, node, args, expected),
-    unfold: (c, node, _name, args) => unfoldCall(c, node, args),
-    mapEffect: (c, node, _name, args) => mapEffectCall(c, node, args),
-    mapGroups: (c, node, _name, args) => mapGroupsCall(c, node, args),
-    scanStream: (c, node, _name, args) => scanStreamCall(c, node, args),
-    mapAccumStream: (c, node, _name, args) => mapAccumStreamCall(c, node, args),
-    foldStream: (c, node, _name, args) => foldStreamCall(c, node, args),
-    foldEffectStream: (c, node, _name, args) =>
-      foldEffectStreamCall(c, node, args),
-    collectStream: (c, node, name, args) =>
-      terminalStreamCall(c, node, name, args, (e) => c.table.array(e)),
-    headStream: (c, node, name, args) =>
-      terminalStreamCall(c, node, name, args, (e) => c.table.option(e)),
-    lastStream: (c, node, name, args) =>
-      terminalStreamCall(c, node, name, args, (e) => c.table.option(e)),
-    drainStream: (c, node, name, args) =>
-      terminalStreamCall(c, node, name, args, () => c.table.unit),
-    flatMapStreams: (c, node, _name, args) => flatMapStreamsCall(c, node, args),
-    switchMapStreams: (c, node, _name, args) =>
-      switchMapStreamsCall(c, node, args),
-    catchStream: (c, node, _name, args) => catchStreamCall(c, node, args),
-    retryStream: (c, node, _name, args) => retryStreamCall(c, node, args),
-    debounceStream: (c, node, _name, args) => debounceStreamCall(c, node, args),
-    throttleStream: (c, node, _name, args) => throttleStreamCall(c, node, args),
-    takeStream: (c, node, name, args) =>
-      countStreamCall(c, node, name, args, "take"),
-    dropStream: (c, node, name, args) =>
-      countStreamCall(c, node, name, args, "drop"),
-    filterEffectStream: (c, node, name, args) =>
-      effectStreamPredicateCall(c, node, args, name),
-    takeWhileEffectStream: (c, node, name, args) =>
-      effectStreamPredicateCall(c, node, args, name),
-    takeUntilEffectStream: (c, node, name, args) =>
-      effectStreamPredicateCall(c, node, args, name),
-    dropWhileEffectStream: (c, node, name, args) =>
-      effectStreamPredicateCall(c, node, args, name),
-    sinkForEach: (c, node, _name, args) => sinkForEachCall(c, node, args),
-    takeSink: (c, node, _name, args, expected) =>
-      takeSinkCall(c, node, args, expected),
-    transduceStream: (c, node, name, args) =>
-      sinkTransformStreamCall(c, node, args, name),
-    aggregateStream: (c, node, name, args) =>
-      sinkTransformStreamCall(c, node, args, name),
-    aggregateWithinStream: (c, node, _name, args) =>
-      aggregateWithinStreamCall(c, node, args),
-    scheduleFromStep: (c, node, _name, args) =>
-      scheduleFromStepCall(c, node, args),
-    scheduleRecurs: (c, node, name, args) =>
-      simpleScheduleCall(c, node, args, name),
-    scheduleSpaced: (c, node, name, args) =>
-      simpleScheduleCall(c, node, args, name),
-    scheduleMap: (c, node, _name, args, expected) =>
-      scheduleMapCall(c, node, args, expected),
-    scheduleMax: (c, node, name, args) =>
-      scheduleComposeCall(c, node, args, name),
-    scheduleMin: (c, node, name, args) =>
-      scheduleComposeCall(c, node, args, name),
-    scheduleConcat: (c, node, name, args) =>
-      scheduleComposeCall(c, node, args, name),
-    runStream: (c, node, _name, args) => runStreamCall(c, node, args),
-    bufferStream: (c, node, _name, args) => bufferStreamCall(c, node, args),
-    mergeStreams: (c, node, name, args) => streamPairCall(c, node, name, args),
-    zipStreams: (c, node, name, args) => streamPairCall(c, node, name, args),
-    concatStreams: (c, node, name, args) => streamPairCall(c, node, name, args),
-    race: (c, node, _name, args) => raceCall(c, node, args),
-    makeRef: (c, node, name, args) => refCall(c, node, name, args),
-    getRef: (c, node, name, args) => refCall(c, node, name, args),
-    setRef: (c, node, name, args) => refCall(c, node, name, args),
-    updateRef: (c, node, name, args) => refCall(c, node, name, args),
-    layer: (c, node, _name, args) => layerCall(c, node, args),
-    mergeLayers: (c, node, _name, args) => mergeLayersCall(c, node, args),
-    unbrand: (c, node, _name, args) => c.unbrandCall(node, args),
-    Some: (c, node, _name, args, expected) => c.someCall(node, args, expected),
-    all: (c, node, _name, args) => allCall(c, node, args),
-    partitionAll: (c, node, _name, args) => partitionAllCall(c, node, args),
-    validateAll: (c, node, _name, args) => validateAllCall(c, node, args),
-    allResults: (c, node, _name, args) => allResultsCall(c, node, args),
-    map: (c, node, name, args, expected) =>
-      collectionCall(c, node, name, args, expected),
-    filter: (c, node, name, args, expected) =>
-      collectionCall(c, node, name, args, expected),
-    fold: (c, node, name, args, expected) =>
-      collectionCall(c, node, name, args, expected),
-    traverse: (c, node, name, args, expected) =>
-      collectionCall(c, node, name, args, expected),
-  };
-
-  private static readonly schemaPrologue: SharedPrologue<SchemaBuiltinName> = {
-    arity: (name, args) => {
-      const builtin: SchemaBuiltin = SCHEMA_BUILTINS[name];
-      return builtin.acceptsOptions === true && args.length === 3
-        ? 3
-        : builtin.arity;
+  /** The rows of the builtins that call private members of the checker. */
+  private static readonly CORE_ROWS: Rows<CoreRowName, BodyChecker> = {
+    unbrand: {
+      prologue: "own-arity",
+      handle: (c, node, _name, args) => c.unbrandCall(node, args),
     },
-    bail: "pure",
-    pipeline: "direct",
-    // `schemaDefaultKey` selects its operation with the `on` option.
-    fact: (c, name, args) => ({
-      kind: "schema",
-      op: name === "schemaDefaultKey" && args.length === 3
-        ? defaultKeyOp(c, name, args[2])
-        : SCHEMA_BUILTINS[name].op,
-    }),
+    Some: {
+      prologue: "own-arity",
+      handle: (c, node, _name, args, expected) =>
+        c.someCall(node, args, expected),
+    },
   };
 
   /**
-   * The prologue of each prelude call name. A name with the row `"own-arity"`
-   * tests its own argument count. A name with an optional last argument uses
-   * `optionalLast`, which also gives the message of a wrong count.
+   * The row of each prelude call name. The family files own the rows of the
+   * other builtins. A row with the prologue `"own-arity"` tests its own
+   * argument count. `CORE_ROWS` must come first, because static initializers
+   * run in source order.
    */
-  private static readonly PRELUDE_PROLOGUES: PreludePrologues = {
-    retry: piped(2, "effect", {
-      bailFact: { kind: "retry", times: undefined },
-    }),
-    retrySchedule: piped(1, "pure", { fact: { kind: "retry-schedule" } }),
-    codec: direct(2, "pure", { fact: { kind: "codec" } }),
-    schema: BodyChecker.schemaPrologue,
-    schemaArray: BodyChecker.schemaPrologue,
-    schemaStruct: BodyChecker.schemaPrologue,
-    schemaOptionalKey: BodyChecker.schemaPrologue,
-    schemaNullToMissingKey: BodyChecker.schemaPrologue,
-    schemaOptionFromOptionalKey: BodyChecker.schemaPrologue,
-    schemaDefaultKey: BodyChecker.schemaPrologue,
-    schemaConstructorDefault: BodyChecker.schemaPrologue,
-    schemaOptionalTransform: BodyChecker.schemaPrologue,
-    schemaOptionalFromRequired: BodyChecker.schemaPrologue,
-    schemaUnion: BodyChecker.schemaPrologue,
-    schemaTransform: BodyChecker.schemaPrologue,
-    schemaRecursive: BodyChecker.schemaPrologue,
-    schemaDecode: BodyChecker.schemaPrologue,
-    schemaEncode: BodyChecker.schemaPrologue,
-    schemaMake: BodyChecker.schemaPrologue,
-    schemaInvalid: BodyChecker.schemaPrologue,
-    schemaAt: BodyChecker.schemaPrologue,
-    schemaBoth: BodyChecker.schemaPrologue,
-    decode: direct(2, "pure", { fact: { kind: "decode" } }),
-    encode: direct(2, "pure", { fact: { kind: "encode" } }),
-    withFiber: direct(2, "effect", { fact: { kind: "with-fiber" } }),
-    joinFiber: piped(1, "effect", { fact: { kind: "join-fiber" } }),
-    interruptFiber: piped(1, "effect", { fact: { kind: "interrupt-fiber" } }),
-    provide: piped(2, "effect", {
-      bailFact: { kind: "provide", provider: undefined },
-    }),
-    defer: piped(1, "pure", { fact: { kind: "defer" } }),
-    run: piped(1, "effect", { fact: { kind: "run" } }),
-    scoped: piped(1, "effect", { fact: { kind: "scoped" } }),
-    forkScoped: piped(1, "effect", { fact: { kind: "fork-scoped" } }),
-    makeScope: piped(0, "effect", { fact: { kind: "make-scope" } }),
-    provideScope: piped(2, "effect", { fact: { kind: "provide-scope" } }),
-    addScopeFinalizer: piped(2, "effect", {
-      fact: { kind: "add-scope-finalizer" },
-    }),
-    closeScope: piped(1, "effect", { fact: { kind: "close-scope" } }),
-    withResource: piped(3, "pure", { fact: { kind: "with-resource" } }),
-    unfold: direct(2, "pure", { fact: { kind: "unfold" } }),
-    mapGroups: direct(4, "pure", {
-      fact: { kind: "map-groups", bufferSize: undefined },
-    }),
-    scanStream: direct(3, "pure", { fact: { kind: "scan-stream" } }),
-    mapAccumStream: direct(3, "pure", { fact: { kind: "map-accum-stream" } }),
-    foldStream: direct(3, "effect", { fact: { kind: "fold-stream" } }),
-    foldEffectStream: direct(3, "effect", {
-      fact: { kind: "fold-effect-stream" },
-    }),
-    collectStream: direct(1, "effect", { fact: { kind: "collect-stream" } }),
-    headStream: direct(1, "effect", { fact: { kind: "head-stream" } }),
-    lastStream: direct(1, "effect", { fact: { kind: "last-stream" } }),
-    drainStream: direct(1, "effect", { fact: { kind: "drain-stream" } }),
-    switchMapStreams: direct(2, "pure"),
-    catchStream: direct(2, "pure"),
-    retryStream: direct(2, "pure"),
-    debounceStream: direct(2, "pure", {
-      bailFact: { kind: "debounce-stream", delayMs: undefined },
-    }),
-    throttleStream: direct(2, "pure", {
-      bailFact: {
-        kind: "throttle-stream",
-        units: undefined,
-        durationMs: undefined,
-        strategy: undefined,
-      },
-    }),
-    takeStream: direct(2, "pure", { fact: { kind: "take-stream" } }),
-    dropStream: direct(2, "pure", { fact: { kind: "drop-stream" } }),
-    filterEffectStream: direct(2, "pure", {
-      bailFact: { kind: STREAM_PREDICATE_FACTS.filterEffectStream.effect },
-    }),
-    takeWhileEffectStream: direct(2, "pure", {
-      bailFact: { kind: STREAM_PREDICATE_FACTS.takeWhileEffectStream.effect },
-    }),
-    takeUntilEffectStream: direct(2, "pure", {
-      bailFact: { kind: STREAM_PREDICATE_FACTS.takeUntilEffectStream.effect },
-    }),
-    dropWhileEffectStream: direct(2, "pure", {
-      bailFact: { kind: STREAM_PREDICATE_FACTS.dropWhileEffectStream.effect },
-    }),
-    sinkForEach: direct(1, "pure", { fact: { kind: "sink-for-each" } }),
-    takeSink: direct(1, "pure", {
-      fact: { kind: "take-sink", count: undefined },
-    }),
-    transduceStream: direct(2, "pure", { fact: { kind: "transduce-stream" } }),
-    aggregateStream: direct(2, "pure", { fact: { kind: "aggregate-stream" } }),
-    aggregateWithinStream: direct(3, "pure", {
-      fact: { kind: "aggregate-within-stream" },
-    }),
-    scheduleFromStep: direct(2, "pure", {
-      fact: { kind: "schedule-from-step" },
-    }),
-    scheduleRecurs: direct(1, "pure", { fact: { kind: "schedule-recurs" } }),
-    scheduleSpaced: direct(1, "pure", { fact: { kind: "schedule-spaced" } }),
-    scheduleMap: direct(2, "pure", { fact: { kind: "schedule-map" } }),
-    scheduleMax: direct(2, "pure", { fact: { kind: "schedule-max" } }),
-    scheduleMin: direct(2, "pure", { fact: { kind: "schedule-min" } }),
-    scheduleConcat: direct(2, "pure", { fact: { kind: "schedule-concat" } }),
-    runStream: direct(2, "effect", { fact: { kind: "run-stream" } }),
-    bufferStream: direct(2, "pure", {
-      bailFact: { kind: "buffer-stream", capacity: undefined },
-    }),
-    mergeStreams: direct(2, "pure", { fact: { kind: "merge-streams" } }),
-    zipStreams: direct(2, "pure", { fact: { kind: "zip-streams" } }),
-    concatStreams: direct(2, "pure", { fact: { kind: "concat-streams" } }),
-    race: direct(2, "pure", { fact: { kind: "race" } }),
-    makeRef: direct(1, "effect", { fact: { kind: "make-ref" } }),
-    getRef: direct(1, "effect", { fact: { kind: "get-ref" } }),
-    setRef: direct(2, "effect", { fact: { kind: "set-ref" } }),
-    updateRef: direct(2, "effect", { fact: { kind: "update-ref" } }),
-    layer: direct(2, "pure", {
-      bailFact: { kind: "layer", service: undefined },
-    }),
-    mergeLayers: direct(2, "pure", { fact: { kind: "merge-layers" } }),
-    mapEffect: optionalLast(
-      2,
-      "`mapEffect` takes a Stream, a callback, and an optional concurrency record",
-    ),
-    flatMapStreams: optionalLast(
-      2,
-      "`flatMapStreams` takes a Stream, a callback, and an optional concurrency record",
-    ),
-    all: optionalLast(
-      1,
-      "`all` takes an Effect collection and an optional concurrency record",
-    ),
-    partitionAll: optionalLast(
-      1,
-      "`partitionAll` takes an Effect array and an optional concurrency record",
-    ),
-    validateAll: optionalLast(
-      2,
-      "`validateAll` takes an Effect array, an error wrapper, and an optional concurrency record",
-    ),
-    allResults: optionalLast(
-      1,
-      "`allResults` takes an Effect collection and an optional concurrency record",
-    ),
-    traverse: optionalLast(
-      2,
-      "`traverse` takes two arguments and an optional concurrency record",
-    ),
-    map: piped(2, "pure"),
-    filter: piped(2, "pure"),
-    fold: piped(3, "pure"),
-    fail: "own-arity",
-    Some: "own-arity",
-    unbrand: "own-arity",
+  private static readonly PRELUDE_ROWS: Rows<PreludeCallName, BodyChecker> = {
+    ...FAMILY_ROWS,
+    ...BodyChecker.CORE_ROWS,
   };
 
   /** Reports a wrong argument count for a prelude call. Returns true when the count is right. */
@@ -1619,14 +1163,7 @@ class BodyChecker
 
   concurrencyBound(
     arg: Arg,
-    operation:
-      | "traverse"
-      | "all"
-      | "partitionAll"
-      | "validateAll"
-      | "allResults"
-      | "mapEffect"
-      | "flatMapStreams" = "traverse",
+    operation: ConcurrencyOperation = "traverse",
   ): number | "unbounded" | undefined {
     const record = this.literalRecord(arg, 1);
     const literal = record.ok

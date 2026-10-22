@@ -19,6 +19,7 @@ import {
   type ResolveView,
   type SyntaxView,
 } from "./context.ts";
+import { piped, type PreludeCallName, type Rows } from "./rows.ts";
 
 export interface ScopeContext extends
   Pick<
@@ -345,3 +346,36 @@ function scopedBorrowUses(c: ScopeContext, body: NodeId, id: LocalId): void {
     }
   }
 }
+
+/** The rows of the Scope builtins. */
+export const SCOPE_ROWS = {
+  scoped: {
+    prologue: piped(1, "effect", { fact: { kind: "scoped" } }),
+    handle: (c, node, _name, args) => scopedCall(c, node, args),
+  },
+  forkScoped: {
+    prologue: piped(1, "effect", { fact: { kind: "fork-scoped" } }),
+    handle: (c, node, _name, args) => forkScopedCall(c, node, args),
+  },
+  makeScope: {
+    prologue: piped(0, "effect", { fact: { kind: "make-scope" } }),
+    handle: (c, node, name, args) => scopeCall(c, node, name, args),
+  },
+  provideScope: {
+    prologue: piped(2, "effect", { fact: { kind: "provide-scope" } }),
+    handle: (c, node, name, args) => scopeCall(c, node, name, args),
+  },
+  addScopeFinalizer: {
+    prologue: piped(2, "effect", { fact: { kind: "add-scope-finalizer" } }),
+    handle: (c, node, name, args) => scopeCall(c, node, name, args),
+  },
+  closeScope: {
+    prologue: piped(1, "effect", { fact: { kind: "close-scope" } }),
+    handle: (c, node, name, args) => scopeCall(c, node, name, args),
+  },
+  withResource: {
+    prologue: piped(3, "pure", { fact: { kind: "with-resource" } }),
+    handle: (c, node, _name, args, expected) =>
+      withResourceCall(c, node, args, expected),
+  },
+} satisfies Partial<Rows<PreludeCallName, ScopeContext>>;
