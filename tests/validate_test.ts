@@ -1604,22 +1604,37 @@ Deno.test("the validation category registers one code for each of the eight area
 
 Deno.test("src/core/validate imports only ir.ts, source.ts, diagnostics.ts, and its own files", () => {
   const directory = new URL("../src/core/validate/", import.meta.url);
-  const own = new Set<string>();
-  for (const entry of Deno.readDirSync(directory)) {
-    assert(entry.isFile, `unexpected entry ${entry.name}`);
-    own.add(`./${entry.name}`);
-  }
-  const allowed = new Set(["../ir.ts", "../source.ts", "../diagnostics.ts"]);
+  const files: URL[] = [];
+  const collect = (dir: URL): void => {
+    for (const entry of Deno.readDirSync(dir)) {
+      if (entry.isDirectory) {
+        collect(new URL(`${entry.name}/`, dir));
+      } else {
+        assert(entry.isFile, `unexpected entry ${entry.name}`);
+        files.push(new URL(entry.name, dir));
+      }
+    }
+  };
+  collect(directory);
+  const own = new Set(files.map((file) => file.href));
+  const allowed = new Set(
+    ["ir.ts", "source.ts", "diagnostics.ts"].map((name) =>
+      new URL(`../${name}`, directory).href
+    ),
+  );
   const pattern =
     /(?:^|[\s;])(?:import|export)\s[^;]*?from\s*["']([^"']+)["']|(?:^|[\s;])import\s*["']([^"']+)["']|\bimport\(\s*["']([^"']+)["']\s*\)/g;
   let checked = 0;
-  for (const entry of Deno.readDirSync(directory)) {
-    const text = Deno.readTextFileSync(new URL(entry.name, directory));
+  for (const file of files) {
+    const text = Deno.readTextFileSync(file);
     for (const match of text.matchAll(pattern)) {
       const specifier = match[1] ?? match[2] ?? match[3];
+      const target = specifier.startsWith(".")
+        ? new URL(specifier, file).href
+        : specifier;
       assert(
-        own.has(specifier) || allowed.has(specifier),
-        `${entry.name} imports ${specifier}`,
+        own.has(target) || allowed.has(target),
+        `${file.pathname} imports ${specifier}`,
       );
       checked++;
     }

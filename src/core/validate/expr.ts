@@ -73,39 +73,22 @@ import {
   UNIT,
 } from "./typing.ts";
 import { checkTypeIds, type Ctx } from "./world.ts";
+import { exprChildren, walkExprs } from "./expr_walk.ts";
+import {
+  type Area,
+  type Comp,
+  derivedResult,
+  EFFECT_ONLY,
+  type Out,
+  streamState,
+  type ValidatorCore,
+} from "./families/context.ts";
+import { codec, codecOperation } from "./families/codec.ts";
+import { fiberOperation, withFiber } from "./families/fiber.ts";
+import { refOperation } from "./families/ref.ts";
 
-const EFFECT_ONLY: Active = {
-  failures: [],
-  requirements: [],
-  execution: "effect",
-};
-
-/** What a checked node contributes to its parent. */
-interface Out extends Active {
-  readonly type: Type;
-}
-
-/** The recomputed annotation of a node. */
-type Comp =
-  | {
-    readonly kind: "derived";
-    readonly type: Type;
-    /** Exact equality, or assignability to the recorded type. */
-    readonly match: "exact" | "fit";
-    readonly active: Active;
-  }
-  /** The node checks its own type, or reports why it cannot be recomputed. */
-  | { readonly kind: "checked"; readonly active: Active }
-  /** Effects cannot be recomputed; the recorded sets stand. */
-  | { readonly kind: "poisoned" };
-
-function derivedResult(
-  type: Type,
-  active: Active,
-  match: "exact" | "fit" = "exact",
-): Comp {
-  return { kind: "derived", type, active, match };
-}
+// The test of the expression children imports this walk from here.
+export { exprChildren };
 
 function checkedResult(active: Active): Comp {
   return { kind: "checked", active };
@@ -364,217 +347,18 @@ function tagMayEqual(
   return fits(env, { kind: "literal", value }, type);
 }
 
-/**
- * The nearest child expressions of a node. The switch has no default case, so
- * the compiler rejects a new Expr kind that the switch does not name.
- */
-export function exprChildren(e: Expr): readonly Expr[] {
-  switch (e.kind) {
-    case "take-sink":
-    case "make-scope":
-    case "null":
-    case "literal":
-    case "reference":
-    case "none":
-      return [];
-    case "record":
-    case "error":
-      return e.fields.map((f) => f.value);
-    case "array":
-    case "tuple":
-      return [...e.elements];
-    case "get":
-      return [e.record];
-    case "update":
-      return [e.record, ...e.fields.map((f) => f.value)];
-    case "brand":
-    case "unbrand":
-    case "some":
-    case "run":
-    case "scoped":
-      return [e.value];
-    case "partition-all":
-      return [e.jobs];
-    case "validate-all":
-      return [e.jobs, e.onErrors];
-    case "all-results":
-      return [e.jobs];
-    case "closure":
-      return [e.body];
-    case "call":
-      return [e.callee, ...e.arguments];
-    case "provide-scope":
-    case "add-scope-finalizer":
-      return [e.owner, e.job];
-    case "close-scope":
-      return [e.owner];
-    case "with-resource":
-      return [e.acquire, e.use, e.release];
-    case "unfold":
-      return [e.seed, e.next];
-    case "map-groups":
-      return [e.stream, e.key, e.use];
-    case "map-effect":
-    case "map-stream":
-    case "flat-map-streams":
-    case "switch-map-streams":
-      return [e.stream, e.transform];
-    case "catch-stream":
-      return [e.stream, e.recover];
-    case "retry-stream":
-      return [e.stream, e.policy];
-    case "debounce-stream":
-    case "throttle-stream":
-      return [e.stream];
-    case "scan-stream":
-    case "map-accum-stream":
-    case "fold-stream":
-    case "fold-effect-stream":
-      return [e.stream, e.seed, e.update];
-    case "collect-stream":
-    case "head-stream":
-    case "last-stream":
-    case "drain-stream":
-      return [e.stream];
-    case "take-stream":
-      return [e.stream, e.count];
-    case "drop-stream":
-      return [e.stream, e.count];
-    case "drop-while-stream":
-      return [e.stream, e.predicate];
-    case "filter-stream":
-    case "filter-effect-stream":
-    case "take-while-effect-stream":
-    case "take-until-effect-stream":
-    case "drop-while-effect-stream":
-      return [e.stream, e.predicate];
-    case "take-while-stream":
-      return [e.stream, e.predicate];
-    case "take-until-stream":
-      return [e.stream, e.predicate];
-    case "sink-for-each":
-      return [e.consume];
-    case "transduce-stream":
-    case "aggregate-stream":
-    case "run-stream":
-      return [e.stream, e.sink];
-    case "aggregate-within-stream":
-      return [e.stream, e.sink, e.schedule];
-    case "schedule-from-step":
-      return [e.initial, e.decide];
-    case "schedule-recurs":
-      return [e.times];
-    case "schedule-spaced":
-      return [e.delayMillis];
-    case "schedule-map":
-      return [e.schedule, e.transform];
-    case "schedule-max":
-    case "schedule-min":
-    case "schedule-concat":
-      return [e.left, e.right];
-    case "buffer-stream":
-      return [e.stream];
-    case "merge-streams":
-    case "zip-streams":
-    case "concat-streams":
-      return [e.left, e.right];
-    case "race":
-      return [e.left, e.right];
-    case "make-ref":
-      return [e.value];
-    case "get-ref":
-      return [e.ref];
-    case "set-ref":
-      return [e.ref, e.value];
-    case "update-ref":
-      return [e.ref, e.transform];
-    case "layer":
-      return [e.acquire];
-    case "merge-layers":
-      return [e.left, e.right];
-    case "retry-schedule":
-      return [e.step];
-    case "retry-with-schedule":
-      return [e.job, e.options];
-    case "codec":
-      return [e.decode, e.encode];
-    case "schema":
-      return [...e.arguments];
-    case "schema-make":
-    case "schema-decode":
-    case "schema-encode":
-      return [e.schema, e.input];
-    case "decode":
-    case "encode":
-      return [e.codec, e.input];
-    case "with-fiber":
-      return [e.job, e.use];
-    case "join-fiber":
-    case "interrupt-fiber":
-      return [e.fiber];
-    case "defer":
-    case "retry":
-    case "fork-scoped":
-      return [e.job];
-    case "perform":
-      return [...e.arguments];
-    case "block":
-      return [...e.steps.map((s) => s.value), e.result];
-    case "if":
-      return [e.condition, e.then, e.else];
-    case "match":
-      return [e.subject, ...e.arms.map((a) => a.body)];
-    case "fail":
-      return [e.error];
-    case "catch":
-      return [e.body, ...e.handlers.map((h) => h.body)];
-    case "provide":
-      return [e.provider, e.job];
-    case "binary":
-      return [e.left, e.right];
-  }
-}
-
-/**
- * Visits `body` and every expression below it, parents first. The visitor
- * gets the node, its parent, its grandparent, and whether a closure lies
- * between the node and `body`. The closure itself is not nested.
- */
-function walkExprs(
-  body: Expr,
-  visit: (
-    e: Expr,
-    parent: Expr | undefined,
-    grandparent: Expr | undefined,
-    nested: boolean,
-  ) => void,
-): void {
-  const go = (
-    e: Expr,
-    parent: Expr | undefined,
-    grandparent: Expr | undefined,
-    nested: boolean,
-  ): void => {
-    visit(e, parent, grandparent, nested);
-    for (const child of exprChildren(e)) {
-      go(child, e, parent, nested || e.kind === "closure");
-    }
-  };
-  go(body, undefined, undefined, false);
-}
-
-export class BodyValidator {
+export class BodyValidator implements ValidatorCore {
   private readonly scope = new Map<string, Type>();
   private readonly declared = new Set<string>();
 
-  constructor(private readonly ctx: Ctx) {}
+  constructor(readonly ctx: Ctx) {}
 
-  private get env() {
+  get env(): TypeEnv {
     return this.ctx.world.env;
   }
 
-  private add(
-    area: Parameters<Ctx["report"]["add"]>[0],
+  add(
+    area: Area,
     path: string,
     what: string,
     span: Span,
@@ -894,12 +678,12 @@ export class BodyValidator {
     return { ...active, type };
   }
 
-  private poison(): Comp {
+  poison(): Comp {
     return { kind: "poisoned" };
   }
 
   /** Reports a concurrency limit that is neither `unbounded` nor a positive safe integer. */
-  private checkConcurrency(
+  checkConcurrency(
     e: {
       readonly concurrency: number | "unbounded" | undefined;
       readonly span: Span;
@@ -1058,7 +842,7 @@ export class BodyValidator {
       case "get-ref":
       case "set-ref":
       case "update-ref":
-        return this.refOperation(e, path);
+        return refOperation(this, e, path);
       case "layer":
         return this.layer(e, path);
       case "merge-layers":
@@ -1068,7 +852,7 @@ export class BodyValidator {
       case "retry-with-schedule":
         return this.retryWithSchedule(e, path);
       case "codec":
-        return this.codec(e, path);
+        return codec(this, e, path);
       case "schema":
         return this.schema(e, path);
       case "schema-make":
@@ -1077,12 +861,12 @@ export class BodyValidator {
         return this.schemaOperation(e, path);
       case "decode":
       case "encode":
-        return this.codecOperation(e, path);
+        return codecOperation(this, e, path);
       case "with-fiber":
-        return this.withFiber(e, path);
+        return withFiber(this, e, path);
       case "join-fiber":
       case "interrupt-fiber":
-        return this.fiberOperation(e, path);
+        return fiberOperation(this, e, path);
       case "perform":
         return this.perform(e, path);
       case "block":
@@ -1929,7 +1713,7 @@ export class BodyValidator {
    * reported, but its sets still count. A job that is no function is
    * reported, and the caller keeps the recorded annotation of the node.
    */
-  private jobFunction(
+  jobFunction(
     job: Out,
     path: string,
     span: Span,
@@ -2059,60 +1843,6 @@ export class BodyValidator {
     return derivedResult(
       fn.result,
       combine([job, options, invocationOf(fn), EFFECT_ONLY]),
-    );
-  }
-
-  private codec(e: Extract<Expr, { kind: "codec" }>, path: string): Comp {
-    const decode = this.check(e.decode, `${path}.decode`);
-    const encode = this.check(e.encode, `${path}.encode`);
-    const d = asFunction(this.env, decode.type);
-    const en = asFunction(this.env, encode.type);
-    if (
-      d === undefined || en === undefined || d.parameters.length !== 1 ||
-      en.parameters.length !== 1
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "codec needs two single-argument functions",
-        e.span,
-      );
-      return this.poison();
-    }
-    if (!isQuiet(invocationOf(d)) || !isQuiet(invocationOf(en))) {
-      this.add(
-        AREA.control,
-        path,
-        "codec transformations must be pure",
-        e.span,
-      );
-    }
-    if (
-      !fits(this.env, d.result, en.parameters[0]) ||
-      !fits(this.env, en.result, d.parameters[0])
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "codec encode transformation must reverse decode types",
-        e.span,
-      );
-    }
-    if (
-      !dataOnly(this.env, d.result, "codec") ||
-      !dataOnly(this.env, d.parameters[0], "codec")
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "codec types need compiler-derived schemas",
-        e.span,
-      );
-    }
-    return derivedResult(
-      { kind: "codec", decoded: d.result, encoded: d.parameters[0] },
-      combine([decode, encode]),
-      "fit",
     );
   }
 
@@ -2912,141 +2642,6 @@ export class BodyValidator {
     );
   }
 
-  private codecOperation(
-    e: Extract<Expr, { kind: "decode" | "encode" }>,
-    path: string,
-  ): Comp {
-    const codec = this.check(e.codec, `${path}.codec`);
-    const input = this.check(e.input, `${path}.input`);
-    const type = unfold(this.env, codec.type);
-    if (type.kind !== "codec") {
-      this.add(
-        AREA.types,
-        `${path}.codec`,
-        `${e.kind} needs a Codec value`,
-        e.codec.span,
-      );
-      return this.poison();
-    }
-    if (e.kind === "encode" && !fits(this.env, input.type, type.decoded)) {
-      this.add(
-        AREA.types,
-        `${path}.input`,
-        "encode input does not fit decoded type",
-        e.input.span,
-      );
-    }
-    return derivedResult({
-      kind: "option",
-      element: e.kind === "decode" ? type.decoded : type.encoded,
-    }, combine([codec, input]));
-  }
-
-  private withFiber(
-    e: Extract<Expr, { kind: "with-fiber" }>,
-    path: string,
-  ): Comp {
-    const job = this.check(e.job, `${path}.job`);
-    const use = this.check(e.use, `${path}.use`);
-    const effect = unfold(this.env, job.type);
-    const fn = asFunction(this.env, use.type);
-    if (
-      effect.kind !== "effect" || e.use.kind !== "closure" ||
-      fn === undefined || fn.parameters.length !== 1 ||
-      e.use.parameters[0]?.id !== e.useBinding
-    ) {
-      this.add(
-        AREA.control,
-        path,
-        "with-fiber needs an Effect and one inline use callback",
-        e.span,
-      );
-      return this.poison();
-    }
-    const fiber: Type = {
-      kind: "fiber",
-      result: effect.result,
-      failures: effect.effects.failures,
-    };
-    if (!same(this.env, fn.parameters[0], fiber)) {
-      this.add(
-        AREA.types,
-        `${path}.use`,
-        "fiber use parameter does not match child type",
-        e.use.span,
-      );
-    }
-    if (!dataOnly(this.env, fn.result, "value")) {
-      this.add(
-        AREA.types,
-        `${path}.use`,
-        "fiber use result must be data only",
-        e.use.span,
-      );
-    }
-    this.fiberReferences(e.use.body, e.useBinding, `${path}.use.body`);
-    return derivedResult(
-      fn.result,
-      combine([
-        job,
-        use,
-        {
-          failures: [],
-          requirements: effect.effects.requirements,
-          execution: "effect",
-        },
-        invocationOf(fn),
-        EFFECT_ONLY,
-      ]),
-    );
-  }
-
-  private fiberOperation(
-    e: Extract<Expr, { kind: "join-fiber" | "interrupt-fiber" }>,
-    path: string,
-  ): Comp {
-    const fiber = this.check(e.fiber, `${path}.fiber`);
-    const type = unfold(this.env, fiber.type);
-    if (type.kind !== "fiber") {
-      this.add(
-        AREA.types,
-        `${path}.fiber`,
-        "fiber operation needs a Fiber value",
-        e.fiber.span,
-      );
-      return this.poison();
-    }
-    return derivedResult(
-      e.kind === "join-fiber" ? type.result : UNIT,
-      combine([
-        fiber,
-        e.kind === "join-fiber"
-          ? { failures: type.failures, requirements: [], execution: "effect" }
-          : EFFECT_ONLY,
-      ]),
-    );
-  }
-
-  private fiberReferences(body: Expr, id: string, path: string): void {
-    walkExprs(body, (expr, parent, _grandparent, nested) => {
-      if (expr.kind === "reference" && expr.target === id) {
-        if (
-          nested ||
-          (parent?.kind !== "join-fiber" &&
-            parent?.kind !== "interrupt-fiber") ||
-          parent.fiber !== expr
-        ) {
-          this.add(
-            AREA.control,
-            path,
-            "borrowed fiber may only be joined or interrupted directly",
-            expr.span,
-          );
-        }
-      }
-    });
-  }
-
   private defer(e: Extract<Expr, { kind: "defer" }>, path: string): Comp {
     const job = this.check(e.job, `${path}.job`);
     const fn = this.jobFunction(job, `${path}.job`, e.job.span, "defer");
@@ -3525,18 +3120,6 @@ export class BodyValidator {
     });
   }
 
-  private streamState(type: Type): Type {
-    const value = unfold(this.env, type);
-    if (value.kind !== "literal" || value.value === null) return type;
-    return typeof value.value === "string"
-      ? STRING
-      : typeof value.value === "boolean"
-      ? BOOLEAN
-      : Number.isSafeInteger(value.value)
-      ? INT
-      : NUMBER;
-  }
-
   private unfoldStream(
     e: Extract<Expr, { kind: "unfold" }>,
     path: string,
@@ -3552,7 +3135,7 @@ export class BodyValidator {
         e.next.span,
       );
     }
-    const state = this.streamState(seed.type);
+    const state = streamState(this.env, seed.type);
     if (
       fn === undefined || fn.parameters.length !== 1 ||
       !fits(this.env, state, fn.parameters[0])
@@ -4635,59 +4218,6 @@ export class BodyValidator {
         ...unionEffects(a.effects, b.effects),
       },
     }, combine([left, right]));
-  }
-
-  private refOperation(
-    e: Extract<
-      Expr,
-      { kind: "make-ref" | "get-ref" | "set-ref" | "update-ref" }
-    >,
-    path: string,
-  ): Comp {
-    if (e.kind === "make-ref") {
-      const value = this.check(e.value, `${path}.value`);
-      return derivedResult({
-        kind: "ref",
-        element: this.streamState(value.type),
-      }, combine([value, EFFECT_ONLY]));
-    }
-    const ref = this.check(e.ref, `${path}.ref`);
-    const type = unfold(this.env, ref.type);
-    if (type.kind !== "ref") {
-      this.add(AREA.types, path, `${e.kind} needs a Ref value`, e.span);
-      return this.poison();
-    }
-    if (e.kind === "get-ref") {
-      return derivedResult(type.element, combine([ref, EFFECT_ONLY]));
-    }
-    if (e.kind === "set-ref") {
-      const value = this.check(e.value, `${path}.value`);
-      if (!fits(this.env, value.type, type.element)) {
-        this.add(
-          AREA.types,
-          `${path}.value`,
-          "the new value must fit the Ref element",
-          e.value.span,
-        );
-      }
-      return derivedResult(UNIT, combine([ref, value, EFFECT_ONLY]));
-    }
-    const transform = this.check(e.transform, `${path}.transform`);
-    const fn = asFunction(this.env, transform.type);
-    if (
-      fn === undefined || fn.parameters.length !== 1 ||
-      !isQuiet(invocationOf(fn)) ||
-      !fits(this.env, type.element, fn.parameters[0]) ||
-      !fits(this.env, fn.result, type.element)
-    ) {
-      this.add(
-        AREA.execution,
-        `${path}.transform`,
-        "updateRef needs a pure element-to-element callback",
-        e.transform.span,
-      );
-    }
-    return derivedResult(UNIT, combine([ref, transform, EFFECT_ONLY]));
   }
 
   private layer(e: Extract<Expr, { kind: "layer" }>, path: string): Comp {
