@@ -1369,8 +1369,8 @@ class BodyChecker
         );
         return this.finish(node, this.table.error, combine(infos));
       }
-      const base = unfolded.kind === "named"
-        ? this.table.brandBaseOf(unfolded.id as TypeId)
+      const base = unfolded.kind === "named" && !isErrorId(unfolded.id)
+        ? this.table.brandBaseOf(unfolded.id)
         : undefined;
       if (base !== undefined) {
         type = base;
@@ -1704,16 +1704,16 @@ class BodyChecker
     const unfolded = this.table.unfold(ref);
     const node = this.table.node(unfolded);
     if (node.kind === "record") return node.fields;
-    if (node.kind === "named" && isErrorId(node.id)) {
-      const record = this.table.errorRecordOf(node.id);
-      const recordNode = record === undefined
-        ? undefined
-        : this.table.node(record);
-      return recordNode?.kind === "record" ? recordNode.fields : undefined;
-    }
     if (node.kind === "named") {
+      if (isErrorId(node.id)) {
+        const record = this.table.errorRecordOf(node.id);
+        const recordNode = record === undefined
+          ? undefined
+          : this.table.node(record);
+        return recordNode?.kind === "record" ? recordNode.fields : undefined;
+      }
       // A brand of a record has the fields of its base.
-      const base = this.table.brandBaseOf(node.id as TypeId);
+      const base = this.table.brandBaseOf(node.id);
       if (base !== undefined) return this.recordFields(base);
     }
     return undefined;
@@ -2113,8 +2113,8 @@ class BodyChecker
    */
   private numericBrand(ref: TypeRef): TypeId | undefined {
     const node = this.table.node(this.table.unfold(ref));
-    if (node.kind !== "named") return undefined;
-    const id = node.id as TypeId;
+    if (node.kind !== "named" || isErrorId(node.id)) return undefined;
+    const id = node.id;
     const base = this.table.brandBaseOf(id);
     if (base === undefined) return undefined;
     const baseNode = this.table.node(this.table.unfold(base));
@@ -2159,8 +2159,8 @@ class BodyChecker
         else if (node.name === "string" || node.name === "boolean") {
           current = node.name;
         }
-      } else if (node.kind === "named") {
-        const base = this.table.brandBaseOf(node.id as TypeId);
+      } else if (node.kind === "named" && !isErrorId(node.id)) {
+        const base = this.table.brandBaseOf(node.id);
         if (base !== undefined && this.comparisonClass(base) !== undefined) {
           current = `brand:${node.id}`;
         }

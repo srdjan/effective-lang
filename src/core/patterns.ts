@@ -3,7 +3,7 @@
 // match must cover. The functions here are pure. The body checker walks the
 // arms and reports the diagnostics.
 
-import type { ErrorId, TypeId } from "./ir.ts";
+import type { ErrorId } from "./ir.ts";
 import type { TypeRef, TypeTable } from "./types.ts";
 import { isErrorId } from "./ids.ts";
 
@@ -182,8 +182,8 @@ function literalMayEqual(
   const next = new Set(seen).add(type);
   const node = table.node(type);
   if (node.kind === "named") {
-    const base = table.aliasOf(node.id as TypeId) ??
-      table.brandBaseOf(node.id as TypeId);
+    if (isErrorId(node.id)) return false;
+    const base = table.aliasOf(node.id) ?? table.brandBaseOf(node.id);
     return base !== undefined && literalMayEqual(table, base, value, next);
   }
   if (node.kind === "union") {

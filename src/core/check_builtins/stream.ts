@@ -1,10 +1,6 @@
 // Stream and Sink construction, callbacks, execution and group lifetimes.
-import {
-  type LocalId,
-  type Result,
-  SCOPE_CAPABILITY,
-  type TypeId,
-} from "../ir.ts";
+import { type LocalId, type Result, SCOPE_CAPABILITY } from "../ir.ts";
+import { isErrorId } from "../ids.ts";
 import { flattenMembers } from "../patterns.ts";
 import type { Target } from "../resolve.ts";
 import { kindOf, type NodeId, SyntaxKind, type SyntaxTree } from "../syntax.ts";
@@ -936,8 +932,8 @@ function groupKeyClass(
       ) {
         current = type.name;
       }
-    } else if (type.kind === "named") {
-      const base = c.table.brandBaseOf(type.id as TypeId);
+    } else if (type.kind === "named" && !isErrorId(type.id)) {
+      const base = c.table.brandBaseOf(type.id);
       if (
         base !== undefined &&
         groupKeyClass(c, base, depth + 1) !== undefined

@@ -165,7 +165,7 @@ export function retryScheduleCall(
     return c.finish(node, c.table.error, combine([info]));
   }
   const error = c.table.node(c.table.unfold(fn.parameters[0]));
-  if (error.kind !== "named" || !error.id.startsWith("error:")) {
+  if (error.kind !== "named" || !isErrorId(error.id)) {
     c.report(
       "type-mismatch/010",
       "the retry schedule callback needs a nominal error parameter",
@@ -194,7 +194,7 @@ export function retryScheduleCall(
       args[0].node,
     );
   }
-  const type = error.kind === "named" && error.id.startsWith("error:")
+  const type = error.kind === "named" && isErrorId(error.id)
     ? c.table.retrySchedule(fn.parameters[0])
     : c.table.error;
   return c.finish(node, type, combine([info]));

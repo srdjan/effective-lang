@@ -199,7 +199,7 @@ export function validateAllCall(
     undefined,
   );
   const wrapper = c.table.node(c.table.unfold(wrapped.result));
-  if (wrapper.kind !== "named" || !wrapper.id.startsWith("error:")) {
+  if (wrapper.kind !== "named" || !isErrorId(wrapper.id)) {
     if (!c.isError(wrapped.result)) {
       c.report(
         "type-mismatch/010",

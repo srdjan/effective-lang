@@ -2,8 +2,11 @@
 
 Each row gives one commit, its measured AST branch delta and cyclomatic delta from `measure.ts` and `fns.ts`, and the other measurements that its plan item asks for.
 
+CHK-11 verification on 2026-10-22 compares baseline `5a5567409abfbe40296ab666921a52da96fceb0c` with the seven frozen working-source files (combined SHA-256 `761a57965ecd4515dbf7127cb89eff5ffc05b0cd0389c634db9999fe7e38e82a`). Each capture exports the baseline with `git archive`; the candidate overlays only those source files. Both use the repository's `instrumentSources` hooks and capture test commands, with the documented `parse_chain_slow_test.ts` record-file permission overlay applied to both temporary trees. Repository tests, source inputs and permissions remain unchanged. The comparison creates no commits and does not stage files.
+
 | Commit | Item | Measurement |
 | --- | --- | --- |
+| 2026-10-22 ID guard remainder | R18 CHK-11 | Remove 24 ID casts and four duplicate error-prefix checks across seven checker source files. Declaration metadata ties each kind to its ID; explicit guards keep nominal errors out of alias/brand lookups. Public method signatures, definition-map key types, canonical IR and independent validator policy are unchanged. Filtered LOC 8082 to 8082; AST branches 2113 to 2125 (+12). All 274 focused tests pass. Three negative probes reject alias, brand and error declarations with mismatched IDs (TS2322); all three were accepted by the baseline, and valid declarations compile on both. `deno task check`: 1826 fast and 177 slow passed. Constant-input capture has 8986 records on each side, zero missing and zero new, using the procedure above. |
 | 730977c | baseline | 9617 branches in `src/` and `playground/src`; full suite 1370 tests, 91.0% branches, 91.3% lines |
 | d6bf00c | P0-4 | 0 branch delta (tests only); 54 of 55 arity-guard bodies have line hits, the 55th is a one-line guard (`check_expr.ts:6055`) whose return branch runs 6 times |
 | 9e051df | P0-5, P0-6a | 71 of 72 listed report sites run; `check_expr.ts:911` (construct SchemaError or SchemaIssue) cannot be reached from source; `None(1)` test added |

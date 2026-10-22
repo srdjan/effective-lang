@@ -830,8 +830,8 @@ export class TypeTable {
     let current = ref;
     for (let steps = 0; steps <= this.aliases.size; steps++) {
       const node = this.node(current);
-      if (node.kind !== "named") return current;
-      const target = this.aliases.get(node.id as TypeId);
+      if (node.kind !== "named" || isErrorId(node.id)) return current;
+      const target = this.aliases.get(node.id);
       if (target === undefined) return current;
       current = target;
     }
@@ -882,8 +882,8 @@ export class TypeTable {
   private childRefs(node: TypeNode): readonly TypeRef[] {
     switch (node.kind) {
       case "named": {
-        if (this.guardedAliases.has(node.id as TypeId)) return [];
-        const alias = this.aliases.get(node.id as TypeId);
+        if (isErrorId(node.id) || this.guardedAliases.has(node.id)) return [];
+        const alias = this.aliases.get(node.id);
         return alias === undefined ? [] : [alias];
       }
       case "record":
@@ -1203,19 +1203,20 @@ export class TypeTable {
     const tn = this.node(t);
     if (
       sn.kind === "named" && tn.kind === "named" && sn.id !== tn.id &&
-      this.guardedAliases.has(sn.id as TypeId) &&
-      this.guardedAliases.has(tn.id as TypeId)
+      !isErrorId(sn.id) && !isErrorId(tn.id) &&
+      this.guardedAliases.has(sn.id) &&
+      this.guardedAliases.has(tn.id)
     ) return false;
     if (sn.kind === "error" || tn.kind === "error") return true;
     if (sn.kind === "primitive" && sn.name === "never") return true;
-    if (sn.kind === "named") {
-      const alias = this.aliases.get(sn.id as TypeId);
+    if (sn.kind === "named" && !isErrorId(sn.id)) {
+      const alias = this.aliases.get(sn.id);
       if (alias !== undefined) {
         return this.assignable(alias, t, depth + 1, lift);
       }
     }
-    if (tn.kind === "named") {
-      const alias = this.aliases.get(tn.id as TypeId);
+    if (tn.kind === "named" && !isErrorId(tn.id)) {
+      const alias = this.aliases.get(tn.id);
       if (alias !== undefined) {
         return this.assignable(s, alias, depth + 1, lift);
       }

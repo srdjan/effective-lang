@@ -454,7 +454,7 @@ export class TypeLowerer {
           return this.errorLowered();
         }
         const error = this.lower(args[0]);
-        if (error.ir.kind !== "named" || !error.ir.id.startsWith("error:")) {
+        if (error.ir.kind !== "named" || !isErrorId(error.ir.id)) {
           this.report(
             "type-mismatch/001",
             "RetrySchedule needs a nominal error type",
@@ -1089,14 +1089,17 @@ export function effectIds(
 
 // ------------------------------------------------------------------ the module checker
 
-interface TypeNodeInfo {
-  readonly id: TypeId | ErrorId;
-  readonly name: string;
-  readonly nameSpan: Span;
-  readonly start: number;
-  readonly kind: "alias" | "brand" | "error";
-  readonly refs: ReadonlySet<string>;
-}
+type TypeNodeInfo =
+  & {
+    readonly name: string;
+    readonly nameSpan: Span;
+    readonly start: number;
+    readonly refs: ReadonlySet<string>;
+  }
+  & (
+    | { readonly kind: "alias" | "brand"; readonly id: TypeId }
+    | { readonly kind: "error"; readonly id: ErrorId }
+  );
 
 /** The most levels that a type declaration may have, counting its aliases. */
 const MAX_TYPE_DEPTH = 128;
@@ -1361,19 +1364,19 @@ class ModuleChecker {
       const first = component[0];
       if (component.length === 1 && first.kind === "alias") {
         const declaration = this.types.find((d) => d.id === first.id);
-        const aliased = this.table.aliasOf(first.id as TypeId);
+        const aliased = this.table.aliasOf(first.id);
         if (
           declaration?.definition.kind === "alias" &&
           guardedRecord(
             declaration.definition.type,
-            first.id as TypeId,
+            first.id,
             (type) => this.literalTag(type),
           ) &&
           aliased !== undefined &&
           dataOnly(this.table, aliased, "schema")
         ) {
-          this.guardedAliases.add(first.id as TypeId);
-          this.table.markGuardedAlias(first.id as TypeId);
+          this.guardedAliases.add(first.id);
+          this.table.markGuardedAlias(first.id);
           continue;
         }
       }
@@ -1391,9 +1394,9 @@ class ModuleChecker {
       );
       for (const member of component) {
         if (member.kind === "alias") {
-          this.table.defineAlias(member.id as TypeId, this.table.error);
+          this.table.defineAlias(member.id, this.table.error);
         } else if (member.kind === "brand") {
-          this.table.defineBrand(member.id as TypeId, this.table.error);
+          this.table.defineBrand(member.id, this.table.error);
         }
       }
     }
@@ -1410,10 +1413,10 @@ class ModuleChecker {
     }
     if (type.kind !== "named") return undefined;
     const seen = new Set<string>();
-    let id: string = type.id;
-    while (!seen.has(id)) {
+    let id: TypeId | ErrorId = type.id;
+    while (!isErrorId(id) && !seen.has(id)) {
       seen.add(id);
-      const target = this.table.aliasOf(id as TypeId);
+      const target = this.table.aliasOf(id);
       if (target === undefined) return undefined;
       const node = this.table.node(target);
       if (node.kind === "literal") {
@@ -1435,8 +1438,8 @@ class ModuleChecker {
     const memo = new Map<TypeRef, number>();
     for (const info of this.typeInfos) {
       if (info.kind !== "alias") continue;
-      if (this.guardedAliases.has(info.id as TypeId)) continue;
-      const body = this.table.aliasOf(info.id as TypeId);
+      if (this.guardedAliases.has(info.id)) continue;
+      const body = this.table.aliasOf(info.id);
       if (body === undefined) continue;
       if (!this.table.exceedsDepth(body, MAX_TYPE_DEPTH, memo)) continue;
       this.lowerer.report(
@@ -1444,7 +1447,7 @@ class ModuleChecker {
         `the type \`${info.name}\` is nested deeper than ${MAX_TYPE_DEPTH} levels, counting the levels inside its aliases`,
         info.nameSpan,
       );
-      this.table.defineAlias(info.id as TypeId, this.table.error);
+      this.table.defineAlias(info.id, this.table.error);
     }
   }
 
