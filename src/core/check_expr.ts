@@ -1,3 +1,18 @@
+import {
+  deferCall,
+  type EffectContext,
+  failCall,
+  raceCall,
+  retryCall,
+  retryScheduleCall,
+  runCall,
+} from "./check_builtins/effect.ts";
+import {
+  layerCall,
+  type LayerContext,
+  mergeLayersCall,
+  provideCall,
+} from "./check_builtins/layer.ts";
 // Expression checking (plan part A3b). A `BodyChecker` checks one declaration
 // body. For each syntax node it records the type, the failure set, the
 // requirement set, and the mode in a `BodyTable`, and it records the facts that
@@ -82,7 +97,13 @@ import {
   type TypeTable,
 } from "./types.ts";
 import { isErrorId, isTypeId, serviceOfCapability, shortName } from "./ids.ts";
-import type { Arg, BuiltinContext } from "./check_builtins/context.ts";
+import {
+  type Arg,
+  type BuiltinContext,
+  type FunctionNode,
+  invocationOf,
+  type LiteralField,
+} from "./check_builtins/context.ts";
 import {
   allCall,
   allResultsCall,
@@ -110,8 +131,6 @@ export interface BodyEnv {
   /** The function type of a service method. The error type when unknown. */
   readonly methodType: (capability: CapabilityId) => TypeRef;
 }
-
-type FunctionNode = Extract<TypeNode, { readonly kind: "function" }>;
 
 /** The contract of a function body. A result means the contract is explicit and closed. */
 export interface Contract {
@@ -152,12 +171,6 @@ interface LocalUse {
   readonly grandparent: NodeId | undefined;
   /** True when an arrow function between the body and the use encloses it. */
   readonly nested: boolean;
-}
-
-/** One `name: literal` field of an option record. */
-interface LiteralField {
-  readonly node: NodeId;
-  readonly value: unknown;
 }
 
 interface ArrowContext {
@@ -510,25 +523,17 @@ function isPureInfo(info: NodeInfo): boolean {
     info.requirements.length === 0;
 }
 
-/** The invocation effects of a function type. An unknown function has none. */
-function invocationOf(fn: FunctionNode | undefined): EffectSet {
-  return fn === undefined ? PURE_EFFECTS : {
-    failures: fn.failures,
-    requirements: fn.requirements,
-    mode: fn.execution,
-  };
-}
-
 // ------------------------------------------------------------------ the checker
 
 // Shared members are exposed only through BuiltinContext to family handlers.
-class BodyChecker implements BuiltinContext, CollectionContext {
+class BodyChecker
+  implements BuiltinContext, CollectionContext, EffectContext, LayerContext {
   readonly sink: Diagnostic[] = [];
   readonly body: BodyTable;
   private readonly lowerer: TypeLowerer;
-  private readonly tree: SyntaxTree;
+  readonly tree: SyntaxTree;
   readonly table: TypeTable;
-  private readonly targets: ReadonlyMap<NodeId, Target>;
+  readonly targets: ReadonlyMap<NodeId, Target>;
   /** Block-local functions whose bodies are being checked. */
   private readonly pendingLocals = new Set<LocalId>();
   /** Counts the error nodes made so far. Recovery uses it to hold back cascades. */
@@ -542,9 +547,13 @@ class BodyChecker implements BuiltinContext, CollectionContext {
     this.body = newBodyTable(declaration);
   }
 
+  get services(): Pick<TypeEnv["services"], "get"> {
+    return this.benv.env.services;
+  }
+
   // -------------------------------------------------------------- helpers
 
-  private kids(node: NodeId): NodeId[] {
+  kids(node: NodeId): NodeId[] {
     return kidsOf(this.tree, node);
   }
 
@@ -1220,10 +1229,10 @@ class BodyChecker implements BuiltinContext, CollectionContext {
   ) => c.schemaCall(node, name, args, expected);
 
   private static readonly PRELUDE_HANDLERS: PreludeHandlers = {
-    fail: (c, node, _name, args) => c.failCall(node, args),
-    retry: (c, node, _name, args) => c.retryCall(node, args),
+    fail: (c, node, _name, args) => failCall(c, node, args),
+    retry: (c, node, _name, args) => retryCall(c, node, args),
     retrySchedule: (c, node, _name, args, expected) =>
-      c.retryScheduleCall(node, args, expected),
+      retryScheduleCall(c, node, args, expected),
     codec: (c, node, _name, args) => codecCall(c, node, args),
     schema: BodyChecker.schemaBuiltin,
     schemaArray: BodyChecker.schemaBuiltin,
@@ -1250,9 +1259,9 @@ class BodyChecker implements BuiltinContext, CollectionContext {
       c.withFiberCall(node, args, expected),
     joinFiber: (c, node, name, args) => c.fiberOperation(node, name, args),
     interruptFiber: (c, node, name, args) => c.fiberOperation(node, name, args),
-    provide: (c, node, _name, args) => c.provideCall(node, args),
-    defer: (c, node, _name, args) => c.deferCall(node, args),
-    run: (c, node, _name, args) => c.runCall(node, args),
+    provide: (c, node, _name, args) => provideCall(c, node, args),
+    defer: (c, node, _name, args) => deferCall(c, node, args),
+    run: (c, node, _name, args) => runCall(c, node, args),
     scoped: (c, node, _name, args) => c.scopedCall(node, args),
     forkScoped: (c, node, _name, args) => c.forkScopedCall(node, args),
     makeScope: (c, node, name, args) => c.scopeCall(node, name, args),
@@ -1324,13 +1333,13 @@ class BodyChecker implements BuiltinContext, CollectionContext {
     mergeStreams: (c, node, name, args) => c.streamPairCall(node, name, args),
     zipStreams: (c, node, name, args) => c.streamPairCall(node, name, args),
     concatStreams: (c, node, name, args) => c.streamPairCall(node, name, args),
-    race: (c, node, _name, args) => c.raceCall(node, args),
+    race: (c, node, _name, args) => raceCall(c, node, args),
     makeRef: (c, node, name, args) => refCall(c, node, name, args),
     getRef: (c, node, name, args) => refCall(c, node, name, args),
     setRef: (c, node, name, args) => refCall(c, node, name, args),
     updateRef: (c, node, name, args) => refCall(c, node, name, args),
-    layer: (c, node, _name, args) => c.layerCall(node, args),
-    mergeLayers: (c, node, _name, args) => c.mergeLayersCall(node, args),
+    layer: (c, node, _name, args) => layerCall(c, node, args),
+    mergeLayers: (c, node, _name, args) => mergeLayersCall(c, node, args),
     unbrand: (c, node, _name, args) => c.unbrandCall(node, args),
     Some: (c, node, _name, args, expected) => c.someCall(node, args, expected),
     all: (c, node, _name, args) => allCall(c, node, args),
@@ -1578,7 +1587,7 @@ class BodyChecker implements BuiltinContext, CollectionContext {
   }
 
   /** Reports a wrong argument count for a prelude call. Returns true when the count is right. */
-  private arity(
+  arity(
     node: NodeId,
     name: string,
     expectedCount: number,
@@ -1595,33 +1604,6 @@ class BodyChecker implements BuiltinContext, CollectionContext {
       node,
     );
     return false;
-  }
-
-  private failCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "fail" });
-    const rightCount = this.arity(node, "fail", 1, args);
-    const infos = args.map((a) => this.argInfo(a));
-    let failure: ErrorId | undefined;
-    if (rightCount) {
-      const unfolded = this.table.node(this.table.unfold(infos[0].type));
-      if (unfolded.kind === "named" && isErrorId(unfolded.id)) {
-        failure = unfolded.id;
-      } else if (!this.isError(infos[0].type)) {
-        this.report(
-          "type-mismatch/010",
-          `\`fail\` needs a value of a named error type, but the value has type ${
-            this.show(infos[0].type)
-          }`,
-          args[0].node,
-        );
-      }
-    }
-    const own: EffectSet = {
-      failures: failure === undefined ? [] : [failure],
-      requirements: [],
-      mode: "effect",
-    };
-    return this.finish(node, this.table.never, combine([...infos, own]));
   }
 
   private unbrandCall(node: NodeId, args: readonly Arg[]): NodeInfo {
@@ -1683,7 +1665,7 @@ class BodyChecker implements BuiltinContext, CollectionContext {
    * value that is not a record, another field count, a field of another form,
    * or a repeated name. It reports nothing and records nothing.
    */
-  private literalRecord(
+  literalRecord(
     arg: Arg,
     count: number,
   ): Result<ReadonlyMap<string, LiteralField>, "shape"> {
@@ -1716,41 +1698,8 @@ class BodyChecker implements BuiltinContext, CollectionContext {
     return { ok: true, value: values };
   }
 
-  /** The literal count of `{ times: N }`, or undefined after a diagnostic. */
-  private retryTimes(arg: Arg): number | undefined {
-    const record = this.literalRecord(arg, 1);
-    const times = record.ok ? record.value.get("times") : undefined;
-    const value = times?.value;
-    if (
-      times === undefined || typeof value !== "number" ||
-      !Number.isSafeInteger(value) || value < 0
-    ) {
-      this.report(
-        "type-mismatch/010",
-        "`retry` needs `{ times: N }`, where N is a finite nonnegative safe integer literal",
-        arg.node,
-      );
-      return undefined;
-    }
-    this.finish(
-      times.node,
-      this.table.int,
-      PURE_EFFECTS,
-    );
-    this.finish(
-      arg.node,
-      this.table.record([{
-        name: "times",
-        type: this.table.int,
-        optional: false,
-      }]),
-      PURE_EFFECTS,
-    );
-    return value;
-  }
-
   /** The zero-argument function type of a `retry` or `provide` job, or undefined after a diagnostic. */
-  private jobFunction(
+  jobFunction(
     name: string,
     arg: Arg,
     info: NodeInfo,
@@ -1777,142 +1726,6 @@ class BodyChecker implements BuiltinContext, CollectionContext {
       return undefined;
     }
     return fn;
-  }
-
-  private retryCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const job = this.argInfo(args[0]);
-    const fn = this.jobFunction("retry", args[0], job);
-    if (this.retryScheduleOption(args[1])) {
-      const options = this.argInfo(args[1]);
-      const shape = this.table.node(this.table.unfold(options.type));
-      const policy = shape.kind === "record"
-        ? this.table.node(this.table.unfold(shape.fields[0].type))
-        : undefined;
-      if (policy?.kind !== "retry-schedule") {
-        this.report(
-          "type-mismatch/010",
-          "`retry` needs a RetrySchedule in `schedule`",
-          args[1].node,
-        );
-      } else if (fn !== undefined) {
-        for (const failure of fn.failures) {
-          if (
-            !this.table.isAssignable(this.table.named(failure), policy.error)
-          ) {
-            this.report(
-              "type-mismatch/003",
-              `the retry schedule does not accept ${failure}`,
-              args[1].node,
-            );
-          }
-        }
-      }
-      this.fact(node, { kind: "retry-with-schedule" });
-      const invocation: EffectSet = invocationOf(fn);
-      return this.finish(
-        node,
-        fn?.result ?? this.table.error,
-        combine([job, options, invocation, EFFECT_ONLY]),
-      );
-    }
-    const times = this.retryTimes(args[1]);
-    this.fact(node, { kind: "retry", times });
-    const invocation: EffectSet = invocationOf(fn);
-    return this.finish(
-      node,
-      fn?.result ?? this.table.error,
-      combine([job, invocation, EFFECT_ONLY]),
-    );
-  }
-
-  private retryScheduleOption(arg: Arg): boolean {
-    if (
-      arg.pre !== undefined ||
-      kindOf(this.tree, arg.node) !== SyntaxKind.RecordExpr
-    ) return false;
-    const fields = this.kids(arg.node);
-    if (
-      fields.length !== 1 ||
-      kindOf(this.tree, fields[0]) !== SyntaxKind.RecordField
-    ) return false;
-    const name = this.kids(fields[0]).find((k) =>
-      kindOf(this.tree, k) === SyntaxKind.Name
-    );
-    return name !== undefined && nameTextOf(this.tree, name) === "schedule";
-  }
-
-  private retryScheduleCall(
-    node: NodeId,
-    args: readonly Arg[],
-    expected: TypeRef | undefined,
-  ): NodeInfo {
-    const expectedType = expected === undefined
-      ? undefined
-      : this.table.node(this.table.unfold(expected));
-    const errorHint = expectedType?.kind === "retry-schedule"
-      ? expectedType.error
-      : undefined;
-    const info = errorHint === undefined
-      ? this.argInfo(args[0])
-      : this.callback(
-        "retrySchedule",
-        args[0],
-        [errorHint, this.table.int],
-        this.table.option(this.table.int),
-      ).info;
-    const fn = this.functionOf(info.type);
-    if (fn === undefined) {
-      if (!this.isError(info.type)) {
-        this.report(
-          "type-mismatch/010",
-          "`retrySchedule` needs a function",
-          args[0].node,
-        );
-      }
-      return this.finish(node, this.table.error, combine([info]));
-    }
-    if (fn.parameters.length !== 2) {
-      this.report(
-        "type-mismatch/004",
-        "the retry schedule callback takes an error and an attempt number",
-        args[0].node,
-      );
-      return this.finish(node, this.table.error, combine([info]));
-    }
-    const error = this.table.node(this.table.unfold(fn.parameters[0]));
-    if (error.kind !== "named" || !error.id.startsWith("error:")) {
-      this.report(
-        "type-mismatch/010",
-        "the retry schedule callback needs a nominal error parameter",
-        args[0].node,
-      );
-    }
-    this.fits(
-      args[0].node,
-      fn.parameters[1],
-      this.table.int,
-      "the retry attempt number",
-    );
-    this.fits(
-      args[0].node,
-      fn.result,
-      this.table.option(this.table.int),
-      "the retry delay",
-    );
-    if (
-      fn.execution !== "pure" || fn.failures.length > 0 ||
-      fn.requirements.length > 0
-    ) {
-      this.report(
-        "execution-mode/001",
-        "the retry schedule callback must be pure",
-        args[0].node,
-      );
-    }
-    const type = error.kind === "named" && error.id.startsWith("error:")
-      ? this.table.retrySchedule(fn.parameters[0])
-      : this.table.error;
-    return this.finish(node, type, combine([info]));
   }
 
   /** The Schema operation that the prologue recorded for a Schema builtin call. */
@@ -3103,47 +2916,6 @@ class BodyChecker implements BuiltinContext, CollectionContext {
         );
       }
     }
-  }
-
-  private deferCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const job = this.argInfo(args[0]);
-    const fn = this.jobFunction("defer", args[0], job);
-    return this.finish(
-      node,
-      fn === undefined
-        ? this.table.error
-        : this.table.effect(fn.result, fn.failures, fn.requirements),
-      job,
-    );
-  }
-
-  private runCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const value = this.argInfo(args[0]);
-    const type = this.table.node(this.table.unfold(value.type));
-    if (type.kind !== "effect") {
-      if (!this.isError(value.type)) {
-        this.report(
-          "type-mismatch/010",
-          `\`run\` needs an Effect value, but the argument has type ${
-            this.show(value.type)
-          }`,
-          args[0].node,
-        );
-      }
-      return this.finish(node, this.table.error, combine([value, EFFECT_ONLY]));
-    }
-    return this.finish(
-      node,
-      type.result,
-      combine([
-        value,
-        {
-          failures: type.failures,
-          requirements: type.requirements,
-          mode: "effect",
-        },
-      ]),
-    );
   }
 
   private scopedCall(node: NodeId, args: readonly Arg[]): NodeInfo {
@@ -4547,184 +4319,6 @@ class BodyChecker implements BuiltinContext, CollectionContext {
       [...a.failures, ...b.failures],
       [...a.requirements, ...b.requirements],
     );
-    return this.finish(node, type, combine([left, right]));
-  }
-
-  private raceCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const left = this.argInfo(args[0]);
-    const right = this.argInfo(args[1]);
-    const a = this.table.node(this.table.unfold(left.type));
-    const b = this.table.node(this.table.unfold(right.type));
-    if (a.kind !== "effect" || b.kind !== "effect") {
-      this.report("type-mismatch/010", "`race` needs two Effect values", node);
-      return this.finish(node, this.table.error, combine([left, right]));
-    }
-    const aFitsB = this.table.isAssignable(a.result, b.result);
-    const bFitsA = this.table.isAssignable(b.result, a.result);
-    if (!aFitsB && !bFitsA) {
-      this.report(
-        "type-mismatch/010",
-        "`race` needs compatible success types",
-        node,
-      );
-    }
-    const type = this.table.effect(
-      aFitsB ? b.result : a.result,
-      [...a.failures, ...b.failures],
-      [...a.requirements, ...b.requirements],
-    );
-    return this.finish(node, type, combine([left, right]));
-  }
-
-  private provideCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const providerInfo = this.argInfo(args[0]);
-    const job = this.argInfo(args[1]);
-    const providerNode = kindOf(this.tree, args[0].node) === SyntaxKind.NameExpr
-      ? args[0].node
-      : undefined;
-    const target = providerNode === undefined
-      ? undefined
-      : this.targets.get(providerNode);
-    const providerType = this.table.node(this.table.unfold(providerInfo.type));
-    let provider: ValueId | undefined;
-    if (target?.kind === "provider" && providerType.kind === "provider") {
-      provider = target.id;
-    } else if (
-      providerType.kind !== "provider" && !this.isError(providerInfo.type)
-    ) {
-      this.report(
-        "type-mismatch/010",
-        "`provide` needs a Layer value",
-        args[0].node,
-      );
-    }
-    this.fact(node, { kind: "provide", provider });
-    const fn = this.jobFunction("provide", args[1], job);
-    const construction = combine([providerInfo, job]);
-    const supplied = providerType.kind === "provider"
-      ? providerType.provides
-      : [];
-    const acquisition: EffectSet = providerType.kind === "provider"
-      ? {
-        failures: providerType.failures,
-        requirements: providerType.requirements,
-        mode: "effect",
-      }
-      : PURE_EFFECTS;
-    const invocation: EffectSet = fn === undefined ? PURE_EFFECTS : {
-      failures: fn.failures,
-      requirements: without(fn.requirements, supplied),
-      mode: fn.execution,
-    };
-    return this.finish(
-      node,
-      fn?.result ?? this.table.error,
-      combine([construction, invocation, acquisition, EFFECT_ONLY]),
-    );
-  }
-
-  private layerCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const target = kindOf(this.tree, args[0].node) === SyntaxKind.NameExpr
-      ? this.targets.get(args[0].node)
-      : undefined;
-    const service: ServiceId | undefined = target?.kind === "service"
-      ? target.id
-      : undefined;
-    this.fact(node, { kind: "layer", service });
-    if (service === undefined) {
-      this.report(
-        "type-mismatch/010",
-        "`layer` needs a declared service name",
-        args[0].node,
-      );
-    }
-    if (kindOf(this.tree, args[1].node) !== SyntaxKind.ArrowExpr) {
-      this.report(
-        "type-mismatch/010",
-        "`layer` needs an inline acquisition callback",
-        args[1].node,
-      );
-    }
-    const acquire = this.argInfo(args[1]);
-    const fn = this.jobFunction("layer", args[1], acquire);
-    const declaration = service === undefined
-      ? undefined
-      : this.benv.env.services.get(service);
-    const implementation = fn === undefined
-      ? undefined
-      : this.table.node(this.table.unfold(fn.result));
-    if (declaration !== undefined && implementation?.kind === "record") {
-      if (implementation.fields.length !== declaration.methods.length) {
-        this.report(
-          "type-mismatch/010",
-          "`layer` must implement exactly the service methods",
-          args[1].node,
-        );
-      }
-      for (const method of declaration.methods) {
-        const field = implementation.fields.find((f) => f.name === method.name);
-        if (
-          field === undefined || field.optional ||
-          !this.table.isAssignable(field.type, this.table.fromIr(method.type))
-        ) {
-          this.report(
-            "type-mismatch/010",
-            `\`layer\` method ${method.name} does not fit its service contract`,
-            args[1].node,
-          );
-        }
-      }
-    } else if (fn !== undefined) {
-      this.report(
-        "type-mismatch/010",
-        "`layer` acquisition must return a service method record",
-        args[1].node,
-      );
-    }
-    const provides = declaration?.methods.map((m) => m.id) ?? [];
-    if (fn?.requirements.some((r) => provides.includes(r))) {
-      this.report(
-        "type-mismatch/010",
-        "`layer` acquisition cannot require a method it provides",
-        args[1].node,
-      );
-    }
-    const type = this.table.provider({
-      provides,
-      execution: "effect",
-      failures: fn?.failures ?? [],
-      requirements: fn?.requirements ?? [],
-    });
-    return this.finish(node, type, acquire);
-  }
-
-  private mergeLayersCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const left = this.argInfo(args[0]);
-    const right = this.argInfo(args[1]);
-    const a = this.table.node(this.table.unfold(left.type));
-    const b = this.table.node(this.table.unfold(right.type));
-    if (a.kind !== "provider" || b.kind !== "provider") {
-      this.report(
-        "type-mismatch/010",
-        "`mergeLayers` needs two Layer values",
-        node,
-      );
-      return this.finish(node, this.table.error, combine([left, right]));
-    }
-    const services = new Set(a.provides.map(serviceOfCapability));
-    if (b.provides.some((id) => services.has(serviceOfCapability(id)))) {
-      this.report(
-        "type-mismatch/010",
-        "`mergeLayers` cannot provide one service twice",
-        node,
-      );
-    }
-    const type = this.table.provider({
-      provides: [...a.provides, ...b.provides],
-      execution: "effect",
-      failures: [...a.failures, ...b.failures],
-      requirements: [...a.requirements, ...b.requirements],
-    });
     return this.finish(node, type, combine([left, right]));
   }
 

@@ -5,7 +5,7 @@
 
 import type { DiagnosticCode } from "../diagnostics.ts";
 import type { NodeId } from "../syntax.ts";
-import type { EffectSet, NodeInfo } from "../tables.ts";
+import { type EffectSet, type NodeInfo, PURE_EFFECTS } from "../tables.ts";
 import type { TypeNode, TypeRef, TypeTable } from "../types.ts";
 
 export interface Arg {
@@ -32,11 +32,26 @@ export interface BuiltinContext {
     expected: TypeRef | undefined,
     what: string,
   ): boolean;
-  functionOf(
-    ref: TypeRef,
-  ): Extract<TypeNode, { readonly kind: "function" }> | undefined;
+  functionOf(ref: TypeRef): FunctionNode | undefined;
   inlineStreamCallback(name: string, arg: Arg): void;
   isError(ref: TypeRef): boolean;
   report(code: DiagnosticCode, message: string, node: NodeId): void;
   widen(ref: TypeRef): TypeRef;
+}
+
+export type FunctionNode = Extract<TypeNode, { readonly kind: "function" }>;
+
+/** One `name: literal` field of an option record. */
+export interface LiteralField {
+  readonly node: NodeId;
+  readonly value: unknown;
+}
+
+/** Invocation effects; an unknown function contributes none during recovery. */
+export function invocationOf(fn: FunctionNode | undefined): EffectSet {
+  return fn === undefined ? PURE_EFFECTS : {
+    failures: fn.failures,
+    requirements: fn.requirements,
+    mode: fn.execution,
+  };
 }
