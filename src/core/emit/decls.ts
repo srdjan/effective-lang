@@ -270,6 +270,35 @@ export function orderConstants(ir: ModuleIR): ConstantDecl[] {
 
 // ------------------------------------------------------------------ printing
 
+/**
+ * The parameter list of a function declaration, and the result type when
+ * `result` is `"always"` or when the contract is explicit. The emitter passes
+ * `"contract"`. Hover passes `"always"`, because it shows the inferred result.
+ */
+export function functionHeaderDoc(
+  scope: Scope,
+  d: FunctionDecl,
+  result: "contract" | "always",
+): Doc {
+  const parameters = bracketed(
+    "(",
+    ")",
+    d.parameters.map((p) => property(p.name, typeDoc(scope, p.type))),
+    false,
+  );
+  if (result === "contract" && d.contract !== "explicit") return parameters;
+  const resultDoc = typeDoc(scope, d.type.result);
+  const returns = d.type.execution === "effect"
+    ? effectTypeDoc(scope, resultDoc, d.type.effects)
+    : resultDoc;
+  return [parameters, ": ", returns];
+}
+
+/** The declared type of a constant. */
+export function constantTypeDoc(scope: Scope, d: ConstantDecl): Doc {
+  return typeDoc(scope, d.type);
+}
+
 export class DeclarationEmitter {
   readonly expr: ExprEmitter;
 
@@ -502,31 +531,8 @@ export class DeclarationEmitter {
     return [`${keyword}class ${d.name} `, heritage];
   }
 
-  private parameters(declaration: FunctionDecl): Doc {
-    return bracketed(
-      "(",
-      ")",
-      declaration.parameters.map((
-        p,
-      ) => property(p.name, typeDoc(this.scope, p.type))),
-      false,
-    );
-  }
-
   private functionDeclaration(d: FunctionDecl): Doc {
-    const parameters = this.parameters(d);
-    const returns = d.contract === "explicit"
-      ? d.type.execution === "effect"
-        ? effectTypeDoc(
-          this.scope,
-          typeDoc(this.scope, d.type.result),
-          d.type.effects,
-        )
-        : typeDoc(this.scope, d.type.result)
-      : undefined;
-    const header: Doc = returns === undefined
-      ? parameters
-      : [parameters, ": ", returns];
+    const header = functionHeaderDoc(this.scope, d, "contract");
     const prefix: Doc = [this.exportKeyword(d.id), "const ", d.name];
     if (
       d.type.execution === "pure" && d.body.kind === "block" &&
@@ -555,7 +561,7 @@ export class DeclarationEmitter {
       "const ",
       d.name,
       ": ",
-      typeDoc(this.scope, d.type),
+      constantTypeDoc(this.scope, d),
       " = ",
       at(value, 0),
       ";",

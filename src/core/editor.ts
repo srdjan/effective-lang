@@ -8,16 +8,16 @@
 import type { CheckedModule, FunctionBody } from "./check_project.ts";
 import { effectText } from "./check_project.ts";
 import type { Revision } from "./db.ts";
-import { bracketed, render } from "./emit/doc.ts";
+import { type Doc, render } from "./emit/doc.ts";
+import { constantTypeDoc, functionHeaderDoc } from "./emit/decls.ts";
 import { EmitFailure, Scope } from "./emit/scope.ts";
-import { effectTypeDoc, typeDoc } from "./emit/types.ts";
 import {
   methodOfCapability,
   moduleOfId,
   nameOfId,
   serviceOfCapability,
 } from "./ids.ts";
-import type { ConstantDecl, FunctionDecl, ModuleIR } from "./ir.ts";
+import type { ModuleIR } from "./ir.ts";
 import type { DeclEntry, FileIndex } from "./index.ts";
 import { parseFileFresh } from "./project.ts";
 import type { Target } from "./resolve.ts";
@@ -92,6 +92,10 @@ function functionContract(
 /** One line, as the emitter prints the declaration header, without the width limit. */
 const FLAT_WIDTH = 1_000_000;
 
+function renderDoc(doc: Doc): string {
+  return render(doc, FLAT_WIDTH).text;
+}
+
 function backendOf(
   revision: Revision,
   module: CheckedModule,
@@ -107,35 +111,22 @@ function backendOf(
   try {
     const scope = new Scope(ir, revision.project.config);
     if (declaration.kind === "function") {
-      return { tag: "type", text: functionHeader(scope, declaration) };
+      return {
+        tag: "type",
+        text: renderDoc(functionHeaderDoc(scope, declaration, "always")),
+      };
     }
     if (declaration.kind === "constant") {
-      return { tag: "type", text: constantType(scope, declaration) };
+      return {
+        tag: "type",
+        text: renderDoc(constantTypeDoc(scope, declaration)),
+      };
     }
     return unavailable;
   } catch (error) {
     if (error instanceof EmitFailure) return unavailable;
     throw error;
   }
-}
-
-/** The header of `functionDeclaration` in the emitter: parameters, then the result. */
-function functionHeader(scope: Scope, d: FunctionDecl): string {
-  const parameters = bracketed(
-    "(",
-    ")",
-    d.parameters.map((p) => [p.name, ": ", typeDoc(scope, p.type)]),
-    false,
-  );
-  const result = typeDoc(scope, d.type.result);
-  const returns = d.type.execution === "effect"
-    ? effectTypeDoc(scope, result, d.type.effects)
-    : result;
-  return render([parameters, ": ", returns], FLAT_WIDTH).text;
-}
-
-function constantType(scope: Scope, d: ConstantDecl): string {
-  return render(typeDoc(scope, d.type), FLAT_WIDTH).text;
 }
 
 /**
