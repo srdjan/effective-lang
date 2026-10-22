@@ -2,7 +2,7 @@
 
 The service-workflow fixture runs the existing `workflow.eff` orchestration
 against a real loopback HTTP catalog and a temporary, file-backed SQLite
-database. It uses Deno 2.9.7 and Effect 4.0.5. There are no new source forms or
+database. It uses Deno 2.9.8 and Effect 4.0.5. There are no new source forms or
 changes to the host interface: the driver supplies `Catalog.price` and
 `Runtime.database`, and the existing `StoreLive` adapter owns transactions and
 receipt validation.

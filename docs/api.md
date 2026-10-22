@@ -404,7 +404,7 @@ When `effective.json` is missing or invalid, the server publishes one diagnostic
 
 ## VS Code client
 
-The client is in `editors/vscode/`. It is plain JavaScript. The packaged VSIX includes the bundled language server and client runtime dependencies, and requires Deno 2.9.7. It starts the bundled server by default, adds syntax highlighting, and adds the command `Effective: Show Generated TypeScript`. See [local installation](installation.md) for artifact builds and installation; its README lists settings and development overrides.
+The client is in `editors/vscode/`. It is plain JavaScript. The packaged VSIX includes the bundled language server and client runtime dependencies, and requires Deno 2.9.8. It starts the bundled server by default, adds syntax highlighting, and adds the command `Effective: Show Generated TypeScript`. See [local installation](installation.md) for artifact builds and installation; its README lists settings and development overrides.
 
 For development, run `npm ci` once in `editors/vscode`, set `effective.server.repository` to the checkout, and start VS Code with the extension and example files. Replace `<repo>` with the path of this repository.
 

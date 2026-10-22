@@ -245,7 +245,7 @@ function activateClient(
 }
 
 Deno.test("the installed client starts its bundled server without checkout configuration", () => {
-  const { errors, launches } = activateClient({}, "2.9.7");
+  const { errors, launches } = activateClient({}, "2.9.8");
   assertEquals(errors, []);
   assertEquals(launches.length, 1);
   assertEquals(launches[0].command, "deno");
@@ -264,7 +264,7 @@ Deno.test("the client keeps an explicit checkout development override", () => {
   const { errors, launches } = activateClient({
     "server.repository": "/work/effective",
     "server.deno": "/tools/deno",
-  }, "2.9.7");
+  }, "2.9.8");
   assertEquals(errors, []);
   assertEquals(launches[0].command, "/tools/deno");
   assertEquals(Array.from(launches[0].args), [
@@ -278,11 +278,11 @@ Deno.test("the client keeps an explicit checkout development override", () => {
 });
 
 Deno.test("missing or incompatible Deno prevents startup with an actionable error", () => {
-  for (const version of ["2.9.6", "3.0.0", new Error("ENOENT")]) {
+  for (const version of ["2.9.6", "2.9.7", "3.0.0", new Error("ENOENT")]) {
     const { errors, launches } = activateClient({}, version);
     assertEquals(launches, []);
     assertEquals(errors.length, 1);
-    assert(errors[0].includes("2.9.7"));
+    assert(errors[0].includes("2.9.8"));
     assert(errors[0].includes("effective.server.deno"));
     if (version instanceof Error) assert(errors[0].includes("ENOENT"));
   }

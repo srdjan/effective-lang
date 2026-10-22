@@ -65,7 +65,7 @@
         "effective.server.deno": {
           "type": "string",
           "default": "deno",
-          "description": "The Deno 2.9.7 executable that starts the language server."
+          "description": "The Deno 2.9.8 executable that starts the language server."
         },
         "effective.server.repository": {
           "type": "string",

@@ -1,10 +1,10 @@
 # Local installation
 
-Effective requires **Deno 2.9.7**. The extension checks the executable before starting its server and reports missing or incompatible installations. Packaged CLI and server entry points also reject other versions. Generated TypeScript targets Effect 4.0.5.
+Effective requires **Deno 2.9.8**. The extension checks the executable before starting its server and reports missing or incompatible installations. Packaged CLI and server entry points also reject other versions. Generated TypeScript targets Effect 4.0.5.
 
 ## Build the local artifacts
 
-From a checkout, with Deno 2.9.7 and Node 20 or later (including npm):
+From a checkout, with Deno 2.9.8 and Node 20 or later (including npm):
 
 ```sh
 deno task package
@@ -30,7 +30,7 @@ deno install --global --name effective --no-config --no-lock --cached-only \
   "$HOME/.local/share/effective/effective.js"
 ```
 
-Add the bin directory printed by Deno to `PATH`. The launcher refers to the copied bundle, so retain that file. Run `effective --help`, `effective check /path/to/project`, or `effective build /path/to/project`. The subprocess grant remains restricted to the PATH executable `deno`; ensure Deno 2.9.7 is on `PATH` for `build --tsc` and `watch --tsc`.
+Add the bin directory printed by Deno to `PATH`. The launcher refers to the copied bundle, so retain that file. Run `effective --help`, `effective check /path/to/project`, or `effective build /path/to/project`. The subprocess grant remains restricted to the PATH executable `deno`; ensure Deno 2.9.8 is on `PATH` for `build --tsc` and `watch --tsc`.
 
 Checking and emitting source work offline. Target checking with `--tsc` still needs the application's host dependencies, Effect 4.0.5, and `@effect/platform-node` 4.0.5 in its Deno cache or registry access. The bundle does not package application runtime dependencies.
 

@@ -2,7 +2,7 @@
 // so identical source and locked dependencies produce identical VSIX bytes.
 import { dirname, fromFileUrl, join, resolve } from "@std/path";
 
-export const REQUIRED_DENO_VERSION = "2.9.7";
+export const REQUIRED_DENO_VERSION = "2.9.8";
 const ROOT = resolve(dirname(fromFileUrl(import.meta.url)), "..");
 const encoder = new TextEncoder();
 

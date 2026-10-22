@@ -10,7 +10,7 @@ The command-line tool checks a project, writes the generated TypeScript with sou
 
 ## Requirements
 
-The project needs Deno 2.9.7. The first test run downloads `@std/assert` from jsr, so it needs network access once. Generated TypeScript targets Effect 4.0.5. To build the VS Code extension, you also need Node 20 or later with npm.
+The project needs Deno 2.9.8. The first test run downloads `@std/assert` from jsr, so it needs network access once. Generated TypeScript targets Effect 4.0.5. To build the VS Code extension, you also need Node 20 or later with npm.
 
 ## Installation
 

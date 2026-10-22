@@ -6,7 +6,7 @@ The core library is in `src/core/`, the command-line tool in `src/cli/`, the hos
 
 ## Build, Test, and Development Commands
 
-`docs/development.md` lists the exact commands. Run `deno task check` from the repository root before each commit. It runs the format check, the lint, the type check, and all tests. Use Deno 2.9.7.
+`docs/development.md` lists the exact commands. Run `deno task check` from the repository root before each commit. It runs the format check, the lint, the type check, and all tests. Use Deno 2.9.8.
 
 ## Coding Style & Naming Conventions
 

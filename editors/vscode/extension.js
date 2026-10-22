@@ -5,7 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
-const REQUIRED_DENO_VERSION = "2.9.7";
+const REQUIRED_DENO_VERSION = "2.9.8";
 const vscode = require("vscode");
 const { LanguageClient } = require("vscode-languageclient/node");
 

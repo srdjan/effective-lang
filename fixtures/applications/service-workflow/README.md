@@ -53,7 +53,7 @@ does not establish actual ambiguous-commit behavior. See
 [docs/status.md](../../../docs/status.md) for the project status.
 
 The separate integration driver uses loopback HTTP and a temporary file-backed
-SQLite database through Deno 2.9.7's `node:sqlite`. It supplies the same Catalog
+SQLite database through Deno 2.9.8's `node:sqlite`. It supplies the same Catalog
 and Runtime services to the unchanged `workflow.eff` and `StoreLive` adapter.
 The recording driver and its deterministic tests remain in place.
 
