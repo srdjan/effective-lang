@@ -155,9 +155,9 @@ export class Revision {
   constructor(
     /** The revision number: 1 for the first successful `update`. */
     readonly number: number,
-    readonly project: Project,
+    private readonly project: Project,
     /** The checked project of this revision, in the shape that `lowerProject` reads. */
-    readonly checked: CheckedProject,
+    private readonly checked: CheckedProject,
     /** The modules that this revision checked again, in topological order. */
     readonly rechecked: readonly string[],
     private readonly entries: ReadonlyMap<string, Entry>,

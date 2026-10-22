@@ -1,6 +1,6 @@
 // Builds long left-deep chains and runs them through every compiler pass.
 
-import { Program, validateProject } from "../src/core/mod.ts";
+import { Program } from "../src/core/mod.ts";
 
 export type ChainForm = "binary" | "pipeline" | "call" | "field" | "array";
 
@@ -65,10 +65,8 @@ export function runAllPasses(source: string): string[] {
   if (lowered === undefined || !lowered.ok) {
     throw new Error(JSON.stringify(lowered));
   }
-  const validated = validateProject(
-    revision.value.project,
-    new Map([["main", lowered]]),
-  ).get("main");
+  const validated = revision.value.validate(new Map([["main", lowered]]))
+    .get("main");
   if (validated === undefined || validated.length > 0) {
     throw new Error(JSON.stringify(validated));
   }

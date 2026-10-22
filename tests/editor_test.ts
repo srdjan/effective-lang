@@ -107,7 +107,7 @@ Deno.test("hover prints unknown (error) where the checker prints <error>", () =>
   assertEquals(hover.contract, "unknown (error)");
   assertEquals(hover.backend, undefined);
   // The checker text itself has the marker, so the replacement is what matters.
-  const table = revision.checked.table;
+  const table = revision.types;
   assertEquals(table.show(table.error), "<error>");
 });
 
