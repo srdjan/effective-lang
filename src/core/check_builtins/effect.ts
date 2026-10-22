@@ -1,13 +1,12 @@
 // Effect construction, execution, failure and retry checking.
-import { nameTextOf } from "../index.ts";
 import { isErrorId } from "../ids.ts";
 import type { ErrorId, Result } from "../ir.ts";
-import { kindOf, type NodeId, SyntaxKind, type SyntaxTree } from "../syntax.ts";
+import { kindOf, type NodeId, SyntaxKind } from "../syntax.ts";
+import { nameTextOf } from "../syntax_queries.ts";
 import {
   combine,
   EFFECT_ONLY,
   type EffectSet,
-  type NodeFact,
   type NodeInfo,
   PURE_EFFECTS,
 } from "../tables.ts";
@@ -15,9 +14,11 @@ import type { TypeRef } from "../types.ts";
 import {
   type Arg,
   type BuiltinContext,
+  type FactWriter,
   type FunctionNode,
   invocationOf,
   type LiteralField,
+  type SyntaxView,
 } from "./context.ts";
 export interface EffectContext extends
   Pick<
@@ -30,9 +31,9 @@ export interface EffectContext extends
     | "functionOf"
     | "isError"
     | "report"
-  > {
-  readonly tree: SyntaxTree;
-  kids(node: NodeId): NodeId[];
+  >,
+  SyntaxView,
+  FactWriter {
   arity(
     node: NodeId,
     name: string,
@@ -40,7 +41,6 @@ export interface EffectContext extends
     args: readonly Arg[],
     usage?: string,
   ): boolean;
-  fact(node: NodeId, fact: NodeFact): void;
   literalRecord(
     arg: Arg,
     count: number,

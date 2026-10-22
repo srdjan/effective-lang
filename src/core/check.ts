@@ -22,7 +22,7 @@ import {
   makeDiagnostic,
   normalizeDiagnostics,
 } from "./diagnostics.ts";
-import { type DeclEntry, nameTextOf } from "./index.ts";
+import type { DeclEntry } from "./index.ts";
 import type {
   CapabilityId,
   DeclarationId,
@@ -71,7 +71,13 @@ import {
   isTypeId,
   serviceOfCapability,
 } from "./ids.ts";
-import { initOf, isTypeKind, kidsOf, literalOf } from "./syntax_queries.ts";
+import {
+  initOf,
+  isTypeKind,
+  kidsOf,
+  literalOf,
+  nameTextOf,
+} from "./syntax_queries.ts";
 import { compareText } from "./util.ts";
 
 // ------------------------------------------------------------------ shapes

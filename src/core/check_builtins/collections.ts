@@ -1,9 +1,9 @@
 // Collection checking. Prelude dispatch retains arity and lowering-fact policy.
 import type { NodeId } from "../syntax.ts";
 import { isErrorId } from "../ids.ts";
-import { combine, type NodeFact, type NodeInfo } from "../tables.ts";
+import { combine, type NodeInfo } from "../tables.ts";
 import type { TypeRef } from "../types.ts";
-import type { Arg, BuiltinContext } from "./context.ts";
+import type { Arg, BuiltinContext, FactWriter } from "./context.ts";
 
 export interface CollectionContext extends
   Pick<
@@ -17,8 +17,8 @@ export interface CollectionContext extends
     | "isError"
     | "report"
     | "widen"
-  > {
-  fact(node: NodeId, fact: NodeFact): void;
+  >,
+  FactWriter {
   noPipeline(name: string, args: readonly Arg[]): void;
   concurrencyBound(
     arg: Arg,

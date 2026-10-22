@@ -80,7 +80,6 @@ import {
   type DiagnosticCode,
   makeDiagnostic,
 } from "./diagnostics.ts";
-import { nameTextOf } from "./index.ts";
 import {
   arrowBody,
   initOf,
@@ -88,6 +87,7 @@ import {
   isTypeKind,
   kidsOf,
   literalOf,
+  nameTextOf,
   operatorOf,
 } from "./syntax_queries.ts";
 import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID } from "./ir.ts";

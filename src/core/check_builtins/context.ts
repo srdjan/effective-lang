@@ -4,8 +4,15 @@
 // by the extracted families.
 
 import type { DiagnosticCode } from "../diagnostics.ts";
-import type { NodeId } from "../syntax.ts";
-import { type EffectSet, type NodeInfo, PURE_EFFECTS } from "../tables.ts";
+import type { LocalId } from "../ir.ts";
+import type { Target } from "../resolve.ts";
+import type { NodeId, SyntaxTree } from "../syntax.ts";
+import {
+  type EffectSet,
+  type NodeFact,
+  type NodeInfo,
+  PURE_EFFECTS,
+} from "../tables.ts";
 import type { TypeNode, TypeRef, TypeTable } from "../types.ts";
 
 export interface Arg {
@@ -63,4 +70,37 @@ export interface LocalUse {
   readonly grandparent: NodeId | undefined;
   /** True when an arrow function between the body and the use encloses it. */
   readonly nested: boolean;
+}
+
+// The views below hold the members that several family contexts share. A
+// family context extends the views that it uses.
+
+/** The syntax tree and its child lists. */
+export interface SyntaxView {
+  readonly tree: SyntaxTree;
+  kids(node: NodeId): NodeId[];
+}
+
+/** What name resolution decided for each node. */
+export interface ResolveView {
+  readonly targets: ReadonlyMap<NodeId, Target>;
+}
+
+/** The facts that the checker recorded so far. */
+export interface FactView {
+  readonly facts: ReadonlyMap<NodeId, NodeFact>;
+}
+
+/** Records a fact about a node. */
+export interface FactWriter {
+  fact(node: NodeId, fact: NodeFact): void;
+}
+
+/** The uses of a local in a body. */
+export interface LocalUseView {
+  localUses(
+    body: NodeId,
+    id: LocalId,
+    shorthand?: boolean,
+  ): readonly LocalUse[];
 }

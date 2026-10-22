@@ -1,20 +1,21 @@
 // Fiber operations and the lifetime of an inline fiber borrow.
 import type { LocalId } from "../ir.ts";
-import type { Target } from "../resolve.ts";
-import { kindOf, type NodeId, SyntaxKind, type SyntaxTree } from "../syntax.ts";
+import { kindOf, type NodeId, SyntaxKind } from "../syntax.ts";
 import {
   combine,
   EFFECT_ONLY,
   type EffectSet,
-  type NodeFact,
   type NodeInfo,
 } from "../tables.ts";
 import { dataOnly, type TypeRef } from "../types.ts";
 import {
   type Arg,
   type BuiltinContext,
+  type FactView,
   invocationOf,
-  type LocalUse,
+  type LocalUseView,
+  type ResolveView,
+  type SyntaxView,
 } from "./context.ts";
 
 export interface FiberContext extends
@@ -27,17 +28,11 @@ export interface FiberContext extends
     | "functionOf"
     | "isError"
     | "report"
-  > {
-  readonly tree: SyntaxTree;
-  readonly targets: ReadonlyMap<NodeId, Target>;
-  readonly facts: ReadonlyMap<NodeId, NodeFact>;
-  kids(node: NodeId): NodeId[];
-  localUses(
-    body: NodeId,
-    id: LocalId,
-    shorthand?: boolean,
-  ): readonly LocalUse[];
-}
+  >,
+  SyntaxView,
+  ResolveView,
+  FactView,
+  LocalUseView {}
 
 export function withFiberCall(
   c: FiberContext,

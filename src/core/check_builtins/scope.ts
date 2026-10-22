@@ -7,21 +7,17 @@ import {
   type ServiceId,
   type ValueId,
 } from "../ir.ts";
-import type { Target } from "../resolve.ts";
-import { kindOf, type NodeId, SyntaxKind, type SyntaxTree } from "../syntax.ts";
-import {
-  combine,
-  EFFECT_ONLY,
-  type NodeFact,
-  type NodeInfo,
-  without,
-} from "../tables.ts";
+import { kindOf, type NodeId, SyntaxKind } from "../syntax.ts";
+import { combine, EFFECT_ONLY, type NodeInfo, without } from "../tables.ts";
 import { dataOnly, type TypeRef } from "../types.ts";
 import {
   type Arg,
   type BuiltinContext,
+  type FactView,
   invocationOf,
-  type LocalUse,
+  type LocalUseView,
+  type ResolveView,
+  type SyntaxView,
 } from "./context.ts";
 
 export interface ScopeContext extends
@@ -34,17 +30,12 @@ export interface ScopeContext extends
     | "fits"
     | "functionOf"
     | "report"
-  > {
-  readonly tree: SyntaxTree;
-  readonly targets: ReadonlyMap<NodeId, Target>;
-  readonly facts: ReadonlyMap<NodeId, NodeFact>;
+  >,
+  SyntaxView,
+  ResolveView,
+  FactView,
+  LocalUseView {
   readonly services: Pick<TypeEnv["services"], "get">;
-  kids(node: NodeId): NodeId[];
-  localUses(
-    body: NodeId,
-    id: LocalId,
-    shorthand?: boolean,
-  ): readonly LocalUse[];
   valueType(id: ValueId): TypeRef;
 }
 

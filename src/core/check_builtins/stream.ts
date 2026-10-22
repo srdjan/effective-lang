@@ -2,30 +2,34 @@
 import { type LocalId, type Result, SCOPE_CAPABILITY } from "../ir.ts";
 import { isErrorId } from "../ids.ts";
 import { flattenMembers } from "../patterns.ts";
-import type { Target } from "../resolve.ts";
-import { kindOf, type NodeId, SyntaxKind, type SyntaxTree } from "../syntax.ts";
+import { kindOf, type NodeId, SyntaxKind } from "../syntax.ts";
 import { isPatternKind, isTypeKind, literalOf } from "../syntax_queries.ts";
 import {
   combine,
   EFFECT_ONLY,
-  type NodeFact,
   type NodeInfo,
   PURE_EFFECTS,
   without,
 } from "../tables.ts";
 import { dataOnly, type TypeNode, type TypeRef } from "../types.ts";
-import type { Arg, BuiltinContext, LiteralField, LocalUse } from "./context.ts";
-export interface StreamContext extends BuiltinContext {
-  readonly tree: SyntaxTree;
-  readonly targets: ReadonlyMap<NodeId, Target>;
-  readonly facts: ReadonlyMap<NodeId, NodeFact>;
-  kids(node: NodeId): NodeId[];
-  localUses(
-    body: NodeId,
-    id: LocalId,
-    shorthand?: boolean,
-  ): readonly LocalUse[];
-  fact(node: NodeId, fact: NodeFact): void;
+import type {
+  Arg,
+  BuiltinContext,
+  FactView,
+  FactWriter,
+  LiteralField,
+  LocalUseView,
+  ResolveView,
+  SyntaxView,
+} from "./context.ts";
+export interface StreamContext
+  extends
+    BuiltinContext,
+    SyntaxView,
+    ResolveView,
+    FactView,
+    FactWriter,
+    LocalUseView {
   literalRecord(
     arg: Arg,
     count: number,

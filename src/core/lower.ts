@@ -16,6 +16,7 @@ import {
   isTypeKind,
   kidsOf,
   literalOf,
+  nameTextOf,
   operatorOf,
 } from "./syntax_queries.ts";
 import { signatureType } from "./check.ts";
@@ -25,7 +26,6 @@ import type {
   ConstantBody,
   FunctionBody,
 } from "./check_project.ts";
-import { nameTextOf } from "./index.ts";
 import type {
   Annotation,
   Arm,

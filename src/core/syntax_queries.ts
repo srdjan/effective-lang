@@ -34,6 +34,28 @@ export function isTypeKind(kind: SyntaxKind): boolean {
   return TYPE_KINDS.has(kind);
 }
 
+/** The lexer kind of a Token node, or undefined for any other node. */
+export function tokenKindOf(
+  tree: SyntaxTree,
+  node: NodeId,
+): TokenKind | undefined {
+  return kindOf(tree, node) === SyntaxKind.Token
+    ? tree.lexed.kinds[tree.tokens[node]] as TokenKind
+    : undefined;
+}
+
+/** The text of a Name node, or undefined when the parser did not read an identifier. */
+export function nameTextOf(
+  tree: SyntaxTree,
+  nameNode: NodeId,
+): string | undefined {
+  const first = childrenOf(tree, nameNode)[0];
+  if (first === undefined || tokenKindOf(tree, first) !== TokenKind.Ident) {
+    return undefined;
+  }
+  return tree.text.slice(tree.starts[first], tree.ends[first]);
+}
+
 export type BinaryOperator =
   | "+"
   | "-"

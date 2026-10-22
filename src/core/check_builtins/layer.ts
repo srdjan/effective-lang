@@ -2,27 +2,32 @@
 import type { TypeEnv } from "../check.ts";
 import { serviceOfCapability } from "../ids.ts";
 import type { ServiceId, ValueId } from "../ir.ts";
-import type { Target } from "../resolve.ts";
-import { kindOf, type NodeId, SyntaxKind, type SyntaxTree } from "../syntax.ts";
+import { kindOf, type NodeId, SyntaxKind } from "../syntax.ts";
 import {
   combine,
   EFFECT_ONLY,
   type EffectSet,
-  type NodeFact,
   type NodeInfo,
   PURE_EFFECTS,
   without,
 } from "../tables.ts";
-import type { Arg, BuiltinContext, FunctionNode } from "./context.ts";
+import type {
+  Arg,
+  BuiltinContext,
+  FactWriter,
+  FunctionNode,
+  ResolveView,
+  SyntaxView,
+} from "./context.ts";
 export interface LayerContext extends
   Pick<
     BuiltinContext,
     "table" | "argInfo" | "finish" | "isError" | "report"
-  > {
-  readonly tree: SyntaxTree;
-  readonly targets: ReadonlyMap<NodeId, Target>;
+  >,
+  Pick<SyntaxView, "tree">,
+  ResolveView,
+  FactWriter {
   readonly services: Pick<TypeEnv["services"], "get">;
-  fact(node: NodeId, fact: NodeFact): void;
   jobFunction(name: string, arg: Arg, info: NodeInfo): FunctionNode | undefined;
 }
 

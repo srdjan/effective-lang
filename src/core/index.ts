@@ -13,6 +13,7 @@
 import { fnv1a64 } from "./hash.ts";
 import { TokenKind } from "./lex.ts";
 import type { Span } from "./source.ts";
+import { nameTextOf, tokenKindOf } from "./syntax_queries.ts";
 import {
   childrenOf,
   decodeString,
@@ -81,24 +82,6 @@ export interface FileIndex {
   /** The first declaration for each name. Later declarations of the name are duplicates. */
   readonly byName: ReadonlyMap<string, DeclEntry>;
   readonly imports: readonly ImportEntry[];
-}
-
-function tokenKindOf(tree: SyntaxTree, node: NodeId): TokenKind | undefined {
-  return kindOf(tree, node) === SyntaxKind.Token
-    ? tree.lexed.kinds[tree.tokens[node]] as TokenKind
-    : undefined;
-}
-
-/** The text of a Name node, or undefined when the parser did not read an identifier. */
-export function nameTextOf(
-  tree: SyntaxTree,
-  nameNode: NodeId,
-): string | undefined {
-  const first = childrenOf(tree, nameNode)[0];
-  if (first === undefined || tokenKindOf(tree, first) !== TokenKind.Ident) {
-    return undefined;
-  }
-  return tree.text.slice(tree.starts[first], tree.ends[first]);
 }
 
 /** Child nodes that are not tokens or Missing nodes. */

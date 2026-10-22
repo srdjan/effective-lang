@@ -1,7 +1,6 @@
 // Schema construction, directional transformations, defaults and recursion checks.
 import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID } from "../ir.ts";
-import type { Target } from "../resolve.ts";
-import { kindOf, type NodeId, SyntaxKind, type SyntaxTree } from "../syntax.ts";
+import { kindOf, type NodeId, SyntaxKind } from "../syntax.ts";
 import { literalOf } from "../syntax_queries.ts";
 import {
   combine,
@@ -10,7 +9,14 @@ import {
   PURE_EFFECTS,
 } from "../tables.ts";
 import { dataOnly, type TypeNode, type TypeRef } from "../types.ts";
-import type { Arg, BuiltinContext } from "./context.ts";
+import type {
+  Arg,
+  BuiltinContext,
+  FactView,
+  FactWriter,
+  ResolveView,
+  SyntaxView,
+} from "./context.ts";
 
 export interface SchemaContext extends
   Pick<
@@ -23,12 +29,12 @@ export interface SchemaContext extends
     | "functionOf"
     | "isError"
     | "report"
-  > {
-  readonly tree: SyntaxTree;
-  readonly targets: ReadonlyMap<NodeId, Target>;
-  readonly facts: ReadonlyMap<NodeId, NodeFact>;
+  >,
+  SyntaxView,
+  ResolveView,
+  FactView,
+  FactWriter {
   readonly infos: ReadonlyMap<NodeId, NodeInfo>;
-  kids(node: NodeId): NodeId[];
   kidsOfKind(node: NodeId, kind: SyntaxKind): NodeId[];
   expr(node: NodeId, expected?: TypeRef): NodeInfo;
   fieldParts(
@@ -38,7 +44,6 @@ export interface SchemaContext extends
     readonly labelNode: NodeId;
     readonly value: NodeId | undefined;
   } | undefined;
-  fact(node: NodeId, fact: NodeFact): void;
 }
 
 /** A Schema type node. */
