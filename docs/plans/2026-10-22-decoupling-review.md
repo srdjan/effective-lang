@@ -449,3 +449,210 @@ Capture: source of `f351a21` against source of `7345a91`, both with the `f351a21
 Size (M, `scripts/measure.ts` over `src/core`, `430460b` against `7345a91`): filtered lines 34,393 to 34,521, and AST branches 7,961 to 7,970. The new `Revision` members and `diagnostic_delta.ts` add more than the editor files lose. Phase 3 narrows the editor boundary. It does not reduce code size.
 
 Remaining: Phase 4 is not started. Decision 3 waits for ED3. ED2 step 3 (speculative child programs) stays optional and needs the bench M4 measurement first.
+
+## 9. Implementation plan for Phase 4
+
+Base: `1665897` or later on local `main`. The user started Phase 4 on 2026-10-22. Decision 3 is (a), from the answer "as recommended". The rules of section 7 apply: one commit for each unit, `deno task check` before each commit, captures one at a time, and no `golden:update` or `validate:update`. Each capture runs one test set on both sides with the write overlay, as in Phases 1 to 3.
+
+Commit `1665897` gives each capture its own DENO_DIR. A self-capture of one revision on both sides gave 9123 and 9124 records, with 1 new `program` record and 0 missing. So one extra or one missing `program` record with the result `[]` is run variance. Any other difference fails the unit.
+
+Measurements for this section (M, 2026-10-22, HEAD `61ef88b`). Three agents measured the ten Phase 4 items again. Their scratch probes are in `/tmp/p4-ck`, `/tmp/p4-ic`, and `/tmp/p4-ed`. The coordinator checked the claims that this section depends on.
+
+### Corrections to section 3
+
+- CK1b. `check_expr.ts` now has 3 `throttleStream` sites. Commit `0cc5349` came before the family split, so its 155 lines do not show the current cost. A new builtin in an existing family has 5 checker edit sites in 3 files. The sites are the `PRELUDE` row, the family import, the handler row, the prologue row, and the family code.
+- CK1b (concurrency names). The concurrency union is declared once in full (`check_expr.ts:1624-1633`). The two other declarations are subsets of it (`collections.ts:23-31`, `stream.ts:33-36`).
+- CK3. The pattern code is 9 members and about 327 lines, not 14 members. `errorCount` is written in `errorInfo` and `unresolvedCall` and read only in `tryExpr`. A return value for it would change the return path of each `expr` call, so CK3 keeps the field.
+- CK5. `TypeTable.function` (`types.ts:714-724`) already sorts and removes duplicates, so a shared `functionTypeOf` adds nothing. The name `FunctionBody` is already a public type through `CheckedModule`.
+- IC2. The `TypeNames` role of section 3 is wrong. `types.ts` calls `nameOf`, `effect`, `scopeRuntime`, `encodedMirrorName`, and `intSchemaName`, and each of them records a name on first use. `fields.ts` allocates names and writes `fieldAdapters` directly. A hover adapter that allocates nothing cannot give the emitter's names, because a name depends on the earlier allocations.
+- IC3. `BodyValidator` has 127 members, of which 122 are methods. The 797 `this.` uses are correct.
+- IC4. The `targetCall` design already exists as `Callee`, `OPERAND_CALLS`, and `LEAF_CALLS` in `emit/calls.ts` (commit `9adc5cd`).
+- IC6. The validator has 284 path templates, not 223. One path is wrong: `simpleSchedule` (`validate/expr.ts:4246`) checks the argument under `${path}.argument`, but the IR fields are `times` and `delayMillis` (`ir.ts:183-184`). All other 109 `this.check(X, path)` calls match the access chain of `X`.
+- ED3. The CLI and the LSP already share `removeStaleOutputs`, `writableModules`, `writeGenerated`, and `generationSource`. About 25 lines of orchestration repeat on each side. Only `projects.ts:40` imports the protocol `Diagnostic`, so the proposed `publish.ts` gives nothing for that goal. The LSP also skips the modules that a nested `effective.json` owns (`projects.ts:470,488`), and the CLI does not (N1, probe `/tmp/p4-ed/nested_probe.ts`).
+
+### Scope
+
+Phase 4 does these units, in this order. Each unit keeps behavior, except IC6a.
+
+1. IC6a: the validator path fix.
+2. CK5: one body outcome type.
+3. CK4: shared family views and `nameTextOf` in `syntax_queries.ts`.
+4. CK1b: builtin rows next to their handlers.
+5. CK3: patterns and operator typing out of `BodyChecker`.
+6. IC3: validator families, in five commits.
+7. ED3: characterization tests, then one `runSaveRound`.
+
+Phase 4 defers these items, because the measurements show that they add edit sites or code for a small gain:
+
+- IC2: the role interfaces add one edit site for a new helper name. The probable hover clash of two foreign `User` names exists today. It needs a two-module probe to confirm.
+- IC4: `resolvedAs` saves about 2 lines at each of 12 sites, and `targetCall` exists.
+- IC6 (the `sub` helper): about 280 edits for a check that IC6a and its test give at the one wrong site.
+- ED5: one tracker removes about 27 lines and adds about 37 lines. Each copy changed in 1 commit.
+- The `publish.ts` and `overlay.ts` splits of ED3: they would expose the private state of `projects.ts` for file size only.
+
+### IC6a (validator path fix)
+
+In `simpleSchedule` (`validate/expr.ts:4241`), check the argument under `${path}.times` for `schedule-recurs` and `${path}.delayMillis` for `schedule-spaced`.
+
+Add one test to `tests/validate_family_mutation_test.ts`. Its `lowerProgram` and `forge()` (lines 165-180) build forged IR from a source text. The test needs its own source with `scheduleRecurs`, because no case there uses a schedule. The test gives the literal under `times` a wrong recorded `type`, and asserts the path that ends in `.times.type`. `finish` reports a type mismatch at `${path}.type` (`validate/expr.ts:837-895`), so no path ends in `.times` alone.
+
+Visible change: only the path of a validation diagnostic inside a schedule argument. Parity: `deno task check`, and a capture with 0 new and 0 missing records, because no fixture reaches that path.
+
+### CK5 (one body outcome type)
+
+In `check_expr.ts`, add `export interface BodyOutcome { readonly body: NodeInfo | undefined; readonly result: TypeRef; readonly failures: readonly ErrorId[]; readonly requirements: readonly CapabilityId[]; readonly mode: Execution }`. `checkBody` returns `BodyOutcome`, so its field `execution` becomes `mode`. The writes are at lines 515, 527, and 556, and the reads `run.execution` are at lines 2368, 3004, and 3019. Only the run field changes its name. The `execution` key of the `table.function` spec stays. `FunctionRun` extends `BodyOutcome` with `table`, `type`, and `diagnostics`.
+
+In `check_project.ts`, `FunctionBody` extends `Omit<FunctionRun, "diagnostics">` with `kind`, `signature`, and `bodyNode`, so its fields stay flat and keep their names. `publish` takes `diagnostics` out and spreads the rest.
+
+Delete the second sort and borrow guard at `check_expr.ts:3003-3011`, because `TypeTable.function` does the same. Before that deletion, read `types.ts:714-724` and confirm that it applies both steps. If it does not, keep the code and report it. Parity: `deno task check` and a capture.
+
+### CK4 (shared family views)
+
+In `check_builtins/context.ts`, add `SyntaxView { readonly tree: SyntaxTree; kids(node: NodeId): NodeId[] }`, `ResolveView { readonly targets: ... }`, `FactView { readonly facts: ... }`, `FactWriter { fact(node: NodeId, fact: NodeFact): void }`, and `LocalUseView { localUses(...): ... }`. Copy each member type from the current family declarations, and stop if two families declare one member with different types. Each family context extends the views that it uses, and drops its own copies of those members. `LayerContext` uses `Pick<SyntaxView, "tree">`.
+
+Move `tokenKindOf` and `nameTextOf` from `index.ts:86-102` to `syntax_queries.ts`, and export both. `index.ts` imports them, and the 5 importers of `nameTextOf` import from `syntax_queries.ts`. Parity: `deno task check`. The change moves types and one function, so a capture is not needed.
+
+### CK1b (builtin rows next to their handlers)
+
+New file `check_builtins/rows.ts`. Move these from `check_expr.ts:228-327` without a change of logic: `PreludeCallName`, `Kebab`, `PrologueFacts`, `Prologue`, `SharedPrologue`, `direct`, `piped`, and `optionalLast`. Each type that names `BodyChecker` gets a context parameter `C`. Add:
+
+```ts
+export interface BuiltinRow<K extends PreludeCallName, C> {
+  readonly prologue: Prologue<K, C> | "own-arity";
+  readonly handle: (c: C, node: NodeId, name: K, args: readonly Arg[], expected: TypeRef | undefined) => NodeInfo;
+}
+export type Rows<N extends PreludeCallName, C> = { readonly [K in N]: BuiltinRow<K, C> };
+```
+
+Each family file exports one rows constant, for example `STREAM_ROWS`, with `satisfies Partial<Rows<PreludeCallName, StreamContext>>`. Each row takes its handler arrow and its prologue from the two current tables without a change. `codec.ts`, `ref.ts`, and `schedule.ts` use `BuiltinContext`. `schema.ts` keeps one shared prologue and has 19 explicit rows. Do not build rows with `Object.fromEntries`, because the result needs a cast.
+
+New file `check_builtins/registry.ts` composes the family rows with a type annotation, not with `satisfies`:
+
+```ts
+export type FamilyContext = BuiltinContext & CollectionContext & EffectContext & LayerContext & FiberContext & ScopeContext & StreamContext & SchemaContext;
+export const FAMILY_ROWS: Rows<Exclude<PreludeCallName, "unbrand" | "Some">, FamilyContext> = { ...EFFECT_ROWS, /* ... */ ...STREAM_ROWS };
+```
+
+A probe (`/tmp/p4-ck/probe2.ts`) showed that `satisfies` on the composed table breaks the generic index in `preludeCall` with TS2322, and that the annotation keeps it. `unbrand` and `Some` call private `BodyChecker` methods, so their rows stay in a private static `CORE_ROWS: Rows<"unbrand" | "Some", BodyChecker>`. `BodyChecker.PRELUDE_ROWS: Rows<PreludeCallName, BodyChecker> = { ...FAMILY_ROWS, ...BodyChecker.CORE_ROWS }` replaces `PRELUDE_HANDLERS` and `PRELUDE_PROLOGUES`. Declare `CORE_ROWS` before `PRELUDE_ROWS` in the class body, because static initializers run in source order.
+
+`preludeCall`, `runPrologue`, and `arity` keep their logic and their step order, and read one row. Add `ConcurrencyOperation` to `context.ts`. The two families use `Extract<ConcurrencyOperation, ...>` for their subsets.
+
+A key that two spreads give compiles with no error (probe `DUP`). So add one test that the key sets of the family rows and the core rows are disjoint and cover each `PreludeCallName`. Keep the `Kebab` restriction in `PrologueFacts`. Delete `PreludeHandler`, `PreludeHandlers`, and `PreludePrologues`. Update `docs/builtin-changes.md` for the new edit sites. After CK1b, a new builtin in an existing family edits the `PRELUDE` row, the family rows, and the family code, so `check_expr.ts` does not change.
+
+Parity: `deno task check`, a capture, and a normalized comparison of the moved code. The comparison matches each handler body and prologue value by name, with the receiver `BodyChecker.` removed. The implementer puts the comparison script in `/tmp` and reports its result.
+
+### CK3 (patterns and operator typing)
+
+New file `check_patterns.ts`. Move these 9 members of `BodyChecker` with `this` changed to `c`: `missing`, `checkCoverage`, `reach`, `foreign`, `bindLocal`, `patternFact`, `pattern`, `recordPattern`, and the free function `describeDomain`. Also move `MatchState` (`check_expr.ts:220-226`). The context is:
+
+```ts
+export interface PatternContext {
+  readonly tree: SyntaxTree;
+  readonly table: TypeTable;
+  readonly targets: ReadonlyMap<NodeId, Target>;
+  readonly body: Pick<BodyTable, "locals">;
+  kids(node: NodeId): NodeId[];
+  kidsOfKind(node: NodeId, kind: SyntaxKind): NodeId[];
+  report(code: DiagnosticCode, message: string, node: NodeId): void;
+  fact(node: NodeId, fact: NodeFact): void;
+}
+```
+
+Take each member type from the current code, not from this sketch. `BodyChecker` has no `locals` member, so the context reads `body.locals`.
+
+`match` stays in `BodyChecker` and keeps its call order: the pattern of an arm, then the body of that arm. The `invalid` arrow in `recordPattern` captures `this`, so it must capture `c`.
+
+New file `check_binary.ts` holds pure functions only: `isNumeric`, `numericBrand`, `sharedNumericBrand`, `isString`, `isBoolean`, `comparisonClass`, and one `operatorResult(table, operator, left, right)` that gives the result type, or a mismatch. `binary` stays in `BodyChecker`. It keeps the operand `expr` calls, the `errorInfo` calls, the one `report`, and `finish`, so `errorCount` and the diagnostic order do not change. `ifExpr` uses the moved `isBoolean`. `isNumeric`, `isString`, and `isBoolean` call `isError`, which is `table.node(ref).kind === "error"` (`check_expr.ts:398`). So each helper needs only `table`.
+
+Parity: `deno task check`, a capture, and a normalized comparison of the moved pattern members.
+
+### IC3 (validator families)
+
+New file `validate/families/context.ts` with the validator-owned context. The validator must not import any file in `check_builtins/` or any other checker file.
+
+```ts
+export interface ValidatorCore {
+  readonly env: TypeEnv;
+  readonly ctx: Ctx;
+  add(area: Area, path: string, what: string, span: Span): void; // type Area = Parameters<Report["add"]>[0]
+  check(e: Expr, path: string): Out;
+  poison(): Comp;
+  checkConcurrency(e: { readonly concurrency: number | "unbounded" | undefined; readonly span: Span }, path: string, name: string): void;
+  jobFunction(job: Out, path: string, span: Span, what: string): ReturnType<typeof asFunction>;
+}
+```
+
+Take each member type from the current code. The same file holds `Area`, `Out`, `Comp`, `derivedResult`, `EFFECT_ONLY`, and `streamState(env: TypeEnv, type: Type): Type`. `streamState` (`validate/expr.ts:3528`) reads only `this.env`, and both `ref` and `stream` call it.
+
+No family file may import `expr.ts`, because that makes an import cycle. So module-level helpers move with their users. The stream constants and types at `expr.ts:115-255` move with `stream`. The schema helpers at `expr.ts:260-370` move with `schema`. `validConcurrency`, `tagMayEqual`, and `checkedResult` stay in `expr.ts`, because only core members use them.
+
+New file `validate/expr_walk.ts` holds `exprChildren` and `walkExprs`, and `expr.ts` re-exports `exprChildren`, because a test imports it. `BodyValidator implements ValidatorCore`, and the members of the interface become public. The five commits:
+
+1. The context, `expr_walk.ts`, and the families `ref`, `codec`, and `fiber`.
+2. `collections`, `effect`, and `layer`.
+3. `schedule` and `scope`. `scope.ts` exports `borrowedReferences` for `checkFunction`.
+4. `stream`.
+5. `schema`. `schemaRows` becomes a module constant.
+
+Each family file exports one function for each family case, of the form `(c: ValidatorCore, e, path) => Comp`. The `switch` in `BodyValidator` calls these functions.
+
+One hazard: `guard` (`validate/index.ts:49`) puts the engine's `TypeError` text into a `validation/008` message. `tests/validate_builtin_test.ts:118` pins a text from `call`, which stays in the class. If a moved body crashes on forged IR, the text changes from `this.` to `c.`. Run that test after each commit.
+
+Parity for each commit: `deno task check`, the 18 `fixtures/validate` cases, and a token comparison of each moved body. Before the comparison, `this.<core>` becomes `c.<core>`, `this.<own>(` becomes `<own>(c, `, and `BodyValidator.` is removed. One capture covers the five commits.
+
+### ED3 (one save round)
+
+Decision 3 is (a). ED3 has two commits.
+
+ED3a (characterization tests first). Add tests for four behaviors that no test pins today:
+
+1. The CLI watch loop forgets a module after a failed removal (probe `/tmp/p4-ed/forget_probe.ts`).
+2. `effective build` writes the outputs of a module that a nested `effective.json` owns (N1, probe `/tmp/p4-ed/nested_probe.ts`).
+3. The LSP logs each removed path and its notes in module order.
+4. The relative order of the LSP type-4, type-1, and type-3 logs in one save round.
+
+Commit ED3a alone, after `deno task check`.
+
+ED3b. New file `src/host/save_round.ts`:
+
+```ts
+export type RemovalRule = "retry" | "forget"; // the LSP retries a failed removal; the CLI watch loop forgets it
+export interface SaveRoundInput {
+  readonly fs: CliFs;
+  readonly root: string;
+  readonly revision: Revision;
+  readonly previous: readonly string[];
+  readonly removal: RemovalRule;
+  readonly owns: (name: string) => boolean;
+  readonly validation?: ReadonlyMap<string, readonly Diagnostic[]>;
+  readonly write: boolean;
+}
+export interface ModuleRemoval { readonly name: string; readonly removed: readonly string[]; readonly notes: readonly string[] }
+export interface SaveRound {
+  readonly modules: readonly string[];
+  readonly removals: readonly ModuleRemoval[];
+  readonly writable: readonly string[];
+  readonly outputs: GeneratedOutputs; // export this interface from host/outputs.ts
+}
+export function runSaveRound(input: SaveRoundInput): SaveRound;
+```
+
+The prototype is `/tmp/p4-ed/proto/save_round.ts`. `runSaveRound` stays synchronous, and it returns one removal record for each module, so each caller keeps its log order. The CLI passes `owns: () => true`, which keeps N1.
+
+`buildRevision` in `src/cli/build.ts` calls `runSaveRound`. `Session.build` (`cli/session.ts:84`) and `buildRevision` get `previous` as a new parameter. `effective build` and the `host-change` round pass `previous: []`. `BuildOutcome` gets `modules` and `removals`. The removal notes must not go into `outcome.notes`, because `printOutcome` prints the notes after `rechecked:` (`cli/report.ts:22`). The watch loop prints the `removed:` lines and the notes before `rechecked:`, and sets `previous = outcome.modules`.
+
+`saveRound` in `src/lsp/projects.ts` calls `runSaveRound` with `removal: "retry"` and the current ownership test. The sync steps, `heldReason`, the message texts, `deno check`, and each sort order stay where they are. The core must not import host code.
+
+Parity: the four ED3a tests and `deno task check`. These 14 test files reach the changed code: `build_imports`, `cli_slow`, `cli_sort`, `cli_test`, `emit_lift_slot_slow`, `lsp_project_state`, `lsp_save_round`, `lsp_server`, `outputs_generation`, `outputs_stale`, `outputs_writable`, `task_permissions_slow`, `watch_host`, and `watch_stale`. The capture does not record subprocess output, so the tests are the oracle.
+
+### Plan check
+
+A Fable agent checked this section against HEAD `1665897`. It rated CK4 sound, and the other units sound with changes. The coordinator verified the claims about `body.locals`, `streamState`, `Area`, and `GeneratedOutputs`, and accepted each finding. The text above includes them:
+
+- IC3: `ref` calls `streamState`, so `streamState` moves to the context in commit 1. `Area` is defined there. Module-level helpers move with their users.
+- CK3: `BodyChecker` has no `locals` member.
+- ED3b: `GeneratedOutputs` was not exported, and `previous` needs a path through `Session.build`. The removal notes must stay out of `outcome.notes`.
+- CK1b: no test checks a wrong fact kind, so the `Kebab` restriction is the check. Static initializer order matters.
+- IC6a: a forged child gives a path that ends in `.times.type`, not `.times`.
+- CK5: one more read at line 3019.
+- ED3a: the stats test was dropped. `effective/stats` reads the overlay program, and the save round runs on `diskProgram`, so the test could not detect an ED3b regression.
