@@ -66,6 +66,12 @@ export function combine(parts: readonly EffectSet[]): EffectSet {
   };
 }
 
+/** True when an evaluation is pure and has no failure and no requirement. */
+export function isQuiet(set: EffectSet): boolean {
+  return set.mode === "pure" && set.failures.length === 0 &&
+    set.requirements.length === 0;
+}
+
 /** Items of `items` that are not in `removed`, in their order. */
 export function without<T extends string>(
   items: readonly T[],

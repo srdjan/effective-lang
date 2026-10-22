@@ -130,6 +130,7 @@ import {
   combine,
   EFFECT_ONLY,
   type EffectSet,
+  isQuiet,
   newBodyTable,
   type NodeFact,
   type NodeInfo,
@@ -1672,8 +1673,7 @@ class BodyChecker
     }
     // The lowering evaluates a left value with effects in its own binding, so
     // the handler sees it as pure and the stage keeps its own sets.
-    const quiet = leftInfo.mode === "pure" &&
-      leftInfo.failures.length === 0 && leftInfo.requirements.length === 0;
+    const quiet = isQuiet(leftInfo);
     const pre: NodeInfo = quiet
       ? leftInfo
       : { type: leftInfo.type, ...PURE_EFFECTS };

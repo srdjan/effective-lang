@@ -64,6 +64,7 @@ import {
   type BodyTable,
   combine,
   type EffectSet,
+  isQuiet,
   type NodeFact,
   type NodeInfo,
 } from "./tables.ts";
@@ -175,11 +176,6 @@ function setOf(expr: Expr): EffectSet {
     requirements: expr.effects.requirements,
     mode: expr.execution,
   };
-}
-
-function isQuiet(info: NodeInfo): boolean {
-  return info.mode === "pure" && info.failures.length === 0 &&
-    info.requirements.length === 0;
 }
 
 const PATTERN_KINDS: ReadonlySet<SyntaxKind> = new Set([
