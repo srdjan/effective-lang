@@ -313,3 +313,17 @@ Captures used temporary commits with the documented write overlay for `tests/par
 
 - IC5, ED6, CK8, and CK1a: source of `924f9aa` against source of `b7a405c`, both with the `924f9aa` tests. Each side had 9082 records, with 0 new and 0 missing.
 - ED2 step 1: source of `b7a405c` against source of `16efd9d`, both with the `b7a405c` tests. Single-revision captures gave 679 `program` records on each side. Exactly 11 records differ, all `program`, and they pair one to one by diagnostic hash. So only the input hashes of the speculative rename and action programs changed, as planned. A first two-revision run also lost 4 `program` records that both single runs contain; that loss is run variance, probably from a timing-dependent slow test (not confirmed).
+
+### Phase 2 results (2026-10-22)
+
+The four units are on local `main`: IC1a `ebfcc28`, IC1b `ee77782`, ED4 `0f693bd`, and CK2 `6fa11fb`. The coordinator added `67333cb` after review: IC1b had left two copies of the quiet test, an inline one in the checker's `pipe` and `isQuiet` in lowering. `tables.ts` now owns `isQuiet`, and both stages import it. The validator keeps its own helper. The last gate passed 1847 fast and 177 slow tests.
+
+Deviations from the spec, accepted after review. `ModuleValues` also has `settle(modes)`, so the solver result goes through the same owner as `publish`. Lowering reads `stageSets` in `invoke`, because the `override` parameter is gone, and `stage()` requires an entry when the left value is not quiet.
+
+IC1b fixed the found defect. The coordinator's reproduction (`makeJob() |> scoped`) gave 3 validation diagnostics on `98df0ef` and 0 on `67333cb`. The IC1a tests pinned the wrong sets, and IC1b changed them to the checker's sets.
+
+Capture: source of `ebfcc28` against source of `67333cb`, which covers IC1b, ED4, CK2, and the fix. Both sides used the IC1a tests without the two `scoped` and `forkScoped` cases, because those cases change their expected result between the revisions. Both sides also used the write overlay. Each side had 9109 records, with 0 new and 0 missing. That run includes the 8 new stage cases with an effectful left value. No file under `fixtures/` changed between `98df0ef` and `67333cb`.
+
+Size (M, `scripts/measure.ts` over `src/core`, `98df0ef` against `67333cb`): filtered lines 34,502 to 34,393, and AST branches 8,065 to 7,961. `lower.ts` falls from 1948 to 1707 raw lines.
+
+Remaining: Phases 3 and 4 are not started. Decisions 2 and 3 wait for ED2 step 2 and ED3. The capture still needs the write overlay for `tests/parse_chain_slow_test.ts`; this batch did not change that test.
