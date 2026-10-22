@@ -29,7 +29,7 @@ import type {
   Span,
   Type,
 } from "../ir.ts";
-import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID, SCOPE_CAPABILITY } from "../ir.ts";
+import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID } from "../ir.ts";
 import { AREA } from "./report.ts";
 import {
   type Active,
@@ -42,7 +42,6 @@ import {
   QUIET,
   sameSet,
   sortedUnique,
-  unionEffects,
 } from "./sets.ts";
 import {
   asFunction,
@@ -55,7 +54,6 @@ import {
   isBooleanLike,
   isNumeric,
   isStringLike,
-  isUnknown,
   MAX_DEPTH,
   members,
   NEVER,
@@ -70,14 +68,13 @@ import {
   UNIT,
 } from "./typing.ts";
 import { checkTypeIds, type Ctx } from "./world.ts";
-import { exprChildren, walkExprs } from "./expr_walk.ts";
+import { exprChildren } from "./expr_walk.ts";
 import {
   type Area,
   type Comp,
   derivedResult,
   EFFECT_ONLY,
   type Out,
-  streamState,
   type ValidatorCore,
 } from "./families/context.ts";
 import { codec, codecOperation } from "./families/codec.ts";
@@ -109,6 +106,31 @@ import {
   scoped,
   withResource,
 } from "./families/scope.ts";
+import {
+  accumulateStream,
+  aggregateStream,
+  aggregateWithinStream,
+  bufferStream,
+  catchStream,
+  concatStreams,
+  debounceStream,
+  effectStreamPredicate,
+  mapElements,
+  mapGroups,
+  mapStreams,
+  mergeStreams,
+  pureStreamPredicate,
+  retryStream,
+  runStream,
+  sinkForEach,
+  streamCount,
+  streamTerminal,
+  takeSink,
+  throttleStream,
+  transduceStream,
+  unfoldStream,
+  zipStreams,
+} from "./families/stream.ts";
 import { refOperation } from "./families/ref.ts";
 
 // The test of the expression children imports this walk from here.
@@ -117,146 +139,6 @@ export { exprChildren };
 function checkedResult(active: Active): Comp {
   return { kind: "checked", active };
 }
-
-/** The Stream operators that run a Stream to one value, with the result type. */
-type StreamTerminal = Extract<
-  Expr,
-  {
-    kind: "collect-stream" | "head-stream" | "last-stream" | "drain-stream";
-  }
->;
-
-const STREAM_TERMINALS: Record<
-  StreamTerminal["kind"],
-  { readonly name: string; readonly result: (element: Type) => Type }
-> = {
-  "collect-stream": {
-    name: "collectStream",
-    result: (element) => ({ kind: "array", element }),
-  },
-  "head-stream": {
-    name: "headStream",
-    result: (element) => ({ kind: "option", element }),
-  },
-  "last-stream": {
-    name: "lastStream",
-    result: (element) => ({ kind: "option", element }),
-  },
-  "drain-stream": { name: "drainStream", result: () => UNIT },
-};
-
-/** The Stream operators that flatten a Stream of Streams, with the operator name. */
-type StreamFlatten = Extract<
-  Expr,
-  { kind: "flat-map-streams" | "switch-map-streams" }
->;
-
-const STREAM_FLATTENS: Record<StreamFlatten["kind"], string> = {
-  "flat-map-streams": "flatMapStreams",
-  "switch-map-streams": "switchMapStreams",
-};
-
-/** The Stream operators that map the elements, with the callback rule and the message. */
-type StreamMap = Extract<Expr, { kind: "map-effect" | "map-stream" }>;
-
-const STREAM_MAPS: Record<
-  StreamMap["kind"],
-  {
-    readonly name: string;
-    /** The callback must be pure. Its effects then stay out of the result. */
-    readonly pure: boolean;
-    readonly needs: string;
-  }
-> = {
-  "map-effect": {
-    name: "mapEffect",
-    pure: false,
-    needs: "mapEffect needs a Stream and an element callback",
-  },
-  "map-stream": {
-    name: "mapStream",
-    pure: true,
-    needs: "mapStream needs a Stream and a pure element callback",
-  },
-};
-
-/** The Stream operators that carry a state through a callback of two arguments. */
-type StreamAccumulator = Extract<
-  Expr,
-  {
-    kind:
-      | "scan-stream"
-      | "map-accum-stream"
-      | "fold-stream"
-      | "fold-effect-stream";
-  }
->;
-
-const STREAM_ACCUMULATORS: Record<
-  StreamAccumulator["kind"],
-  {
-    readonly name: string;
-    /** The callback must be pure. Its effects then stay out of the result. */
-    readonly pure: boolean;
-    /** The operator runs the Stream to the final state instead of returning a Stream. */
-    readonly terminal: boolean;
-    readonly needs: string;
-  }
-> = {
-  "scan-stream": {
-    name: "scanStream",
-    pure: true,
-    terminal: false,
-    needs: "scanStream needs a Stream and a pure state update callback",
-  },
-  "map-accum-stream": {
-    name: "mapAccumStream",
-    pure: true,
-    terminal: false,
-    needs:
-      "mapAccumStream needs a Stream and a pure callback returning [State, Output[]]",
-  },
-  "fold-stream": {
-    name: "foldStream",
-    pure: true,
-    terminal: true,
-    needs: "foldStream needs a Stream and a pure state update callback",
-  },
-  "fold-effect-stream": {
-    name: "foldEffectStream",
-    pure: false,
-    terminal: true,
-    needs:
-      "foldEffectStream needs a Stream and a compatible state update callback",
-  },
-};
-
-/** The Stream operators that take a pure Int count, with the operator name. */
-type StreamCount = Extract<Expr, { kind: "take-stream" | "drop-stream" }>;
-
-const STREAM_COUNTS: Record<StreamCount["kind"], string> = {
-  "take-stream": "takeStream",
-  "drop-stream": "dropStream",
-};
-
-/** The Stream operators that take a pure boolean predicate, with the operator name. */
-type PureStreamPredicate = Extract<
-  Expr,
-  {
-    kind:
-      | "drop-while-stream"
-      | "filter-stream"
-      | "take-while-stream"
-      | "take-until-stream";
-  }
->;
-
-const PURE_STREAM_PREDICATES: Record<PureStreamPredicate["kind"], string> = {
-  "drop-while-stream": "dropWhileStream",
-  "filter-stream": "filterStream",
-  "take-while-stream": "takeWhileStream",
-  "take-until-stream": "takeUntilStream",
-};
 
 /** A concurrency limit is `unbounded` or a positive safe integer. Undefined selects the default. */
 function validConcurrency(value: number | "unbounded" | undefined): boolean {
@@ -789,56 +671,56 @@ export class BodyValidator implements ValidatorCore {
       case "with-resource":
         return withResource(this, e, path);
       case "unfold":
-        return this.unfoldStream(e, path);
+        return unfoldStream(this, e, path);
       case "map-effect":
       case "map-stream":
-        return this.mapElements(e, path);
+        return mapElements(this, e, path);
       case "map-groups":
-        return this.mapGroups(e, path);
+        return mapGroups(this, e, path);
       case "scan-stream":
       case "map-accum-stream":
       case "fold-stream":
       case "fold-effect-stream":
-        return this.accumulateStream(e, path);
+        return accumulateStream(this, e, path);
       case "collect-stream":
       case "head-stream":
       case "last-stream":
       case "drain-stream":
-        return this.streamTerminal(e, path);
+        return streamTerminal(this, e, path);
       case "flat-map-streams":
       case "switch-map-streams":
-        return this.mapStreams(e, path);
+        return mapStreams(this, e, path);
       case "catch-stream":
-        return this.catchStream(e, path);
+        return catchStream(this, e, path);
       case "retry-stream":
-        return this.retryStream(e, path);
+        return retryStream(this, e, path);
       case "debounce-stream":
-        return this.debounceStream(e, path);
+        return debounceStream(this, e, path);
       case "throttle-stream":
-        return this.throttleStream(e, path);
+        return throttleStream(this, e, path);
       case "take-stream":
       case "drop-stream":
-        return this.streamCount(e, path);
+        return streamCount(this, e, path);
       case "drop-while-stream":
       case "filter-stream":
       case "take-while-stream":
       case "take-until-stream":
-        return this.pureStreamPredicate(e, path);
+        return pureStreamPredicate(this, e, path);
       case "filter-effect-stream":
       case "take-while-effect-stream":
       case "take-until-effect-stream":
       case "drop-while-effect-stream":
-        return this.effectStreamPredicate(e, path);
+        return effectStreamPredicate(this, e, path);
       case "sink-for-each":
-        return this.sinkForEach(e, path);
+        return sinkForEach(this, e, path);
       case "take-sink":
-        return this.takeSink(e, path);
+        return takeSink(this, e, path);
       case "transduce-stream":
-        return this.transduceStream(e, path);
+        return transduceStream(this, e, path);
       case "aggregate-stream":
-        return this.aggregateStream(e, path);
+        return aggregateStream(this, e, path);
       case "aggregate-within-stream":
-        return this.aggregateWithinStream(e, path);
+        return aggregateWithinStream(this, e, path);
       case "schedule-from-step":
         return scheduleFromStep(this, e, path);
       case "schedule-recurs":
@@ -851,15 +733,15 @@ export class BodyValidator implements ValidatorCore {
       case "schedule-concat":
         return scheduleCompose(this, e, path);
       case "run-stream":
-        return this.runStream(e, path);
+        return runStream(this, e, path);
       case "buffer-stream":
-        return this.bufferStream(e, path);
+        return bufferStream(this, e, path);
       case "merge-streams":
-        return this.mergeStreams(e, path);
+        return mergeStreams(this, e, path);
       case "zip-streams":
-        return this.zipStreams(e, path);
+        return zipStreams(this, e, path);
       case "concat-streams":
-        return this.concatStreams(e, path);
+        return concatStreams(this, e, path);
       case "race":
         return race(this, e, path);
       case "make-ref":
@@ -2558,865 +2440,6 @@ export class BodyValidator implements ValidatorCore {
           : type.encodeRequirements,
       }]),
     );
-  }
-
-  private unfoldStream(
-    e: Extract<Expr, { kind: "unfold" }>,
-    path: string,
-  ): Comp {
-    const seed = this.check(e.seed, `${path}.seed`);
-    const next = this.check(e.next, `${path}.next`);
-    const fn = asFunction(this.env, next.type);
-    if (e.next.kind !== "closure") {
-      this.add(
-        AREA.control,
-        `${path}.next`,
-        "unfold requires an inline closure",
-        e.next.span,
-      );
-    }
-    const state = streamState(this.env, seed.type);
-    if (
-      fn === undefined || fn.parameters.length !== 1 ||
-      !fits(this.env, state, fn.parameters[0])
-    ) {
-      this.add(
-        AREA.types,
-        `${path}.next`,
-        "unfold needs a callback accepting the state",
-        e.next.span,
-      );
-      return this.poison();
-    }
-    const option = unfold(this.env, fn.result);
-    const pair = option.kind === "option"
-      ? unfold(this.env, option.element)
-      : undefined;
-    if (
-      pair?.kind !== "tuple" || pair.elements.length !== 2 ||
-      !fits(this.env, pair.elements[1], state)
-    ) {
-      this.add(
-        AREA.types,
-        `${path}.next`,
-        "unfold callback must return Option<[Element, State]>",
-        e.next.span,
-      );
-      return this.poison();
-    }
-    return derivedResult({
-      kind: "stream",
-      element: pair.elements[0],
-      effects: fn.effects,
-    }, combine([seed, next]));
-  }
-
-  private mapElements(e: StreamMap, path: string): Comp {
-    const row = STREAM_MAPS[e.kind];
-    if (e.kind === "map-effect") this.checkConcurrency(e, path, row.name);
-    const stream = this.check(e.stream, `${path}.stream`);
-    const transform = this.check(e.transform, `${path}.transform`);
-    const source = unfold(this.env, stream.type);
-    const fn = asFunction(this.env, transform.type);
-    if (e.transform.kind !== "closure") {
-      this.add(
-        AREA.control,
-        `${path}.transform`,
-        `${row.name} requires an inline closure`,
-        e.transform.span,
-      );
-    }
-    if (
-      source.kind !== "stream" || fn === undefined ||
-      fn.parameters.length !== 1 ||
-      !fits(this.env, source.element, fn.parameters[0]) ||
-      (row.pure && !isQuiet(invocationOf(fn)))
-    ) {
-      this.add(AREA.types, path, row.needs, e.span);
-      return this.poison();
-    }
-    return derivedResult({
-      kind: "stream",
-      element: fn.result,
-      effects: row.pure
-        ? source.effects
-        : { ...unionEffects(source.effects, fn.effects) },
-    }, combine([stream, transform]));
-  }
-
-  private accumulateStream(e: StreamAccumulator, path: string): Comp {
-    const row = STREAM_ACCUMULATORS[e.kind];
-    const stream = this.check(e.stream, `${path}.stream`);
-    const seed = this.check(e.seed, `${path}.seed`);
-    const update = this.check(e.update, `${path}.update`);
-    const source = unfold(this.env, stream.type);
-    const fn = asFunction(this.env, update.type);
-    if (e.update.kind !== "closure") {
-      this.add(
-        AREA.control,
-        `${path}.update`,
-        `${row.name} requires an inline closure`,
-        e.update.span,
-      );
-    }
-    // mapAccumStream returns [State, Output[]]. The others return the State.
-    const pair = e.kind === "map-accum-stream" && fn !== undefined
-      ? unfold(this.env, fn.result)
-      : undefined;
-    const elements = pair?.kind === "tuple" && pair.elements.length === 2
-      ? pair.elements
-      : undefined;
-    const output = elements === undefined
-      ? undefined
-      : unfold(this.env, elements[1]);
-    const state = e.kind === "map-accum-stream" ? elements?.[0] : fn?.result;
-    if (
-      source.kind !== "stream" || fn === undefined ||
-      fn.parameters.length !== 2 ||
-      !fits(this.env, seed.type, fn.parameters[0]) ||
-      !fits(this.env, source.element, fn.parameters[1]) ||
-      state === undefined || !fits(this.env, state, seed.type) ||
-      (e.kind === "map-accum-stream" && output?.kind !== "array") ||
-      (row.pure && !isQuiet(invocationOf(fn)))
-    ) {
-      this.add(AREA.types, path, row.needs, e.span);
-      return this.poison();
-    }
-    if (!isQuiet(seed)) {
-      this.add(
-        AREA.execution,
-        `${path}.seed`,
-        `${row.name} seed must be pure`,
-        e.seed.span,
-      );
-    }
-    if (row.terminal) {
-      return derivedResult(
-        seed.type,
-        combine([stream, seed, update, {
-          ...(row.pure
-            ? source.effects
-            : unionEffects(source.effects, fn.effects)),
-          execution: "effect",
-        }]),
-      );
-    }
-    return derivedResult({
-      kind: "stream",
-      element: output?.kind === "array" ? output.element : seed.type,
-      effects: source.effects,
-    }, combine([stream, seed, update]));
-  }
-
-  private streamTerminal(e: StreamTerminal, path: string): Comp {
-    const row = STREAM_TERMINALS[e.kind];
-    const stream = this.check(e.stream, `${path}.stream`);
-    const source = unfold(this.env, stream.type);
-    if (source.kind !== "stream") {
-      this.add(
-        AREA.types,
-        path,
-        `${row.name} needs a Stream value`,
-        e.span,
-      );
-      return this.poison();
-    }
-    return derivedResult(
-      row.result(source.element),
-      combine([stream, {
-        failures: source.effects.failures,
-        requirements: source.effects.requirements,
-        execution: "effect",
-      }]),
-    );
-  }
-
-  private mapStreams(e: StreamFlatten, path: string): Comp {
-    const name = STREAM_FLATTENS[e.kind];
-    if (e.kind === "flat-map-streams") this.checkConcurrency(e, path, name);
-    const stream = this.check(e.stream, `${path}.stream`);
-    const transform = this.check(e.transform, `${path}.transform`);
-    const source = unfold(this.env, stream.type);
-    const fn = asFunction(this.env, transform.type);
-    if (e.transform.kind !== "closure") {
-      this.add(
-        AREA.control,
-        `${path}.transform`,
-        `${name} requires an inline closure`,
-        e.transform.span,
-      );
-    }
-    const inner = fn === undefined ? undefined : unfold(this.env, fn.result);
-    if (
-      source.kind !== "stream" || fn === undefined ||
-      fn.parameters.length !== 1 ||
-      !fits(this.env, source.element, fn.parameters[0]) ||
-      !isQuiet(invocationOf(fn)) || inner?.kind !== "stream"
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        `${name} needs a Stream and a pure callback returning a Stream`,
-        e.span,
-      );
-      return this.poison();
-    }
-    return derivedResult({
-      kind: "stream",
-      element: inner.element,
-      effects: {
-        ...unionEffects(source.effects, inner.effects),
-      },
-    }, combine([stream, transform]));
-  }
-
-  private catchStream(
-    e: Extract<Expr, { kind: "catch-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const recover = this.check(e.recover, `${path}.recover`);
-    const source = unfold(this.env, stream.type);
-    const fn = asFunction(this.env, recover.type);
-    if (e.recover.kind !== "closure") {
-      this.add(
-        AREA.control,
-        `${path}.recover`,
-        "catchStream requires an inline closure",
-        e.recover.span,
-      );
-    }
-    const replacement = fn === undefined
-      ? undefined
-      : unfold(this.env, fn.result);
-    const errors = source.kind === "stream"
-      ? unionOf(
-        this.env,
-        source.effects.failures.map((id) => ({ kind: "named", id })),
-      )
-      : NEVER;
-    if (
-      source.kind !== "stream" || fn === undefined ||
-      fn.parameters.length !== 1 ||
-      !fits(this.env, errors, fn.parameters[0]) ||
-      !isQuiet(invocationOf(fn)) || replacement?.kind !== "stream"
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "catchStream needs a Stream and a pure error callback returning a Stream",
-        e.span,
-      );
-      return this.poison();
-    }
-    return derivedResult({
-      kind: "stream",
-      element: unionOf(this.env, [source.element, replacement.element]),
-      effects: {
-        failures: replacement.effects.failures,
-        requirements: sortedUnique([
-          ...source.effects.requirements,
-          ...replacement.effects.requirements,
-        ]),
-      },
-    }, combine([stream, recover]));
-  }
-
-  private retryStream(
-    e: Extract<Expr, { kind: "retry-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const policy = this.check(e.policy, `${path}.policy`);
-    const source = unfold(this.env, stream.type);
-    const schedule = unfold(this.env, policy.type);
-    if (source.kind !== "stream" || schedule.kind !== "retry-schedule") {
-      this.add(
-        AREA.types,
-        path,
-        "retryStream needs a Stream and a RetrySchedule",
-        e.span,
-      );
-      return this.poison();
-    }
-    for (const failure of source.effects.failures) {
-      if (!fits(this.env, { kind: "named", id: failure }, schedule.error)) {
-        this.add(
-          AREA.types,
-          `${path}.policy`,
-          `retry schedule does not accept ${failure}`,
-          e.policy.span,
-        );
-      }
-    }
-    if (!isQuiet(policy)) {
-      this.add(
-        AREA.execution,
-        `${path}.policy`,
-        "retryStream policy must be pure",
-        e.policy.span,
-      );
-    }
-    return derivedResult(source, combine([stream, policy]));
-  }
-
-  private debounceStream(
-    e: Extract<Expr, { kind: "debounce-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const source = unfold(this.env, stream.type);
-    if (source.kind !== "stream") {
-      this.add(AREA.types, path, "debounceStream needs a Stream", e.span);
-      return this.poison();
-    }
-    if (!Number.isSafeInteger(e.delayMs) || e.delayMs < 0) {
-      this.add(
-        AREA.control,
-        `${path}.delayMs`,
-        "debounceStream delay must be a nonnegative safe integer",
-        e.span,
-      );
-    }
-    return derivedResult(source, combine([stream]));
-  }
-
-  private throttleStream(
-    e: Extract<Expr, { kind: "throttle-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const source = unfold(this.env, stream.type);
-    if (source.kind !== "stream") {
-      this.add(AREA.types, path, "throttleStream needs a Stream", e.span);
-      return this.poison();
-    }
-    if (
-      !Number.isSafeInteger(e.units) || e.units <= 0 ||
-      !Number.isSafeInteger(e.durationMs) || e.durationMs <= 0 ||
-      (e.strategy !== "shape" && e.strategy !== "enforce")
-    ) {
-      this.add(
-        AREA.control,
-        path,
-        "throttleStream needs positive units and duration and a known strategy",
-        e.span,
-      );
-    }
-    return derivedResult(source, combine([stream]));
-  }
-
-  private streamCount(e: StreamCount, path: string): Comp {
-    const name = STREAM_COUNTS[e.kind];
-    const stream = this.check(e.stream, `${path}.stream`);
-    const count = this.check(e.count, `${path}.count`);
-    const source = unfold(this.env, stream.type);
-    if (source.kind !== "stream" || !fits(this.env, count.type, INT)) {
-      this.add(
-        AREA.types,
-        path,
-        `${name} needs a Stream value and an Int count`,
-        e.span,
-      );
-      return this.poison();
-    }
-    if (!isQuiet(count)) {
-      this.add(
-        AREA.execution,
-        `${path}.count`,
-        `${name} count must be pure`,
-        e.count.span,
-      );
-    }
-    return derivedResult(source, combine([stream, count]));
-  }
-
-  private pureStreamPredicate(e: PureStreamPredicate, path: string): Comp {
-    const name = PURE_STREAM_PREDICATES[e.kind];
-    const stream = this.check(e.stream, `${path}.stream`);
-    const predicate = this.check(e.predicate, `${path}.predicate`);
-    const source = unfold(this.env, stream.type);
-    const fn = asFunction(this.env, predicate.type);
-    if (e.predicate.kind !== "closure") {
-      this.add(
-        AREA.control,
-        `${path}.predicate`,
-        `${name} requires an inline closure`,
-        e.predicate.span,
-      );
-    }
-    if (
-      source.kind !== "stream" || fn === undefined ||
-      fn.parameters.length !== 1 ||
-      !fits(this.env, source.element, fn.parameters[0]) ||
-      !fits(this.env, fn.result, BOOLEAN) ||
-      !isQuiet(invocationOf(fn))
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        `${name} needs a Stream and a pure boolean predicate`,
-        e.span,
-      );
-      return this.poison();
-    }
-    return derivedResult(source, combine([stream, predicate]));
-  }
-
-  private effectStreamPredicate(
-    e: Extract<
-      Expr,
-      {
-        kind:
-          | "filter-effect-stream"
-          | "take-while-effect-stream"
-          | "take-until-effect-stream"
-          | "drop-while-effect-stream";
-      }
-    >,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const predicate = this.check(e.predicate, `${path}.predicate`);
-    const source = unfold(this.env, stream.type);
-    const fn = asFunction(this.env, predicate.type);
-    if (e.predicate.kind !== "closure") {
-      this.add(
-        AREA.control,
-        `${path}.predicate`,
-        "effectful stream predicate requires an inline closure",
-        e.predicate.span,
-      );
-    }
-    if (
-      source.kind !== "stream" || fn === undefined ||
-      fn.parameters.length !== 1 ||
-      !fits(this.env, source.element, fn.parameters[0]) ||
-      !fits(this.env, fn.result, BOOLEAN)
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "effectful stream predicate needs a Stream and a boolean callback",
-        e.span,
-      );
-      return this.poison();
-    }
-    return derivedResult({
-      kind: "stream",
-      element: source.element,
-      effects: {
-        ...unionEffects(source.effects, fn.effects),
-      },
-    }, combine([stream, predicate]));
-  }
-
-  private sinkForEach(
-    e: Extract<Expr, { kind: "sink-for-each" }>,
-    path: string,
-  ): Comp {
-    const consume = this.check(e.consume, `${path}.consume`);
-    const fn = asFunction(this.env, consume.type);
-    if (e.consume.kind !== "closure") {
-      this.add(
-        AREA.control,
-        `${path}.consume`,
-        "sinkForEach requires an inline closure",
-        e.consume.span,
-      );
-    }
-    if (
-      fn === undefined || fn.parameters.length !== 1 ||
-      !fits(this.env, fn.result, UNIT)
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "sinkForEach needs a one-argument void callback",
-        e.span,
-      );
-      return this.poison();
-    }
-    return derivedResult({
-      kind: "sink",
-      input: fn.parameters[0],
-      result: UNIT,
-      effects: fn.effects,
-    }, combine([consume]));
-  }
-
-  private takeSink(
-    e: Extract<Expr, { kind: "take-sink" }>,
-    path: string,
-  ): Comp {
-    if (!Number.isSafeInteger(e.count) || e.count <= 0) {
-      this.add(
-        AREA.control,
-        path,
-        "takeSink needs a positive safe integer count",
-        e.span,
-      );
-    }
-    const sink = unfold(this.env, e.type);
-    if (sink.kind !== "sink") {
-      this.add(AREA.types, path, "takeSink needs a Sink annotation", e.span);
-      return this.poison();
-    }
-    return derivedResult({
-      kind: "sink",
-      input: sink.input,
-      result: { kind: "array", element: sink.input },
-      leftover: sink.input,
-      effects: { failures: [], requirements: [] },
-    }, QUIET);
-  }
-
-  private mapGroups(
-    e: Extract<Expr, { kind: "map-groups" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const key = this.check(e.key, `${path}.key`);
-    const use = this.check(e.use, `${path}.use`);
-    const source = unfold(this.env, stream.type);
-    const classifier = asFunction(this.env, key.type);
-    const consumer = asFunction(this.env, use.type);
-    if (
-      source.kind !== "stream" || e.key.kind !== "closure" ||
-      e.use.kind !== "closure" ||
-      classifier === undefined || consumer === undefined ||
-      classifier.parameters.length !== 1 || consumer.parameters.length !== 2 ||
-      e.use.parameters[1]?.id !== e.groupBinding ||
-      e.use.parameters[0]?.id === e.groupBinding
-    ) {
-      this.add(
-        AREA.control,
-        path,
-        "mapGroups needs a Stream and inline key/use callbacks with the declared group binding",
-        e.span,
-      );
-      return this.poison();
-    }
-    if (!Number.isSafeInteger(e.bufferSize) || e.bufferSize <= 0) {
-      this.add(
-        AREA.control,
-        path,
-        "mapGroups needs a positive safe integer buffer size",
-        e.span,
-      );
-    }
-    const group: Type = {
-      kind: "stream",
-      element: source.element,
-      effects: { failures: [], requirements: [] },
-    };
-    if (
-      !fits(this.env, source.element, classifier.parameters[0]) ||
-      !fits(this.env, classifier.result, consumer.parameters[0]) ||
-      !same(this.env, group, consumer.parameters[1]) ||
-      this.groupKeyClass(classifier.result) === undefined ||
-      !dataOnly(this.env, consumer.result, "value")
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "mapGroups needs a primitive key class, matching borrowed input, and data-only result",
-        e.span,
-      );
-    }
-    if (!isQuiet(invocationOf(classifier))) {
-      this.add(
-        AREA.control,
-        path,
-        "the group classifier must be pure",
-        e.key.span,
-      );
-    }
-    this.groupReferences(e.use.body, e.groupBinding, `${path}.use.body`);
-    return derivedResult({
-      kind: "stream",
-      element: consumer.result,
-      effects: {
-        ...unionEffects(source.effects, {
-          failures: consumer.effects.failures,
-          requirements: minus(consumer.effects.requirements, [
-            SCOPE_CAPABILITY,
-          ]),
-        }),
-      },
-    }, combine([stream, key, use]));
-  }
-
-  private groupKeyClass(type: Type, depth = 0): string | undefined {
-    if (depth > 128) return undefined;
-    let found: string | undefined;
-    for (const member of members(this.env, type)) {
-      let current: string | undefined;
-      if (member.kind === "literal") {
-        if (member.value === null) return undefined;
-        current = typeof member.value === "number"
-          ? Number.isSafeInteger(member.value) ? "int" : undefined
-          : typeof member.value;
-      } else if (member.kind === "primitive") {
-        if (
-          member.name === "int" || member.name === "string" ||
-          member.name === "boolean"
-        ) current = member.name;
-      } else if (member.kind === "named") {
-        const base = this.env.brands.get(member.id);
-        if (
-          base !== undefined &&
-          this.groupKeyClass(base, depth + 1) !== undefined
-        ) current = `brand:${member.id}`;
-      }
-      if (current === undefined || (found !== undefined && found !== current)) {
-        return undefined;
-      }
-      found = current;
-    }
-    return found;
-  }
-
-  private groupReferences(body: Expr, id: string, path: string): void {
-    let references = 0;
-    walkExprs(body, (expr, parent, _grandparent, nested) => {
-      if (expr.kind === "reference" && expr.target === id) {
-        references++;
-        const terminal = parent?.kind === "collect-stream" ||
-          parent?.kind === "run-stream" ||
-          parent?.kind === "fold-stream" ||
-          parent?.kind === "fold-effect-stream" ||
-          parent?.kind === "head-stream" || parent?.kind === "last-stream" ||
-          parent?.kind === "drain-stream";
-        if (nested || references > 1 || !terminal || parent.stream !== expr) {
-          this.add(
-            AREA.control,
-            path,
-            "a borrowed group permits at most one direct terminal use and cannot escape or be captured",
-            expr.span,
-          );
-        }
-      }
-    });
-  }
-
-  private transduceStream(
-    e: Extract<Expr, { kind: "transduce-stream" }>,
-    path: string,
-  ): Comp {
-    return this.sinkTransformStream(e, path, "transduceStream");
-  }
-
-  private aggregateStream(
-    e: Extract<Expr, { kind: "aggregate-stream" }>,
-    path: string,
-  ): Comp {
-    return this.sinkTransformStream(e, path, "aggregateStream");
-  }
-
-  private aggregateWithinStream(
-    e: Extract<Expr, { kind: "aggregate-within-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const sink = this.check(e.sink, `${path}.sink`);
-    const schedule = this.check(e.schedule, `${path}.schedule`);
-    const source = unfold(this.env, stream.type);
-    const consumer = unfold(this.env, sink.type);
-    const policy = unfold(this.env, schedule.type);
-    const unknownInput = policy.kind === "schedule" &&
-      isUnknown(this.env, policy.input);
-    if (
-      source.kind !== "stream" || consumer.kind !== "sink" ||
-      policy.kind !== "schedule" ||
-      !fits(this.env, source.element, consumer.input) ||
-      !fits(this.env, consumer.leftover ?? NEVER, consumer.input) ||
-      !(unknownInput ||
-        fits(
-          this.env,
-          { kind: "option", element: consumer.result },
-          policy.input,
-        ))
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "aggregateWithinStream needs compatible Stream, Sink, and Schedule inputs",
-        e.span,
-      );
-      return this.poison();
-    }
-    return derivedResult({
-      kind: "stream",
-      element: consumer.result,
-      effects: {
-        ...unionEffects(source.effects, consumer.effects, policy.effects),
-      },
-    }, combine([stream, sink, schedule]));
-  }
-
-  private sinkTransformStream(
-    e: Extract<Expr, { kind: "transduce-stream" | "aggregate-stream" }>,
-    path: string,
-    name: "transduceStream" | "aggregateStream",
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const sink = this.check(e.sink, `${path}.sink`);
-    const source = unfold(this.env, stream.type);
-    const consumer = unfold(this.env, sink.type);
-    if (
-      source.kind !== "stream" || consumer.kind !== "sink" ||
-      !fits(this.env, source.element, consumer.input) ||
-      !fits(this.env, consumer.leftover ?? NEVER, consumer.input)
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        `${name} needs compatible input and replayable Sink leftovers`,
-        e.span,
-      );
-      return this.poison();
-    }
-    return derivedResult({
-      kind: "stream",
-      element: consumer.result,
-      effects: {
-        ...unionEffects(source.effects, consumer.effects),
-      },
-    }, combine([stream, sink]));
-  }
-
-  private runStream(
-    e: Extract<Expr, { kind: "run-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const sink = this.check(e.sink, `${path}.sink`);
-    const source = unfold(this.env, stream.type);
-    const consumer = unfold(this.env, sink.type);
-    if (
-      source.kind !== "stream" || consumer.kind !== "sink" ||
-      !fits(this.env, source.element, consumer.input)
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "runStream needs compatible Stream and Sink values",
-        e.span,
-      );
-      return this.poison();
-    }
-    return derivedResult(
-      consumer.result,
-      combine([stream, sink, {
-        ...unionEffects(source.effects, consumer.effects),
-        execution: "effect",
-      }]),
-    );
-  }
-
-  private bufferStream(
-    e: Extract<Expr, { kind: "buffer-stream" }>,
-    path: string,
-  ): Comp {
-    const stream = this.check(e.stream, `${path}.stream`);
-    const source = unfold(this.env, stream.type);
-    if (source.kind !== "stream") {
-      this.add(AREA.types, path, "bufferStream needs a Stream value", e.span);
-      return this.poison();
-    }
-    if (!Number.isSafeInteger(e.capacity) || e.capacity <= 0) {
-      this.add(
-        AREA.control,
-        path,
-        "bufferStream capacity must be a positive safe integer",
-        e.span,
-      );
-    }
-    return derivedResult(source, combine([stream]));
-  }
-
-  private mergeStreams(
-    e: Extract<Expr, { kind: "merge-streams" }>,
-    path: string,
-  ): Comp {
-    const left = this.check(e.left, `${path}.left`);
-    const right = this.check(e.right, `${path}.right`);
-    const a = unfold(this.env, left.type);
-    const b = unfold(this.env, right.type);
-    if (a.kind !== "stream" || b.kind !== "stream") {
-      this.add(
-        AREA.types,
-        path,
-        "mergeStreams needs two Stream values",
-        e.span,
-      );
-      return this.poison();
-    }
-    const aFitsB = fits(this.env, a.element, b.element);
-    const bFitsA = fits(this.env, b.element, a.element);
-    if (!aFitsB && !bFitsA) {
-      this.add(
-        AREA.types,
-        path,
-        "mergeStreams needs compatible element types",
-        e.span,
-      );
-    }
-    return derivedResult({
-      kind: "stream",
-      element: aFitsB ? b.element : a.element,
-      effects: {
-        ...unionEffects(a.effects, b.effects),
-      },
-    }, combine([left, right]));
-  }
-
-  private zipStreams(
-    e: Extract<Expr, { kind: "zip-streams" }>,
-    path: string,
-  ): Comp {
-    const left = this.check(e.left, `${path}.left`);
-    const right = this.check(e.right, `${path}.right`);
-    const a = unfold(this.env, left.type);
-    const b = unfold(this.env, right.type);
-    if (a.kind !== "stream" || b.kind !== "stream") {
-      this.add(AREA.types, path, "zipStreams needs two Stream values", e.span);
-      return this.poison();
-    }
-    return derivedResult({
-      kind: "stream",
-      element: { kind: "tuple", elements: [a.element, b.element] },
-      effects: {
-        ...unionEffects(a.effects, b.effects),
-      },
-    }, combine([left, right]));
-  }
-
-  private concatStreams(
-    e: Extract<Expr, { kind: "concat-streams" }>,
-    path: string,
-  ): Comp {
-    const left = this.check(e.left, `${path}.left`);
-    const right = this.check(e.right, `${path}.right`);
-    const a = unfold(this.env, left.type);
-    const b = unfold(this.env, right.type);
-    if (a.kind !== "stream" || b.kind !== "stream") {
-      this.add(
-        AREA.types,
-        path,
-        "concatStreams needs two Stream values",
-        e.span,
-      );
-      return this.poison();
-    }
-    return derivedResult({
-      kind: "stream",
-      element: unionOf(this.env, [a.element, b.element]),
-      effects: {
-        ...unionEffects(a.effects, b.effects),
-      },
-    }, combine([left, right]));
   }
 
   // -------------------------------------------------------------- operators
