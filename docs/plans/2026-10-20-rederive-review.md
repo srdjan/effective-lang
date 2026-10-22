@@ -1,6 +1,6 @@
 # Rederive review: measured re-basing plan
 
-Date: 2026-10-20. Base revision: 730977c. Status: Phase 0 accepted on 2026-10-20. The user chose option (a) for D1, D2, D3, and D4. Phases 0 to 2 are done on main. R1 to R6, R9, R10, R14, and D1 to D6 are done. R7, R8, R11 (checker and validator sides), R12 (FE-1, FE-3, FE-5), and R18 (compareText, isRecord, errorMessage, the editor search, and the dead exports) are done on main. R12 FE-1, FE-3, FE-5, and R18 were replayed in `d25a6a6..c542847`. R7 and the checker side of R11 are in `39e94ba..d858322`. R8 and the validator side of R11 are in `044c2e3..7c2d151`. R16 and R17 are done through P1 and R17 of the hardening plan. Still open: R12 FE-2 (LSP param schema kit), R15b (Schedule, Codec, Ref, collections, Effect/Layer, Fiber/Scope and Stream/Sink complete; Schema open), R18 CHK-12 (built-in type table; its only implementation is commit `21449db`, kept by the tag `keep/chk-12`), and the R18 `isErrorId` casts (CHK-11). The R18 closing-token parser sites are done in `463b872`. R13 is complete through the accepted completion batch. R15a and C10 are complete through the shared syntax queries; A6 is complete in `docs/builtin-changes.md`. The sibling plan `2026-10-20-hardening-pruning.md` carries the remaining cleanup work.
+Date: 2026-10-20. Base revision: 730977c. Status: Phase 0 accepted on 2026-10-20. The user chose option (a) for D1, D2, D3, and D4. Phases 0 to 2 are done on main. R1 to R6, R9, R10, R14, and D1 to D6 are done. R7, R8, R11 (checker and validator sides), R12 (FE-1, FE-3, FE-5), and R18 (compareText, isRecord, errorMessage, the editor search, and the dead exports) are done on main. R12 FE-1, FE-3, FE-5, and R18 were replayed in `d25a6a6..c542847`. R7 and the checker side of R11 are in `39e94ba..d858322`. R8 and the validator side of R11 are in `044c2e3..7c2d151`. R16 and R17 are done through P1 and R17 of the hardening plan. Still open: R12 FE-2 (LSP param schema kit), R18 CHK-12 (built-in type table; its only implementation is commit `21449db`, kept by the tag `keep/chk-12`), and the R18 `isErrorId` casts (CHK-11). The R18 closing-token parser sites are done in `463b872`. R13 and R15b are complete through the accepted completion batch. R15a and C10 are complete through the shared syntax queries; A6 is complete in `docs/builtin-changes.md`. The sibling plan `2026-10-20-hardening-pruning.md` carries the remaining cleanup work.
 
 This document is a plan, not a change. It ranks the weak units of the transpiler by measured leverage. For each rederived unit, it gives the contract to keep, the judging tests, and the verification. The evidence is in `docs/plans/rederive-review-evidence/`. Each finding ID (for example CHK-2) points to a section of a scout report in that directory. The scratch paths under `/tmp/rederive/` in those reports are not kept.
 
@@ -225,6 +225,7 @@ The 17 sites are of three kinds. The 3 emitter walker defaults are part of R3, w
 - R15b (ARC-4). Define a `BuiltinContext` of about 22 members. Move each family to `src/core/check_builtins/<family>.ts`.
 - Delta. Branch delta 0. `check_expr.ts` goes from 7316 own-body lines to about 3100 (design target; the size of `BuiltinContext` is not measured).
 - Validator. `validate/expr.ts` has the same seam. Its split must not reuse the checker modules.
+- Completion. R15a and R15b are complete. The [accepted completion batch](#accepted-completion-batch) records each family, context and verification unit. `check_expr.ts` is 2,997 raw lines after formatting; the common context has ten operations and the largest family context has nineteen members.
 
 #### R16. One check step for each module, shared by the project drivers (ARC-2, FE-11)
 
@@ -655,3 +656,26 @@ match checking and Stream hints. All 520 focused tests pass. Normalized AST
 comparison matches all thirty-three moved bodies and both metadata initializers;
 four negative probes reject mutation and body/environment access. Full gate and
 constant-input behavior comparison are recorded in the ledger.
+
+R15b Schema moves twenty-nine methods, Schema metadata and its exhaustive
+operation table to `schema.ts`. A seventeen-member context exposes the needed
+checking operations, syntax queries and read-only facts, infos and targets;
+the body environment, lowerer and writable body tables stay private. Recursion
+guards, defaults, presence, make-input metadata, directional effects and report
+order retain their behavior. Normalized AST comparison matches all twenty-nine
+moved bodies and all four metadata initializers, including the handler table.
+Four negative probes reject mutation and body-table access. The full gate,
+focused tests and constant-input comparison are recorded in the ledger.
+
+This completes every unit of the accepted R13/R15b batch. All named builtin
+families now have an owner module, the common context remains ten operations,
+and the independent validator imports no checker policy. Existing source syntax,
+public core exports and canonical IR are unchanged. Other rederive items and
+manual release acceptance remain separate work.
+
+Across the remaining R15b family moves, normalized AST comparison matches all
+ninety-two moved method bodies and six metadata initializers against the
+post-R13 source baseline (`42c7830`). Receiver and helper-call substitutions,
+read-view projections and formatter-only blocks/parentheses are normalized;
+no existing local binding can capture the new context receiver. This evidence
+supplements the full gates and constant-input behavior captures.

@@ -21,7 +21,7 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
   types.ts       Interned types, compatibility, IR conversion, canonical JSON.
   check.ts       Declaration checker: type lowering, signatures, providers.
   check_expr.ts  Body checker: expressions, calls, patterns, contracts.
-  check_builtins/ Source-checker builtin families; arity, pipeline rules and facts stay in check_expr.ts.
+  check_builtins/ Source-checker builtin families; shared dispatch and body-table writes stay in check_expr.ts.
     context.ts     Shared argument, function, literal-field and local-use shapes, invocation effects and ten checker operations.
     codec.ts       Codec construction, decode and encode, including pure transformations and derived-schema checks.
     collections.ts Collection callbacks, traversal, grouped effects and result accumulation through a family-specific context.
@@ -30,6 +30,7 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
     layer.ts       Layer construction, merging and provision through LayerContext.
     ref.ts         Mutable reference construction, reads, writes and pure update callbacks.
     schedule.ts    General Schedule construction, mapping and comparable-input composition.
+    schema.ts      Schema metadata, exhaustive handlers, defaults, directional effects and recursion through SchemaContext.
     scope.ts       Scope operations, resource lifetimes and borrowed parameters through ScopeContext.
     stream.ts      Stream/Sink callbacks, grouping lifetimes, aggregation hints and execution through StreamContext.
   check_project.ts Project driver: paired declaration entries and body results, modes, interfaces, the shared per-module step, and effectText.
