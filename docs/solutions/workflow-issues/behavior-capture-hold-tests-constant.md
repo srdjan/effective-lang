@@ -116,14 +116,17 @@ verification run.
 
 ## When to Apply
 
-Run the full repository gate and behavior capture serially. The benchmark
-cleanup tests in `tests/bench_lsp_slow_test.ts` compare all matching harness
-directories in the system temporary directory before and after each test.
-Concurrent verification runs can therefore see each other's directories and
-fail those assertions on both the unchanged base and the candidate. During
-the Codec extraction, the failures named only changing `effective-bench-lsp-`
-directories; the concurrent logs were retained and both checks were rerun
-serially. Keep these assertions and the test inputs unchanged.
+When a compared revision predates the process-scoped benchmark directory
+prefix, run the full repository gate and behavior capture serially. Its cleanup
+tests compare all matching harness directories in the system temporary
+directory before and after each test. Concurrent verification runs can see
+each other's directories and fail those assertions on both the unchanged
+base and the candidate. During the Codec extraction, the failures named only
+changing `effective-bench-lsp-` directories; the concurrent logs were retained
+and both checks were rerun serially. On 2026-10-22, the harness prefix gained
+the creating process ID, so current cleanup checks detect their own leaks
+without observing directories from other runs. The regression also verifies
+that an owned leftover remains visible.
 
 - Before you accept any refactor commit that deletes, moves, merges, or
   rewrites a test, when its capture against the base shows any difference.

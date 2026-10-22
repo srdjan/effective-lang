@@ -195,8 +195,8 @@ export function applyCompanionEdit(text: string, revision: number): string {
 
 // ------------------------------------------------------------------ temporary projects
 
-/** The prefix of every temporary directory of the harness. */
-export const TEMP_PREFIX = "effective-bench-lsp-";
+/** The prefix of this process's harness directories, so cleanup checks ignore other runs. */
+export const TEMP_PREFIX = `effective-bench-lsp-${Deno.pid}-`;
 
 function writeProject(
   files: ReadonlyMap<string, string>,

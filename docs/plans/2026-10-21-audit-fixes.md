@@ -104,9 +104,11 @@ Status on 2026-10-21. Three Sonnet lanes implemented the items in separate workt
 - AU5: `f39d15b`. AU6: `b25405e`. AU7: `8873a3e`.
 - AU8: `5520fc6`. Seven of the nine stage forms lower, emit, pass `deno check`, and run. `joinFiber` and `interruptFiber` as stages always fail: a borrowed fiber may only be joined or interrupted by a direct call (`type-mismatch/010`). Website commit `a724c20` removes them from the spec stage list.
 
-Open follow-ups (no owner yet):
+Follow-up review on 2026-10-22:
 
-- AU7 compares the first line with a header that it builds from the module name. The emitter writes the source path. With custom module roots the two can differ, and then `watch` keeps the stale file (I). This fails safe.
+- AU7 header concern retired: the current loader derives each module name from its root-relative source path (`moduleNameOf`), and configuration accepts only `host`, with no custom module roots. Lowering records that same source path. The removal header therefore agrees with the emitter for every supported `.eff` module.
 - Fixed by SV1 and SV3/SV4 (`90ecd76`, `7fcf1d9`): the language server save path wrote a module whose import was not written (the AU6 defect).
-- A pure function type alias emits `type G = (a: Count) => Effect.Effect<Count>`, but a constant of that type emits as a plain function. The alias is unused, so `deno check` passes (M, AU4 lane). A use of the alias type in emitted code could disagree (I).
-- `tests/bench_lsp_slow_test.ts` compares shared `effective-bench-lsp-*` temporary directories, so it fails when two test runs overlap (M, three lanes).
+- Pure function alias concern already fixed: `functionTypeDoc` wraps the result only for effect execution. `tests/function_alias_binding_slow_test.ts` checks pure alias bindings under strict TypeScript and runs them.
+- Benchmark cleanup race fixed: harness directory prefixes include the creating process ID. Cleanup assertions still detect that process's leftovers while ignoring other runs. A regression creates both owned and foreign directories, verifies that the owned directory is detected, then removes it and verifies that the foreign directory is ignored.
+
+Benchmark fix verification on 2026-10-22: the regression failed with the original shared prefix. The focused file then passed all eight tests, and two concurrent copies each passed all eight tests. The initial restricted run of `deno task check` passed formatting, lint, type checking, 1826 fast tests and 175 slow tests. Two slow tests could not pass there: HTTP/SQLite failed to open a loopback listener (`Operation not permitted`), and installation failed to fetch an npm tarball (`ENOTFOUND registry.npmjs.org`). A focused HTTP/SQLite rerun confirmed the listener restriction. After those restrictions were lifted, the full gate passed with Deno 2.9.7: formatting, lint, type checking, 1826 fast tests and all 177 slow tests, including HTTP/SQLite and installation.

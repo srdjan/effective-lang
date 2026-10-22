@@ -14,7 +14,7 @@ import { parseOptions } from "../bench/main.ts";
 
 const TIMEOUT_MS = 30_000;
 
-/** The names of the harness directories in the system temporary directory. */
+/** This process's harness directories in the system temporary directory. */
 function tempLeftovers(): string[] {
   const probe = Deno.makeTempDirSync();
   const parent = probe.slice(0, probe.lastIndexOf("/"));
@@ -24,6 +24,26 @@ function tempLeftovers(): string[] {
     .filter((name) => name.startsWith(TEMP_PREFIX))
     .sort();
 }
+
+Deno.test("cleanup checks detect this process's leaks and ignore other benchmark runs", () => {
+  const before = tempLeftovers();
+  const foreign = Deno.makeTempDirSync({
+    prefix: "effective-bench-lsp-other-process-",
+  });
+  try {
+    assertEquals(tempLeftovers(), before);
+    const owned = Deno.makeTempDirSync({ prefix: TEMP_PREFIX });
+    try {
+      const name = owned.slice(owned.lastIndexOf("/") + 1);
+      assertEquals(tempLeftovers(), [...before, name].sort());
+    } finally {
+      Deno.removeSync(owned);
+    }
+    assertEquals(tempLeftovers(), before);
+  } finally {
+    Deno.removeSync(foreign);
+  }
+});
 
 Deno.test("M1 returns a change row and a hover row for each input and edit kind", async () => {
   const before = tempLeftovers();
