@@ -1,9 +1,8 @@
 // Lowering of a checked module to typed IR (plan part A4, design 6.1 and 6.3).
 //
 // The lowering reads the syntax tree and the side tables that body checking
-// built. It never infers a type or an effect set itself. The only sets it
-// computes are those of a pipeline stage whose left value moved into a fresh
-// binding (see `stageEffects`).
+// built. It never infers a type or an effect set itself. A pipeline stage whose
+// left value moved into a fresh binding takes its set from `stageSets`.
 //
 // The IR exists only for a module whose diagnostics are empty. A module in a
 // `.effi` file emits nothing. Expected failures are error values. A violated
@@ -49,7 +48,6 @@ import type {
   Type,
   ValueId,
 } from "./ir.ts";
-import { SCOPE_CAPABILITY } from "./ir.ts";
 import { TokenKind } from "./lex.ts";
 import type { ModuleInfo } from "./project.ts";
 import type { ModuleResolution, Target } from "./resolve.ts";
@@ -65,11 +63,9 @@ import {
 import {
   type BodyTable,
   combine,
-  EFFECT_ONLY,
   type EffectSet,
   type NodeFact,
   type NodeInfo,
-  without,
 } from "./tables.ts";
 import {
   canonicalJson,
@@ -77,7 +73,7 @@ import {
   type TypeRef,
   type TypeTable,
 } from "./types.ts";
-import { builtinInstanceId, isErrorId, serviceOfCapability } from "./ids.ts";
+import { builtinInstanceId } from "./ids.ts";
 
 type FunctionNode = Extract<TypeNode, { readonly kind: "function" }>;
 
@@ -755,24 +751,23 @@ class BodyLowerer {
       kindOf(this.ctx.tree, k) === SyntaxKind.ArgList
     );
     const args = argList === undefined ? [] : this.kids(argList);
-    return this.invoke(node, callee, args, undefined, undefined);
+    return this.invoke(node, callee, args, undefined);
   }
 
   /**
    * Lowers a call node or a pipeline stage by the checker fact of `node`.
    * `pre` is the lowered left value of a stage, which is the first argument.
-   * `override` computes the sets of the node when they differ from the checker's.
+   * A stage whose left value moved into a binding takes its set from `stageSets`.
    */
   private invoke(
     node: NodeId,
     calleeNode: NodeId,
     argNodes: readonly NodeId[],
     pre: Expr | undefined,
-    override: ((args: readonly Expr[]) => EffectSet) | undefined,
   ): Expr {
     const fact = this.required(this.fact(node), "the call fact", node);
     if (fact.kind === "layer") {
-      if (pre !== undefined || override !== undefined) {
+      if (pre !== undefined) {
         throw internal("layer does not accept a pipeline input");
       }
       return {
@@ -791,10 +786,10 @@ class BodyLowerer {
     if (fact.kind !== "error-construction") {
       for (const argNode of argNodes) args.push(this.expr(argNode));
     }
-    const info = this.info(node);
-    const annotation = override === undefined
+    const stageSet = this.body.stageSets.get(node);
+    const annotation = stageSet === undefined
       ? this.annotation(node)
-      : this.annotationWith(info.type, override(args), this.span(node));
+      : this.annotationWith(this.info(node).type, stageSet, this.span(node));
     const arg: ArgumentAt = (i) =>
       this.required(args[i], `argument ${i + 1}`, node);
     switch (fact.kind) {
@@ -1129,246 +1124,14 @@ class BodyLowerer {
       kindOf(this.ctx.tree, k) === SyntaxKind.ArgList
     );
     const argNodes = argList === undefined ? [] : this.kids(argList);
-    const override = isQuiet(leftInfo)
-      ? undefined
-      : (args: readonly Expr[]) =>
-        this.stageEffects(stage, qualified, leftInfo, argNodes, args);
-    return this.invoke(stage, qualified, argNodes, pre, override);
-  }
-
-  /**
-   * The sets of a stage call when its left value moved into a binding. The
-   * checker's sets for the stage include the left value. The call in the IR
-   * evaluates only a pure reference, so its sets are its arguments plus its own
-   * invocation. Control stages include the deferred job's invocation and any
-   * provider acquisition, but not the already evaluated left value.
-   */
-  private stageEffects(
-    stage: NodeId,
-    qualified: NodeId,
-    leftInfo: NodeInfo,
-    argNodes: readonly NodeId[],
-    args: readonly Expr[],
-  ): EffectSet {
-    const fact = this.required(this.fact(stage), "the stage fact", stage);
-    const parts: EffectSet[] = args.map(setOf);
-    switch (fact.kind) {
-      case "call": {
-        const fn = this.functionOf(this.info(qualified).type);
-        parts.push({
-          failures: fn.failures,
-          requirements: fn.requirements,
-          mode: fn.execution,
-        });
-        break;
-      }
-      case "perform": {
-        const service = serviceOfCapability(fact.capability);
-        const method =
-          (service === undefined ? undefined : this.ctx.services.get(service))
-            ?.methods.find((m) => m.id === fact.capability);
-        const fn = this.required(method, "the service method", stage).type;
-        parts.push({
-          failures: fn.effects.failures,
-          requirements: fn.effects.requirements,
-          mode: fn.execution,
-        });
-        parts.push({
-          failures: [],
-          requirements: [fact.capability],
-          mode: "effect",
-        });
-        break;
-      }
-      case "fail": {
-        const node = this.ctx.types.node(this.ctx.types.unfold(leftInfo.type));
-        if (node.kind === "named" && isErrorId(node.id)) {
-          parts.push({
-            failures: [node.id],
-            requirements: [],
-            mode: "effect",
-          });
-        }
-        break;
-      }
-      case "builtin":
-        parts.push({
-          failures: fact.ir.effects.failures,
-          requirements: fact.ir.effects.requirements,
-          mode: fact.ir.execution,
-        });
-        break;
-      case "retry": {
-        const fn = this.functionOf(leftInfo.type);
-        return combine([
-          setOf(this.required(args[0], "the retry job", stage)),
-          {
-            failures: fn.failures,
-            requirements: fn.requirements,
-            mode: fn.execution,
-          },
-          EFFECT_ONLY,
-        ]);
-      }
-      case "retry-with-schedule": {
-        const fn = this.functionOf(leftInfo.type);
-        return combine([
-          setOf(this.required(args[0], "the retry job", stage)),
-          setOf(this.required(args[1], "the retry options", stage)),
-          {
-            failures: fn.failures,
-            requirements: fn.requirements,
-            mode: fn.execution,
-          },
-          EFFECT_ONLY,
-        ]);
-      }
-      case "close-scope":
-        return combine([...parts, EFFECT_ONLY]);
-      case "provide-scope":
-      case "add-scope-finalizer": {
-        const job = this.required(argNodes[0], "the scope job", stage);
-        const effect = this.ctx.types.node(
-          this.ctx.types.unfold(this.info(job).type),
-        );
-        if (effect.kind !== "effect") {
-          throw internal("the scope stage has no Effect type");
-        }
-        return combine([...parts, {
-          failures: fact.kind === "provide-scope" ? effect.failures : [],
-          requirements: fact.kind === "provide-scope"
-            ? without(effect.requirements, [SCOPE_CAPABILITY])
-            : effect.requirements,
-          mode: "effect",
-        }]);
-      }
-      case "run": {
-        const value = this.ctx.types.node(
-          this.ctx.types.unfold(leftInfo.type),
-        );
-        if (value.kind !== "effect") {
-          throw internal("the run stage has no Effect type");
-        }
-        return combine([
-          setOf(this.required(args[0], "the Effect value", stage)),
-          {
-            failures: value.failures,
-            requirements: value.requirements,
-            mode: "effect",
-          },
-        ]);
-      }
-      case "provide": {
-        const provider = this.ctx.types.node(
-          this.ctx.types.unfold(leftInfo.type),
-        );
-        if (provider.kind !== "provider") {
-          throw internal("the provide stage has no provider type");
-        }
-        const job = this.required(argNodes[0], "the provide job", stage);
-        const fn = this.functionOf(this.info(job).type);
-        return combine([
-          setOf(this.required(args[0], "the provider", stage)),
-          setOf(this.required(args[1], "the provide job", stage)),
-          {
-            failures: fn.failures,
-            requirements: without(fn.requirements, provider.provides),
-            mode: fn.execution,
-          },
-          {
-            failures: provider.failures,
-            requirements: provider.requirements,
-            mode: "effect",
-          },
-          EFFECT_ONLY,
-        ]);
-      }
-      case "retry-schedule":
-      case "codec":
-      case "schema":
-      case "decode":
-      case "encode":
-      case "defer":
-      case "error-construction":
-      case "brand-construction":
-      case "unbrand":
-      case "some":
-      case "none":
-      case "scoped":
-      case "fork-scoped":
-      case "make-scope":
-      case "with-resource":
-      case "unfold":
-      case "map-effect":
-      case "map-stream":
-      case "scan-stream":
-      case "map-accum-stream":
-      case "fold-stream":
-      case "fold-effect-stream":
-      case "collect-stream":
-      case "head-stream":
-      case "last-stream":
-      case "drain-stream":
-      case "flat-map-streams":
-      case "switch-map-streams":
-      case "catch-stream":
-      case "retry-stream":
-      case "debounce-stream":
-      case "throttle-stream":
-      case "take-stream":
-      case "drop-stream":
-      case "drop-while-stream":
-      case "filter-stream":
-      case "filter-effect-stream":
-      case "take-while-effect-stream":
-      case "take-until-effect-stream":
-      case "drop-while-effect-stream":
-      case "take-while-stream":
-      case "take-until-stream":
-      case "partition-all":
-      case "validate-all":
-      case "all-results":
-      case "sink-for-each":
-      case "take-sink":
-      case "transduce-stream":
-      case "aggregate-stream":
-      case "aggregate-within-stream":
-      case "schedule-from-step":
-      case "schedule-recurs":
-      case "schedule-spaced":
-      case "schedule-map":
-      case "schedule-max":
-      case "schedule-min":
-      case "schedule-concat":
-      case "map-groups":
-      case "run-stream":
-      case "buffer-stream":
-      case "merge-streams":
-      case "zip-streams":
-      case "concat-streams":
-      case "race":
-      case "make-ref":
-      case "get-ref":
-      case "set-ref":
-      case "update-ref":
-      case "layer":
-      case "merge-layers":
-      case "with-fiber":
-      case "join-fiber":
-      case "interrupt-fiber":
-      case "list":
-      case "field":
-      case "arrow":
-      case "binding":
-      case "pattern":
-      case "handler":
-        break;
-      default: {
-        const unreachable: never = fact;
-        return unreachable;
-      }
+    if (!isQuiet(leftInfo)) {
+      this.required(
+        this.body.stageSets.get(stage),
+        "the stage effect set",
+        stage,
+      );
     }
-    return combine(parts);
+    return this.invoke(stage, qualified, argNodes, pre);
   }
 
   // -------------------------------------------------------------- records

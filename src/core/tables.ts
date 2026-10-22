@@ -269,6 +269,12 @@ export interface BodyTable {
   readonly facts: Map<NodeId, NodeFact>;
   /** The type of each parameter, block binding, and pattern binding. */
   readonly locals: Map<LocalId, TypeRef>;
+  /**
+   * The sets of a pipeline stage without its left value. A stage has an entry
+   * only when its left value is not quiet. The stage's own `info` includes the
+   * left value, but the lowering evaluates the left value in its own binding.
+   */
+  readonly stageSets: Map<NodeId, EffectSet>;
 }
 
 export function newBodyTable(declaration: ValueId): BodyTable {
@@ -277,5 +283,6 @@ export function newBodyTable(declaration: ValueId): BodyTable {
     info: new Map(),
     facts: new Map(),
     locals: new Map(),
+    stageSets: new Map(),
   };
 }

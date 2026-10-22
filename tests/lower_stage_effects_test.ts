@@ -296,10 +296,8 @@ const probe = (): Int[] fails Stop uses Cfg.limit | Jobs.next => makeList() |> t
   });
 });
 
-// `stageEffects` has no arm for `scoped` and `forkScoped`, so the lowering
-// records the pure empty set for the stage. The checker gives the invocation
-// set, so the validator reports the difference. IC1b fixes both cases, and
-// then they assert no diagnostic.
+// The checker computes the stage set, so `scoped` and `forkScoped` carry the
+// invocation set of the Effect value like every other stage.
 const SCOPED_PROBE = `type Bool = boolean
 service Child { alive(): Bool }
 service Cfg { limit(): Bool }
@@ -309,36 +307,38 @@ const makeJob = (): Effect<Bool, never, Child.alive> uses Cfg.limit => {
 }
 `;
 
-Deno.test("a scoped stage with an effectful left value records the wrong stage set today", () => {
-  const { stage, validation } = lowerProbeWithValidation(
+Deno.test("a scoped stage adds the Effect value sets and excludes the left value", () => {
+  const { body, stage } = lowerProbe(
     `${SCOPED_PROBE}const probe = () => makeJob() |> scoped\n`,
   );
   assertEquals(stage.kind, "scoped");
-  assertEquals(stage.execution, "pure");
-  assertEquals(stage.effects, { failures: [], requirements: [] });
-  assertEquals(
-    validation.map((d) => `${d.code} ${d.message}`),
-    [
-      "validation/003 declarations[4].body.effects.requirements: expected [cap:m#Cfg.limit, cap:m#Child.alive], recorded [cap:m#Cfg.limit]",
-      "validation/003 declarations[4].body.result.effects.requirements: expected [cap:m#Child.alive], recorded []",
-      "validation/004 declarations[4].body.result.execution: expected effect, recorded pure",
-    ],
-  );
+  assertEquals(stage.execution, "effect");
+  assertEquals(stage.effects, {
+    failures: [],
+    requirements: ["cap:m#Child.alive"],
+  });
+  assertEquals(body.effects, {
+    failures: [],
+    requirements: ["cap:m#Cfg.limit", "cap:m#Child.alive"],
+  });
 });
 
-Deno.test("a forkScoped stage with an effectful left value records the wrong stage set today", () => {
-  const { stage, validation } = lowerProbeWithValidation(
+Deno.test("a forkScoped stage adds the Scope requirement and excludes the left value", () => {
+  const { body, stage } = lowerProbe(
     `${SCOPED_PROBE}const probe = () => makeJob() |> forkScoped\n`,
   );
   assertEquals(stage.kind, "fork-scoped");
-  assertEquals(stage.execution, "pure");
-  assertEquals(stage.effects, { failures: [], requirements: [] });
-  assertEquals(
-    validation.map((d) => `${d.code} ${d.message}`),
-    [
-      "validation/003 declarations[4].body.effects.requirements: expected [cap:effect/Scope, cap:m#Cfg.limit, cap:m#Child.alive], recorded [cap:m#Cfg.limit]",
-      "validation/003 declarations[4].body.result.effects.requirements: expected [cap:effect/Scope, cap:m#Child.alive], recorded []",
-      "validation/004 declarations[4].body.result.execution: expected effect, recorded pure",
+  assertEquals(stage.execution, "effect");
+  assertEquals(stage.effects, {
+    failures: [],
+    requirements: ["cap:effect/Scope", "cap:m#Child.alive"],
+  });
+  assertEquals(body.effects, {
+    failures: [],
+    requirements: [
+      "cap:effect/Scope",
+      "cap:m#Cfg.limit",
+      "cap:m#Child.alive",
     ],
-  );
+  });
 });

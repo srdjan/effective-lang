@@ -1670,13 +1670,20 @@ class BodyChecker
       this.errorInfo(stage);
       return this.finish(node, this.table.error, leftInfo);
     }
+    // The lowering evaluates a left value with effects in its own binding, so
+    // the handler sees it as pure and the stage keeps its own sets.
+    const quiet = leftInfo.mode === "pure" &&
+      leftInfo.failures.length === 0 && leftInfo.requirements.length === 0;
+    const pre: NodeInfo = quiet
+      ? leftInfo
+      : { type: leftInfo.type, ...PURE_EFFECTS };
     const args: Arg[] = [
-      { node: left, pre: leftInfo },
+      { node: left, pre },
       ...(argList === undefined
         ? []
         : this.kids(argList).map((n) => ({ node: n }))),
     ];
-    const info = this.invoke(
+    const q = this.invoke(
       stage,
       qualified,
       this.targets.get(qualified),
@@ -1684,7 +1691,15 @@ class BodyChecker
       args,
       expected,
     );
-    return this.finish(node, info.type, info);
+    if (quiet) return this.finish(node, q.type, q);
+    this.body.stageSets.set(stage, {
+      failures: q.failures,
+      requirements: q.requirements,
+      mode: q.mode,
+    });
+    const combined = combine([leftInfo, q]);
+    this.finish(stage, q.type, combined);
+    return this.finish(node, q.type, combined);
   }
 
   // -------------------------------------------------------------- fields and records
