@@ -327,3 +327,103 @@ Capture: source of `ebfcc28` against source of `67333cb`, which covers IC1b, ED4
 Size (M, `scripts/measure.ts` over `src/core`, `98df0ef` against `67333cb`): filtered lines 34,502 to 34,393, and AST branches 8,065 to 7,961. `lower.ts` falls from 1948 to 1707 raw lines.
 
 Remaining: Phases 3 and 4 are not started. Decisions 2 and 3 wait for ED2 step 2 and ED3. The capture still needs the write overlay for `tests/parse_chain_slow_test.ts`; this batch did not change that test.
+
+## 8. Implementation plan for Phase 3
+
+Base: `430460b` or later on local `main`. The user started Phase 3 on 2026-10-22. Decision 2 is (a), from the answer "as recommended". The rules of section 7 apply: one commit for each unit, `deno task check` before each commit, captures one at a time, and no `golden:update` or `validate:update`. Each capture runs the base tests on both sides with the write overlay, as in Phases 1 and 2. The new tests add `program` records, so a capture with the new tests on one side only would show new records for a sound change.
+
+Measurements for this section (M, 2026-10-22, base `430460b`). In a probe worktree, `project` and `checked` of `Revision` were made private. `deno check` over `src`, `playground`, `tests`, `scripts`, and `bench` then gave 35 errors in 13 files. The editor files have 26 of them: `editor.ts` 8, `editor_completion.ts` 6, `editor_index.ts` 4, `editor_actions.ts` 4, `editor_rename.ts` 3, and `editor_tokens.ts` 1. The adapters have 7: `cli/build.ts` 2, `lsp/features.ts` 2, `lsp/projects.ts` 1, `host/outputs.ts` 1, and `playground/src/compile.ts` 1. The tests have 2: `tests/editor_test.ts:110` and `tests/chain_helpers.ts:69`.
+
+Corrections to section 3. ED1 said that 24 test files read `revision.project.*` and 2 read `revision.checked.*`. That count came from a text search that also matched other objects. The compiler count is 2 test reads in total.
+
+ED7 said that 8 `mod.ts` exports have no user outside the core. A name search over every `.ts` file outside `src/core` finds 20 such names. Only 4 of them are values: `methodOfCapability`, `moduleOfId`, `nameOfId`, and `readConfig`. The other 16 are types, and several of them name the result of a public function, for example `Completion` and `HoverBackend`. A public signature needs its types, so ED7 keeps the 16 type exports.
+
+`docs/api.md:271` documents the `Revision` queries and does not name `project` or `checked`. `deno.json` exports `src/core/mod.ts` as the package `@srdjan/effective-lang` 0.6.0. So the private fields and the 4 removed values are a change of the package surface, but not of its documented contract. Each commit body states the change.
+
+### ED1 (read-only queries on `Revision`)
+
+Add these members to `Revision` in `src/core/db.ts`. The design puts methods on `Revision`, not a separate view file, because each query is a lookup in data that `Revision` already holds.
+
+```ts
+/** The project root. */
+get root(): string;
+/** The project configuration. */
+get config(): ProjectConfig;
+/** The type table of this revision, read-only. */
+get types(): TypeReader;
+/** The module infos in discovery order. */
+moduleInfos(): Iterable<ModuleInfo>;
+/** The module info of a module name. */
+moduleInfo(name: string): ModuleInfo | undefined;
+/** The module info of a root-relative file path. */
+moduleInfoAt(path: string): ModuleInfo | undefined;
+/** The checked module of a root-relative file path. */
+checkedModuleAt(path: string): CheckedModule | undefined;
+/** The resolver result of a module name. */
+resolution(name: string): ModuleResolution | undefined;
+/** The sorted module names that a module imports, or an empty list. */
+imports(name: string): readonly string[];
+/** The index entry of a declaration identity, or undefined for a malformed or unknown id. */
+declEntry(id: string): DeclEntry | undefined;
+/** Independent validation of the lowered modules, as `validateProject` with this project. */
+validate(lowered: ReadonlyMap<string, Result<ModuleIR, LowerError>>): ReadonlyMap<string, readonly Diagnostic[]>;
+```
+
+`TypeReader` is a new export of `src/core/types.ts`: `export type TypeReader = Pick<TypeTable, "show" | "node" | "aliasOf" | "brandBaseOf" | "errorRecordOf" | "error" | "size">`. `Revision.types` is public, so `mod.ts` exports `TypeReader`. It also exports `TypeNode` and `TypeRef`, because `TypeReader` names them. The getter returns the same table object. The type only hides the writers.
+
+`moduleInfoAt` and `checkedModuleAt` use one path map that `Revision` builds on first use and keeps. One path names one module, because the module name derives from the path, so a map gives the same result as today's first match. `moduleInfos()` iterates `project.modules` in its own order, because `symbolIndex` builds its occurrence lists in that order. `declEntry` moves the body of `declEntryOf` from `editor.ts` and the owner lookup from `declarationOf` in `editor_index.ts` into one method, with `moduleOfId` and `nameOfId` from `ids.ts`.
+
+Then change every editor and adapter read from the measurement list to these members. Keep each result and its order. Delete `moduleAt` and `declEntryOf` from `editor.ts`. At `editor_tokens.ts:67` and `editor_completion.ts:191`, the path can be undefined (`declaration?.source`). Keep a guard there that gives undefined, as the current `find` does.
+
+In `editor_index.ts`, `declarationOf` keeps its signature and calls `revision.declEntry`. In `lsp/features.ts`, `effModuleOf` becomes `revision.moduleInfoAt(path)` with the `mode === "eff"` test. `host/outputs.ts` and `lsp/projects.ts` use `revision.imports(name)` and `revision.moduleInfo(target)?.mode`. `cli/build.ts` uses `revision.validate(lowered)` and `revision.config`. `playground/src/compile.ts` uses `revision.moduleInfos()`. `lsp/features.ts:317` uses `revision?.types.size ?? 0`.
+
+Do not make the fields private in this unit.
+
+`Revision.validate` keeps the validator independent: `db.ts` imports `validate_project.ts`, and no validator file imports `db.ts`. The plan check proposed a sources overload of `validateProject` instead. The coordinator kept `validate`, because it leaves the public signature of `validateProject` unchanged.
+
+Add the members to the `Revision` paragraph of `docs/api.md`. Add one test in `tests/db_test.ts` that checks `moduleInfoAt`, `checkedModuleAt`, `imports`, and `declEntry` on a two-module project. Include an unknown path and a malformed id. The test also pins the order of `moduleInfos()`: `b.eff` imports `a.eff`, so `moduleInfos()` gives b then a, and `moduleNames()` gives a then b.
+
+Parity: `deno task check`, and a capture against the previous commit with zero new and zero missing records. The capture does not record editor queries, so `tests/editor_queries_test.ts`, `tests/editor_test.ts`, and the LSP tests are the oracle for them.
+
+### ED7 (private fields and a smaller package surface)
+
+Make `project` and `checked` of `Revision` private. Move the two test reads: `tests/editor_test.ts:110` reads `revision.types`, and `tests/chain_helpers.ts:69` calls `revision.value.validate(...)`. Remove `methodOfCapability`, `moduleOfId`, and `nameOfId` from the `mod.ts` re-exports, and remove `readConfig` from them too. Each of them stays exported from its own file for the core. Before the removal, search `docs/`, `README.md`, `editors/`, `bench/`, and `scripts/` for each of the 4 names again, and stop if one has a user. Keep all 16 type exports.
+
+Parity: `deno task check`, and a capture with zero new and zero missing records. The commit body lists the 4 removed values and the two private fields. The version in `deno.json` stays 0.6.0, because a release is the user's decision. The commit body states that the next release should be a minor version.
+
+### ED2 step 2 (diagnostic comparison, Decision 2a)
+
+Add `src/core/diagnostic_delta.ts`:
+
+```ts
+/** The diagnostics that an edit adds and removes, by code, source, and moved span. */
+export interface DiagnosticDelta {
+  readonly added: readonly Diagnostic[];
+  readonly removed: readonly Diagnostic[];
+}
+export function diagnosticDelta(
+  before: readonly Diagnostic[],
+  after: readonly Diagnostic[],
+  edits: readonly SourceEdit[],
+): DiagnosticDelta;
+```
+
+The key of a diagnostic is its code, its span source, and its span start and end. The function moves each span of `before` through `edits`. A position moves by the length change of each edit in the same source whose end is at or before the position. A position strictly inside an edit does not move. An empty edit at offset p moves a start at p, but it does not move an end at p.
+
+The function compares the keys as multisets, so two equal diagnostics count twice. The message text is not part of the key, because a rename changes names in messages. The function does not use `movedSpan` of `editor_rename.ts`, because `movedSpan` does not move the end of a span that contains an edit.
+
+Rename (`editor_rename.ts:140-147`) rejects when `diagnosticDelta(before analysis diagnostics, after analysis diagnostics, edits).added` is not empty. Keep the analysis diagnostics as the compared set and keep the error message. Contract actions (`editor_actions.ts:147`) skip an action unless `added` is empty and `removed` is not empty. They compare `revision.diagnostics` with the diagnostics of the speculative revision, and they use the merged edits.
+
+Known visible changes. A rename that removes one analysis diagnostic and adds another passes today and is rejected after this unit. A contract action that removes two diagnostics and adds one is offered today and is skipped after this unit. A rename or action is no longer affected when an unrelated diagnostic moves only because of the edit.
+
+Measure the visible change before the commit with a temporary probe that is not committed. It runs over the 14 fixture directories that hold an `effective.json` (`find fixtures -name effective.json`). For each identifier occurrence, the probe calls `renameAt` with the new name `renamedProbe`. The plan check measured 2800 such calls in 15.4 s. Only the 6 `errors/` fixtures have diagnostics, so only they can show a rename difference.
+
+The fixtures offer 0 contract actions, so the probe also changes the fixtures for actions. For each function with an explicit contract and a `fails` or `uses` clause, the probe deletes that clause text. Then it calls `contractActionsAt` on the function span of the changed project, under the old and the new rule. The probe compares the old and the new results. List each difference in the commit body. With no difference, state that the probe found none, and state how many renames and actions it ran.
+
+Add three tests for `diagnosticDelta` to `tests/editor_queries_test.ts`. In the first, an edit before a diagnostic moves it. Use the source that the plan check measured: a file with an unrelated `unknown-name/001` and a parameter `a`. The rename of `a` to `top` moves the diagnostic from 93-100 to 97-104. In the second, an edit inside a diagnostic span moves only its end. In the third, a duplicate diagnostic counts twice.
+
+Also add one rename test where the count stays equal but a new analysis diagnostic appears. The rename must now be rejected.
+
+The test asserts the full error text of the diagnostic check. A test of `ok === false` alone does not show which check rejected the rename. The text is "The new name is reserved or conflicts with an existing binding." The plan check tried five such sources, and the occurrence checks or the count test reject each of them today. If the implementer finds no such source, the implementer reports that and adds the `diagnosticDelta` tests only.
+
+Parity: `deno task check`, `tests/editor_queries_test.ts`, `tests/lsp_editor_test.ts`, and a capture with zero new and zero missing records. The speculative programs get the same inputs as before, so their `program` records stay equal.
