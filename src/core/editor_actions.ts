@@ -2,6 +2,7 @@
 import { Program, type Revision } from "./db.ts";
 import type { SourceEdit } from "./editor_rename.ts";
 import { applySourceEdits, revisionInputs } from "./editor_rename.ts";
+import { EFFECT_ERROR_IDS } from "./resolve.ts";
 import { childrenOf, kindOf, SyntaxKind } from "./syntax.ts";
 
 export interface ContractAction {
@@ -14,8 +15,9 @@ function effectName(
   module: string,
   id: string,
 ): string | undefined {
-  if (id === "error:effect/SchemaError") return "SchemaError";
-  if (id === "error:effect/SchemaIssue") return "SchemaIssue";
+  for (const [name, effectId] of EFFECT_ERROR_IDS) {
+    if (id === effectId) return name;
+  }
   const namespace = revision.checked.analysis.resolutions.get(module)
     ?.namespace;
   for (const [name, binding] of namespace ?? []) {

@@ -26,6 +26,7 @@ import type {
   TypeId,
   ValueId,
 } from "./ir.ts";
+import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID } from "./ir.ts";
 import type { ModuleInfo, Project } from "./project.ts";
 import type { Span } from "./source.ts";
 import {
@@ -174,6 +175,12 @@ const BUILTIN_TYPES = [
 type BuiltinTypeName = typeof BUILTIN_TYPES[number];
 
 export const BUILTIN_TYPE_NAMES: ReadonlySet<string> = new Set(BUILTIN_TYPES);
+
+/** The error names that the Effect runtime provides, and their identities. */
+export const EFFECT_ERROR_IDS: ReadonlyMap<string, ErrorId> = new Map([
+  ["SchemaError", SCHEMA_ERROR_ID],
+  ["SchemaIssue", SCHEMA_ISSUE_ID],
+]);
 
 /**
  * Names that the generated TypeScript needs, so no declaration or binding may
@@ -735,11 +742,9 @@ class Resolver {
       }
       return;
     }
-    if (name === "SchemaError" || name === "SchemaIssue") {
-      this.set(nameNode, {
-        kind: "error",
-        id: `error:effect/${name}`,
-      });
+    const effectError = EFFECT_ERROR_IDS.get(name);
+    if (effectError !== undefined) {
+      this.set(nameNode, { kind: "error", id: effectError });
       return;
     }
     const builtin = asBuiltinType(name);
@@ -756,11 +761,9 @@ class Resolver {
     if (name === undefined) return;
     const binding = this.namespace.get(name);
     if (binding === undefined) {
-      if (name === "SchemaError" || name === "SchemaIssue") {
-        this.set(nameNode, {
-          kind: "error",
-          id: `error:effect/${name}`,
-        });
+      const effectError = EFFECT_ERROR_IDS.get(name);
+      if (effectError !== undefined) {
+        this.set(nameNode, { kind: "error", id: effectError });
         return;
       }
       this.unknown(nameNode, name, "error");

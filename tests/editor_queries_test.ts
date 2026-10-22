@@ -186,6 +186,39 @@ Deno.test("completion respects prefix, context, local scopes and incomplete memb
   );
 });
 
+Deno.test("type completion offers every type word and the Effect error names", () => {
+  const text = "type R = { first: int }\nconst f = (outer: R): int => 1\n";
+  const loaded = new Program("").update({
+    set: { "effective.json": "{}", "m.eff": text },
+  });
+  assert(loaded.ok);
+  const labels = new Set(
+    completionsAt(loaded.value, "m.eff", text.indexOf("outer: R") + 7).map((
+      c,
+    ) => c.label),
+  );
+  for (
+    const word of [
+      "Codec",
+      "Effect",
+      "Stream",
+      "Sink",
+      "Layer",
+      "Schema",
+      "SchemaError",
+      "SchemaIssue",
+      "Schedule",
+      "SchemaOptional",
+      "SchemaEncodedOptional",
+      "SchemaDecodedOptional",
+      "SchemaConstructorDefault",
+      "SchemaOptionalConstructorDefault",
+      "SchemaEncodedOptionalConstructorDefault",
+      "SchemaDecodedOptionalConstructorDefault",
+    ]
+  ) assert(labels.has(word), `type completion lacks ${word}`);
+});
+
 Deno.test("semantic classifications retain UTF-16 spans and lexical fallback on broken or stale text", () => {
   const text =
     "// 😀 comment\ntype Int = int\nconst f = (value: Int): Int => value + 1\nconst broken = (\n";

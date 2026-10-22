@@ -3,9 +3,19 @@ import { TokenKind } from "./lex.ts";
 import type { Revision } from "./db.ts";
 import { declarationOf, occurrenceAt, symbolIndex } from "./editor_index.ts";
 import { isTypeKind } from "./syntax_queries.ts";
-import { BUILTIN_TYPE_NAMES, PRELUDE_NAMES } from "./resolve.ts";
+import {
+  BUILTIN_TYPE_NAMES,
+  EFFECT_ERROR_IDS,
+  PRELUDE_NAMES,
+} from "./resolve.ts";
 import type { Span } from "./source.ts";
-import { kindOf, type NodeId, SyntaxKind, type SyntaxTree } from "./syntax.ts";
+import {
+  kindOf,
+  type NodeId,
+  SyntaxKind,
+  type SyntaxTree,
+  TYPE_WORDS,
+} from "./syntax.ts";
 import type { TypeRef } from "./types.ts";
 
 export interface Completion {
@@ -214,17 +224,12 @@ export function completionsAt(
     for (
       const name of [
         ...BUILTIN_TYPE_NAMES,
-        "Effect",
-        "Stream",
-        "Sink",
-        "Schema",
-        "Layer",
-        "SchemaError",
-        "SchemaIssue",
+        ...TYPE_WORDS.keys(),
+        ...EFFECT_ERROR_IDS.keys(),
       ]
     ) if (!values.has(name)) values.set(name, make(name, "type"));
   } else if (context === "fails") {
-    for (const name of ["SchemaError", "SchemaIssue"]) {
+    for (const name of EFFECT_ERROR_IDS.keys()) {
       values.set(name, make(name, "class"));
     }
   }
