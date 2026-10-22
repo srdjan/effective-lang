@@ -1,4 +1,31 @@
 import {
+  aggregateWithinStreamCall,
+  bufferStreamCall,
+  catchStreamCall,
+  countStreamCall,
+  debounceStreamCall,
+  effectStreamPredicateCall,
+  flatMapStreamsCall,
+  foldEffectStreamCall,
+  foldStreamCall,
+  mapAccumStreamCall,
+  mapEffectCall,
+  mapGroupsCall,
+  retryStreamCall,
+  runStreamCall,
+  scanStreamCall,
+  sinkForEachCall,
+  sinkTransformStreamCall,
+  STREAM_PREDICATE_FACTS,
+  type StreamContext,
+  streamPairCall,
+  switchMapStreamsCall,
+  takeSinkCall,
+  terminalStreamCall,
+  throttleStreamCall,
+  unfoldCall,
+} from "./check_builtins/stream.ts";
+import {
   type FiberContext,
   fiberOperation,
   withFiberCall,
@@ -49,12 +76,13 @@ import { nameTextOf } from "./index.ts";
 import {
   arrowBody,
   initOf,
+  isPatternKind,
   isTypeKind,
   kidsOf,
   literalOf,
   operatorOf,
 } from "./syntax_queries.ts";
-import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID, SCOPE_CAPABILITY } from "./ir.ts";
+import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID } from "./ir.ts";
 import type {
   CapabilityId,
   ErrorId,
@@ -182,14 +210,6 @@ interface ArrowContext {
   readonly result: TypeRef | undefined;
 }
 
-const PATTERN_KINDS: ReadonlySet<SyntaxKind> = new Set([
-  SyntaxKind.WildcardPattern,
-  SyntaxKind.LiteralPattern,
-  SyntaxKind.NamePattern,
-  SyntaxKind.CtorPattern,
-  SyntaxKind.RecordPattern,
-]);
-
 function names(ids: readonly string[]): string {
   return ids.map(shortName).join(", ");
 }
@@ -249,23 +269,6 @@ interface SchemaBuiltin {
   /** How a recursive Schema body may hold its `self` below a call of this builtin. */
   readonly recursion: RecursionRole;
 }
-
-/** The fact kinds of the stream predicates, for a pure and an effect callback. */
-const STREAM_PREDICATE_FACTS = {
-  filterEffectStream: { pure: "filter-stream", effect: "filter-effect-stream" },
-  takeWhileEffectStream: {
-    pure: "take-while-stream",
-    effect: "take-while-effect-stream",
-  },
-  takeUntilEffectStream: {
-    pure: "take-until-stream",
-    effect: "take-until-effect-stream",
-  },
-  dropWhileEffectStream: {
-    pure: "drop-while-stream",
-    effect: "drop-while-effect-stream",
-  },
-} as const;
 
 const SCHEMA_BUILTINS = {
   schema: {
@@ -521,12 +524,6 @@ function optionalLast<K extends PreludeCallName>(
   };
 }
 
-/** True when a checked expression is pure and has no failures or requirements. */
-function isPureInfo(info: NodeInfo): boolean {
-  return info.mode === "pure" && info.failures.length === 0 &&
-    info.requirements.length === 0;
-}
-
 // ------------------------------------------------------------------ the checker
 
 // Shared members are exposed only through BuiltinContext to family handlers.
@@ -537,7 +534,8 @@ class BodyChecker
     EffectContext,
     LayerContext,
     FiberContext,
-    ScopeContext {
+    ScopeContext,
+    StreamContext {
   readonly sink: Diagnostic[] = [];
   readonly body: BodyTable;
   private readonly lowerer: TypeLowerer;
@@ -1289,50 +1287,50 @@ class BodyChecker
     closeScope: (c, node, name, args) => scopeCall(c, node, name, args),
     withResource: (c, node, _name, args, expected) =>
       withResourceCall(c, node, args, expected),
-    unfold: (c, node, _name, args) => c.unfoldCall(node, args),
-    mapEffect: (c, node, _name, args) => c.mapEffectCall(node, args),
-    mapGroups: (c, node, _name, args) => c.mapGroupsCall(node, args),
-    scanStream: (c, node, _name, args) => c.scanStreamCall(node, args),
-    mapAccumStream: (c, node, _name, args) => c.mapAccumStreamCall(node, args),
-    foldStream: (c, node, _name, args) => c.foldStreamCall(node, args),
+    unfold: (c, node, _name, args) => unfoldCall(c, node, args),
+    mapEffect: (c, node, _name, args) => mapEffectCall(c, node, args),
+    mapGroups: (c, node, _name, args) => mapGroupsCall(c, node, args),
+    scanStream: (c, node, _name, args) => scanStreamCall(c, node, args),
+    mapAccumStream: (c, node, _name, args) => mapAccumStreamCall(c, node, args),
+    foldStream: (c, node, _name, args) => foldStreamCall(c, node, args),
     foldEffectStream: (c, node, _name, args) =>
-      c.foldEffectStreamCall(node, args),
+      foldEffectStreamCall(c, node, args),
     collectStream: (c, node, name, args) =>
-      c.terminalStreamCall(node, name, args, (e) => c.table.array(e)),
+      terminalStreamCall(c, node, name, args, (e) => c.table.array(e)),
     headStream: (c, node, name, args) =>
-      c.terminalStreamCall(node, name, args, (e) => c.table.option(e)),
+      terminalStreamCall(c, node, name, args, (e) => c.table.option(e)),
     lastStream: (c, node, name, args) =>
-      c.terminalStreamCall(node, name, args, (e) => c.table.option(e)),
+      terminalStreamCall(c, node, name, args, (e) => c.table.option(e)),
     drainStream: (c, node, name, args) =>
-      c.terminalStreamCall(node, name, args, () => c.table.unit),
-    flatMapStreams: (c, node, _name, args) => c.flatMapStreamsCall(node, args),
+      terminalStreamCall(c, node, name, args, () => c.table.unit),
+    flatMapStreams: (c, node, _name, args) => flatMapStreamsCall(c, node, args),
     switchMapStreams: (c, node, _name, args) =>
-      c.switchMapStreamsCall(node, args),
-    catchStream: (c, node, _name, args) => c.catchStreamCall(node, args),
-    retryStream: (c, node, _name, args) => c.retryStreamCall(node, args),
-    debounceStream: (c, node, _name, args) => c.debounceStreamCall(node, args),
-    throttleStream: (c, node, _name, args) => c.throttleStreamCall(node, args),
+      switchMapStreamsCall(c, node, args),
+    catchStream: (c, node, _name, args) => catchStreamCall(c, node, args),
+    retryStream: (c, node, _name, args) => retryStreamCall(c, node, args),
+    debounceStream: (c, node, _name, args) => debounceStreamCall(c, node, args),
+    throttleStream: (c, node, _name, args) => throttleStreamCall(c, node, args),
     takeStream: (c, node, name, args) =>
-      c.countStreamCall(node, name, args, "take"),
+      countStreamCall(c, node, name, args, "take"),
     dropStream: (c, node, name, args) =>
-      c.countStreamCall(node, name, args, "drop"),
+      countStreamCall(c, node, name, args, "drop"),
     filterEffectStream: (c, node, name, args) =>
-      c.effectStreamPredicateCall(node, args, name),
+      effectStreamPredicateCall(c, node, args, name),
     takeWhileEffectStream: (c, node, name, args) =>
-      c.effectStreamPredicateCall(node, args, name),
+      effectStreamPredicateCall(c, node, args, name),
     takeUntilEffectStream: (c, node, name, args) =>
-      c.effectStreamPredicateCall(node, args, name),
+      effectStreamPredicateCall(c, node, args, name),
     dropWhileEffectStream: (c, node, name, args) =>
-      c.effectStreamPredicateCall(node, args, name),
-    sinkForEach: (c, node, _name, args) => c.sinkForEachCall(node, args),
+      effectStreamPredicateCall(c, node, args, name),
+    sinkForEach: (c, node, _name, args) => sinkForEachCall(c, node, args),
     takeSink: (c, node, _name, args, expected) =>
-      c.takeSinkCall(node, args, expected),
+      takeSinkCall(c, node, args, expected),
     transduceStream: (c, node, name, args) =>
-      c.sinkTransformStreamCall(node, args, name),
+      sinkTransformStreamCall(c, node, args, name),
     aggregateStream: (c, node, name, args) =>
-      c.sinkTransformStreamCall(node, args, name),
+      sinkTransformStreamCall(c, node, args, name),
     aggregateWithinStream: (c, node, _name, args) =>
-      c.aggregateWithinStreamCall(node, args),
+      aggregateWithinStreamCall(c, node, args),
     scheduleFromStep: (c, node, _name, args) =>
       scheduleFromStepCall(c, node, args),
     scheduleRecurs: (c, node, name, args) =>
@@ -1347,11 +1345,11 @@ class BodyChecker
       scheduleComposeCall(c, node, args, name),
     scheduleConcat: (c, node, name, args) =>
       scheduleComposeCall(c, node, args, name),
-    runStream: (c, node, _name, args) => c.runStreamCall(node, args),
-    bufferStream: (c, node, _name, args) => c.bufferStreamCall(node, args),
-    mergeStreams: (c, node, name, args) => c.streamPairCall(node, name, args),
-    zipStreams: (c, node, name, args) => c.streamPairCall(node, name, args),
-    concatStreams: (c, node, name, args) => c.streamPairCall(node, name, args),
+    runStream: (c, node, _name, args) => runStreamCall(c, node, args),
+    bufferStream: (c, node, _name, args) => bufferStreamCall(c, node, args),
+    mergeStreams: (c, node, name, args) => streamPairCall(c, node, name, args),
+    zipStreams: (c, node, name, args) => streamPairCall(c, node, name, args),
+    concatStreams: (c, node, name, args) => streamPairCall(c, node, name, args),
     race: (c, node, _name, args) => raceCall(c, node, args),
     makeRef: (c, node, name, args) => refCall(c, node, name, args),
     getRef: (c, node, name, args) => refCall(c, node, name, args),
@@ -1550,60 +1548,6 @@ class BodyChecker
     filter: piped(2, "pure"),
     fold: piped(3, "pure"),
   };
-
-  /**
-   * The Stream shape of a checked argument. When it is neither a Stream nor an
-   * error, this reports `type-mismatch/010` and returns the other shape.
-   */
-  private streamOf(name: string, arg: Arg, info: NodeInfo): TypeNode {
-    const source = this.table.node(this.table.unfold(info.type));
-    if (source.kind !== "stream" && !this.isError(info.type)) {
-      this.report(
-        "type-mismatch/010",
-        `\`${name}\` needs a Stream value`,
-        arg.node,
-      );
-    }
-    return source;
-  }
-
-  /** Checks an argument that must be a Stream and gives its shape and element type. */
-  private streamArg(
-    name: string,
-    arg: Arg,
-  ): { info: NodeInfo; source: TypeNode; element: TypeRef } {
-    const info = this.argInfo(arg);
-    const source = this.streamOf(name, arg, info);
-    return {
-      info,
-      source,
-      element: source.kind === "stream" ? source.element : this.table.error,
-    };
-  }
-
-  /**
-   * Checks the Stream and the seed of a fold-like call, in that order, and
-   * reports a seed that is not pure.
-   */
-  private seededStream(
-    name: string,
-    args: readonly Arg[],
-  ): { stream: NodeInfo; seed: NodeInfo; source: TypeNode; element: TypeRef } {
-    const stream = this.argInfo(args[0]);
-    const seed = this.argInfo(args[1]);
-    const source = this.streamOf(name, args[0], stream);
-    if (!isPureInfo(seed)) {
-      this.report(
-        "execution-mode/001",
-        `\`${name}\` seed must be pure`,
-        args[1].node,
-      );
-    }
-    const element = source.kind === "stream"
-      ? source.element
-      : this.table.error;
-    return { stream, seed, source, element };
-  }
 
   /** Reports a wrong argument count for a prelude call. Returns true when the count is right. */
   arity(
@@ -2839,1074 +2783,6 @@ class BodyChecker
     }
   }
 
-  private unfoldCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.inlineStreamCallback("unfold", args[1]);
-    const seed = this.argInfo(args[0]);
-    const state = this.widen(seed.type);
-    const next = this.callback("unfold", args[1], [state], undefined, true);
-    const fn = this.functionOf(next.info.type);
-    const option = this.table.node(this.table.unfold(next.result));
-    const pair = option.kind === "option"
-      ? this.table.node(this.table.unfold(option.element))
-      : undefined;
-    let element = this.table.error;
-    if (pair?.kind !== "tuple" || pair.elements.length !== 2) {
-      if (!this.isError(next.result)) {
-        this.report(
-          "type-mismatch/010",
-          "`unfold` callback must return Option<[Element, State]>",
-          args[1].node,
-        );
-      }
-    } else {
-      element = pair.elements[0];
-      this.fits(args[1].node, pair.elements[1], state, "the next stream state");
-    }
-    const type = this.table.stream(
-      element,
-      fn?.failures ?? [],
-      fn?.requirements ?? [],
-    );
-    return this.finish(node, type, combine([seed, next.info]));
-  }
-
-  private mapEffectCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const concurrency = args[2] === undefined
-      ? undefined
-      : this.concurrencyBound(args[2], "mapEffect");
-    this.noPipeline("mapEffect", args);
-    this.inlineStreamCallback("mapEffect", args[1]);
-    const { info: stream, source, element } = this.streamArg(
-      "mapEffect",
-      args[0],
-    );
-    const transform = this.callback(
-      "mapEffect",
-      args[1],
-      [element],
-      undefined,
-      true,
-    );
-    const fn = this.functionOf(transform.info.type);
-    // Only a pure callback without options compiles to the pure operation.
-    this.fact(
-      node,
-      args[2] === undefined && fn !== undefined && fn.execution === "pure" &&
-        fn.failures.length === 0 && fn.requirements.length === 0
-        ? { kind: "map-stream" }
-        : { kind: "map-effect", concurrency },
-    );
-    const type = this.table.stream(
-      transform.result,
-      [
-        ...(source.kind === "stream" ? source.failures : []),
-        ...(fn?.failures ?? []),
-      ],
-      [
-        ...(source.kind === "stream" ? source.requirements : []),
-        ...(fn?.requirements ?? []),
-      ],
-    );
-    return this.finish(
-      node,
-      type,
-      combine([
-        stream,
-        transform.info,
-        ...(args[2] === undefined ? [] : [this.argInfo(args[2])]),
-      ]),
-    );
-  }
-
-  private mapGroupsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.inlineStreamCallback("mapGroups", args[1]);
-    this.inlineStreamCallback("mapGroups", args[2]);
-    const bufferSize = this.streamBufferCapacity(
-      args[3],
-      "mapGroups",
-      "bufferSize",
-    );
-    this.fact(node, { kind: "map-groups", bufferSize });
-    const { info: stream, source, element } = this.streamArg(
-      "mapGroups",
-      args[0],
-    );
-    const key = this.callback("mapGroups key", args[1], [element], undefined);
-    if (
-      this.groupKeyClass(key.result) === undefined && !this.isError(key.result)
-    ) {
-      this.report(
-        "type-mismatch/010",
-        "`mapGroups` keys must share one string, boolean, int, or primitive brand class",
-        args[1].node,
-      );
-    }
-    const group = this.table.stream(element, [], []);
-    const use = this.callback(
-      "mapGroups use",
-      args[2],
-      [key.result, group],
-      undefined,
-      true,
-    );
-    const fn = this.functionOf(use.info.type);
-    // A wider annotated parameter must not erase the special borrowed Stream.
-    if (
-      fn !== undefined && fn.parameters[1] !== undefined &&
-      (!this.table.isAssignable(fn.parameters[1], group) ||
-        !this.table.isAssignable(group, fn.parameters[1]))
-    ) {
-      this.report(
-        "type-mismatch/010",
-        "the group parameter must have exactly the supplied Stream type",
-        args[2].node,
-      );
-    }
-    if (!dataOnly(this.table, use.result, "value")) {
-      this.report(
-        "type-mismatch/010",
-        "the group use result must be data only",
-        args[2].node,
-      );
-    }
-    const fact = this.body.facts.get(args[2].node);
-    if (fact?.kind === "arrow" && fact.parameters[1]?.id !== undefined) {
-      const body = this.kids(args[2].node).at(-1);
-      if (body !== undefined) this.groupUses(body, fact.parameters[1].id);
-    }
-    return this.finish(
-      node,
-      this.table.stream(use.result, [
-        ...(source.kind === "stream" ? source.failures : []),
-        ...(fn?.failures ?? []),
-      ], [
-        ...(source.kind === "stream" ? source.requirements : []),
-        ...without(fn?.requirements ?? [], [SCOPE_CAPABILITY]),
-      ]),
-      combine([stream, key.info, use.info]),
-    );
-  }
-
-  private groupKeyClass(ref: TypeRef, depth = 0): string | undefined {
-    if (depth > 128) return undefined;
-    let found: string | undefined;
-    for (const member of flattenMembers(this.table, ref)) {
-      const type = this.table.node(member);
-      let current: string | undefined;
-      if (type.kind === "literal") {
-        if (type.value === null) return undefined;
-        current = typeof type.value === "number"
-          ? Number.isSafeInteger(type.value) ? "int" : undefined
-          : typeof type.value;
-      } else if (type.kind === "primitive") {
-        if (
-          type.name === "int" || type.name === "string" ||
-          type.name === "boolean"
-        ) current = type.name;
-      } else if (type.kind === "named") {
-        const base = this.table.brandBaseOf(type.id as TypeId);
-        if (
-          base !== undefined &&
-          this.groupKeyClass(base, depth + 1) !== undefined
-        ) current = `brand:${type.id}`;
-      }
-      if (current === undefined || (found !== undefined && found !== current)) {
-        return undefined;
-      }
-      found = current;
-    }
-    return found;
-  }
-
-  private groupUses(body: NodeId, id: LocalId): void {
-    const terminals = new Set([
-      "collectStream",
-      "runStream",
-      "foldStream",
-      "foldEffectStream",
-      "headStream",
-      "lastStream",
-      "drainStream",
-    ]);
-    const uses = this.localUses(body, id, true);
-    uses.forEach(({ node, parent, grandparent, nested }, references) => {
-      const call = parent !== undefined &&
-          kindOf(this.tree, parent) === SyntaxKind.ArgList
-        ? grandparent
-        : parent;
-      const callee =
-        call !== undefined && kindOf(this.tree, call) === SyntaxKind.CallExpr
-          ? this.kids(call)[0]
-          : undefined;
-      const called = callee === undefined
-        ? undefined
-        : this.targets.get(callee);
-      const first = call === undefined
-        ? undefined
-        : this.kids(call).slice(1).flatMap((child) =>
-          kindOf(this.tree, child) === SyntaxKind.ArgList
-            ? this.kids(child)
-            : [child]
-        )[0];
-      if (
-        nested || references > 0 || first !== node ||
-        called?.kind !== "builtin" || !terminals.has(called.name)
-      ) {
-        this.report(
-          "type-mismatch/010",
-          "a borrowed group permits at most one direct terminal use and cannot escape or be captured",
-          node,
-        );
-      }
-    });
-  }
-
-  private scanStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.inlineStreamCallback("scanStream", args[2]);
-    const { stream, seed, source, element } = this.seededStream(
-      "scanStream",
-      args,
-    );
-    const update = this.callback(
-      "scanStream",
-      args[2],
-      [seed.type, element],
-      seed.type,
-    );
-    this.fits(
-      args[2].node,
-      update.result,
-      seed.type,
-      "the scanStream update result",
-    );
-    const type = this.table.stream(
-      seed.type,
-      source.kind === "stream" ? source.failures : [],
-      source.kind === "stream" ? source.requirements : [],
-    );
-    return this.finish(node, type, combine([stream, seed, update.info]));
-  }
-
-  private mapAccumStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.inlineStreamCallback("mapAccumStream", args[2]);
-    if (
-      kindOf(this.tree, args[2].node) === SyntaxKind.ArrowExpr &&
-      !this.kids(args[2].node).some((kid) => isTypeKind(kindOf(this.tree, kid)))
-    ) {
-      this.report(
-        "type-mismatch/011",
-        "`mapAccumStream` callback needs an explicit [State, Output[]] result type",
-        args[2].node,
-      );
-    }
-    const { stream, seed, source, element } = this.seededStream(
-      "mapAccumStream",
-      args,
-    );
-    const update = this.callback(
-      "mapAccumStream",
-      args[2],
-      [seed.type, element],
-      undefined,
-    );
-    const result = this.table.node(this.table.unfold(update.result));
-    const state = result.kind === "tuple" && result.elements.length === 2
-      ? result.elements[0]
-      : this.table.error;
-    const outputs = result.kind === "tuple" && result.elements.length === 2
-      ? this.table.node(this.table.unfold(result.elements[1]))
-      : undefined;
-    if (
-      result.kind !== "tuple" || result.elements.length !== 2 ||
-      !this.table.isAssignable(state, seed.type) || outputs?.kind !== "array"
-    ) {
-      this.report(
-        "type-mismatch/003",
-        "`mapAccumStream` callback must return [State, Output[]]",
-        args[2].node,
-      );
-    }
-    const type = this.table.stream(
-      outputs?.kind === "array" ? outputs.element : this.table.error,
-      source.kind === "stream" ? source.failures : [],
-      source.kind === "stream" ? source.requirements : [],
-    );
-    return this.finish(node, type, combine([stream, seed, update.info]));
-  }
-
-  private foldStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.inlineStreamCallback("foldStream", args[2]);
-    const { stream, seed, source, element } = this.seededStream(
-      "foldStream",
-      args,
-    );
-    const update = this.callback(
-      "foldStream",
-      args[2],
-      [seed.type, element],
-      seed.type,
-    );
-    this.fits(
-      args[2].node,
-      update.result,
-      seed.type,
-      "the foldStream update result",
-    );
-    return this.finish(
-      node,
-      seed.type,
-      combine([stream, seed, update.info, {
-        failures: source.kind === "stream" ? source.failures : [],
-        requirements: source.kind === "stream" ? source.requirements : [],
-        mode: "effect",
-      }]),
-    );
-  }
-
-  private foldEffectStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.inlineStreamCallback("foldEffectStream", args[2]);
-    const { stream, seed, source, element } = this.seededStream(
-      "foldEffectStream",
-      args,
-    );
-    const update = this.callback(
-      "foldEffectStream",
-      args[2],
-      [seed.type, element],
-      seed.type,
-      true,
-    );
-    this.fits(
-      args[2].node,
-      update.result,
-      seed.type,
-      "the foldEffectStream update result",
-    );
-    const fn = this.functionOf(update.info.type);
-    return this.finish(
-      node,
-      seed.type,
-      combine([stream, seed, update.info, {
-        failures: [
-          ...(source.kind === "stream" ? source.failures : []),
-          ...(fn?.failures ?? []),
-        ],
-        requirements: [
-          ...(source.kind === "stream" ? source.requirements : []),
-          ...(fn?.requirements ?? []),
-        ],
-        mode: "effect",
-      }]),
-    );
-  }
-
-  private flatMapStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const concurrency = args[2] === undefined
-      ? undefined
-      : this.concurrencyBound(args[2], "flatMapStreams");
-    this.fact(node, { kind: "flat-map-streams", concurrency });
-    this.noPipeline("flatMapStreams", args);
-    const { stream, transform, type } = this.innerStreams(
-      "flatMapStreams",
-      args,
-    );
-    return this.finish(
-      node,
-      type,
-      combine([
-        stream,
-        transform,
-        ...(args[2] === undefined ? [] : [this.argInfo(args[2])]),
-      ]),
-    );
-  }
-
-  private switchMapStreamsCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "switch-map-streams" });
-    const { stream, transform, type } = this.innerStreams(
-      "switchMapStreams",
-      args,
-    );
-    return this.finish(node, type, combine([stream, transform]));
-  }
-
-  /**
-   * The shared part of flatMapStreams and switchMapStreams: each element maps
-   * to an inner Stream, and the result joins the channels of both.
-   */
-  private innerStreams(
-    name: "flatMapStreams" | "switchMapStreams",
-    args: readonly Arg[],
-  ): { stream: NodeInfo; transform: NodeInfo; type: TypeRef } {
-    this.inlineStreamCallback(name, args[1]);
-    const { info: stream, source, element } = this.streamArg(
-      name,
-      args[0],
-    );
-    const transform = this.callback(
-      name,
-      args[1],
-      [element],
-      undefined,
-    );
-    const inner = this.table.node(this.table.unfold(transform.result));
-    if (inner.kind !== "stream" && !this.isError(transform.result)) {
-      this.report(
-        "type-mismatch/010",
-        `\`${name}\` callback must return a Stream value`,
-        args[1].node,
-      );
-    }
-    const type = this.table.stream(
-      inner.kind === "stream" ? inner.element : this.table.error,
-      [
-        ...(source.kind === "stream" ? source.failures : []),
-        ...(inner.kind === "stream" ? inner.failures : []),
-      ],
-      [
-        ...(source.kind === "stream" ? source.requirements : []),
-        ...(inner.kind === "stream" ? inner.requirements : []),
-      ],
-    );
-    return { stream, transform: transform.info, type };
-  }
-
-  private catchStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "catch-stream" });
-    this.inlineStreamCallback("catchStream", args[1]);
-    const { info: stream, source } = this.streamArg(
-      "catchStream",
-      args[0],
-    );
-    const errors = source.kind === "stream"
-      ? this.table.union(source.failures.map((id) => this.table.named(id)))
-      : this.table.error;
-    const recover = this.callback("catchStream", args[1], [errors], undefined);
-    const replacement = this.table.node(this.table.unfold(recover.result));
-    if (replacement.kind !== "stream" && !this.isError(recover.result)) {
-      this.report(
-        "type-mismatch/010",
-        "`catchStream` callback must return a Stream value",
-        args[1].node,
-      );
-    }
-    const type = this.table.stream(
-      this.table.union([
-        source.kind === "stream" ? source.element : this.table.error,
-        replacement.kind === "stream" ? replacement.element : this.table.error,
-      ]),
-      replacement.kind === "stream" ? replacement.failures : [],
-      [
-        ...(source.kind === "stream" ? source.requirements : []),
-        ...(replacement.kind === "stream" ? replacement.requirements : []),
-      ],
-    );
-    return this.finish(node, type, combine([stream, recover.info]));
-  }
-
-  private retryStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "retry-stream" });
-    const stream = this.argInfo(args[0]);
-    const policy = this.argInfo(args[1]);
-    const source = this.streamOf(
-      "retryStream",
-      args[0],
-      stream,
-    );
-    const schedule = this.table.node(this.table.unfold(policy.type));
-    if (schedule.kind !== "retry-schedule" && !this.isError(policy.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`retryStream` needs a RetrySchedule value",
-        args[1].node,
-      );
-    }
-    if (source.kind === "stream" && schedule.kind === "retry-schedule") {
-      for (const failure of source.failures) {
-        if (
-          !this.table.isAssignable(this.table.named(failure), schedule.error)
-        ) {
-          this.report(
-            "type-mismatch/003",
-            `the retry schedule does not accept ${failure}`,
-            args[1].node,
-          );
-        }
-      }
-    }
-    if (!isPureInfo(policy)) {
-      this.report(
-        "execution-mode/001",
-        "`retryStream` policy must be pure",
-        args[1].node,
-      );
-    }
-    const type = source.kind === "stream"
-      ? this.table.stream(
-        source.element,
-        source.failures,
-        source.requirements,
-      )
-      : this.table.error;
-    return this.finish(node, type, combine([stream, policy]));
-  }
-
-  private debounceStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const { info: stream } = this.streamArg(
-      "debounceStream",
-      args[0],
-    );
-    const delayNode = args[1].node;
-    const delay = args[1].pre === undefined &&
-        kindOf(this.tree, delayNode) === SyntaxKind.LiteralExpr
-      ? literalOf(this.tree, delayNode)
-      : undefined;
-    const delayMs = typeof delay === "number" &&
-        Number.isSafeInteger(delay) && delay >= 0
-      ? delay
-      : undefined;
-    if (delayMs === undefined) {
-      this.report(
-        "type-mismatch/010",
-        "`debounceStream` needs a nonnegative safe integer millisecond literal",
-        delayNode,
-      );
-    } else {
-      this.finish(delayNode, this.table.int, PURE_EFFECTS);
-    }
-    this.fact(node, { kind: "debounce-stream", delayMs });
-    return this.finish(node, stream.type, stream);
-  }
-
-  private throttleStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const { info: stream } = this.streamArg(
-      "throttleStream",
-      args[0],
-    );
-    const options = this.streamThrottleOptions(args[1]);
-    this.fact(node, {
-      kind: "throttle-stream",
-      units: options?.units,
-      durationMs: options?.durationMs,
-      strategy: options?.strategy,
-    });
-    return this.finish(node, stream.type, stream);
-  }
-
-  private streamThrottleOptions(
-    arg: Arg,
-  ):
-    | { units: number; durationMs: number; strategy: "shape" | "enforce" }
-    | undefined {
-    const record = this.literalRecord(arg, 3);
-    const values = record.ok ? record.value : undefined;
-    const units = values?.get("units");
-    const duration = values?.get("durationMs");
-    const strategy = values?.get("strategy");
-    if (
-      units === undefined || duration === undefined || strategy === undefined ||
-      typeof units.value !== "number" ||
-      !Number.isSafeInteger(units.value) || units.value <= 0 ||
-      typeof duration.value !== "number" ||
-      !Number.isSafeInteger(duration.value) || duration.value <= 0 ||
-      (strategy.value !== "shape" && strategy.value !== "enforce")
-    ) {
-      this.report(
-        "type-mismatch/010",
-        '`throttleStream` needs { units: U, durationMs: M, strategy: "shape" | "enforce" } with positive safe integer literals',
-        arg.node,
-      );
-      return undefined;
-    }
-    this.finish(units.node, this.table.int, PURE_EFFECTS);
-    this.finish(duration.node, this.table.int, PURE_EFFECTS);
-    this.finish(
-      strategy.node,
-      this.table.literal(strategy.value),
-      PURE_EFFECTS,
-    );
-    this.finish(
-      arg.node,
-      this.table.record([
-        { name: "units", type: this.table.int, optional: false },
-        { name: "durationMs", type: this.table.int, optional: false },
-        {
-          name: "strategy",
-          type: this.table.literal(strategy.value),
-          optional: false,
-        },
-      ]),
-      PURE_EFFECTS,
-    );
-    return {
-      units: units.value,
-      durationMs: duration.value,
-      strategy: strategy.value,
-    };
-  }
-
-  /** A terminal over a Stream: it runs the Stream and gives `result(element)`. */
-  private terminalStreamCall(
-    node: NodeId,
-    name: "collectStream" | "headStream" | "lastStream" | "drainStream",
-    args: readonly Arg[],
-    result: (element: TypeRef) => TypeRef,
-  ): NodeInfo {
-    const stream = this.argInfo(args[0]);
-    const source = this.streamOf(name, args[0], stream);
-    if (source.kind !== "stream") {
-      return this.finish(
-        node,
-        this.table.error,
-        combine([stream, EFFECT_ONLY]),
-      );
-    }
-    return this.finish(
-      node,
-      result(source.element),
-      combine([stream, {
-        failures: source.failures,
-        requirements: source.requirements,
-        mode: "effect",
-      }]),
-    );
-  }
-
-  /** `takeStream` and `dropStream`: a Stream and a pure Int count. `label` names the count. */
-  private countStreamCall(
-    node: NodeId,
-    name: "takeStream" | "dropStream",
-    args: readonly Arg[],
-    label: "take" | "drop",
-  ): NodeInfo {
-    const stream = this.argInfo(args[0]);
-    const count = this.argInfo(args[1], this.table.int);
-    this.streamOf(name, args[0], stream);
-    this.fits(args[1].node, count.type, this.table.int, `the ${label} count`);
-    if (!isPureInfo(count)) {
-      this.report(
-        "execution-mode/001",
-        `\`${name}\` count must be pure`,
-        args[1].node,
-      );
-    }
-    return this.finish(node, stream.type, combine([stream, count]));
-  }
-
-  private effectStreamPredicateCall(
-    node: NodeId,
-    args: readonly Arg[],
-    name:
-      | "filterEffectStream"
-      | "takeWhileEffectStream"
-      | "takeUntilEffectStream"
-      | "dropWhileEffectStream",
-  ): NodeInfo {
-    this.inlineStreamCallback(name, args[1]);
-    const stream = this.argInfo(args[0]);
-    const source = this.table.node(this.table.unfold(stream.type));
-    if (source.kind !== "stream" && !this.isError(stream.type)) {
-      this.report(
-        "type-mismatch/010",
-        `${name} needs a Stream value`,
-        args[0].node,
-      );
-    }
-    const element = source.kind === "stream"
-      ? source.element
-      : this.table.error;
-    const predicate = this.callback(
-      name,
-      args[1],
-      [element],
-      this.table.boolean,
-      true,
-    );
-    this.fits(
-      args[1].node,
-      predicate.result,
-      this.table.boolean,
-      `the ${name} predicate`,
-    );
-    const fn = this.functionOf(predicate.info.type);
-    // A pure callback compiles to the pure stream operation, and the
-    // stream type (an alias too) stays as it is.
-    if (
-      fn !== undefined && fn.execution === "pure" &&
-      fn.failures.length === 0 && fn.requirements.length === 0
-    ) {
-      this.fact(node, { kind: STREAM_PREDICATE_FACTS[name].pure });
-      return this.finish(node, stream.type, combine([stream, predicate.info]));
-    }
-    this.fact(node, { kind: STREAM_PREDICATE_FACTS[name].effect });
-    const type = this.table.stream(
-      element,
-      [
-        ...(source.kind === "stream" ? source.failures : []),
-        ...(fn?.failures ?? []),
-      ],
-      [
-        ...(source.kind === "stream" ? source.requirements : []),
-        ...(fn?.requirements ?? []),
-      ],
-    );
-    return this.finish(node, type, combine([stream, predicate.info]));
-  }
-
-  private sinkForEachCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.inlineStreamCallback("sinkForEach", args[0]);
-    const consume = this.argInfo(args[0]);
-    const fn = this.functionOf(consume.type);
-    if (fn === undefined || fn.parameters.length !== 1) {
-      if (!this.isError(consume.type)) {
-        this.report(
-          "type-mismatch/010",
-          "`sinkForEach` needs a one-argument callback with an annotated input",
-          args[0].node,
-        );
-      }
-      return this.finish(node, this.table.error, consume);
-    }
-    this.fits(
-      args[0].node,
-      fn.result,
-      this.table.unit,
-      "the sink callback result",
-    );
-    const type = this.table.sink(
-      fn.parameters[0],
-      this.table.unit,
-      fn.failures,
-      fn.requirements,
-    );
-    return this.finish(node, type, consume);
-  }
-
-  private takeSinkCall(
-    node: NodeId,
-    args: readonly Arg[],
-    expected: TypeRef | undefined,
-  ): NodeInfo {
-    const literal = args[0].pre === undefined &&
-        kindOf(this.tree, args[0].node) === SyntaxKind.LiteralExpr
-      ? literalOf(this.tree, args[0].node)
-      : undefined;
-    const count =
-      typeof literal === "number" && Number.isSafeInteger(literal) &&
-        literal > 0
-        ? literal
-        : undefined;
-    if (count === undefined) {
-      this.argInfo(args[0]);
-      this.report(
-        "type-mismatch/010",
-        "`takeSink` needs a positive safe integer literal count",
-        args[0].node,
-      );
-    } else {
-      this.finish(args[0].node, this.table.int, PURE_EFFECTS);
-    }
-    this.fact(node, { kind: "take-sink", count });
-    const hint = expected === undefined
-      ? undefined
-      : this.table.node(this.table.unfold(expected));
-    if (hint?.kind !== "sink") {
-      this.report(
-        "type-mismatch/010",
-        "`takeSink` needs an expected Sink type to determine its input",
-        node,
-      );
-      return this.finish(node, this.table.error, PURE_EFFECTS);
-    }
-    return this.finish(
-      node,
-      this.table.sink(
-        hint.input,
-        this.table.array(hint.input),
-        [],
-        [],
-        hint.input,
-      ),
-      PURE_EFFECTS,
-    );
-  }
-
-  private aggregateWithinStreamCall(
-    node: NodeId,
-    args: readonly Arg[],
-  ): NodeInfo {
-    const stream = this.argInfo(args[0]);
-    const producer = this.table.node(this.table.unfold(stream.type));
-    const sink = this.argInfo(args[1], this.takeSinkHint(stream.type, args[1]));
-    const schedule = this.argInfo(args[2]);
-    const consumer = this.table.node(this.table.unfold(sink.type));
-    const policy = this.table.node(this.table.unfold(schedule.type));
-    if (
-      producer.kind !== "stream" || consumer.kind !== "sink" ||
-      policy.kind !== "schedule"
-    ) {
-      this.report(
-        "type-mismatch/010",
-        "`aggregateWithinStream` needs Stream, Sink, and Schedule values",
-        node,
-      );
-      return this.finish(
-        node,
-        this.table.error,
-        combine([stream, sink, schedule]),
-      );
-    }
-    this.fits(args[0].node, producer.element, consumer.input, "the sink input");
-    this.fits(
-      args[1].node,
-      consumer.leftover,
-      consumer.input,
-      "the replayed sink leftovers",
-    );
-    if (this.table.unfold(policy.input) !== this.table.unknown) {
-      this.fits(
-        args[2].node,
-        this.table.option(consumer.result),
-        policy.input,
-        "the schedule input",
-      );
-    }
-    return this.finish(
-      node,
-      this.table.stream(consumer.result, [
-        ...producer.failures,
-        ...consumer.failures,
-        ...policy.failures,
-      ], [
-        ...producer.requirements,
-        ...consumer.requirements,
-        ...policy.requirements,
-      ]),
-      combine([stream, sink, schedule]),
-    );
-  }
-
-  private sinkTransformStreamCall(
-    node: NodeId,
-    args: readonly Arg[],
-    name: "transduceStream" | "aggregateStream",
-  ): NodeInfo {
-    const stream = this.argInfo(args[0]);
-    const producer = this.table.node(this.table.unfold(stream.type));
-    const sink = this.argInfo(args[1], this.takeSinkHint(stream.type, args[1]));
-    const consumer = this.table.node(this.table.unfold(sink.type));
-    if (producer.kind !== "stream" || consumer.kind !== "sink") {
-      this.report(
-        "type-mismatch/010",
-        `\`${name}\` needs Stream and Sink values`,
-        node,
-      );
-      return this.finish(node, this.table.error, combine([stream, sink]));
-    }
-    this.fits(args[0].node, producer.element, consumer.input, "the sink input");
-    this.fits(
-      args[1].node,
-      consumer.leftover,
-      consumer.input,
-      "the replayed sink leftovers",
-    );
-    return this.finish(
-      node,
-      this.table.stream(consumer.result, [
-        ...producer.failures,
-        ...consumer.failures,
-      ], [...producer.requirements, ...consumer.requirements]),
-      combine([stream, sink]),
-    );
-  }
-
-  /**
-   * The expected Sink type for a sink argument of a stream: the stream element
-   * as input, an array of it as result, and no channels. `takeSink` needs the
-   * element to find its input, so the argument gets this type when a direct
-   * `takeSink` call is one of its results. An expected type also constrains
-   * each `if` and `match` branch, so a sink with no `takeSink` result, such as
-   * a branch between named sinks, gets no expected type.
-   */
-  private takeSinkHint(stream: TypeRef, sink: Arg): TypeRef | undefined {
-    const producer = this.table.node(this.table.unfold(stream));
-    if (
-      producer.kind !== "stream" || sink.pre !== undefined ||
-      !this.resultsInTakeSink(sink.node)
-    ) return undefined;
-    return this.table.sink(
-      producer.element,
-      this.table.array(producer.element),
-      [],
-      [],
-      producer.element,
-    );
-  }
-
-  /**
-   * Whether a direct call of the `takeSink` builtin is a result of the
-   * expression: the expression itself, or the result of a block, a branch of
-   * an `if`, or an arm of a `match` inside it.
-   */
-  private resultsInTakeSink(node: NodeId): boolean {
-    const kids = this.kids(node);
-    switch (kindOf(this.tree, node)) {
-      case SyntaxKind.CallExpr: {
-        const target = kids[0] === undefined
-          ? undefined
-          : this.targets.get(kids[0]);
-        return target?.kind === "builtin" && target.name === "takeSink";
-      }
-      case SyntaxKind.ParenExpr:
-        return kids[0] !== undefined && this.resultsInTakeSink(kids[0]);
-      case SyntaxKind.Block: {
-        const last = kids.at(-1);
-        return last !== undefined &&
-          kindOf(this.tree, last) !== SyntaxKind.ConstDecl &&
-          this.resultsInTakeSink(last);
-      }
-      case SyntaxKind.IfExpr:
-        return kids.slice(1, 3).some((branch) =>
-          this.resultsInTakeSink(branch)
-        );
-      case SyntaxKind.MatchExpr:
-        return kids.slice(1).some((arm) => {
-          if (kindOf(this.tree, arm) !== SyntaxKind.MatchArm) return false;
-          const parts = this.kids(arm);
-          const pattern = parts.find((k) =>
-            PATTERN_KINDS.has(kindOf(this.tree, k))
-          );
-          const body = parts.filter((k) => k !== pattern).pop();
-          return body !== undefined && this.resultsInTakeSink(body);
-        });
-      default:
-        return false;
-    }
-  }
-
-  private runStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const stream = this.argInfo(args[0]);
-    const producer = this.table.node(this.table.unfold(stream.type));
-    const sink = this.argInfo(args[1], this.takeSinkHint(stream.type, args[1]));
-    const consumer = this.table.node(this.table.unfold(sink.type));
-    if (producer.kind !== "stream" && !this.isError(stream.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`runStream` needs a Stream as its first argument",
-        args[0].node,
-      );
-    }
-    if (consumer.kind !== "sink" && !this.isError(sink.type)) {
-      this.report(
-        "type-mismatch/010",
-        "`runStream` needs a Sink as its second argument",
-        args[1].node,
-      );
-    }
-    if (producer.kind !== "stream" || consumer.kind !== "sink") {
-      return this.finish(
-        node,
-        this.table.error,
-        combine([stream, sink, EFFECT_ONLY]),
-      );
-    }
-    this.fits(args[1].node, producer.element, consumer.input, "the sink input");
-    return this.finish(
-      node,
-      consumer.result,
-      combine([stream, sink, {
-        failures: [...producer.failures, ...consumer.failures],
-        requirements: [...producer.requirements, ...consumer.requirements],
-        mode: "effect",
-      }]),
-    );
-  }
-
-  private bufferStreamCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const { info: stream } = this.streamArg(
-      "bufferStream",
-      args[0],
-    );
-    const capacity = this.streamBufferCapacity(args[1]);
-    this.fact(node, { kind: "buffer-stream", capacity });
-    return this.finish(node, stream.type, stream);
-  }
-
-  private streamBufferCapacity(
-    arg: Arg,
-    operation = "bufferStream",
-    fieldName = "capacity",
-  ): number | undefined {
-    const record = this.literalRecord(arg, 1);
-    const capacity = record.ok ? record.value.get(fieldName) : undefined;
-    const value = capacity?.value;
-    if (
-      capacity === undefined || typeof value !== "number" ||
-      !Number.isSafeInteger(value) || value <= 0
-    ) {
-      this.report(
-        "type-mismatch/010",
-        `\`${operation}\` needs \`{ ${fieldName}: N }\` with a positive safe integer literal`,
-        arg.node,
-      );
-      return undefined;
-    }
-    this.finish(capacity.node, this.table.int, PURE_EFFECTS);
-    this.finish(
-      arg.node,
-      this.table.record([{
-        name: fieldName,
-        type: this.table.int,
-        optional: false,
-      }]),
-      PURE_EFFECTS,
-    );
-    return value;
-  }
-
-  /** `mergeStreams`, `zipStreams`, and `concatStreams`: two Streams give one. */
-  private streamPairCall(
-    node: NodeId,
-    name: "mergeStreams" | "zipStreams" | "concatStreams",
-    args: readonly Arg[],
-  ): NodeInfo {
-    const left = this.argInfo(args[0]);
-    const right = this.argInfo(args[1]);
-    const a = this.table.node(this.table.unfold(left.type));
-    const b = this.table.node(this.table.unfold(right.type));
-    if (a.kind !== "stream" || b.kind !== "stream") {
-      this.report(
-        "type-mismatch/010",
-        `\`${name}\` needs two Stream values`,
-        node,
-      );
-      return this.finish(node, this.table.error, combine([left, right]));
-    }
-    let element: TypeRef;
-    if (name === "zipStreams") {
-      element = this.table.tuple([a.element, b.element]);
-    } else if (name === "concatStreams") {
-      element = this.table.union([a.element, b.element]);
-    } else {
-      const aFitsB = this.table.isAssignable(a.element, b.element);
-      const bFitsA = this.table.isAssignable(b.element, a.element);
-      if (!aFitsB && !bFitsA) {
-        this.report(
-          "type-mismatch/010",
-          "`mergeStreams` needs compatible element types",
-          node,
-        );
-      }
-      element = aFitsB ? b.element : a.element;
-    }
-    const type = this.table.stream(
-      element,
-      [...a.failures, ...b.failures],
-      [...a.requirements, ...b.requirements],
-    );
-    return this.finish(node, type, combine([left, right]));
-  }
-
   /**
    * Checks a collection callback. An inline arrow receives its parameter
    * types from the context. Only traverse permits invocation effects.
@@ -4958,7 +3834,7 @@ class BodyChecker
     for (const arm of arms) {
       const parts = this.kids(arm);
       const patternNode = parts.find((k) =>
-        PATTERN_KINDS.has(kindOf(this.tree, k))
+        isPatternKind(kindOf(this.tree, k))
       );
       const bodyNode = parts.filter((k) => k !== patternNode).pop();
       if (patternNode !== undefined) {

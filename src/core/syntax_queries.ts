@@ -127,3 +127,16 @@ export function initOf(
     child !== nameNode && !isTypeKind(kindOf(tree, child))
   ).pop();
 }
+
+const PATTERN_KINDS: ReadonlySet<SyntaxKind> = new Set([
+  SyntaxKind.WildcardPattern,
+  SyntaxKind.LiteralPattern,
+  SyntaxKind.NamePattern,
+  SyntaxKind.CtorPattern,
+  SyntaxKind.RecordPattern,
+]);
+
+/** True for the syntax kinds of match patterns. */
+export function isPatternKind(kind: SyntaxKind): boolean {
+  return PATTERN_KINDS.has(kind);
+}

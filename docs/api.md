@@ -12,7 +12,7 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
   diagnostics.ts Diagnostic type, the registry of codes, sort and dedupe.
   lex.ts         Lexer: typed arrays of tokens plus trivia.
   syntax.ts      Syntax tree types and the printer.
-  syntax_queries.ts Pure child, literal, operator, arrow-body and initializer queries shared by the front end.
+  syntax_queries.ts Pure child, type/pattern-kind, literal, operator, arrow-body and initializer queries shared by the front end.
   parse.ts       Parser with recovery.
   hash.ts        Synchronous content hash (FNV-1a 64).
   index.ts       Declaration index of one file: names, kinds, spans, hashes.
@@ -31,6 +31,7 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
     ref.ts         Mutable reference construction, reads, writes and pure update callbacks.
     schedule.ts    General Schedule construction, mapping and comparable-input composition.
     scope.ts       Scope operations, resource lifetimes and borrowed parameters through ScopeContext.
+    stream.ts      Stream/Sink callbacks, grouping lifetimes, aggregation hints and execution through StreamContext.
   check_project.ts Project driver: paired declaration entries and body results, modes, interfaces, the shared per-module step, and effectText.
   tables.ts      Side tables of a body: node info and lowering facts.
   patterns.ts    Pattern domains of match subjects.
