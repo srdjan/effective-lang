@@ -96,6 +96,19 @@ import {
 } from "./families/effect.ts";
 import { fiberOperation, withFiber } from "./families/fiber.ts";
 import { layer, mergeLayers, provide } from "./families/layer.ts";
+import {
+  scheduleCompose,
+  scheduleFromStep,
+  scheduleMap,
+  simpleSchedule,
+} from "./families/schedule.ts";
+import {
+  borrowedReferences,
+  explicitScope,
+  forkScoped,
+  scoped,
+  withResource,
+} from "./families/scope.ts";
 import { refOperation } from "./families/ref.ts";
 
 // The test of the expression children imports this walk from here.
@@ -533,7 +546,7 @@ export class BodyValidator implements ValidatorCore {
             d.span,
           );
         }
-        this.borrowedReferences(d.body, parameter.id, `${path}.body`);
+        borrowedReferences(this, d.body, parameter.id, `${path}.body`);
       });
       return checked;
     });
@@ -764,17 +777,17 @@ export class BodyValidator implements ValidatorCore {
       case "all-results":
         return allResults(this, e, path);
       case "scoped":
-        return this.scoped(e, path);
+        return scoped(this, e, path);
       case "fork-scoped":
-        return this.forkScoped(e, path);
+        return forkScoped(this, e, path);
       case "make-scope":
         return derivedResult({ kind: "closeable-scope" }, EFFECT_ONLY);
       case "provide-scope":
       case "add-scope-finalizer":
       case "close-scope":
-        return this.explicitScope(e, path);
+        return explicitScope(this, e, path);
       case "with-resource":
-        return this.withResource(e, path);
+        return withResource(this, e, path);
       case "unfold":
         return this.unfoldStream(e, path);
       case "map-effect":
@@ -827,16 +840,16 @@ export class BodyValidator implements ValidatorCore {
       case "aggregate-within-stream":
         return this.aggregateWithinStream(e, path);
       case "schedule-from-step":
-        return this.scheduleFromStep(e, path);
+        return scheduleFromStep(this, e, path);
       case "schedule-recurs":
       case "schedule-spaced":
-        return this.simpleSchedule(e, path);
+        return simpleSchedule(this, e, path);
       case "schedule-map":
-        return this.scheduleMap(e, path);
+        return scheduleMap(this, e, path);
       case "schedule-max":
       case "schedule-min":
       case "schedule-concat":
-        return this.scheduleCompose(e, path);
+        return scheduleCompose(this, e, path);
       case "run-stream":
         return this.runStream(e, path);
       case "buffer-stream":
@@ -2547,283 +2560,6 @@ export class BodyValidator implements ValidatorCore {
     );
   }
 
-  private scoped(e: Extract<Expr, { kind: "scoped" }>, path: string): Comp {
-    const value = this.check(e.value, `${path}.value`);
-    const effect = unfold(this.env, value.type);
-    if (effect.kind !== "effect") {
-      this.add(AREA.control, path, "scoped needs an Effect value", e.span);
-      return this.poison();
-    }
-    return derivedResult(
-      effect.result,
-      combine([value, {
-        failures: effect.effects.failures,
-        requirements: minus(effect.effects.requirements, [SCOPE_CAPABILITY]),
-        execution: "effect",
-      }]),
-    );
-  }
-
-  private forkScoped(
-    e: Extract<Expr, { kind: "fork-scoped" }>,
-    path: string,
-  ): Comp {
-    const job = this.check(e.job, `${path}.job`);
-    const effect = unfold(this.env, job.type);
-    if (effect.kind !== "effect") {
-      this.add(AREA.control, path, "forkScoped needs an Effect value", e.span);
-      return this.poison();
-    }
-    if (effect.effects.failures.length > 0) {
-      this.add(
-        AREA.control,
-        path,
-        "forkScoped needs an Effect value without typed failures",
-        e.span,
-      );
-    }
-    return derivedResult(
-      UNIT,
-      combine([job, {
-        failures: [],
-        requirements: [...effect.effects.requirements, SCOPE_CAPABILITY],
-        execution: "effect",
-      }]),
-    );
-  }
-
-  private explicitScope(
-    e: Extract<
-      Expr,
-      { kind: "provide-scope" | "add-scope-finalizer" | "close-scope" }
-    >,
-    path: string,
-  ): Comp {
-    const owner = this.check(e.owner, `${path}.owner`);
-    if (!fits(this.env, owner.type, { kind: "closeable-scope" })) {
-      this.add(
-        AREA.control,
-        path,
-        `${e.kind} needs a CloseableScope owner`,
-        e.span,
-      );
-    }
-    if (e.kind === "close-scope") {
-      return derivedResult(UNIT, combine([owner, EFFECT_ONLY]));
-    }
-    const job = this.check(e.job, `${path}.job`);
-    const effect = unfold(this.env, job.type);
-    if (effect.kind !== "effect") {
-      this.add(AREA.control, path, `${e.kind} needs an Effect value`, e.span);
-      return this.poison();
-    }
-    if (
-      e.kind === "add-scope-finalizer" && (
-        !fits(this.env, effect.result, UNIT) ||
-        effect.effects.failures.length > 0 ||
-        effect.effects.requirements.includes(SCOPE_CAPABILITY)
-      )
-    ) {
-      this.add(
-        AREA.control,
-        path,
-        "a scope finalizer must return void without typed failures or the reserved Scope requirement",
-        e.span,
-      );
-    }
-    return derivedResult(
-      e.kind === "provide-scope" ? effect.result : UNIT,
-      combine([owner, job, {
-        failures: e.kind === "provide-scope" ? effect.effects.failures : [],
-        requirements: e.kind === "provide-scope"
-          ? minus(effect.effects.requirements, [SCOPE_CAPABILITY])
-          : effect.effects.requirements,
-        execution: "effect",
-      }]),
-    );
-  }
-
-  private checkOperationRecord(type: Type, path: string, span: Span): void {
-    const value = unfold(this.env, type);
-    if (
-      value.kind !== "record" || value.fields.length === 0 ||
-      value.fields.some((f) => f.optional)
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "acquisition must return a nonempty record of required operations",
-        span,
-      );
-      return;
-    }
-    for (const field of value.fields) {
-      const fn = asFunction(this.env, field.type);
-      if (
-        fn === undefined || !fn.parameters.every((p) =>
-          dataOnly(this.env, p, "value")
-        ) ||
-        !dataOnly(this.env, fn.result, "value")
-      ) {
-        this.add(
-          AREA.types,
-          `${path}.${field.name}`,
-          "an operation must take and return data-only values",
-          span,
-        );
-      }
-    }
-  }
-
-  private scopedReferences(body: Expr, id: string, path: string): void {
-    walkExprs(body, (e, parent, grandparent, nested) => {
-      if (e.kind === "reference" && e.target === id) {
-        if (
-          nested || parent?.kind !== "get" || parent.record !== e ||
-          grandparent?.kind !== "call" || grandparent.callee !== parent
-        ) {
-          this.add(
-            AREA.control,
-            path,
-            "a scoped operation record may only be the direct receiver of an operation call",
-            e.span,
-          );
-        }
-      }
-    });
-  }
-
-  private withResource(
-    e: Extract<Expr, { kind: "with-resource" }>,
-    path: string,
-  ): Comp {
-    const acquire = this.check(e.acquire, `${path}.acquire`);
-    const use = this.check(e.use, `${path}.use`);
-    const release = this.check(e.release, `${path}.release`);
-    const a = asFunction(this.env, acquire.type);
-    const u = asFunction(this.env, use.type);
-    const r = asFunction(this.env, release.type);
-    if (
-      e.acquire.kind !== "closure" || e.use.kind !== "closure" ||
-      e.release.kind !== "closure" || a === undefined || u === undefined ||
-      r === undefined
-    ) {
-      this.add(
-        AREA.control,
-        path,
-        "with-resource requires three inline closures",
-        e.span,
-      );
-      return this.poison();
-    }
-    if (
-      a.parameters.length !== 0 || u.parameters.length !== 1 ||
-      r.parameters.length !== 1 ||
-      e.use.parameters[0]?.id !== e.useBinding ||
-      e.release.parameters[0]?.id !== e.releaseBinding
-    ) {
-      this.add(
-        AREA.control,
-        path,
-        "with-resource callback arity or scoped identity is invalid",
-        e.span,
-      );
-      return this.poison();
-    }
-    const acquired = unfold(this.env, a.result);
-    const opaque = acquired.kind === "named" &&
-      this.ctx.world.types.get(acquired.id)?.opaque === true;
-    if (!opaque) {
-      this.checkOperationRecord(
-        a.result,
-        `${path}.acquire.type.result`,
-        e.acquire.span,
-      );
-    }
-    if (
-      !same(this.env, a.result, u.parameters[0]) ||
-      !same(this.env, a.result, r.parameters[0])
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "use and release must accept the acquired operation record",
-        e.span,
-      );
-    }
-    if (!fits(this.env, r.result, UNIT)) {
-      this.add(
-        AREA.types,
-        `${path}.release.type.result`,
-        "release must return void",
-        e.release.span,
-      );
-    }
-    if (!dataOnly(this.env, u.result, "value")) {
-      this.add(
-        AREA.types,
-        `${path}.use.type.result`,
-        "use must return data only",
-        e.use.span,
-      );
-    }
-    if (opaque) {
-      this.borrowedReferences(e.use.body, e.useBinding, `${path}.use.body`);
-      this.borrowedReferences(
-        e.release.body,
-        e.releaseBinding,
-        `${path}.release.body`,
-      );
-    } else {
-      this.scopedReferences(e.use.body, e.useBinding, `${path}.use.body`);
-      this.scopedReferences(
-        e.release.body,
-        e.releaseBinding,
-        `${path}.release.body`,
-      );
-    }
-    return derivedResult(
-      u.result,
-      combine([
-        acquire,
-        use,
-        release,
-        invocationOf(a),
-        invocationOf(u),
-        invocationOf(r),
-        EFFECT_ONLY,
-      ]),
-    );
-  }
-
-  private borrowedReferences(body: Expr, id: string, path: string): void {
-    walkExprs(body, (expr, parent, _grandparent, nested) => {
-      if (expr.kind === "reference" && expr.target === id) {
-        const index = parent?.kind === "perform" || parent?.kind === "call"
-          ? parent.arguments.indexOf(expr)
-          : -1;
-        const method = parent?.kind === "perform"
-          ? this.ctx.world.methods.get(parent.capability)
-          : undefined;
-        const functionType =
-          parent?.kind === "call" && parent.callee.kind === "reference"
-            ? this.ctx.world.values.get(parent.callee.target)
-            : undefined;
-        const borrowed = method?.borrows?.[index] === true ||
-          (functionType?.kind === "function" &&
-            functionType.borrows?.[index] === true);
-        if (nested || index < 0 || !borrowed) {
-          this.add(
-            AREA.control,
-            path,
-            "borrowed handle may only pass to a borrow-qualified method",
-            expr.span,
-          );
-        }
-      }
-    });
-  }
-
   private unfoldStream(
     e: Extract<Expr, { kind: "unfold" }>,
     path: string,
@@ -3476,224 +3212,6 @@ export class BodyValidator implements ValidatorCore {
     path: string,
   ): Comp {
     return this.sinkTransformStream(e, path, "aggregateStream");
-  }
-
-  private scheduleInput(input: Type): Extract<Type, { kind: "record" }> {
-    return {
-      kind: "record",
-      fields: [
-        { name: "input", type: input, optional: false },
-        { name: "attempt", type: INT, optional: false },
-        ...["start", "now", "elapsed", "elapsedSincePrevious"].map((name) => ({
-          name,
-          type: NUMBER,
-          optional: false,
-        })),
-      ],
-    };
-  }
-
-  private scheduleDecision(state: Type, output: Type): Type {
-    return {
-      kind: "union",
-      members: [
-        {
-          kind: "record",
-          fields: [
-            {
-              name: "kind",
-              type: { kind: "literal", value: "Continue" },
-              optional: false,
-            },
-            { name: "state", type: state, optional: false },
-            { name: "output", type: output, optional: false },
-            { name: "delayMillis", type: NUMBER, optional: false },
-          ],
-        },
-        {
-          kind: "record",
-          fields: [
-            {
-              name: "kind",
-              type: { kind: "literal", value: "Done" },
-              optional: false,
-            },
-            { name: "output", type: output, optional: false },
-          ],
-        },
-      ],
-    };
-  }
-
-  private simpleSchedule(
-    e: Extract<Expr, { kind: "schedule-recurs" | "schedule-spaced" }>,
-    path: string,
-  ): Comp {
-    const argument = e.kind === "schedule-recurs" ? e.times : e.delayMillis;
-    const field = e.kind === "schedule-recurs" ? "times" : "delayMillis";
-    const value = this.check(argument, `${path}.${field}`);
-    if (
-      !fits(this.env, value.type, e.kind === "schedule-recurs" ? INT : NUMBER)
-    ) {
-      this.add(AREA.types, path, "invalid schedule argument", argument.span);
-    }
-    return derivedResult({
-      kind: "schedule",
-      output: INT,
-      input: { kind: "primitive", name: "unknown" },
-      effects: { failures: [], requirements: [] },
-    }, combine([value]));
-  }
-
-  private scheduleFromStep(
-    e: Extract<Expr, { kind: "schedule-from-step" }>,
-    path: string,
-  ): Comp {
-    const initial = this.check(e.initial, `${path}.initial`);
-    const decide = this.check(e.decide, `${path}.decide`);
-    const factory = asFunction(this.env, initial.type);
-    const step = asFunction(this.env, decide.type);
-    if (
-      e.initial.kind !== "closure" || e.decide.kind !== "closure" ||
-      factory === undefined || factory.parameters.length !== 0 ||
-      step === undefined || step.parameters.length !== 2
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "scheduleFromStep needs inline state and decision callbacks",
-        e.span,
-      );
-      return this.poison();
-    }
-    const input = fieldsOf(this.env, step.parameters[1])?.find((field) =>
-      field.name === "input"
-    )?.type;
-    const outputs = members(this.env, step.result).map((member) =>
-      fieldsOf(this.env, member)?.find((field) => field.name === "output")?.type
-    ).filter((type): type is Type => type !== undefined);
-    const output = unionOf(this.env, outputs);
-    if (
-      input === undefined || outputs.length === 0 ||
-      !fits(this.env, factory.result, step.parameters[0]) ||
-      !fits(this.env, this.scheduleInput(input), step.parameters[1]) ||
-      !fits(
-        this.env,
-        step.result,
-        this.scheduleDecision(factory.result, output),
-      )
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "scheduleFromStep needs ScheduleInput and ScheduleDecision<State, Output>",
-        e.span,
-      );
-      return this.poison();
-    }
-    return derivedResult({
-      kind: "schedule",
-      output,
-      input,
-      effects: {
-        ...unionEffects(factory.effects, step.effects),
-      },
-    }, combine([initial, decide]));
-  }
-
-  private scheduleMap(
-    e: Extract<Expr, { kind: "schedule-map" }>,
-    path: string,
-  ): Comp {
-    const schedule = this.check(e.schedule, `${path}.schedule`);
-    const transform = this.check(e.transform, `${path}.transform`);
-    const policy = unfold(this.env, schedule.type);
-    const fn = asFunction(this.env, transform.type);
-    if (
-      e.transform.kind !== "closure" || policy.kind !== "schedule" ||
-      fn === undefined || fn.parameters.length !== 1
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "scheduleMap needs a Schedule and inline callback",
-        e.span,
-      );
-      return this.poison();
-    }
-    const base = this.scheduleInput(policy.input);
-    const metadata: Type = {
-      kind: "record",
-      fields: [
-        ...base.fields,
-        { name: "output", type: policy.output, optional: false },
-        { name: "durationMillis", type: NUMBER, optional: false },
-      ],
-    };
-    if (!fits(this.env, metadata, fn.parameters[0])) {
-      this.add(
-        AREA.types,
-        path,
-        "scheduleMap callback needs ScheduleMetadata<Output, Input>",
-        e.span,
-      );
-    }
-    return derivedResult({
-      kind: "schedule",
-      output: fn.result,
-      input: policy.input,
-      effects: {
-        ...unionEffects(policy.effects, fn.effects),
-      },
-    }, combine([schedule, transform]));
-  }
-
-  private scheduleCompose(
-    e: Extract<
-      Expr,
-      { kind: "schedule-max" | "schedule-min" | "schedule-concat" }
-    >,
-    path: string,
-  ): Comp {
-    const left = this.check(e.left, `${path}.left`);
-    const right = this.check(e.right, `${path}.right`);
-    const first = unfold(this.env, left.type);
-    const second = unfold(this.env, right.type);
-    if (first.kind !== "schedule" || second.kind !== "schedule") {
-      this.add(
-        AREA.types,
-        path,
-        "schedule composition needs two Schedules",
-        e.span,
-      );
-      return this.poison();
-    }
-    const accepts = (input: Type, offered: Type): boolean =>
-      isUnknown(this.env, input) || fits(this.env, offered, input);
-    const input = accepts(second.input, first.input)
-      ? first.input
-      : accepts(first.input, second.input)
-      ? second.input
-      : undefined;
-    if (input === undefined) {
-      this.add(
-        AREA.types,
-        path,
-        "schedule composition needs comparable input types",
-        e.span,
-      );
-      return this.poison();
-    }
-    return derivedResult({
-      kind: "schedule",
-      output: e.kind === "schedule-concat"
-        ? unionOf(this.env, [first.output, second.output])
-        : NUMBER,
-      input,
-      effects: {
-        ...unionEffects(first.effects, second.effects),
-      },
-    }, combine([left, right]));
   }
 
   private aggregateWithinStream(
