@@ -427,3 +427,9 @@ Also add one rename test where the count stays equal but a new analysis diagnost
 The test asserts the full error text of the diagnostic check. A test of `ok === false` alone does not show which check rejected the rename. The text is "The new name is reserved or conflicts with an existing binding." The plan check tried five such sources, and the occurrence checks or the count test reject each of them today. If the implementer finds no such source, the implementer reports that and adds the `diagnosticDelta` tests only.
 
 Parity: `deno task check`, `tests/editor_queries_test.ts`, `tests/lsp_editor_test.ts`, and a capture with zero new and zero missing records. The speculative programs get the same inputs as before, so their `program` records stay equal.
+
+### Phase 3 results (2026-10-22)
+
+ED1 is `8ff12fa` and ED7 is `7c8a185`. The implementer ran `deno task check` before each commit; both gates passed 1848 fast and 177 slow tests. The coordinator reviewed both diffs line by line.
+
+Deviations, accepted after review. The order claim of the ED1 test was wrong, and the plan check repeated it. The loader queues the entry files in sorted path order, so `b.eff` that imports `a.eff` still loads a before b. The test now lets `a.eff` import `b.eff`: `moduleInfos()` gives a then b, and `moduleNames()` gives b then a. The plan also missed one read: the rename count test reads the analysis diagnostics. `Revision` has one more getter, `analysisDiagnostics`.
