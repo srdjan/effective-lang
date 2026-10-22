@@ -45,9 +45,15 @@ _Avoid: mirror, shadow program_
 
 ### Prelude table
 
-The one table in `resolve.ts` that lists every prelude operation, with a flag that tells whether a source binding may shadow it.
+The one table that lists every prelude operation, with a flag that tells whether a source binding may shadow it.
 
-The type `PreludeName`, the set `PRELUDE_NAMES`, and the set `SHADOWABLE_PRELUDE_NAMES` all derive from this table. The checker keeps a handler table that has one row for each prelude name except `None`, so a name without a handler is a compile error.
+The prelude name type and the name sets all derive from this table. The checker keeps two tables keyed by the same names. One table has a handler for each prelude name except `None`. The other table has a prologue row for each of those names. A name without a handler or a prologue row is a compile error. A prologue row may state that the handler tests its own argument count.
+
+### Stage set
+
+The effect set that one pipeline stage adds by itself, without the effects of its left value.
+
+A quiet value is pure and has no failure and no requirement. When the left value is not quiet, the checker checks the stage with a quiet value of the same type in its place. Lowering moves the left value into its own binding and copies the stage set onto the stage call. Lowering never derives a stage set, so each stage rule has one owner. So a stage handler must not read the effect sets or the mode of its left value.
 
 ## Verification
 
