@@ -61,5 +61,5 @@ A quiet value is pure and has no failure and no requirement. When the left value
 
 The refactor oracle that records a hash of each checker, program, lowering, emission, and validation result that the test suites produce on two revisions, and compares the two record sets.
 
-A base record that is missing from the head means a behavior change, and a new head record usually comes from an added test. The checker, program, and validation records also hash their input, so a change that moves or rewrites tests changes the record set without any change in behavior. To judge such a change, compare revisions that run the same tests.
+A base record that is missing from the head means a behavior change, and a new head record usually comes from an added test. The checker, program, and validation records also hash their input, so a change that moves or rewrites tests changes the record set without any change in behavior. To judge such a change, compare revisions that run the same tests. Two runs of one revision can differ by one clean program record, so one such record alone is not a behavior change. The capture records only results of the core library, so it does not cover command-line or language server output.
 _Avoid: snapshot, golden run_

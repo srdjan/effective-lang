@@ -10,7 +10,10 @@ applies_when:
   - "A refactor commit also moves, deletes, merges, or rewrites tests"
   - "behavior:capture reports missing or new records after a change that should keep behavior"
   - "A change renames or removes a source form, so tests rewrite their own Effective sources"
-tags: [behavior-capture, oracle, refactor, git-commit-tree, byte-identity, rederive]
+  - "A capture shows one new or one missing program record and nothing else"
+  - "A refactor changes the CLI or the language server output, which the capture does not record"
+tags: [behavior-capture, oracle, refactor, git-commit-tree, byte-identity, rederive, run-variance, characterization-test]
+last_updated: 2026-10-22
 ---
 
 # Hold the test set constant to read behavior:capture when a change also moves tests
@@ -19,7 +22,7 @@ tags: [behavior-capture, oracle, refactor, git-commit-tree, byte-identity, reder
 
 `deno task behavior:capture <base> <head>` is the refactor oracle of this
 project. It runs the fast and slow suites on both revisions and compares the
-record sets as multisets (`scripts/behavior_capture.ts:300`, `:339-340`).
+record sets as multisets (`scripts/behavior_capture.ts:306`, `:345-346`).
 Each `check`, `program`, and `validate` record holds a hash of its input
 (`scripts/behavior_capture.ts:13-17`, `:56`). That hash makes a clean program
 visible, but it also ties every record to the test that produced it.
@@ -54,9 +57,11 @@ unset GIT_INDEX_FILE
 deno task behavior:capture "$C" HEAD
 ```
 
-Read the result as follows. "new 0, missing 0" proves that the source change
-keeps behavior for every program the head tests run. Any remaining difference
-is a real source behavior change.
+Read the result as follows. "new 0, missing 0" shows that the source change
+keeps every recorded result for the programs that the head tests run. It does
+not cover what the capture does not record (see "Run variance and blind
+spots" below). One new or one missing clean `program` record can be run
+variance. Any other difference is a real source behavior change.
 
 Two refinements:
 
@@ -75,6 +80,46 @@ use a byte-identity proof: extract the base compiler with
 compile the rewritten source with the head compiler, and compare the emitted
 TypeScript, the serialized IR, the interface hash, and the hover text. The S1,
 S2, and S4 builtin removals were verified this way.
+
+## Run variance and blind spots
+
+A capture of one revision against itself is not always equal. On 2026-10-22,
+a temporary commit captured against itself gave 9123 and 9124 records: 1 new
+`program` record and 0 missing (`docs/plans/2026-10-22-decoupling-review.md`,
+section 9). Earlier captures in the same plan also gained or lost clean
+`program` records that reruns of one revision did not repeat. The cause is
+probably a test whose number of speculative programs depends on timing. It is
+not confirmed. So accept one extra or one missing `program` record only when:
+
+- the record is clean. A record line is `kind input-hash result-hash size`
+  (`scripts/behavior_capture.ts:56-57`), and a clean result `[]` has size 2.
+  The capture prints the new records (`scripts/behavior_capture.ts:348`) and
+  the missing records, so read the size.
+- no other record differs.
+
+For any larger difference, capture each revision alone
+(`deno task behavior:capture <rev>` prints its records) and compare the sets.
+
+The capture records completed calls of the core library, also in the child
+processes of the slow tests. It records no stdout or stderr text, no CLI
+output, and no language server log.
+
+ED3b of that plan moved the CLI watch round and the language server save round
+onto one shared function. Its capture was clean, and all tests passed. But the
+watch loop printed the removed paths and the notes of each module together,
+where it had printed all removed paths first. A line-by-line review found the
+change. The fix restores the old order, and a test with two leaving modules
+in `tests/watch_stale_test.ts` pins it.
+
+Before such a refactor, add characterization tests of the output text and
+order. Use at least two items wherever the old code flattens per-item
+results.
+
+Each capture exports a revision to a new temporary path and runs the tests
+there. Deno keeps compile cache entries for each path, so the capture uses its
+own DENO_DIR and removes it after (`scripts/behavior_capture.ts:253-254`,
+`:292`). Do not run two captures at once, or a capture with the gate, because
+some slow tests check the temporary directories of the system.
 
 ## Why This Matters
 
@@ -134,6 +179,8 @@ that an owned leftover remains visible.
   Run this check; do not accept the claim.
 - Not needed when the capture already shows "new 0, missing 0", or when the
   only differences are new records from added tests and no record is missing.
+  A clean capture still says nothing about CLI or language server output, so
+  a change to that output needs its own tests.
 
 ## Examples
 
