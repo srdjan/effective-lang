@@ -1,6 +1,6 @@
 # Decoupling review: coupling that remains after the rederive work
 
-Date: 2026-10-22. Base revision: `3e7a84a`. Status: proposed. No item is accepted, and no source file changed.
+Date: 2026-10-22. Base revision: `3e7a84a`. Status: accepted on 2026-10-22. The user chose the recommended option for Decisions 1 to 4: 1 (a), 2 (a), 3 (a), and 4 (a). So Phases 1 and 2 are in scope. Decisions 2 and 3 apply to ED2 step 2 and ED3, which are outside that scope, and they wait until those items start.
 
 This document is a plan, not a change. It lists the places where a change to one unit still forces edits in other units, or changes their behavior with no compile error. For each place, it gives a decoupling design and a parity check. Section 9 ("What not to touch") of `2026-10-20-rederive-review.md` applies to every item.
 
@@ -161,6 +161,8 @@ export class ModuleScope implements TypeNames, Temporaries { ledger(): ImportLed
 
 `types.ts`, `fields.ts`, and hover take `TypeNames`. Hover gets a read-only adapter that allocates nothing. `emit.ts` reads `ledger()` after printing, so the phase is explicit. Risk: a hover on a foreign type with a name clash can print `User` where the emitter prints `User$1`. Parity: goldens byte-identical, `tests/editor_test.ts`, `tests/emit_test.ts`. Time to stable: days.
 
+Correction (2026-10-22). The hover claim above is wrong. `backendOf` (`editor.ts:95-117`) tests `revision.emitted(...)` on purpose: the backend line shows the emitted type, so a module that does not emit has no backend type. Hover builds its `Scope` from the same IR and config as the emitter, so the names agree. The shared `Scope` is not a drift risk for hover. ED4 alone removes the hover copy. IC2 stays an edit-spread item and moves to Phase 4.
+
 ### IC3. `BodyValidator` has 149 members on one `this`
 
 Evidence. `validate/expr.ts` has 4901 lines, 149 members, and 797 `this.` uses (M). Family sizes: schema 723 lines, stream 666, scope 277, schedule 217, ref and layer 190, codec 157, fiber 116. The schema family uses only `add`, `check`, `env`, and `poison` outside itself.
@@ -231,11 +233,11 @@ The reviewers checked these units and found no defect to report (M). `PRELUDE_HA
 
 Phase 1 (silent drift, small): IC5, ED6, CK8, CK1a, ED2 step 1, and the CK6 probe. Each item takes hours, keeps behavior, and has its own commit.
 
-Phase 2 (one owner for each rule): IC1, then IC2 with ED4, then CK2. Each item changes a contract between two stages, so each needs the Fable plan check first.
+Phase 2 (one owner for each rule): IC1, then ED4, then CK2. Each item changes a contract between two stages, so each needs the Fable plan check first. IC2 moved to Phase 4 (see the IC2 correction).
 
 Phase 3 (editor boundary): ED1, then ED7, then ED2 step 2 under Decision 2.
 
-Phase 4 (edit spread): CK1b, CK3, CK4, CK5, IC3, IC4, IC6, ED3, and ED5. These items reduce edit count and do not fix a drift risk.
+Phase 4 (edit spread): CK1b, CK3, CK4, CK5, IC2, IC3, IC4, IC6, ED3, and ED5. These items reduce edit count and do not fix a drift risk.
 
 Each unit runs `deno task check` and a `behavior:capture` with constant test inputs before its commit. Do not run `golden:update` or `validate:update`.
 
@@ -248,3 +250,57 @@ Decision 2 (rename conflict test, ED2 step 2). Options: (a) Replace the count te
 Decision 3 (module removal rule, ED3). The LSP keeps a module after a failed removal, and the CLI watch loop does not. Options: (a) Keep both rules as parameters of one `runSaveRound`. (b) Use the LSP rule in both. Recommendation: (a), because it keeps behavior.
 
 Decision 4 (hover result rule, ED4). Options: (a) Hover keeps the return type for inferred functions, as an explicit option of the shared header. (b) Hover matches the emitter exactly. Recommendation: (a), because hover then still shows the inferred type.
+
+## 7. Implementation plan for Phases 1 and 2
+
+Base: `98df0ef` or later on local `main`. Each unit is one commit. Each unit keeps behavior unless its text states an exact visible change. Each commit passes `deno task check`. A unit that keeps behavior also passes `deno task behavior:capture <previous-commit> <unit-commit>` with zero missing records and zero new records. Run captures one at a time. Never run `golden:update` or `validate:update`. Section 9 of the rederive review applies.
+
+Plan check (2026-10-22). A Fable agent checked this section against the code. It rated CK8, CK1a, CK2, and ED4 sound, and IC5, ED6, ED2 step 1, IC1a, and IC1b sound with changes. This section includes those changes. It also found one existing defect: `makeJob() |> scoped` passes the checker, but its IR fails validation with `validation/003` and `validation/004`, because `stageEffects` has no arm for `scoped` and `forkScoped`. The coordinator reproduced the defect on `98df0ef`. IC1b fixes it, because lowering then uses the checker's own set.
+
+### Phase 1
+
+IC5 (builtin instance id). Add to `src/core/ids.ts`:
+
+```ts
+/** The identity of a closed builtin instance: `value:<module>#$builtin/<name>/<hash>`. */
+export function builtinInstanceId(module: string, name: string, hash: string): ValueId;
+/** The builtin name of an instance identity, or undefined for any other identity. */
+export function builtinInstanceName(id: string): string | undefined;
+```
+
+`builtinInstanceName` keeps the rule of `builtinName` in `emit/expr.ts:542-548` and adds a `value:` prefix test: the text after the first `#` must start with `$builtin/`, and the result is the next `/`-separated part. Reachable callee targets are value or local ids, so the prefix test changes no output (I). `lower.ts:1009` calls `builtinInstanceId`. `emit/expr.ts` deletes `builtinName` and calls `builtinInstanceName` at its three call sites (`effectCollectionBuiltin`, `:1858`, `:2159`). The validator regular expression in `validate/builtins.ts:20` and the message in `validate/world.ts:963` stay, because the validator must stay independent. Add one test in a new `tests/ids_test.ts` that round-trips an id and rejects `value:m#map` and `type:m#$builtin/x/1`.
+
+ED6 (editor name lists). In `editor_completion.ts`, the `"type"` context offers `BUILTIN_TYPE_NAMES`, every key of `TYPE_WORDS` (`syntax.ts:159`), and the Effect error names. In `resolve.ts`, export `EFFECT_ERROR_IDS: ReadonlyMap<string, ErrorId>` with `SchemaError` to `SCHEMA_ERROR_ID` and `SchemaIssue` to `SCHEMA_ISSUE_ID` (from `ir.ts`). Use it in `resolve.ts:738-743` and `:759-764`, in the `"fails"` completion context, and in `editor_actions.ts:17-18`. Visible change: type completion gains eight words: `Schedule`, `SchemaOptional`, `SchemaEncodedOptional`, `SchemaDecodedOptional`, `SchemaConstructorDefault`, `SchemaOptionalConstructorDefault`, `SchemaEncodedOptionalConstructorDefault`, and `SchemaDecodedOptionalConstructorDefault`. The parser and checker accept each one in any type position, although the `Schema*` words mean something only as struct field schemas. The completion list is sorted (`editor_completion.ts:103-106`), so the order of the source lists has no effect. No test pins the type list, so add an assertion in `tests/editor_queries_test.ts` that the type context offers the current words and the eight added words. Name the added words in the commit body. The capture does not record editor queries, so this change gives no capture difference. The contextual-keyword part of ED6 is dropped: the parser tests words by position and also tests `from`, `void`, and `_`, so a shared list would not let the compiler catch a new keyword.
+
+CK8 (ModuleChecker phase values). In `check.ts`, `checkType` returns its `TypeNodeInfo` values to `run()`, or `run()` collects them in a local array. `checkCycles(infos)` returns the guarded alias set. `checkDepths(infos, guarded)` takes both. Delete the fields `typeInfos` and `guardedAliases`. `checkError` keeps its behavior; if it also writes type infos today, it returns them the same way. Diagnostic order inside `sink` must not change, so keep the call order of `run()`.
+
+CK1a (required prologue rows). Change `PreludePrologues` (`check_expr.ts:270`) to `{ readonly [K in PreludeCallName]: Prologue<K> | "own-arity" }`. 92 of the 95 call names have a row now. Add rows `fail: "own-arity"`, `Some: "own-arity"`, and `unbrand: "own-arity"`. `preludeCall` (`:982`) runs the prologue only when the row is not `"own-arity"`. Optional, only if it compiles without changing a row: restrict a static `fact` object in `PrologueFacts<K>` to `NodeFact & { readonly kind: Kebab<K> }`, where `Kebab` converts camel case to kebab case at the type level. The validator measured that every static `fact` kind and every `bailFact` kind equals the kebab form of its name, so the restriction can also cover `bailFact`. If it does not compile, drop the option and report why.
+
+ED2 step 1 (revision inputs). `Revision` gets a private field with a snapshot of `Program.files` at the time of `update`, and a method `inputs(): ReadonlyMap<string, string>`. `Program.check` passes `new Map(this.files)`. `Program.files` holds only `.eff`, `.effi`, and the root `effective.json`, with root-relative keys (M). Delete `revisionInputs` from `editor_rename.ts`; `mod.ts` does not export it and no test imports it. `renameAt` and `contractActionsAt` call `new Map(revision.inputs())`, then apply their edits. Visible change: the speculative program now reads the real config text. A config with unknown keys gives `module/001` diagnostics. Today they count in the base revision but not in the speculative program, so a rename that adds up to that many new diagnostics passes. After this unit, both sides count them, so such a rename is rejected. Contract actions change the same way. Add one test for this case in `tests/editor_queries_test.ts`, and state the change in the commit body. The capture records each `Program.update`, and the inputs of the speculative programs now include the real config text, so `program` records can change their input hash. Judge this unit with the capture and accept only differences in `program` input hashes whose diagnostic lists stay equal. Also run `tests/editor_queries_test.ts` and `tests/lsp_editor_test.ts`.
+
+CK6 (probe, no commit). The coordinator adds a temporary counter in `TypeTable.union` for ties where `irKey(a) === irKey(b)` and `a !== b`, runs `deno task test`, records the count in this section, and reverts the probe. With 0 ties, a later unit replaces `|| a - b` with an internal invariant throw. With any ties, the fallback stays and this section records the cases.
+
+CK6 result (2026-10-22, base `98df0ef`). A probe in a detached worktree counted the comparisons in `TypeTable.union`. The fast suite (1833 tests; the core boundary test fails because of the probe) made 4075 comparisons in 48 test isolates, and 0 were ties (M). The slow suite was not probed, because its subprocesses may not have write access. A later unit can replace `|| a - b` with an invariant throw. That unit runs the slow suite too, because a throw there would fail visibly.
+
+### Phase 2
+
+IC1 has two commits.
+
+IC1a (tests first). `tests/lower_stage_effects_test.ts` already pins `retrySchedule`, retry with a schedule, `defer`, `run`, and `provide` with an effectful left value (M). Add cases to that file for the remaining arms: `call`, `perform`, `fail`, `retry` with a count, `closeScope`, `provideScope`, `addScopeFinalizer`, and a builtin call. Each case asserts that lowering succeeds and validation reports no diagnostic. Also add `scoped` and `forkScoped` cases with an effectful left value, such as `makeJob() |> scoped`. Today these two kinds have no arm in `stageEffects`, so lowering records the wrong set, and validation reports `validation/003` and `validation/004` (M, reproduced on `98df0ef`). In IC1a, these two cases assert the current diagnostics, with a comment that IC1b fixes them. Commit IC1a alone, after `deno task check`.
+
+IC1b (one owner). In `pipe` (`check_expr.ts:1626`), when `leftInfo` is not quiet (mode `pure` with empty failures and requirements), call `invoke` with `pre: { type: leftInfo.type, ...PURE_EFFECTS }`. Record the returned effect set in a new `BodyTable` field `stageSets: Map<NodeId, EffectSet>` under the stage node. Then call `finish(stage, q.type, combine([leftInfo, q]))` and finish the pipe node with the same set as now. When `leftInfo` is quiet, keep the current call and record nothing. In `lower.ts`, `stage()` uses `stageSets.get(stage)` as the override set when the left value is not quiet. Delete `stageEffects`, the `override` parameter of `invoke` (its only caller is `stage()`; `lower.ts:758` passes undefined), and the `stageEffects` reference in the header comment at `lower.ts:6`. In the same commit, change the two `scoped` and `forkScoped` cases of IC1a to assert no diagnostic. Precondition: before IC1b, run `git grep` for handler reads of `args[0]` effect sets (`isPureInfo`, `.failures`, `.requirements`, `.mode`) in `check_builtins/` and `check_expr.ts`. If any handler reads the piped argument's sets, stop and report it. The validator found none: `isPureInfo` reads only `args[1]`, and each `.pre` read is a presence test (M). Known visible changes: (1) the `scoped` and `forkScoped` pipelines with an effectful left value now lower to valid IR; (2) `takeSink`, `layer`, and `schemaIdentityCall` drop the first argument's set from their result, but each one rejects a pipeline with a diagnostic, so only the stage node info of that rejected pipeline changes, and only hover shows it. Parity: capture between IC1a and IC1b. Accept only the missing and new `lower` and `validate` records of the two flipped `scoped` and `forkScoped` cases. The goldens and `fixtures/ir/example/log.ir.json` stay byte-identical.
+
+ED4 (shared header). In `emit/decls.ts`, export `functionHeaderDoc(scope: Scope, d: FunctionDecl, result: "contract" | "always"): Doc` and `constantTypeDoc(scope: Scope, d: ConstantDecl): Doc`. `functionDeclaration` uses `functionHeaderDoc(this.scope, d, "contract")`, and `constantDeclaration` uses `constantTypeDoc`. `editor.ts` deletes `functionHeader` and `constantType`, and renders `functionHeaderDoc(scope, d, "always")` and `constantTypeDoc(scope, d)` at `FLAT_WIDTH`. `"always"` prints the result type for every function, as hover does now. The parameter list uses `property` as the emitter does; at flat width it prints the same text as hover prints now. A probe over 188 headers of the 8 clean fixture projects found 0 differences between the two renderings (M). The four functions of `users.eff` all have explicit contracts, so `tests/editor_test.ts:148` already covers them, and `tests/editor_test.ts:183` pins the inferred rule. Keep both tests unchanged. Parity: goldens byte-identical, capture with zero missing and zero new records.
+
+CK2 (body scheduling). Split `checkModuleBodies` (`check_project.ts:224-452`) in the same file, or in a new `check_bodies.ts` that `check_project.ts` imports:
+
+- `moduleValues(args)` owns `importedValues`, `methodTypes`, `inferred`, `constantTypes`, `functions`, `constants`, and `modes`. It returns `environment(view)`, `publish(run, recursive)`, `settledModes(): ModeLookup`, and `bodies()`. `publish` is the only writer of the maps, with the body of `commit` unchanged.
+- `scheduleRuns(entries, edges, values, diagnostics)` holds the SCC loop and the solver, unchanged.
+- `initializationDiagnostics(entries)` returns the graph and the `module/004` diagnostics, unchanged.
+- `checkModuleBodies` composes them and keeps the final source-order loop.
+
+No message, code, span, or order changes. Keep the order: the SCC runs first, then the `module/004` diagnostics, because `normalizeDiagnostics` resolves exact duplicates in push order (`diagnostics.ts:405-430`). Parity: capture with zero missing and zero new records, and the test files that import `check_project.ts`.
+
+### Review and handoff
+
+The implementer commits each unit after `deno task check`, and does not push. The coordinator reviews each commit diff line by line, runs `deno task check` and each capture, and records the result in this section. A failed unit goes back to the implementer with exact findings.
