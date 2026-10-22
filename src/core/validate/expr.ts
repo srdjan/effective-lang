@@ -13,13 +13,10 @@
 import {
   type BuiltinCallName,
   classifyBuiltinCall,
-  containerEntries,
   isConcurrencyOption,
-  rebuildContainer,
 } from "./builtins.ts";
 
 import type {
-  CapabilityId,
   ConstantDecl,
   Effects,
   ErrorId,
@@ -84,7 +81,21 @@ import {
   type ValidatorCore,
 } from "./families/context.ts";
 import { codec, codecOperation } from "./families/codec.ts";
+import {
+  allResults,
+  partitionAll,
+  validateAll,
+} from "./families/collections.ts";
+import {
+  defer,
+  race,
+  retry,
+  retrySchedule,
+  retryWithSchedule,
+  run,
+} from "./families/effect.ts";
 import { fiberOperation, withFiber } from "./families/fiber.ts";
+import { layer, mergeLayers, provide } from "./families/layer.ts";
 import { refOperation } from "./families/ref.ts";
 
 // The test of the expression children imports this walk from here.
@@ -743,15 +754,15 @@ export class BodyValidator implements ValidatorCore {
       case "call":
         return this.call(e, path);
       case "defer":
-        return this.defer(e, path);
+        return defer(this, e, path);
       case "run":
-        return this.run(e, path);
+        return run(this, e, path);
       case "partition-all":
-        return this.partitionAll(e, path);
+        return partitionAll(this, e, path);
       case "validate-all":
-        return this.validateAll(e, path);
+        return validateAll(this, e, path);
       case "all-results":
-        return this.allResults(e, path);
+        return allResults(this, e, path);
       case "scoped":
         return this.scoped(e, path);
       case "fork-scoped":
@@ -837,20 +848,20 @@ export class BodyValidator implements ValidatorCore {
       case "concat-streams":
         return this.concatStreams(e, path);
       case "race":
-        return this.race(e, path);
+        return race(this, e, path);
       case "make-ref":
       case "get-ref":
       case "set-ref":
       case "update-ref":
         return refOperation(this, e, path);
       case "layer":
-        return this.layer(e, path);
+        return layer(this, e, path);
       case "merge-layers":
-        return this.mergeLayers(e, path);
+        return mergeLayers(this, e, path);
       case "retry-schedule":
-        return this.retrySchedule(e, path);
+        return retrySchedule(this, e, path);
       case "retry-with-schedule":
-        return this.retryWithSchedule(e, path);
+        return retryWithSchedule(this, e, path);
       case "codec":
         return codec(this, e, path);
       case "schema":
@@ -880,9 +891,9 @@ export class BodyValidator implements ValidatorCore {
       case "catch":
         return this.catchExpr(e, path);
       case "retry":
-        return this.retry(e, path);
+        return retry(this, e, path);
       case "provide":
-        return this.provide(e, path);
+        return provide(this, e, path);
       case "binary":
         return this.binary(e, path);
     }
@@ -1740,112 +1751,6 @@ export class BodyValidator implements ValidatorCore {
     return fn;
   }
 
-  private retry(e: Extract<Expr, { kind: "retry" }>, path: string): Comp {
-    const job = this.check(e.job, `${path}.job`);
-    const fn = this.jobFunction(job, `${path}.job`, e.job.span, "retry");
-    if (!Number.isSafeInteger(e.times) || e.times < 0) {
-      this.add(
-        AREA.control,
-        `${path}.times`,
-        `retry needs a finite nonnegative safe integer count, recorded ${e.times}`,
-        e.span,
-      );
-    }
-    if (fn === undefined) return this.poison();
-    return derivedResult(
-      fn.result,
-      combine([job, invocationOf(fn), EFFECT_ONLY]),
-    );
-  }
-
-  private retrySchedule(
-    e: Extract<Expr, { kind: "retry-schedule" }>,
-    path: string,
-  ): Comp {
-    const step = this.check(e.step, `${path}.step`);
-    const fn = asFunction(this.env, step.type);
-    if (fn === undefined || fn.parameters.length !== 2) {
-      this.add(
-        AREA.control,
-        `${path}.step`,
-        "retry schedule needs a two-parameter callback",
-        e.step.span,
-      );
-      return this.poison();
-    }
-    const error = unfold(this.env, fn.parameters[0]);
-    if (error.kind !== "named" || !this.env.errors.has(error.id)) {
-      this.add(
-        AREA.types,
-        `${path}.step`,
-        "retry schedule needs a nominal error parameter",
-        e.step.span,
-      );
-    }
-    if (
-      !fits(this.env, INT, fn.parameters[1]) ||
-      !fits(this.env, fn.result, { kind: "option", element: INT })
-    ) {
-      this.add(
-        AREA.types,
-        `${path}.step`,
-        "retry schedule needs an Int attempt and Option<Int> result",
-        e.step.span,
-      );
-    }
-    if (!isQuiet(invocationOf(fn))) {
-      this.add(
-        AREA.control,
-        `${path}.step`,
-        "retry schedule callback must be pure",
-        e.step.span,
-      );
-    }
-    return derivedResult(
-      { kind: "retry-schedule", error: fn.parameters[0] },
-      combine([step]),
-    );
-  }
-
-  private retryWithSchedule(
-    e: Extract<Expr, { kind: "retry-with-schedule" }>,
-    path: string,
-  ): Comp {
-    const job = this.check(e.job, `${path}.job`);
-    const options = this.check(e.options, `${path}.options`);
-    const fn = this.jobFunction(job, `${path}.job`, e.job.span, "retry");
-    const shape = unfold(this.env, options.type);
-    const fields = shape.kind === "record" ? shape.fields : [];
-    const policy = fields.length === 1 && fields[0].name === "schedule" &&
-        !fields[0].optional
-      ? unfold(this.env, fields[0].type)
-      : undefined;
-    if (policy?.kind !== "retry-schedule") {
-      this.add(
-        AREA.control,
-        `${path}.options`,
-        "retry needs a schedule option",
-        e.options.span,
-      );
-    } else if (fn !== undefined) {
-      for (const failure of fn.effects.failures) {
-        if (!fits(this.env, { kind: "named", id: failure }, policy.error)) {
-          this.add(
-            AREA.types,
-            `${path}.options`,
-            `retry schedule does not accept ${failure}`,
-            e.options.span,
-          );
-        }
-      }
-    }
-    if (fn === undefined) return this.poison();
-    return derivedResult(
-      fn.result,
-      combine([job, options, invocationOf(fn), EFFECT_ONLY]),
-    );
-  }
-
   /**
    * One row for each Schema operation. A new operation is a compile error
    * until it has a row. The columns are the handler, whether `schemaOf`
@@ -2638,207 +2543,6 @@ export class BodyValidator implements ValidatorCore {
           : e.kind === "schema-decode"
           ? type.decodeRequirements
           : type.encodeRequirements,
-      }]),
-    );
-  }
-
-  private defer(e: Extract<Expr, { kind: "defer" }>, path: string): Comp {
-    const job = this.check(e.job, `${path}.job`);
-    const fn = this.jobFunction(job, `${path}.job`, e.job.span, "defer");
-    if (fn === undefined) return this.poison();
-    return derivedResult({
-      kind: "effect",
-      result: fn.result,
-      effects: fn.effects,
-    }, combine([job]));
-  }
-
-  private run(e: Extract<Expr, { kind: "run" }>, path: string): Comp {
-    const value = this.check(e.value, `${path}.value`);
-    const type = unfold(this.env, value.type);
-    if (type.kind !== "effect") {
-      this.add(
-        AREA.control,
-        `${path}.value`,
-        `run needs an Effect value, but the expression has type ${
-          show(value.type)
-        }`,
-        e.value.span,
-      );
-      return this.poison();
-    }
-    return derivedResult(
-      type.result,
-      combine([
-        value,
-        {
-          failures: type.effects.failures,
-          requirements: type.effects.requirements,
-          execution: "effect",
-        },
-      ]),
-    );
-  }
-
-  private partitionAll(
-    e: Extract<Expr, { kind: "partition-all" }>,
-    path: string,
-  ): Comp {
-    const jobs = this.check(e.jobs, `${path}.jobs`);
-    const array = unfold(this.env, jobs.type);
-    const job = array.kind === "array"
-      ? unfold(this.env, array.element)
-      : undefined;
-    if (job?.kind !== "effect") {
-      this.add(
-        AREA.types,
-        path,
-        "partitionAll needs an array of Effect values",
-        e.span,
-      );
-      return this.poison();
-    }
-    this.checkConcurrency(e, path, "partitionAll");
-    const errors = unionOf(
-      this.env,
-      job.effects.failures.map((id) => ({ kind: "named", id })),
-    );
-    return derivedResult(
-      {
-        kind: "tuple",
-        elements: [
-          { kind: "array", element: job.result },
-          { kind: "array", element: errors },
-        ],
-      },
-      combine([jobs, {
-        failures: [],
-        requirements: job.effects.requirements,
-        execution: "effect",
-      }]),
-    );
-  }
-
-  private validateAll(
-    e: Extract<Expr, { kind: "validate-all" }>,
-    path: string,
-  ): Comp {
-    const jobs = this.check(e.jobs, `${path}.jobs`);
-    const onErrors = this.check(e.onErrors, `${path}.onErrors`);
-    const array = unfold(this.env, jobs.type);
-    const job = array.kind === "array"
-      ? unfold(this.env, array.element)
-      : undefined;
-    const wrapper = asFunction(this.env, onErrors.type);
-    const errors = job?.kind === "effect"
-      ? unionOf(
-        this.env,
-        job.effects.failures.map((id) => ({ kind: "named", id })),
-      )
-      : undefined;
-    const failure = wrapper === undefined
-      ? undefined
-      : unfold(this.env, wrapper.result);
-    if (
-      job?.kind !== "effect" || wrapper === undefined ||
-      errors === undefined || wrapper.parameters.length !== 1 ||
-      !fits(
-        this.env,
-        { kind: "array", element: errors },
-        wrapper.parameters[0],
-      ) ||
-      !isQuiet(invocationOf(wrapper)) || failure?.kind !== "named" ||
-      !this.env.errors.has(failure.id)
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "validateAll needs Effect jobs and a pure error-array wrapper returning a nominal error",
-        e.span,
-      );
-      return this.poison();
-    }
-    this.checkConcurrency(e, path, "validateAll");
-    return derivedResult(
-      { kind: "array", element: job.result },
-      combine([jobs, onErrors, {
-        failures: [failure.id as ErrorId],
-        requirements: job.effects.requirements,
-        execution: "effect",
-      }]),
-    );
-  }
-
-  private allResults(
-    e: Extract<Expr, { kind: "all-results" }>,
-    path: string,
-  ): Comp {
-    const jobs = this.check(e.jobs, `${path}.jobs`);
-    const shape = unfold(this.env, jobs.type);
-    const container = containerEntries(shape);
-    if (
-      container === undefined ||
-      (shape.kind === "record" && shape.fields.some((field) => field.optional))
-    ) {
-      this.add(
-        AREA.types,
-        path,
-        "allResults needs a tuple, record, or array of Effect values with required fields",
-        e.span,
-      );
-      return this.poison();
-    }
-    const outcomes: Type[] = [];
-    const requirements: CapabilityId[] = [];
-    for (const type of container.entries) {
-      const member = unfold(this.env, type);
-      if (member.kind !== "effect") {
-        this.add(
-          AREA.types,
-          path,
-          "allResults requires an Effect value at every position",
-          e.span,
-        );
-        return this.poison();
-      }
-      const error = unionOf(
-        this.env,
-        member.effects.failures.map((id) => ({ kind: "named", id })),
-      );
-      outcomes.push(unionOf(this.env, [
-        {
-          kind: "record",
-          fields: [
-            {
-              name: "_tag",
-              type: { kind: "literal", value: "Success" },
-              optional: false,
-            },
-            { name: "success", type: member.result, optional: false },
-          ],
-        },
-        {
-          kind: "record",
-          fields: [
-            {
-              name: "_tag",
-              type: { kind: "literal", value: "Failure" },
-              optional: false,
-            },
-            { name: "failure", type: error, optional: false },
-          ],
-        },
-      ]));
-      requirements.push(...member.effects.requirements);
-    }
-    this.checkConcurrency(e, path, "allResults");
-    const result = rebuildContainer(container, outcomes);
-    return derivedResult(
-      result,
-      combine([jobs, {
-        failures: [],
-        requirements,
-        execution: "effect",
       }]),
     );
   }
@@ -4195,164 +3899,6 @@ export class BodyValidator implements ValidatorCore {
         ...unionEffects(a.effects, b.effects),
       },
     }, combine([left, right]));
-  }
-
-  private race(e: Extract<Expr, { kind: "race" }>, path: string): Comp {
-    const left = this.check(e.left, `${path}.left`);
-    const right = this.check(e.right, `${path}.right`);
-    const a = unfold(this.env, left.type);
-    const b = unfold(this.env, right.type);
-    if (a.kind !== "effect" || b.kind !== "effect") {
-      this.add(AREA.types, path, "race needs two Effect values", e.span);
-      return this.poison();
-    }
-    const aFitsB = fits(this.env, a.result, b.result);
-    const bFitsA = fits(this.env, b.result, a.result);
-    if (!aFitsB && !bFitsA) {
-      this.add(AREA.types, path, "race needs compatible success types", e.span);
-    }
-    return derivedResult({
-      kind: "effect",
-      result: aFitsB ? b.result : a.result,
-      effects: {
-        ...unionEffects(a.effects, b.effects),
-      },
-    }, combine([left, right]));
-  }
-
-  private layer(e: Extract<Expr, { kind: "layer" }>, path: string): Comp {
-    const acquire = this.check(e.acquire, `${path}.acquire`);
-    const service = this.ctx.world.services.get(e.service);
-    const fn = asFunction(this.env, acquire.type);
-    if (
-      service === undefined || fn === undefined || fn.parameters.length !== 0 ||
-      e.acquire.kind !== "closure"
-    ) {
-      this.add(
-        AREA.control,
-        path,
-        "layer needs a declared service and inline zero-argument callback",
-        e.span,
-      );
-      return this.poison();
-    }
-    const implementation = unfold(this.env, fn.result);
-    if (
-      implementation.kind !== "record" ||
-      implementation.fields.length !== service.methods.length
-    ) {
-      this.add(
-        AREA.types,
-        `${path}.acquire`,
-        "layer must return exactly the service methods",
-        e.acquire.span,
-      );
-      return this.poison();
-    }
-    for (const method of service.methods) {
-      const field = implementation.fields.find((f) => f.name === method.name);
-      if (
-        field === undefined || field.optional ||
-        !fits(this.env, field.type, method.type)
-      ) {
-        this.add(
-          AREA.types,
-          `${path}.acquire`,
-          `layer method ${method.name} does not fit its service contract`,
-          e.acquire.span,
-        );
-      }
-    }
-    const provides = service.methods.map((m) => m.id).sort();
-    if (fn.effects.requirements.some((r) => provides.includes(r))) {
-      this.add(
-        AREA.control,
-        path,
-        "layer acquisition requires a method it provides",
-        e.span,
-      );
-    }
-    return derivedResult({
-      kind: "provider",
-      provides,
-      acquisition: { execution: "effect", effects: fn.effects },
-    }, combine([acquire]));
-  }
-
-  private mergeLayers(
-    e: Extract<Expr, { kind: "merge-layers" }>,
-    path: string,
-  ): Comp {
-    const left = this.check(e.left, `${path}.left`);
-    const right = this.check(e.right, `${path}.right`);
-    const a = unfold(this.env, left.type);
-    const b = unfold(this.env, right.type);
-    if (a.kind !== "provider" || b.kind !== "provider") {
-      this.add(AREA.types, path, "mergeLayers needs two Layer values", e.span);
-      return this.poison();
-    }
-    const services = new Set(
-      a.provides.map((id) => id.slice(0, id.lastIndexOf("."))),
-    );
-    if (
-      b.provides.some((id) => services.has(id.slice(0, id.lastIndexOf("."))))
-    ) {
-      this.add(
-        AREA.control,
-        path,
-        "mergeLayers cannot provide one service twice",
-        e.span,
-      );
-    }
-    return derivedResult({
-      kind: "provider",
-      provides: sortedUnique([...a.provides, ...b.provides]),
-      acquisition: {
-        execution: "effect",
-        effects: {
-          ...unionEffects(a.acquisition.effects, b.acquisition.effects),
-        },
-      },
-    }, combine([left, right]));
-  }
-
-  private provide(e: Extract<Expr, { kind: "provide" }>, path: string): Comp {
-    const provider = this.check(e.provider, `${path}.provider`);
-    const job = this.check(e.job, `${path}.job`);
-    const providerType = unfold(this.env, provider.type);
-    if (providerType.kind !== "provider") {
-      this.add(
-        AREA.control,
-        `${path}.provider`,
-        `provide needs a provider, but the expression has type ${
-          show(provider.type)
-        }`,
-        e.provider.span,
-      );
-    }
-    const fn = this.jobFunction(job, `${path}.job`, e.job.span, "provide");
-    if (fn === undefined || providerType.kind !== "provider") {
-      return this.poison();
-    }
-    const invocation: Active = {
-      failures: fn.effects.failures,
-      requirements: minus(fn.effects.requirements, providerType.provides),
-      execution: fn.execution,
-    };
-    const acquisition: Active = {
-      failures: providerType.acquisition.effects.failures,
-      requirements: providerType.acquisition.effects.requirements,
-      execution: "effect",
-    };
-    return derivedResult(
-      fn.result,
-      combine([
-        combine([provider, job]),
-        invocation,
-        acquisition,
-        EFFECT_ONLY,
-      ]),
-    );
   }
 
   // -------------------------------------------------------------- operators
