@@ -345,6 +345,7 @@ if (import.meta.main) {
   const missing = difference(before, after);
   const added = difference(after, before);
   console.log(`new in ${head}: ${added.length} (${summary(added)})`);
+  if (added.length > 0) console.log(added.join("\n"));
   console.log(`missing in ${head}: ${missing.length}`);
   if (missing.length > 0) {
     console.log(missing.join("\n"));
