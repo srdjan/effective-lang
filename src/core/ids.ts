@@ -44,6 +44,23 @@ export function isLocalId(id: string): id is LocalId {
   return id.startsWith("local:");
 }
 
+/** The identity of a closed builtin instance: `value:<module>#$builtin/<name>/<hash>`. */
+export function builtinInstanceId(
+  module: string,
+  name: string,
+  hash: string,
+): ValueId {
+  return `value:${module}#$builtin/${name}/${hash}`;
+}
+
+/** The builtin name of an instance identity, or undefined for any other identity. */
+export function builtinInstanceName(id: string): string | undefined {
+  if (!isValueId(id)) return undefined;
+  const rest = id.slice(id.indexOf("#") + 1);
+  if (!rest.startsWith("$builtin/")) return undefined;
+  return rest.split("/")[1];
+}
+
 /** The module part of an identity such as `type:users#User`. */
 export function moduleOfId(id: string): string | undefined {
   const colon = id.indexOf(":");

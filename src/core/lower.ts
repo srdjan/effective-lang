@@ -77,7 +77,7 @@ import {
   type TypeRef,
   type TypeTable,
 } from "./types.ts";
-import { isErrorId, serviceOfCapability } from "./ids.ts";
+import { builtinInstanceId, isErrorId, serviceOfCapability } from "./ids.ts";
 
 type FunctionNode = Extract<TypeNode, { readonly kind: "function" }>;
 
@@ -1006,7 +1006,7 @@ class BodyLowerer {
   private specialize(name: string, type: FunctionType): ValueId {
     const json = canonicalJson(type);
     const hash = sha256Hex(json).slice(0, 12);
-    const id: ValueId = `value:${this.ctx.module}#$builtin/${name}/${hash}`;
+    const id: ValueId = builtinInstanceId(this.ctx.module, name, hash);
     const known = this.ctx.builtins.get(id);
     if (known === undefined) {
       this.ctx.builtins.set(id, { name, type });

@@ -72,7 +72,7 @@ import {
 } from "./calls.ts";
 import { evaluatedChildren, type ExprOf, isLeafExpr } from "./shape.ts";
 import { patternBinding } from "./walk.ts";
-import { isLocalId } from "../ids.ts";
+import { builtinInstanceName, isLocalId } from "../ids.ts";
 
 // ------------------------------------------------------------------ precedence
 
@@ -538,18 +538,10 @@ function isIntType(type: Type): boolean {
   return type.kind === "primitive" && type.name === "int";
 }
 
-/** Builtin callee names: `value:m#$builtin/map/<hash>` gives `map`. */
-function builtinName(target: string): string | undefined {
-  const hash = target.indexOf("#");
-  const rest = target.slice(hash + 1);
-  if (!rest.startsWith("$builtin/")) return undefined;
-  return rest.split("/")[1];
-}
-
 function effectCollectionBuiltin(
   target: string,
 ): "all" | "traverse" | undefined {
-  const name = builtinName(target);
+  const name = builtinInstanceName(target);
   return name === "all" || name === "traverse" ? name : undefined;
 }
 
@@ -1855,7 +1847,7 @@ export class ExprEmitter {
     }
     const host = this.scope.hostBinding(target as ValueId);
     if (host !== undefined) return host.hostName;
-    if (builtinName(target) !== undefined) {
+    if (builtinInstanceName(target) !== undefined) {
       throw unsupported(`the builtin ${target} is not in callee position`);
     }
     return this.scope.nameOf(target as ValueId);
@@ -2156,7 +2148,7 @@ export class ExprEmitter {
     kid: Kid,
   ): Emitted {
     if (e.callee.kind === "reference") {
-      const builtin = builtinName(e.callee.target);
+      const builtin = builtinInstanceName(e.callee.target);
       if (builtin !== undefined) return this.builtinCall(e, builtin, kid);
     }
     if (this.isEffectfulFunction(e.callee.type)) {
