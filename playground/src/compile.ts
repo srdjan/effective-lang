@@ -97,8 +97,8 @@ export interface Playground {
 /** The module name of the `.eff` file `path`, as `effModuleOf` in the LSP. */
 function effModulesOf(revision: Revision): ReadonlyMap<string, string> {
   const paths = new Map<string, string>();
-  for (const [name, info] of revision.project.modules) {
-    if (info.mode === "eff") paths.set(info.path, name);
+  for (const info of revision.moduleInfos()) {
+    if (info.mode === "eff") paths.set(info.path, info.name);
   }
   return paths;
 }

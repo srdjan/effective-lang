@@ -323,6 +323,18 @@ interface DefinitionSource {
 // about 1280 frames. 1536 leaves room above that.
 const MAX_DEPTH = 1536;
 
+/** The read side of a `TypeTable`: queries only, no writers. */
+export type TypeReader = Pick<
+  TypeTable,
+  | "show"
+  | "node"
+  | "aliasOf"
+  | "brandBaseOf"
+  | "errorRecordOf"
+  | "error"
+  | "size"
+>;
+
 export class TypeTable {
   private readonly nodes: TypeNode[] = [];
   private readonly byKey = new Map<string, TypeRef>();

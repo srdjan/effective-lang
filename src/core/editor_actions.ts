@@ -18,8 +18,7 @@ function effectName(
   for (const [name, effectId] of EFFECT_ERROR_IDS) {
     if (id === effectId) return name;
   }
-  const namespace = revision.checked.analysis.resolutions.get(module)
-    ?.namespace;
+  const namespace = revision.resolution(module)?.namespace;
   for (const [name, binding] of namespace ?? []) {
     const target = binding.target;
     if ("id" in target && target.id === id) return name;
@@ -41,9 +40,7 @@ export function contractActionsAt(
   start: number,
   end = start,
 ): readonly ContractAction[] {
-  const module = [...revision.checked.modules.values()].find((m) =>
-    m.path === path
-  );
+  const module = revision.checkedModuleAt(path);
   if (module === undefined || !path.endsWith(".eff")) return [];
   const output: ContractAction[] = [];
   for (const fn of module.functions.values()) {
@@ -53,7 +50,7 @@ export function contractActionsAt(
       body === undefined || signature.span.end < start ||
       end < signature.span.start
     ) continue;
-    const entry = revision.project.modules.get(module.module)?.index.byName.get(
+    const entry = revision.moduleInfo(module.module)?.index.byName.get(
       signature.name,
     );
     if (entry === undefined || entry.broken) continue;
@@ -130,7 +127,7 @@ export function contractActionsAt(
     }
     const files = new Map(revision.inputs());
     files.set(path, applySourceEdits(text, merged));
-    const checked = new Program(revision.project.root).update({ set: files });
+    const checked = new Program(revision.root).update({ set: files });
     if (!checked.ok) continue;
     const changedFunction = checked.value.checkedModule(module.module)
       ?.functions.get(signature.id);

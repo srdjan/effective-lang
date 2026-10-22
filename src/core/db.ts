@@ -62,6 +62,8 @@ import {
   type SpanTable,
 } from "./emit/spans.ts";
 import { fnv1a64 } from "./hash.ts";
+import { moduleOfId, nameOfId } from "./ids.ts";
+import type { DeclEntry } from "./index.ts";
 import { buildInterface, type ModuleInterface } from "./interface.ts";
 import type { ModuleIR } from "./ir.ts";
 import { type LowerError, lowerModule } from "./lower.ts";
@@ -69,14 +71,17 @@ import {
   type ConfigError,
   type FileParser,
   joinPath,
+  type ModuleInfo,
   type ParsedFile,
   parseFileFresh,
   type Project,
   type ProjectConfig,
 } from "./project.ts";
+import type { ModuleResolution } from "./resolve.ts";
 import { memoryHost, type Result } from "./source.ts";
-import { canonicalJson, TypeTable } from "./types.ts";
+import { canonicalJson, type TypeReader, TypeTable } from "./types.ts";
 import { compareText } from "./util.ts";
+import { validateProject } from "./validate_project.ts";
 
 // ------------------------------------------------------------------ changes
 
@@ -162,6 +167,8 @@ export class Revision {
     private readonly files: ReadonlyMap<string, string>,
   ) {}
 
+  private pathMap?: ReadonlyMap<string, string>;
+
   /** All diagnostics of the project, sorted and without duplicates. */
   get diagnostics(): readonly Diagnostic[] {
     return this.checked.diagnostics;
@@ -181,6 +188,83 @@ export class Revision {
 
   checkedModule(name: string): CheckedModule | undefined {
     return this.entries.get(name)?.checked;
+  }
+
+  /** The project root. */
+  get root(): string {
+    return this.project.root;
+  }
+
+  /** The project configuration. */
+  get config(): ProjectConfig {
+    return this.project.config;
+  }
+
+  /** The type table of this revision, read-only. */
+  get types(): TypeReader {
+    return this.checked.table;
+  }
+
+  /** The loading, linking, and resolving diagnostics of the analysis, before the module checks. */
+  get analysisDiagnostics(): readonly Diagnostic[] {
+    return this.checked.analysis.diagnostics;
+  }
+
+  /** The module infos in discovery order. */
+  moduleInfos(): Iterable<ModuleInfo> {
+    return this.project.modules.values();
+  }
+
+  /** The module info of a module name. */
+  moduleInfo(name: string): ModuleInfo | undefined {
+    return this.project.modules.get(name);
+  }
+
+  /** The module info of a root-relative file path. */
+  moduleInfoAt(path: string): ModuleInfo | undefined {
+    const name = this.namesByPath().get(path);
+    return name === undefined ? undefined : this.project.modules.get(name);
+  }
+
+  /** The checked module of a root-relative file path. */
+  checkedModuleAt(path: string): CheckedModule | undefined {
+    const name = this.namesByPath().get(path);
+    return name === undefined ? undefined : this.entries.get(name)?.checked;
+  }
+
+  /** The resolver result of a module name. */
+  resolution(name: string): ModuleResolution | undefined {
+    return this.checked.analysis.resolutions.get(name);
+  }
+
+  /** The sorted module names that a module imports, or an empty list. */
+  imports(name: string): readonly string[] {
+    return this.project.graph.get(name) ?? [];
+  }
+
+  /** The index entry of a declaration identity, or undefined for a malformed or unknown id. */
+  declEntry(id: string): DeclEntry | undefined {
+    const owner = moduleOfId(id);
+    const name = nameOfId(id);
+    if (owner === undefined || name === undefined) return undefined;
+    return this.project.modules.get(owner)?.index.byName.get(name);
+  }
+
+  /** Independent validation of the lowered modules, as `validateProject` with this project. */
+  validate(
+    lowered: ReadonlyMap<string, Result<ModuleIR, LowerError>>,
+  ): ReadonlyMap<string, readonly Diagnostic[]> {
+    return validateProject(this.project, lowered);
+  }
+
+  /** The module name of each root-relative path. Built on first use. */
+  private namesByPath(): ReadonlyMap<string, string> {
+    if (this.pathMap === undefined) {
+      this.pathMap = new Map(
+        [...this.project.modules].map(([name, info]) => [info.path, name]),
+      );
+    }
+    return this.pathMap;
   }
 
   /** The interface hash of design I8, which leaves out source spans. */

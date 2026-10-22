@@ -520,3 +520,40 @@ Deno.test("revisionDelta: a module absent from the previous revision, or no prev
     modeChanged: ["extra"],
   });
 });
+
+Deno.test("revision queries: path lookups, imports, declaration entries, and module order", () => {
+  const result = new Program("").update({
+    set: {
+      "effective.json": "{}",
+      "a.eff": 'import { N, n } from "./b.eff"\nexport const copy: N = n\n',
+      "b.eff": "export type N = int\nexport const n: N = 1\n",
+    },
+  });
+  assert(result.ok, JSON.stringify(result));
+  const revision = result.value;
+  assertEquals(revision.diagnostics, []);
+
+  // Discovery order follows the sorted entry paths. The checking order puts
+  // the imported module first.
+  assertEquals([...revision.moduleInfos()].map((info) => info.name), [
+    "a",
+    "b",
+  ]);
+  assertEquals(revision.moduleNames(), ["b", "a"]);
+
+  assertEquals(revision.moduleInfoAt("a.eff")?.name, "a");
+  assertEquals(revision.moduleInfoAt("b.eff")?.name, "b");
+  assertEquals(revision.moduleInfoAt("c.eff"), undefined);
+  assertEquals(revision.checkedModuleAt("a.eff"), revision.checkedModule("a"));
+  assertEquals(revision.checkedModuleAt("c.eff"), undefined);
+
+  assertEquals(revision.imports("a"), ["b"]);
+  assertEquals(revision.imports("b"), []);
+  assertEquals(revision.imports("missing"), []);
+
+  assertEquals(revision.declEntry("type:b#N")?.name, "N");
+  assertEquals(revision.declEntry("value:b#n")?.name, "n");
+  assertEquals(revision.declEntry("type:b#Missing"), undefined);
+  assertEquals(revision.declEntry("type:c#N"), undefined);
+  assertEquals(revision.declEntry("not an id"), undefined);
+});

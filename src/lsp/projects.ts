@@ -246,9 +246,8 @@ function heldReason(
       return `${name} is not written: it has ${lowered.error.count} diagnostics`;
     }
   }
-  const { graph, modules } = revision.project;
-  const blocker = (graph.get(name) ?? []).find((target) =>
-    modules.get(target)?.mode === "eff" && !writable.has(target)
+  const blocker = revision.imports(name).find((target) =>
+    revision.moduleInfo(target)?.mode === "eff" && !writable.has(target)
   );
   if (blocker !== undefined) {
     return `${name} is not written: it imports ${blocker}, which is not written`;

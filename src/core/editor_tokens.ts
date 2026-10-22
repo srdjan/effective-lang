@@ -64,9 +64,11 @@ function resolvedKind(
         : "variable";
     case "value": {
       const declaration = occurrence.declaration;
-      const entry = [...revision.project.modules.values()].find((m) =>
-        m.path === declaration?.source
-      )?.index.decls.find((d) => d.nameSpan.start === declaration?.start);
+      const entry = declaration === undefined
+        ? undefined
+        : revision.moduleInfoAt(declaration.source)?.index.decls.find((d) =>
+          d.nameSpan.start === declaration.start
+        );
       return entry?.isArrow ? "function" : "variable";
     }
     default:

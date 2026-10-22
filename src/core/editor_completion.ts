@@ -48,7 +48,7 @@ function recordFields(
   seen = new Set<TypeRef>(),
 ): readonly string[] {
   if (seen.has(ref)) return [];
-  const table = revision.checked.table;
+  const table = revision.types;
   const node = table.node(ref);
   if (node.kind === "record") return node.fields.map((f) => f.name);
   if (node.kind === "named") {
@@ -78,9 +78,7 @@ export function completionsAt(
   path: string,
   offset: number,
 ): readonly Completion[] {
-  const info = [...revision.project.modules.values()].find((m) =>
-    m.path === path
-  );
+  const info = revision.moduleInfoAt(path);
   if (info === undefined || offset < 0 || offset > info.tree.text.length) {
     return [];
   }
@@ -133,14 +131,13 @@ export function completionsAt(
     const baseOccurrence = occurrenceAt(revision, path, baseEnd);
     if (baseOccurrence?.target.kind === "service") {
       // The resolver's namespace contains imported service declarations too.
-      const binding = revision.checked.analysis.resolutions.get(info.name)
-        ?.namespace.get(
-          text.slice(baseOccurrence.span.start, baseOccurrence.span.end),
-        );
+      const binding = revision.resolution(info.name)?.namespace.get(
+        text.slice(baseOccurrence.span.start, baseOccurrence.span.end),
+      );
       const methods = binding?.service?.entry.methodList ?? [];
       return filter(methods.map((m) => make(m.name, "method")));
     }
-    const checked = revision.checked.modules.get(info.name);
+    const checked = revision.checkedModule(info.name);
     const fields = new Set<string>();
     const tables = [
       ...[...(checked?.functions.values() ?? [])].map((f) => f.table),
@@ -177,8 +174,7 @@ export function completionsAt(
     node = tree.parents[node];
   }
   const values = new Map<string, Completion>();
-  const namespace = revision.checked.analysis.resolutions.get(info.name)
-    ?.namespace;
+  const namespace = revision.resolution(info.name)?.namespace;
   for (const [name, binding] of namespace ?? []) {
     const kind = binding.target.kind;
     if (context === "type" && kind !== "type" && kind !== "error") continue;
@@ -188,9 +184,9 @@ export function completionsAt(
     const origin = declarationOf(revision, info.name, binding.target);
     const declaration = origin === undefined
       ? undefined
-      : [...revision.project.modules.values()].find((m) =>
-        m.path === origin.source
-      )?.index.decls.find((d) => d.nameSpan.start === origin.start);
+      : revision.moduleInfoAt(origin.source)?.index.decls.find((d) =>
+        d.nameSpan.start === origin.start
+      );
     values.set(
       name,
       make(

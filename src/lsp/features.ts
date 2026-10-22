@@ -43,10 +43,8 @@ function answer(value: unknown): Answer {
 
 /** The module name of the `.eff` file `path` in the revision, or undefined. */
 function effModuleOf(revision: Revision, path: string): string | undefined {
-  for (const [name, info] of revision.project.modules) {
-    if (info.path === path && info.mode === "eff") return name;
-  }
-  return undefined;
+  const info = revision.moduleInfoAt(path);
+  return info?.mode === "eff" ? info.name : undefined;
 }
 
 /** The range of a span, against the text that the revision used for the span's file. */
@@ -314,7 +312,7 @@ export function statsRequest(
       interfaceChanged: [...(project.lastDelta?.interfaceChanged ?? [])],
       modeChanged: [...(project.lastDelta?.modeChanged ?? [])],
     },
-    typeTableSize: revision?.checked.table.size ?? 0,
+    typeTableSize: revision?.types.size ?? 0,
     memory: ctx.memory(),
   };
   return answer(result);

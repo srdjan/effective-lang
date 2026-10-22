@@ -129,7 +129,7 @@ export function renameAt(
       applySourceEdits(text, edits.filter((e) => e.span.source === source)),
     );
   }
-  const changed = new Program(revision.project.root).update({ set: files });
+  const changed = new Program(revision.root).update({ set: files });
   if (!changed.ok) {
     return {
       ok: false,
@@ -137,9 +137,9 @@ export function renameAt(
     };
   }
   const next = changed.value;
-  const beforeAnalysis = revision.checked.analysis;
-  const afterAnalysis = next.checked.analysis;
-  if (afterAnalysis.diagnostics.length > beforeAnalysis.diagnostics.length) {
+  const analysisBefore = revision.analysisDiagnostics;
+  const analysisAfter = next.analysisDiagnostics;
+  if (analysisAfter.length > analysisBefore.length) {
     return {
       ok: false,
       error: "The new name is reserved or conflicts with an existing binding.",

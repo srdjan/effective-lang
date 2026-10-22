@@ -4,6 +4,7 @@
 // The program with module cutoff.
 export { Program, Revision, revisionDelta } from "./db.ts";
 export type { ProgramChanges, QueryCounts, RevisionDelta } from "./db.ts";
+export type { TypeNode, TypeReader, TypeRef } from "./types.ts";
 
 // The difference between two file maps, for `Program.update`.
 export { diffFiles } from "./file_diff.ts";

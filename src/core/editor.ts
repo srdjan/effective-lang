@@ -11,12 +11,7 @@ import type { Revision } from "./db.ts";
 import { type Doc, render } from "./emit/doc.ts";
 import { constantTypeDoc, functionHeaderDoc } from "./emit/decls.ts";
 import { EmitFailure, Scope } from "./emit/scope.ts";
-import {
-  methodOfCapability,
-  moduleOfId,
-  nameOfId,
-  serviceOfCapability,
-} from "./ids.ts";
+import { methodOfCapability, serviceOfCapability } from "./ids.ts";
 import type { ModuleIR } from "./ir.ts";
 import type { DeclEntry, FileIndex } from "./index.ts";
 import { parseFileFresh } from "./project.ts";
@@ -45,13 +40,6 @@ function covers(range: Range, offset: number, afterEnd: boolean): boolean {
 
 const PASSES: readonly boolean[] = [false, true];
 
-function moduleAt(revision: Revision, path: string): CheckedModule | undefined {
-  for (const candidate of revision.checked.modules.values()) {
-    if (candidate.path === path) return candidate;
-  }
-  return undefined;
-}
-
 // ------------------------------------------------------------------ hover
 
 /** The backend type of a declaration, or the reason that it is missing. */
@@ -77,7 +65,7 @@ function functionContract(
   revision: Revision,
   fn: FunctionBody,
 ): string {
-  const table = revision.checked.table;
+  const table = revision.types;
   const { signature } = fn;
   const parameters = signature.parameters.map((p) =>
     `${p.name}: ${table.show(p.type.ref)}`
@@ -109,7 +97,7 @@ function backendOf(
   const declaration = ir.declarations.find((d) => d.id === id);
   if (declaration === undefined) return unavailable;
   try {
-    const scope = new Scope(ir, revision.project.config);
+    const scope = new Scope(ir, revision.config);
     if (declaration.kind === "function") {
       return {
         tag: "type",
@@ -175,7 +163,7 @@ function hoverPass(
   offset: number,
   afterEnd: boolean,
 ): Hover | undefined {
-  const table = revision.checked.table;
+  const table = revision.types;
   for (const fn of module.functions.values()) {
     const span = fn.signature.nameSpan;
     if (!covers(span, offset, afterEnd)) continue;
@@ -229,7 +217,7 @@ export function hoverAt(
   path: string,
   offset: number,
 ): Hover | undefined {
-  const module = moduleAt(revision, path);
+  const module = revision.checkedModuleAt(path);
   if (module === undefined) return undefined;
   for (const afterEnd of PASSES) {
     const found = hoverPass(revision, module, offset, afterEnd);
@@ -239,14 +227,6 @@ export function hoverAt(
 }
 
 // ------------------------------------------------------------------ definition
-
-/** The index entry of the declaration `id`, or undefined for a malformed or unknown id. */
-function declEntryOf(revision: Revision, id: string): DeclEntry | undefined {
-  const module = moduleOfId(id);
-  const name = nameOfId(id);
-  if (module === undefined || name === undefined) return undefined;
-  return revision.project.modules.get(module)?.index.byName.get(name);
-}
 
 function targetSpan(
   revision: Revision,
@@ -259,15 +239,15 @@ function targetSpan(
     case "service":
     case "value":
     case "provider":
-      return declEntryOf(revision, target.id)?.nameSpan;
+      return revision.declEntry(target.id)?.nameSpan;
     case "cap": {
       const service = serviceOfCapability(target.id);
       const method = methodOfCapability(target.id);
       if (service === undefined || method === undefined) return undefined;
-      return declEntryOf(revision, service)?.methods.get(method)?.nameSpan;
+      return revision.declEntry(service)?.methods.get(method)?.nameSpan;
     }
     case "local":
-      return revision.checked.analysis.resolutions.get(module.module)?.locals
+      return revision.resolution(module.module)?.locals
         .get(target.id);
     case "builtin":
     case "builtin-type":
@@ -287,9 +267,9 @@ export function definitionAt(
   path: string,
   offset: number,
 ): Span | undefined {
-  const module = moduleAt(revision, path);
+  const module = revision.checkedModuleAt(path);
   if (module === undefined) return undefined;
-  const resolution = revision.checked.analysis.resolutions.get(module.module);
+  const resolution = revision.resolution(module.module);
   if (resolution === undefined) return undefined;
   const { tree } = module;
   for (const afterEnd of PASSES) {
@@ -356,9 +336,8 @@ function indexOfFile(
   text: string,
 ): FileIndex {
   if (revision !== undefined) {
-    for (const info of revision.project.modules.values()) {
-      if (info.path === path && info.tree.text === text) return info.index;
-    }
+    const info = revision.moduleInfoAt(path);
+    if (info !== undefined && info.tree.text === text) return info.index;
   }
   return parseFileFresh(path, text).index;
 }

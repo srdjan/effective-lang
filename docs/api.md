@@ -270,6 +270,8 @@ The program reads its files only from these calls, so it needs no `SourceHost`. 
 
 A `Revision` answers one query for each module name: `checkedModule`, `lowered`, `emitted`, `spanTable`, and `sourceMap`. It also holds `diagnostics`, `interfaceHash`, and `rechecked`. The `rechecked` list names the modules that this revision checked again, in topological order. It includes the host interface modules.
 
+A `Revision` also answers read-only queries for the editor and the adapters, so a caller needs no access to the project or the checker state. The getters `root`, `config`, `types`, and `analysisDiagnostics` give the project root, the project configuration, the read-only type table (`TypeReader`), and the diagnostics of the analysis. `moduleInfos()` lists the module infos in discovery order, and `moduleNames()` lists the names in topological order. `moduleInfo(name)`, `moduleInfoAt(path)`, `checkedModuleAt(path)`, `resolution(name)`, `imports(name)`, and `declEntry(id)` look up one item. `validate(lowered)` runs `validateProject` with the project of the revision.
+
 The IR, the emitted text, the span table, and the source map are computed on first use. A module that is not checked again and not lowered again returns the same objects as in the revision before.
 
 The program has three memos. The parse memo keeps the syntax tree of a file whose text is equal. The check memo keeps a checked module when its key is equal. The lowering memo keeps the IR and the emitted values when the lowering key is equal.

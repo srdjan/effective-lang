@@ -58,7 +58,6 @@ export function writableModules(
         (validation.get(name) ?? []).length === 0;
     }),
   );
-  const { graph, modules } = revision.project;
   const writable = (name: string): boolean => {
     const lowered = revision.lowered(name);
     return lowered !== undefined && lowered.ok && passed.has(name);
@@ -68,10 +67,9 @@ export function writableModules(
   for (let changed = true; changed;) {
     changed = false;
     for (const name of [...passed]) {
-      const imports = graph.get(name) ?? [];
       if (
-        imports.some((target) =>
-          modules.get(target)?.mode === "eff" && !writable(target)
+        revision.imports(name).some((target) =>
+          revision.moduleInfo(target)?.mode === "eff" && !writable(target)
         )
       ) {
         passed.delete(name);

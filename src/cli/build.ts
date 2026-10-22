@@ -1,14 +1,13 @@
 // One build of a revision: print the diagnostics, and for `build` and `watch`
 // also validate the IR, write the generated files, and run `deno check`.
 
-import {
-  type Diagnostic,
-  type LowerError,
-  type ModuleIR,
-  type Result,
-  type Revision,
-  type SpanTable,
-  validateProject,
+import type {
+  Diagnostic,
+  LowerError,
+  ModuleIR,
+  Result,
+  Revision,
+  SpanTable,
 } from "../core/mod.ts";
 import { formatDiagnostics, type TextOf } from "./format.ts";
 import type { CliIo } from "../host/io.ts";
@@ -66,7 +65,7 @@ export async function buildRevision(
       const result = revision.lowered(name);
       if (result !== undefined) lowered.set(name, result);
     }
-    for (const [name, found] of validateProject(revision.project, lowered)) {
+    for (const [name, found] of revision.validate(lowered)) {
       validation.set(name, found);
       diagnostics.push(...found);
     }
@@ -100,7 +99,7 @@ export async function buildRevision(
       const outcome = await runTsc(
         io,
         root,
-        revision.project.config,
+        revision.config,
         generated,
         tables,
         textOf,

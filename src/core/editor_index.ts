@@ -1,12 +1,7 @@
 // Resolver identities and declaration anchors shared by editor queries. The
 // cache belongs to a Revision; retaining a Program does not retain old indices.
 import type { Revision } from "./db.ts";
-import {
-  methodOfCapability,
-  moduleOfId,
-  nameOfId,
-  serviceOfCapability,
-} from "./ids.ts";
+import { methodOfCapability, serviceOfCapability } from "./ids.ts";
 import { type Target, targetText } from "./resolve.ts";
 import type { Span } from "./source.ts";
 import {
@@ -53,16 +48,12 @@ export function declarationOf(
   target: Target,
 ): Span | undefined {
   if (target.kind === "local") {
-    return revision.checked.analysis.resolutions.get(module)?.locals.get(
-      target.id,
-    );
+    return revision.resolution(module)?.locals.get(target.id);
   }
   if (!("id" in target)) return undefined;
   const id = target.kind === "cap" ? serviceOfCapability(target.id) : target.id;
   if (id === undefined) return undefined;
-  const owner = moduleOfId(id), name = nameOfId(id);
-  if (owner === undefined || name === undefined) return undefined;
-  const entry = revision.project.modules.get(owner)?.index.byName.get(name);
+  const entry = revision.declEntry(id);
   return target.kind === "cap"
     ? entry?.methods.get(methodOfCapability(target.id) ?? "")?.nameSpan
     : entry?.nameSpan;
@@ -102,8 +93,9 @@ export function symbolIndex(revision: Revision): SymbolIndex {
   const byIdentity = new Map<string, SymbolOccurrence[]>();
   const byPath = new Map<string, SymbolOccurrence[]>();
   const locals = new Map<string, LocalScope[]>();
-  for (const [module, info] of revision.project.modules) {
-    const resolution = revision.checked.analysis.resolutions.get(module);
+  for (const info of revision.moduleInfos()) {
+    const module = info.name;
+    const resolution = revision.resolution(module);
     if (resolution === undefined) continue;
     const tree = info.tree;
     const file: SymbolOccurrence[] = [];
