@@ -25,6 +25,14 @@ import {
 } from "./typing.ts";
 import { invocationOf, isQuiet, sameSet } from "./sets.ts";
 import { typeChildren } from "./type_children.ts";
+import {
+  type BuiltinInfo,
+  builtinInfo,
+  type BuiltinName,
+  containerEntries,
+  isConcurrencyType,
+  rebuildContainer,
+} from "./builtins.ts";
 
 const PRELUDE_MODULE = "effective:prelude";
 
@@ -39,6 +47,8 @@ interface World {
   readonly values: ReadonlyMap<string, Type>;
   /** The builtin ids of the prelude import. */
   readonly builtins: ReadonlyMap<string, string>;
+  /** Cached identity and call classifications; raw names retain malformed-IR behavior. */
+  readonly builtinInfo: ReadonlyMap<string, BuiltinInfo>;
 }
 
 function addFirst<V>(map: Map<string, V>, key: string, value: V): void {
@@ -52,6 +62,7 @@ export function buildWorld(ir: ModuleIR): World {
   const services = new Map<string, ServiceDecl>();
   const values = new Map<string, Type>();
   const builtins = new Map<string, string>();
+  const builtinMetadata = new Map<string, BuiltinInfo>();
   for (const d of ir.declarations) {
     switch (d.kind) {
       case "type":
@@ -77,7 +88,10 @@ export function buildWorld(ir: ModuleIR): World {
     for (const s of imp.services) addFirst(services, s.id, s);
     for (const v of imp.values) {
       addFirst(values, v.id, v.type);
-      if (imp.module === PRELUDE_MODULE) addFirst(builtins, v.id, v.name);
+      if (imp.module === PRELUDE_MODULE && !builtins.has(v.id)) {
+        builtins.set(v.id, v.name);
+        builtinMetadata.set(v.id, builtinInfo(v.id, v.name));
+      }
     }
   }
   errors.set("error:effect/SchemaError", {
@@ -119,6 +133,7 @@ export function buildWorld(ir: ModuleIR): World {
     methods,
     values,
     builtins,
+    builtinInfo: builtinMetadata,
   };
 }
 
@@ -697,12 +712,9 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
 
 // ------------------------------------------------------------------ imports
 
-const BUILTIN_ID =
-  /^value:(.+)#\$builtin\/(map|filter|fold|all|traverse)\/[0-9a-f]+$/;
-
 function checkBuiltinShape(
   ctx: Ctx,
-  name: string,
+  name: BuiltinName,
   type: Type,
   path: string,
   span: Span,
@@ -740,25 +752,13 @@ function checkBuiltinShape(
       return;
     }
     if (count === 2) {
-      const options = unfold(env, type.parameters[1]);
-      const field = options.kind === "record" && options.fields.length === 1
-        ? options.fields[0]
-        : undefined;
-      if (
-        field?.name !== "concurrency" || field.optional ||
-        (!same(env, field.type, { kind: "primitive", name: "int" }) &&
-          !same(env, field.type, { kind: "primitive", name: "string" }))
-      ) wrong("requires a concurrency options record");
+      if (!isConcurrencyType(env, type.parameters[1])) {
+        wrong("requires a concurrency options record");
+      }
     }
     const input = unfold(env, type.parameters[0]);
-    const entries = input.kind === "tuple"
-      ? input.elements
-      : input.kind === "record"
-      ? input.fields.map((field) => field.type)
-      : input.kind === "array"
-      ? [input.element]
-      : undefined;
-    if (entries === undefined) {
+    const container = containerEntries(input);
+    if (container === undefined) {
       wrong("takes a tuple, record, or array of Effects");
       return;
     }
@@ -767,25 +767,14 @@ function checkBuiltinShape(
     ) {
       wrong("requires every record field to be present");
     }
-    const effects = entries.map((entry) => unfold(env, entry));
+    const effects = container.entries.map((entry) => unfold(env, entry));
     if (effects.some((entry) => entry.kind !== "effect")) {
       wrong("requires an Effect at every position");
       return;
     }
     const effectEntries = effects.filter((entry) => entry.kind === "effect");
     const results = effectEntries.map((entry) => entry.result);
-    const result: Type = input.kind === "tuple"
-      ? { kind: "tuple", elements: results }
-      : input.kind === "record"
-      ? {
-        kind: "record",
-        fields: input.fields.map((field, i) => ({
-          name: field.name,
-          type: results[i],
-          optional: false,
-        })),
-      }
-      : { kind: "array", element: results[0] };
+    const result = rebuildContainer(container, results);
     if (!same(env, type.result, result)) wrong("must preserve input shape");
     if (
       type.execution !== "effect" ||
@@ -810,15 +799,7 @@ function checkBuiltinShape(
     return;
   }
   if (name === "traverse" && count === 3) {
-    const options = unfold(env, type.parameters[2]);
-    const field = options.kind === "record" && options.fields.length === 1
-      ? options.fields[0]
-      : undefined;
-    if (
-      field?.name !== "concurrency" || field.optional ||
-      (!same(env, field.type, { kind: "primitive", name: "int" }) &&
-        !same(env, field.type, { kind: "primitive", name: "string" }))
-    ) {
+    if (!isConcurrencyType(env, type.parameters[2])) {
       wrong("requires a concurrency options record as its third parameter");
     }
   }
@@ -865,18 +846,26 @@ function checkBuiltinShape(
     return;
   }
   const result = unfold(env, type.result);
-  if (name === "map" || name === "traverse") {
-    if (
-      result.kind !== "array" || !same(env, result.element, callback.result)
-    ) {
-      wrong("returns an array of the callback result");
-    }
-  } else {
-    if (
-      !same(env, callback.result, { kind: "primitive", name: "boolean" }) ||
-      isNever(callback.result) || !same(env, type.result, first)
-    ) {
-      wrong("returns the array type with a boolean predicate");
+  switch (name) {
+    case "map":
+    case "traverse":
+      if (
+        result.kind !== "array" || !same(env, result.element, callback.result)
+      ) {
+        wrong("returns an array of the callback result");
+      }
+      return;
+    case "filter":
+      if (
+        !same(env, callback.result, { kind: "primitive", name: "boolean" }) ||
+        isNever(callback.result) || !same(env, type.result, first)
+      ) {
+        wrong("returns the array type with a boolean predicate");
+      }
+      return;
+    default: {
+      const unreachable: never = name;
+      return unreachable;
     }
   }
 }
@@ -888,7 +877,7 @@ function checkImport(
   ir: ModuleIR,
   own: ReadonlySet<string>,
 ): void {
-  const { report } = ctx;
+  const { world, report } = ctx;
   const path = `imports[${i}]`;
   const span: Span = { source: ir.sources[0] ?? ir.module, start: 0, end: 0 };
   const ids = new Set<string>();
@@ -966,8 +955,8 @@ function checkImport(
   }
   imp.values.forEach((v, j) => {
     const at = `${path}.values[${j}]`;
-    const match = BUILTIN_ID.exec(v.id);
-    if (match === null || match[1] !== ir.module) {
+    const identity = world.builtinInfo.get(v.id)?.identity;
+    if (identity === undefined || identity.module !== ir.module) {
       report.add(
         AREA.identity,
         `${at}.id`,
@@ -984,7 +973,7 @@ function checkImport(
         span,
       );
     }
-    checkBuiltinShape(ctx, match[2], v.type, `${at}.type`, span);
+    checkBuiltinShape(ctx, identity.name, v.type, `${at}.type`, span);
   });
 }
 

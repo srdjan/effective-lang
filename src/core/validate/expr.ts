@@ -10,6 +10,14 @@
 //
 // The equations come from the spec, "Equations and validation".
 
+import {
+  type BuiltinCallName,
+  classifyBuiltinCall,
+  containerEntries,
+  isConcurrencyOption,
+  rebuildContainer,
+} from "./builtins.ts";
+
 import type {
   CapabilityId,
   ConstantDecl,
@@ -1517,7 +1525,7 @@ export class BodyValidator {
     parameters: readonly Type[],
     path: string,
     span: Span,
-    builtin: string | undefined,
+    builtin: BuiltinCallName | undefined,
   ): void {
     if (outs.length !== parameters.length) {
       this.add(
@@ -1572,8 +1580,16 @@ export class BodyValidator {
       );
       return checkedResult(combine([callee, ...outs]));
     }
-    const builtin = e.callee.kind === "reference"
-      ? this.ctx.world.builtins.get(e.callee.target)?.split("/")[1]
+    const metadata = e.callee.kind === "reference"
+      ? this.ctx.world.builtinInfo.get(e.callee.target)
+      : undefined;
+    // Keep malformed names on the original guarded expression path.
+    const builtin = metadata?.call.parsed
+      ? metadata.call.name
+      : e.callee.kind === "reference"
+      ? classifyBuiltinCall(
+        this.ctx.world.builtins.get(e.callee.target)?.split("/")[1],
+      )
       : undefined;
     this.checkArguments(
       e.arguments,
@@ -1599,16 +1615,7 @@ export class BodyValidator {
       }
       if (outs.length === 3) {
         const options = e.arguments[2];
-        const field = options?.kind === "record" && options.fields.length === 1
-          ? options.fields[0]
-          : undefined;
-        const value = field?.value;
-        if (
-          field?.name !== "concurrency" || value?.kind !== "literal" ||
-          !(value.value === "unbounded" ||
-            (typeof value.value === "number" &&
-              Number.isSafeInteger(value.value) && value.value > 0))
-        ) {
+        if (!isConcurrencyOption(options)) {
           this.add(
             AREA.control,
             `${path}.arguments[2]`,
@@ -1620,16 +1627,7 @@ export class BodyValidator {
     }
     if (builtin === "all" && outs.length === 2) {
       const options = e.arguments[1];
-      const field = options?.kind === "record" && options.fields.length === 1
-        ? options.fields[0]
-        : undefined;
-      const value = field?.value;
-      if (
-        field?.name !== "concurrency" || value?.kind !== "literal" ||
-        !(value.value === "unbounded" ||
-          (typeof value.value === "number" &&
-            Number.isSafeInteger(value.value) && value.value > 0))
-      ) {
+      if (!isConcurrencyOption(options)) {
         this.add(
           AREA.control,
           `${path}.arguments[1]`,
@@ -3182,15 +3180,9 @@ export class BodyValidator {
   ): Comp {
     const jobs = this.check(e.jobs, `${path}.jobs`);
     const shape = unfold(this.env, jobs.type);
-    const members = shape.kind === "tuple"
-      ? shape.elements
-      : shape.kind === "record"
-      ? shape.fields.map((field) => field.type)
-      : shape.kind === "array"
-      ? [shape.element]
-      : undefined;
+    const container = containerEntries(shape);
     if (
-      members === undefined ||
+      container === undefined ||
       (shape.kind === "record" && shape.fields.some((field) => field.optional))
     ) {
       this.add(
@@ -3203,7 +3195,7 @@ export class BodyValidator {
     }
     const outcomes: Type[] = [];
     const requirements: CapabilityId[] = [];
-    for (const type of members) {
+    for (const type of container.entries) {
       const member = unfold(this.env, type);
       if (member.kind !== "effect") {
         this.add(
@@ -3245,18 +3237,7 @@ export class BodyValidator {
       requirements.push(...member.effects.requirements);
     }
     this.checkConcurrency(e, path, "allResults");
-    const result: Type = shape.kind === "tuple"
-      ? { kind: "tuple", elements: outcomes }
-      : shape.kind === "record"
-      ? {
-        kind: "record",
-        fields: shape.fields.map((field, i) => ({
-          name: field.name,
-          type: outcomes[i],
-          optional: false,
-        })),
-      }
-      : { kind: "array", element: outcomes[0] };
+    const result = rebuildContainer(container, outcomes);
     return derivedResult(
       result,
       combine([jobs, {
