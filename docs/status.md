@@ -86,6 +86,8 @@ release checks now pass; user manual editor and playground acceptance remains
 pending.
 The accepted [editor and release plan](plans/2026-10-21-editor-release.md) selects editor capabilities, local installation, HTTP/SQLite integration and automated release checks. It selects no new language forms. The [correctness plan](archive/plans/2026-10-21-correctness-fixes.md) records the prerequisite fixes.
 
+The [audit fix batch](archive/plans/2026-10-21-audit-fixes.md) and all its follow-ups are complete. The [save-transpilation plan](archive/plans/2026-10-21-save-transpilation.md) is also complete; the [save-round measurements](release-measurements.md#save-rounds) record its M7 and M4 results. Both plans are archived.
+
 ## Open items
 
 The hardening plan [section 9](plans/2026-10-20-hardening-pruning.md) tracks the work items. This list gives the items that still need a person.
@@ -94,7 +96,6 @@ The hardening plan [section 9](plans/2026-10-20-hardening-pruning.md) tracks the
 | --- | --- | --- |
 | Hand test of the VS Code client | The installed VSIX passed automated references, rename, completion, semantic tokens, contract quick fixes, generated output, save, error recovery and restart on 2026-10-21; [installation evidence](installation.md). User acceptance check 5 of the [language server plan](archive/plans/2026-10-16-lsp.md) remains pending. | User |
 | Playground acceptance | The user has not accepted the page (acceptance check 5 of the [playground plan](archive/plans/2026-10-16-playground.md)). An [automated browser review on 2026-10-21](playground-review-2026-10-21.md) passed at 375, 720 and 1280 pixels, including keyboard navigation, type/syntax error recovery and screenshot inspection. It does not replace the user’s manual acceptance. | User |
-| Audit fix batch | Items AU1 to AU8 of the [audit fix plan](plans/2026-10-21-audit-fixes.md) are on `main`. Its Progress section lists the open follow-ups. | Plan owner |
 | Open rederive items | R12 FE-2, CHK-11, CHK-12 (kept by the tag `keep/chk-12`), ARC-5, and VAL-8 of the [rederive review](plans/2026-10-20-rederive-review.md) are open. R13, R15a, R15b, C10 and A6 are complete. The refactor plan defers C7, F3, and F9b. No item has an owner. | User |
 | Measured numbers | Earlier evidence remains in `rejected.md` (the lexer split) and the audit fix plan (AU1). The [full release measurements](release-measurements.md) meet the unchanged 100 ms large-input p90 diagnostics budget and include three open documents with 10,000 distinct edits. Raw RSS, heap and type-table samples record growth; they establish no memory bound. | User |
 

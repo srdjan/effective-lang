@@ -66,7 +66,7 @@ The saved JSON was independently checked for sample counts, per-document edit co
 
 ## Save rounds
 
-The save plan (`docs/plans/2026-10-21-save-transpilation.md`, unit SV5) added M7 and a second M4 run with `writeOnSave` true. One full run measured the tree that was committed as `539dda6`:
+The [completed save plan](archive/plans/2026-10-21-save-transpilation.md), unit SV5, added M7 and a second M4 run with `writeOnSave` true. One full run measured the tree that was committed as `539dda6`:
 
 ```sh
 deno task bench --full m1 m4 m7

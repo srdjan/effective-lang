@@ -233,7 +233,10 @@ run, because the Fable rate limit was reached.
 ## 8. Evidence
 
 SV1 is `90ecd76`, SV2 is `e5f607b`, SV3 and SV4 are `7fcf1d9` (one commit,
-because they share one change in `src/lsp/projects.ts`), and SV5 is
-`539dda6`. On 2026-10-21 the user confirmed SV-D1 (a) again, after a review
-of the first-save behavior. The full M7 run of SV5 met the SV-D3 budget. The
-M7 and M4 numbers are not recorded here until the user decides what to record.
+because they share one change in `src/lsp/projects.ts`), SV5 is `539dda6`,
+and SV6 is `8237af6`. On 2026-10-21 the user confirmed SV-D1 (a) again,
+after a review of the first-save behavior, and chose to record the SV5 run
+in `5236308`. The [save-round measurements](../../release-measurements.md#save-rounds)
+hold the M7 and M4 results and link the complete text report. The large body
+save p90 was 24.927 ms, within the 100 ms budget of SV-D3. The M4 comparison
+records higher sampled RSS with the disk program and establishes no memory bound.

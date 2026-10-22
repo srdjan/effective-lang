@@ -1,6 +1,6 @@
 # Audit fix batch
 
-Date: 2026-10-21. Base: `69c4b60`. Status: accepted by the user on 2026-10-21 (decision 2 (a) of the completeness audit). The ID prefix is AU.
+Date: 2026-10-21. Base: `69c4b60`. Status: complete on 2026-10-22, including follow-ups through `1af80d7`. Accepted by the user on 2026-10-21 (decision 2 (a) of the completeness audit). The ID prefix is AU.
 
 The completeness audit of 2026-10-21 ran four read-only lanes and one adversarial Fable pass. This plan fixes the seven confirmed defects that the user selected. "M" marks a fact measured or read in source. "I" marks an inference. The audit evidence and the probes are in the session scratchpad. Each item below repeats the probe that it needs, so the plan does not depend on that scratchpad.
 

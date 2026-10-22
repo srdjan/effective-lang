@@ -137,7 +137,7 @@ the TypeScript server. The generated TypeScript stays visible per change through
 an in-memory virtual document. The disk copy updates on save.
 
 Correction, 2026-10-21: a save first wrote only the saved module, from the
-open-document texts. The save plan (`docs/plans/2026-10-21-save-transpilation.md`)
+open-document texts. The [completed save plan](archive/plans/2026-10-21-save-transpilation.md)
 made each save write every changed output from the disk texts, with the
 `build` write rule.
 

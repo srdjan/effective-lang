@@ -96,5 +96,5 @@ The rederive review, section 9 (`docs/plans/2026-10-20-rederive-review.md:426`),
 
 - `docs/solutions/logic-errors/checker-expected-type-is-enforced-not-a-hint.md` also covers a checker choice that depends on how the expected type is used.
 - `docs/solutions/logic-errors/checker-result-type-from-expected-hint.md` touches `TypeTable.union` for result types, not for member order.
-- The rule row "Contextual record unions" in `docs/language-rules.md` states the selection order. The audit fix plan `docs/plans/2026-10-21-audit-fixes.md` (items AU1, AU2, AU4) holds the probes and measurements.
+- The rule row "Contextual record unions" in `docs/language-rules.md` states the selection order. The [completed audit fix plan](../../archive/plans/2026-10-21-audit-fixes.md) (items AU1, AU2, AU4) holds the probes and measurements.
 - Commits d3a1633, 8a0abf2, and ac9db59 are on main.
