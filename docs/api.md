@@ -20,9 +20,13 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
   resolve.ts     Names to identities, scopes, prelude, side table of targets.
   types.ts       Interned types, compatibility, IR conversion, canonical JSON.
   check.ts       Declaration checker: type lowering, signatures, providers.
-  check_expr.ts  Body checker: expressions, calls, patterns, contracts.
+  check_expr.ts  Body checker: expressions, calls, contracts, and the prelude dispatch.
+  check_patterns.ts Match patterns, bindings, and coverage through PatternContext.
+  check_binary.ts Pure operand rules and result types of the binary operators.
   check_builtins/ Source-checker builtin families; shared dispatch and body-table writes stay in check_expr.ts.
-    context.ts     Shared argument, function, literal-field and local-use shapes, invocation effects and ten checker operations.
+    context.ts     Shared argument, function, literal-field and local-use shapes, invocation effects, the shared views, and the checker operations.
+    rows.ts        The row shape of a builtin: its prologue and its handler, and the prologue helpers.
+    registry.ts    FAMILY_ROWS: the rows of all families, composed once.
     codec.ts       Codec construction, decode and encode, including pure transformations and derived-schema checks.
     collections.ts Collection callbacks, traversal, grouped effects and result accumulation through a family-specific context.
     effect.ts      Effect construction, execution, failures and retry options through EffectContext.
@@ -58,6 +62,8 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
     index.ts       validateModule: the public entry.
     world.ts       Identities in scope, imports, declaration headers, recursive types.
     expr.ts        Bottom-up recomputation of types, sets, and modes of each body.
+    expr_walk.ts   The child expressions of a node, and a walk over them.
+    families/      The builtin families of the validator, behind the validator-owned ValidatorCore in context.ts.
     typing.ts      Type compatibility, including the lift rule.
     type_children.ts The child types of a type with their IR path suffixes: one descent for the type walkers.
     sets.ts        Sorted effect sets and the combine rule.
@@ -94,6 +100,7 @@ src/host/      The host adapters that the command-line tool and the language ser
   workspace.ts   Source/configuration walks and separate local target-check inputs.
   events.ts      Debouncing of file system events.
   outputs.ts     writeGenerated: the write of the .ts and .ts.map files, shared by build and the language server.
+  save_round.ts  runSaveRound: the removal of stale outputs and the write, with the removal rule of each caller.
 src/lsp/       The language server. See "Language server".
   main.ts        The stdio entry: reads frames, writes frames, and ends the process.
   server.ts      LanguageServer: lifecycle, dispatch, and the flush schedule.

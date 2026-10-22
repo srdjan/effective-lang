@@ -656,3 +656,43 @@ A Fable agent checked this section against HEAD `1665897`. It rated CK4 sound, a
 - IC6a: a forged child gives a path that ends in `.times.type`, not `.times`.
 - CK5: one more read at line 3019.
 - ED3a: the stats test was dropped. `effective/stats` reads the overlay program, and the save round runs on `diskProgram`, so the test could not detect an ED3b regression.
+
+### Phase 4 results (2026-10-22)
+
+The seven units are on local `main`. IC6a is `76de0c2`, CK5 is `9bbc593`, CK4 is `7aa64ba`, CK1b is `e0def39`, and CK3 is `770dae4`. IC3 is `5175776`, `7e44c33`, `fed12e2`, `14ad733`, and `a14e100`. ED3a is `a88ad9c`, and ED3b is `6ea0021`. The coordinator added `88d5bdd` after review.
+
+The implementers ran `deno task check` before each commit, and the last gate passed 1861 fast and 177 slow tests. The coordinator reviewed each diff line by line.
+
+The coordinator also changed the capture tool. `1665897` gives each capture its own DENO_DIR, and `088d50f` prints the new records of a capture.
+
+Review finding, fixed in `88d5bdd`. ED3b printed the removed paths and the notes of each module together. The old watch loop printed every removed path first, then every note. So with two modules that leave in one round, and a failed removal in the first, the stderr order changed. No test had two modules. The new test in `tests/watch_stale_test.ts` passes on `a88ad9c`, fails on `6ea0021`, and passes on `88d5bdd`.
+
+Accepted difference in ED3b. The LSP save round now sends its `removed` logs after the round also wrote the new files, not before. The log texts and their order do not change, and no test or protocol message depends on that timing.
+
+Deviations, accepted after review:
+
+- CK1b exports `CoreRowName`, `CORE_ROW_NAMES`, and `FAMILY_ROW_TABLES` from `registry.ts`, so `tests/builtin_rows_test.ts` checks the key sets from outside the class.
+- CK3 names the moved `missing` as `missingOf`, because a local `missing` in `checkCoverage` shadows it.
+- IC3 rewrote the independence test in `tests/validate_test.ts`, because it read only the flat `validate/` directory. The test now walks `families/` and resolves each import against its file. The implementer confirmed that the test still rejects a planted `import "../../check_expr.ts"`. Five helpers that read no validator state take no `c`, because the lint rejects an unused parameter.
+
+Parity evidence. Each moved-code comparison was run again by the coordinator:
+
+- CK1b matched 95 handlers and 95 prologues.
+- CK3 matched 16 moved members. The implementer confirmed that one changed diagnostic code fails the script.
+- IC3 matched 119 items, and every one of the 87 members that left `BodyValidator` is in the comparison.
+
+Captures, each with one test set on both sides and the write overlay:
+
+- `b888a6a` against `7aa64ba` (IC6a, CK5, CK4): 9123 against 9124 records, with 1 new `program` record and 0 missing. A self-capture of one revision gave the same counts, so the record is run variance. The capture tool did not yet print new records, so the result of that record was not seen.
+- `088d50f` against `e0def39` (CK1b): 9127 records on each side, with 0 new and 0 missing.
+- `e0def39` against `770dae4` (CK3): 9127 records on each side, with 0 new and 0 missing.
+- `770dae4` against `a14e100` (IC3): 9127 records on each side, with 0 new and 0 missing. Both sides used the `a14e100` tests, because the old independence test rejects the `families/` directory.
+- `a88ad9c` against `6ea0021` (ED3b): 9180 records on each side, with 0 new and 0 missing. The capture records no subprocess output, so the ED3a tests and the order test of `88d5bdd` are the oracle for ED3.
+
+Size (M, `scripts/measure.ts` over the `.ts` files of `src/core`, `b888a6a` against `88d5bdd`): 71 to 87 files. Filtered lines go from 34,521 to 35,184, and AST branches from 7,970 to 7,969. `check_expr.ts` falls from 3039 to 2092 raw lines, and `validate/expr.ts` falls from 4901 to 1638. The new files hold the moved code, their imports, and their context interfaces, so the total grows.
+
+Edit sites after Phase 4. A new builtin in an existing family edits the `PRELUDE` row, the rows of the family, and the family code, and `check_expr.ts` does not change. A change of the removal or ownership rule of a save round edits `src/host/save_round.ts` only.
+
+Open item for the user, found in Phase 4 (N1). `effective build` writes the outputs of a module that a nested `effective.json` owns, and the language server does not. ED3 keeps this difference as the `owns` parameter, and `tests/cli_test.ts` pins it.
+
+Remaining: the deferred items IC2, IC4, the IC6 path helper, ED5, and the ED3 file splits. ED2 step 3 stays optional and needs the bench M4 measurement first.
