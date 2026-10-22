@@ -1,5 +1,6 @@
 // Contract edits come from checked body effect sets, never diagnostic prose.
 import { Program, type Revision } from "./db.ts";
+import { diagnosticDelta } from "./diagnostic_delta.ts";
 import type { SourceEdit } from "./editor_rename.ts";
 import { applySourceEdits } from "./editor_rename.ts";
 import { EFFECT_ERROR_IDS } from "./resolve.ts";
@@ -141,7 +142,12 @@ export function contractActionsAt(
     ) {
       continue;
     }
-    if (checked.value.diagnostics.length >= revision.diagnostics.length) {
+    const delta = diagnosticDelta(
+      revision.diagnostics,
+      checked.value.diagnostics,
+      merged,
+    );
+    if (delta.added.length > 0 || delta.removed.length === 0) {
       continue;
     }
     output.push({

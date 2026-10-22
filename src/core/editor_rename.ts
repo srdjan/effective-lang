@@ -6,6 +6,7 @@ import {
 // Rename proves that declaration anchors remain the same after re-resolution,
 // including uses of symbols that the requested rename does not edit.
 import { Program, type Revision } from "./db.ts";
+import { diagnosticDelta } from "./diagnostic_delta.ts";
 import { lex, TokenKind } from "./lex.ts";
 import type { Result, Span } from "./source.ts";
 import {
@@ -137,9 +138,12 @@ export function renameAt(
     };
   }
   const next = changed.value;
-  const analysisBefore = revision.analysisDiagnostics;
-  const analysisAfter = next.analysisDiagnostics;
-  if (analysisAfter.length > analysisBefore.length) {
+  const delta = diagnosticDelta(
+    revision.analysisDiagnostics,
+    next.analysisDiagnostics,
+    edits,
+  );
+  if (delta.added.length > 0) {
     return {
       ok: false,
       error: "The new name is reserved or conflicts with an existing binding.",

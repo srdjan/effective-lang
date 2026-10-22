@@ -44,6 +44,7 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
   editor.ts      hoverAt, definitionAt, and documentSymbols over a revision.
   editor_index.ts Revision-scoped resolver identities, occurrences and lexical scopes.
   editor_rename.ts References, prepare-rename and re-resolved rename edits.
+  diagnostic_delta.ts Diagnostics that an edit adds and removes, by code, source, and moved span.
   editor_completion.ts Visible names, record fields and service-method completion.
   editor_tokens.ts Semantic classifications with lexical recovery.
   editor_actions.ts Validated missing fails/uses actions from checked body effects.

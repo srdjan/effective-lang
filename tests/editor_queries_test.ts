@@ -8,6 +8,7 @@ import {
 } from "../src/core/editor_rename.ts";
 import { assert, assertEquals } from "@std/assert";
 import { Program } from "../src/core/db.ts";
+import { diagnosticDelta } from "../src/core/diagnostic_delta.ts";
 import {
   occurrenceAt,
   referencesAt,
@@ -232,6 +233,106 @@ Deno.test("rename counts configuration diagnostics on both sides of the speculat
   // `Number` adds one diagnostic, and the config diagnostic counts on both sides.
   const result = renameAt(loaded.value, "m.eff", text.indexOf("x:"), "Number");
   assertEquals(result.ok, false);
+});
+
+const deltaText =
+  "type Int = int\nconst f = (a: Int): Int => a + a\nconst g = (): Int => missing\n";
+
+Deno.test("diagnosticDelta moves a diagnostic after an edit before it", () => {
+  const loaded = new Program("").update({
+    set: { "effective.json": "{}", "m.eff": deltaText },
+  });
+  assert(loaded.ok);
+  const before = loaded.value.analysisDiagnostics;
+  assertEquals(before.map((d) => [d.code, d.span.start, d.span.end]), [
+    ["unknown-name/001", 69, 76],
+  ]);
+  const renamed = renameAt(
+    loaded.value,
+    "m.eff",
+    deltaText.indexOf("a:"),
+    "top",
+  );
+  assert(renamed.ok);
+  const next = new Program("").update({
+    set: {
+      "effective.json": "{}",
+      "m.eff": applySourceEdits(deltaText, renamed.value),
+    },
+  });
+  assert(next.ok);
+  const after = next.value.analysisDiagnostics;
+  assertEquals(after.map((d) => [d.code, d.span.start, d.span.end]), [
+    ["unknown-name/001", 75, 82],
+  ]);
+  const delta = diagnosticDelta(before, after, renamed.value);
+  assertEquals([delta.added, delta.removed], [[], []]);
+  // Without the edits, the moved diagnostic is a new one and the old one is gone.
+  const unmoved = diagnosticDelta(before, after, []);
+  assertEquals([unmoved.added, unmoved.removed], [after, before]);
+});
+
+Deno.test("diagnosticDelta moves only the end of a span that contains an edit", () => {
+  const loaded = new Program("").update({
+    set: { "effective.json": "{}", "m.eff": deltaText },
+  });
+  assert(loaded.ok);
+  const [diagnostic] = loaded.value.analysisDiagnostics;
+  const edits = [{
+    span: { source: "m.eff", start: 71, end: 73 },
+    text: "",
+  }];
+  const shrunk = { ...diagnostic, span: { ...diagnostic.span, end: 74 } };
+  const same = diagnosticDelta([diagnostic], [shrunk], edits);
+  assertEquals([same.added, same.removed], [[], []]);
+  const startMoved = {
+    ...diagnostic,
+    span: { ...diagnostic.span, start: 67, end: 74 },
+  };
+  const moved = diagnosticDelta([diagnostic], [startMoved], edits);
+  assertEquals([moved.added, moved.removed], [[startMoved], [diagnostic]]);
+  // An empty edit at the start moves the start, and an empty edit at the end keeps the end.
+  const insert = (at: number) => [{
+    span: { source: "m.eff", start: at, end: at },
+    text: "xy",
+  }];
+  const atStart = {
+    ...diagnostic,
+    span: { ...diagnostic.span, start: 71, end: 78 },
+  };
+  const atEnd = { ...diagnostic, span: { ...diagnostic.span, end: 76 } };
+  assertEquals(diagnosticDelta([diagnostic], [atStart], insert(69)).added, []);
+  assertEquals(diagnosticDelta([diagnostic], [atEnd], insert(76)).added, []);
+});
+
+Deno.test("diagnosticDelta counts a duplicate diagnostic twice", () => {
+  const loaded = new Program("").update({
+    set: { "effective.json": "{}", "m.eff": deltaText },
+  });
+  assert(loaded.ok);
+  const [diagnostic] = loaded.value.analysisDiagnostics;
+  const other = { ...diagnostic, message: "another message" };
+  const grown = diagnosticDelta([diagnostic], [diagnostic, other], []);
+  assertEquals([grown.added, grown.removed], [[other], []]);
+  const shrunk = diagnosticDelta([diagnostic, diagnostic], [other], []);
+  assertEquals([shrunk.added, shrunk.removed], [[], [diagnostic]]);
+});
+
+Deno.test("rename rejects a new analysis diagnostic when the diagnostic count stays equal", () => {
+  // The rename resolves the unknown `w` and makes `w` a duplicate binding.
+  const text =
+    "type Int = int\nconst f = (x: Int): Int => { const t = w; const w = 2; t + w + x }\n";
+  const loaded = new Program("").update({
+    set: { "effective.json": "{}", "m.eff": text },
+  });
+  assert(loaded.ok);
+  assertEquals(loaded.value.analysisDiagnostics.map((d) => d.code), [
+    "unknown-name/001",
+  ]);
+  assertEquals(renameAt(loaded.value, "m.eff", text.indexOf("x:"), "w"), {
+    ok: false,
+    error: "The new name is reserved or conflicts with an existing binding.",
+  });
 });
 
 Deno.test("semantic classifications retain UTF-16 spans and lexical fallback on broken or stale text", () => {
