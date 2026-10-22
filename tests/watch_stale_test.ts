@@ -120,3 +120,20 @@ Deno.test("watch forgets a module whose output removal failed", async () => {
   ]);
   assert(!err.includes("removed: old"), err);
 });
+
+Deno.test("watch prints every removed path before the removal notes of a round", async () => {
+  const m = project();
+  m.script = [() => {
+    m.files.delete(`${ROOT}/old.eff`);
+    m.files.delete(`${ROOT}/pay.eff`);
+    m.unwritable.add(`${ROOT}/old.ts.map`);
+  }];
+  assertEquals(await main(["watch", ROOT], m.io), 0);
+  const lines = m.err.join("").split("\n")
+    .filter((line) => line.startsWith("removed:") || line.includes("remove "));
+  assertEquals(lines.map((line) => line.replace(/: permission.*$/, "")), [
+    "removed: pay.ts.map",
+    "removed: pay.ts",
+    "error: cannot remove old.ts.map",
+  ]);
+});

@@ -72,9 +72,13 @@ async function watchLoop(
           options,
           previous,
         );
-        for (const { removed, notes } of outcome.removals) {
-          for (const path of removed) io.stderr(`removed: ${path}\n`);
-          for (const note of notes) io.stderr(`${note}\n`);
+        // The CLI prints all removed paths of a round first, then all notes.
+        const removals = outcome.removals;
+        for (const path of removals.flatMap((r) => r.removed)) {
+          io.stderr(`removed: ${path}\n`);
+        }
+        for (const note of removals.flatMap((r) => r.notes)) {
+          io.stderr(`${note}\n`);
         }
         previous = outcome.modules;
         io.stderr(`rechecked: ${rechecked(synced.revision.rechecked)}\n`);
