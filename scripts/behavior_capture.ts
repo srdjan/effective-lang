@@ -226,10 +226,12 @@ async function run(
   command: string,
   args: readonly string[],
   cwd: string,
+  env: Record<string, string> = {},
 ): Promise<boolean> {
   const result = await new Deno.Command(command, {
     args: [...args],
     cwd,
+    env,
     stdout: "piped",
     stderr: "piped",
   }).output();
@@ -247,6 +249,9 @@ async function captureRevision(
   revision: string,
 ): Promise<Result<readonly string[], string>> {
   const tree = Deno.makeTempDirSync({ prefix: "effective-capture-" });
+  // Deno keeps compile cache entries for each tree path, so each capture uses
+  // its own DENO_DIR and removes it after, as `scripts/test_slow.ts` does.
+  const denoDir = Deno.makeTempDirSync({ prefix: "effective-capture-deno-" });
   try {
     const archive = `${tree}.tar`;
     if (
@@ -270,7 +275,7 @@ async function captureRevision(
     }
     const deno = Deno.execPath();
     for (const args of CAPTURE_TESTS) {
-      if (!await run(deno, args, tree)) {
+      if (!await run(deno, args, tree, { DENO_DIR: denoDir })) {
         return {
           ok: false,
           error: `tests failed at ${revision}: deno ${args.join(" ")}`,
@@ -284,6 +289,7 @@ async function captureRevision(
     };
   } finally {
     Deno.removeSync(tree, { recursive: true });
+    Deno.removeSync(denoDir, { recursive: true });
   }
 }
 
