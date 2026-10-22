@@ -8,12 +8,7 @@
 // wrapper is the only exception boundary.
 
 import type { CliFs } from "../host/io.ts";
-import { generationSource } from "../host/generation.ts";
-import {
-  removeStaleOutputs,
-  writableModules,
-  writeGenerated,
-} from "../host/outputs.ts";
+import { runSaveRound } from "../host/save_round.ts";
 import { isSourcePath, readWorkspace } from "../host/workspace.ts";
 import {
   compareText,
@@ -464,32 +459,28 @@ export class ProjectSet {
     const owns = (name: string): boolean => this.#owns(project, name);
 
     const names = revision.effModuleNames();
-    const present = new Set(names);
-    const kept: string[] = [];
-    for (const name of project.diskModules) {
-      if (present.has(name) || !owns(name)) continue;
-      const removal = removeStaleOutputs(fs, project.root, [name]);
-      for (const path of removal.removed) log(4, `removed ${path}`);
-      for (const note of removal.notes) log(1, note);
-      if (removal.notes.length > 0) kept.push(name);
+    const round = runSaveRound({
+      fs,
+      root: project.root,
+      revision,
+      previous: project.diskModules,
+      removal: "retry",
+      owns,
+      write: true,
+    });
+    for (const { removed, notes } of round.removals) {
+      for (const path of removed) log(4, `removed ${path}`);
+      for (const note of notes) log(1, note);
     }
-    project.diskModules = [...names, ...kept];
+    project.diskModules = round.modules;
 
-    const writable = writableModules(revision);
     // `writableModules` also keeps a module whose own lowering failed, and
     // `writeGenerated` skips it. A module is written only when it lowered.
     const writableSet = new Set(
-      writable.filter((name) => revision.lowered(name)?.ok === true),
+      round.writable.filter((name) => revision.lowered(name)?.ok === true),
     );
-    const outputs = writeGenerated(
-      fs,
-      project.root,
-      generationSource(revision),
-      writable.filter(owns),
-      true,
-    );
-    for (const path of outputs.written) log(4, `wrote ${path}`);
-    for (const note of outputs.notes) log(1, note);
+    for (const path of round.outputs.written) log(4, `wrote ${path}`);
+    for (const note of round.outputs.notes) log(1, note);
 
     const held = new Set<string>();
     for (const name of names) {

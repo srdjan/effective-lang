@@ -15,7 +15,6 @@ import { parseArgs, type ProjectCommand, USAGE } from "./args.ts";
 import type { BuildOptions, BuildOutcome } from "./build.ts";
 import { denoIo } from "../host/deno_io.ts";
 import type { CliIo } from "../host/io.ts";
-import { removeStaleOutputs } from "../host/outputs.ts";
 import { printOutcome, rechecked } from "./report.ts";
 import { Session, type SyncResult } from "./session.ts";
 
@@ -62,25 +61,22 @@ async function watchLoop(
         return;
       case "host-change": {
         if (!options.tsc) return;
-        const outcome = await session.build(synced.revision, options);
+        const outcome = await session.build(synced.revision, options, []);
         io.stderr("host inputs changed; rechecked: (none)\n");
         printOutcome(io, outcome, synced.revision.effModuleNames().length);
         return;
       }
       case "revision": {
-        const names = new Set(synced.revision.effModuleNames());
-        const stale = removeStaleOutputs(
-          io.fs,
-          session.root,
-          previous.filter((name) => !names.has(name)),
-        );
-        for (const path of stale.removed) io.stderr(`removed: ${path}\n`);
-        for (const note of stale.notes) io.stderr(`${note}\n`);
-        previous = [...names];
         const outcome: BuildOutcome = await session.build(
           synced.revision,
           options,
+          previous,
         );
+        for (const { removed, notes } of outcome.removals) {
+          for (const path of removed) io.stderr(`removed: ${path}\n`);
+          for (const note of notes) io.stderr(`${note}\n`);
+        }
+        previous = outcome.modules;
         io.stderr(`rechecked: ${rechecked(synced.revision.rechecked)}\n`);
         printOutcome(io, outcome, synced.revision.effModuleNames().length);
       }
@@ -161,7 +157,7 @@ async function execute(
     return EXIT_OK;
   }
   if (synced.tag === "unchanged") return EXIT_OK;
-  const outcome = await session.build(synced.revision, options);
+  const outcome = await session.build(synced.revision, options, []);
   printOutcome(io, outcome, synced.revision.effModuleNames().length);
   return outcome.failed ? EXIT_DIAGNOSTICS : EXIT_OK;
 }

@@ -80,8 +80,19 @@ export class Session {
     return { tag: "revision", revision: updated.value };
   }
 
-  /** Builds one revision. */
-  build(revision: Revision, options: BuildOptions): Promise<BuildOutcome> {
-    return buildRevision(this.io, this.root, revision, this.textOf, options);
+  /** Builds one revision. `previous` holds the modules of the last build. */
+  build(
+    revision: Revision,
+    options: BuildOptions,
+    previous: readonly string[],
+  ): Promise<BuildOutcome> {
+    return buildRevision(
+      this.io,
+      this.root,
+      revision,
+      this.textOf,
+      options,
+      previous,
+    );
   }
 }

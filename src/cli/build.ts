@@ -11,8 +11,7 @@ import type {
 } from "../core/mod.ts";
 import { formatDiagnostics, type TextOf } from "./format.ts";
 import type { CliIo } from "../host/io.ts";
-import { writableModules, writeGenerated } from "../host/outputs.ts";
-import { generationSource } from "../host/generation.ts";
+import { type ModuleRemoval, runSaveRound } from "../host/save_round.ts";
 import { runTsc } from "./tsc.ts";
 
 export interface BuildOptions {
@@ -35,11 +34,17 @@ export interface BuildOutcome {
   readonly failed: boolean;
   /** The root-relative paths of the files that changed on disk. */
   readonly written: readonly string[];
+  /** The modules of the revision. Pass them as `previous` to the next build. */
+  readonly modules: readonly string[];
+  /** The removed outputs of each module that left, for the caller to print. They are not in `notes`. */
+  readonly removals: readonly ModuleRemoval[];
 }
 
 /**
  * Prints nothing itself. Returns the lines and notes for the caller. With
- * `write` false, only the diagnostics of the revision count.
+ * `write` false, only the diagnostics of the revision count. `previous` holds
+ * the modules of the last build. With `write` true, the outputs of each module
+ * that left are removed first, and a failed removal is not tried again.
  */
 export async function buildRevision(
   io: CliIo,
@@ -47,12 +52,14 @@ export async function buildRevision(
   revision: Revision,
   textOf: TextOf,
   options: BuildOptions,
+  previous: readonly string[],
 ): Promise<BuildOutcome> {
   const notes: string[] = [];
   const diagnostics: Diagnostic[] = [...revision.diagnostics];
   let failed = false;
   const written: string[] = [];
   const lines: string[] = [];
+  let removals: readonly ModuleRemoval[] = [];
 
   const names = revision.effModuleNames();
   const wanted = options.write || options.validate;
@@ -74,13 +81,18 @@ export async function buildRevision(
   let generated: string[] = [];
   let tables = new Map<string, SpanTable>();
   if (wanted) {
-    const outputs = writeGenerated(
-      io.fs,
+    const round = runSaveRound({
+      fs: io.fs,
       root,
-      generationSource(revision),
-      writableModules(revision, validation),
-      options.write,
-    );
+      revision,
+      previous,
+      removal: "forget",
+      owns: () => true,
+      validation,
+      write: options.write,
+    });
+    const outputs = round.outputs;
+    removals = round.removals;
     written.push(...outputs.written);
     notes.push(...outputs.notes);
     if (outputs.failed) failed = true;
@@ -110,5 +122,13 @@ export async function buildRevision(
       if (outcome.failed) failed = true;
     }
   }
-  return { lines, notes, diagnosticCount: count, failed, written };
+  return {
+    lines,
+    notes,
+    diagnosticCount: count,
+    failed,
+    written,
+    modules: names,
+    removals,
+  };
 }

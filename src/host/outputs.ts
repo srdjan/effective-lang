@@ -13,7 +13,7 @@ import {
 import type { CliFs } from "./io.ts";
 import type { GeneratedSource } from "./generation.ts";
 
-interface GeneratedOutputs {
+export interface GeneratedOutputs {
   /** The root-relative paths of the files that changed on disk. */
   readonly written: string[];
   /** The root-relative paths of the generated modules, in the order of `names`. */
