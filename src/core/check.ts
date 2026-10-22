@@ -280,6 +280,47 @@ function loweredFunction(
 
 // ------------------------------------------------------------------ type lowering
 
+type BuiltinTypeName = Extract<
+  Target,
+  { readonly kind: "builtin-type" }
+>["name"];
+
+/** How a built-in type name lowers. */
+type BuiltinTypeRow =
+  /** The name takes no type arguments. */
+  | {
+    readonly kind: "plain";
+    readonly build: (lowerer: TypeLowerer) => Lowered;
+  }
+  /**
+   * The name takes `arity` type arguments. The lowerer lowers them in order and
+   * calls `build` with them and with their nodes. A wrong count is a report.
+   */
+  | {
+    readonly kind: "generic";
+    readonly arity: 1 | 2;
+    readonly build: (
+      lowerer: TypeLowerer,
+      args: readonly Lowered[],
+      nodes: readonly NodeId[],
+    ) => Lowered;
+  }
+  /** `Brand<T>` is allowed only as the whole body of a type declaration. */
+  | { readonly kind: "brand" };
+
+/** The row of a primitive type name that takes no type arguments. */
+function primitiveRow(
+  name: "string" | "boolean" | "int" | "number" | "never" | "unknown",
+): BuiltinTypeRow {
+  return {
+    kind: "plain",
+    build: (lowerer) => ({
+      ref: lowerer.env.table.primitive(name),
+      ir: { kind: "primitive", name },
+    }),
+  };
+}
+
 /** Lowers type syntax nodes to interned types and IR trees. Diagnostics go to `sink`. */
 export class TypeLowerer {
   constructor(
@@ -407,107 +448,126 @@ export class TypeLowerer {
       };
     }
     if (target.kind !== "builtin-type") return this.errorLowered();
-    switch (target.name) {
-      case "CloseableScope":
+    const row = TypeLowerer.BUILTIN_TYPES[target.name];
+    switch (row.kind) {
+      case "plain":
         this.noArguments(name, args, argsNode);
-        return { ref: table.closeableScope, ir: { kind: "closeable-scope" } };
-      case "string":
-      case "boolean":
-      case "int":
-      case "number":
-      case "never":
-      case "unknown": {
-        this.noArguments(name, args, argsNode);
-        return {
-          ref: table.primitive(target.name),
-          ir: { kind: "primitive", name: target.name },
-        };
-      }
-      case "void":
-        this.noArguments(name, args, argsNode);
-        return { ref: table.unit, ir: { kind: "primitive", name: "unit" } };
-      case "Option": {
-        if (args.length !== 1) {
-          this.arity(name, 1, args, node);
+        return row.build(this);
+      case "generic": {
+        if (args.length !== row.arity) {
+          this.arity(name, row.arity, args, node);
           return this.errorLowered();
         }
-        const element = this.lower(args[0]);
-        return {
-          ref: table.option(element.ref),
-          ir: { kind: "option", element: element.ir },
-        };
+        return row.build(this, args.map((arg) => this.lower(arg)), args);
       }
-      case "Ref": {
-        if (args.length !== 1) {
-          this.arity(name, 1, args, node);
-          return this.errorLowered();
-        }
-        const element = this.lower(args[0]);
-        return {
-          ref: table.ref(element.ref),
-          ir: { kind: "ref", element: element.ir },
-        };
+      case "brand":
+        for (const arg of args) this.lower(arg);
+        this.report(
+          "declaration/008",
+          "`Brand<T>` is allowed only as the whole body of a type declaration",
+          this.span(node),
+        );
+        return this.errorLowered();
+      default: {
+        const unreachable: never = row;
+        return unreachable;
       }
-      case "RetrySchedule": {
-        if (args.length !== 1) {
-          this.arity(name, 1, args, node);
-          return this.errorLowered();
-        }
-        const error = this.lower(args[0]);
+    }
+  }
+
+  /** One row for each built-in type name. A missing name is a compile error. */
+  private static readonly BUILTIN_TYPES: {
+    readonly [N in BuiltinTypeName]: BuiltinTypeRow;
+  } = {
+    string: primitiveRow("string"),
+    boolean: primitiveRow("boolean"),
+    int: primitiveRow("int"),
+    number: primitiveRow("number"),
+    never: primitiveRow("never"),
+    unknown: primitiveRow("unknown"),
+    void: {
+      kind: "plain",
+      build: (lowerer) => ({
+        ref: lowerer.env.table.unit,
+        ir: { kind: "primitive", name: "unit" },
+      }),
+    },
+    CloseableScope: {
+      kind: "plain",
+      build: (lowerer) => ({
+        ref: lowerer.env.table.closeableScope,
+        ir: { kind: "closeable-scope" },
+      }),
+    },
+    Option: {
+      kind: "generic",
+      arity: 1,
+      build: (lowerer, [element]) => ({
+        ref: lowerer.env.table.option(element.ref),
+        ir: { kind: "option", element: element.ir },
+      }),
+    },
+    Ref: {
+      kind: "generic",
+      arity: 1,
+      build: (lowerer, [element]) => ({
+        ref: lowerer.env.table.ref(element.ref),
+        ir: { kind: "ref", element: element.ir },
+      }),
+    },
+    RetrySchedule: {
+      kind: "generic",
+      arity: 1,
+      build: (lowerer, [error], nodes) => {
         if (error.ir.kind !== "named" || !isErrorId(error.ir.id)) {
-          this.report(
+          lowerer.report(
             "type-mismatch/001",
             "RetrySchedule needs a nominal error type",
-            this.span(args[0]),
+            lowerer.span(nodes[0]),
           );
         }
         return {
-          ref: table.retrySchedule(error.ref),
+          ref: lowerer.env.table.retrySchedule(error.ref),
           ir: { kind: "retry-schedule", error: error.ir },
         };
-      }
-      case "ScheduleInput":
-      case "ScheduleMetadata":
-      case "ScheduleDecision": {
-        const required = target.name === "ScheduleInput" ? 1 : 2;
-        if (args.length !== required) {
-          this.arity(name, required, args, node);
-          return this.errorLowered();
-        }
-        const first = this.lower(args[0]);
-        const second = args[1] === undefined ? undefined : this.lower(args[1]);
-        if (target.name === "ScheduleInput") {
-          const ref = table.scheduleInput(first.ref);
-          return { ref, ir: table.toIr(ref) };
-        }
-        // The arity check above gives the two-argument forms a second argument.
-        if (second === undefined) {
-          throw new Error("internal: a schedule type has no second argument");
-        }
-        const ref = target.name === "ScheduleMetadata"
-          ? table.scheduleMetadata(first.ref, second.ref)
-          : table.scheduleDecision(first.ref, second.ref);
-        return { ref, ir: table.toIr(ref) };
-      }
-      case "Codec": {
-        if (args.length !== 2) {
-          this.arity(name, 2, args, node);
-          return this.errorLowered();
-        }
-        const decoded = this.lower(args[0]);
-        const encoded = this.lower(args[1]);
-        return {
-          ref: table.codec(decoded.ref, encoded.ref),
-          ir: { kind: "codec", decoded: decoded.ir, encoded: encoded.ir },
-        };
-      }
-      case "Fiber": {
-        if (args.length !== 2) {
-          this.arity(name, 2, args, node);
-          return this.errorLowered();
-        }
-        const result = this.lower(args[0]);
-        const error = this.lower(args[1]);
+      },
+    },
+    ScheduleInput: {
+      kind: "generic",
+      arity: 1,
+      build: (lowerer, [input]) => {
+        const ref = lowerer.env.table.scheduleInput(input.ref);
+        return { ref, ir: lowerer.env.table.toIr(ref) };
+      },
+    },
+    ScheduleMetadata: {
+      kind: "generic",
+      arity: 2,
+      build: (lowerer, [input, output]) => {
+        const ref = lowerer.env.table.scheduleMetadata(input.ref, output.ref);
+        return { ref, ir: lowerer.env.table.toIr(ref) };
+      },
+    },
+    ScheduleDecision: {
+      kind: "generic",
+      arity: 2,
+      build: (lowerer, [state, input]) => {
+        const ref = lowerer.env.table.scheduleDecision(state.ref, input.ref);
+        return { ref, ir: lowerer.env.table.toIr(ref) };
+      },
+    },
+    Codec: {
+      kind: "generic",
+      arity: 2,
+      build: (lowerer, [decoded, encoded]) => ({
+        ref: lowerer.env.table.codec(decoded.ref, encoded.ref),
+        ir: { kind: "codec", decoded: decoded.ir, encoded: encoded.ir },
+      }),
+    },
+    Fiber: {
+      kind: "generic",
+      arity: 2,
+      build: (lowerer, [result, error], nodes) => {
         const failures: ErrorId[] = [];
         const collect = (type: Type): void => {
           if (type.kind === "primitive" && type.name === "never") return;
@@ -516,30 +576,23 @@ export class TypeLowerer {
           } else if (type.kind === "named" && isErrorId(type.id)) {
             failures.push(type.id);
           } else {
-            this.report(
+            lowerer.report(
               "type-mismatch/001",
               "Fiber failure type needs nominal errors or never",
-              this.span(args[1]),
+              lowerer.span(nodes[1]),
             );
           }
         };
         collect(error.ir);
         const unique = sortedUnique(failures);
         return {
-          ref: table.fiber(result.ref, unique),
+          ref: lowerer.env.table.fiber(result.ref, unique),
           ir: { kind: "fiber", result: result.ir, failures: unique },
         };
-      }
-      case "Brand":
-        for (const arg of args) this.lower(arg);
-        this.report(
-          "declaration/008",
-          "`Brand<T>` is allowed only as the whole body of a type declaration",
-          this.span(node),
-        );
-        return this.errorLowered();
-    }
-  }
+      },
+    },
+    Brand: { kind: "brand" },
+  };
 
   /** Lowers the argument of `Brand<T>` for a type declaration. Reports a wrong argument count. */
   brandBase(node: NodeId): Lowered {

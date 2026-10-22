@@ -151,28 +151,7 @@ export const PRELUDE_NAMES: ReadonlySet<string> = new Set(
   Object.keys(PRELUDE),
 );
 
-type BuiltinTypeName =
-  | "string"
-  | "boolean"
-  | "int"
-  | "number"
-  | "void"
-  | "never"
-  | "unknown"
-  | "Option"
-  | "Brand"
-  | "Ref"
-  | "RetrySchedule"
-  | "ScheduleInput"
-  | "ScheduleMetadata"
-  | "ScheduleDecision"
-  | "Codec"
-  | "Fiber"
-  | "CloseableScope";
-
-export const BUILTIN_TYPE_NAMES: ReadonlySet<string> = new Set<
-  BuiltinTypeName
->([
+const BUILTIN_TYPES = [
   "string",
   "boolean",
   "int",
@@ -190,7 +169,11 @@ export const BUILTIN_TYPE_NAMES: ReadonlySet<string> = new Set<
   "Codec",
   "Fiber",
   "CloseableScope",
-]);
+] as const;
+
+type BuiltinTypeName = typeof BUILTIN_TYPES[number];
+
+export const BUILTIN_TYPE_NAMES: ReadonlySet<string> = new Set(BUILTIN_TYPES);
 
 /**
  * Names that the generated TypeScript needs, so no declaration or binding may
@@ -227,7 +210,7 @@ function asPrelude(name: string): PreludeName | undefined {
 }
 
 function asBuiltinType(name: string): BuiltinTypeName | undefined {
-  return BUILTIN_TYPE_NAMES.has(name) ? name as BuiltinTypeName : undefined;
+  return BUILTIN_TYPES.find((builtin) => builtin === name);
 }
 
 // ------------------------------------------------------------------ targets
