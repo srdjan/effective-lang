@@ -1219,3 +1219,34 @@ Deno.test("a Schema callback that fails with another error is rejected", () => {
     );
   }
 });
+
+// ------------------------------------------------------------------ Schedules
+
+const SCHEDULES = `type Int = int
+
+const simple: Schedule<Int> = scheduleRecurs(3)
+const timer: Schedule<Int, unknown> = scheduleSpaced(1000)
+`;
+
+const SCHEDULE_PROGRAM = lowerProgram(SCHEDULES);
+
+Deno.test("a schedule argument with a wrong recorded type is reported under times or delayMillis", () => {
+  const rows: readonly [declaration: string, kind: string, field: string][] = [
+    ["simple", "schedule-recurs", "times"],
+    ["timer", "schedule-spaced", "delayMillis"],
+  ];
+  for (const [declaration, kind, field] of rows) {
+    const ir = SCHEDULE_PROGRAM.forge();
+    const root = rootOf(ir, declaration);
+    assertEquals(root.node.kind, kind, declaration);
+    const argument = objectAt(root.node, field);
+    argument.type = STRING_TYPE;
+    assertValidation(
+      validateModule(ir, SCHEDULE_PROGRAM.sources),
+      "validation/002",
+      `${root.path}.${field}.type`,
+      undefined,
+      declaration,
+    );
+  }
+});

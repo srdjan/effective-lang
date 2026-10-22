@@ -4243,7 +4243,8 @@ export class BodyValidator {
     path: string,
   ): Comp {
     const argument = e.kind === "schedule-recurs" ? e.times : e.delayMillis;
-    const value = this.check(argument, `${path}.argument`);
+    const field = e.kind === "schedule-recurs" ? "times" : "delayMillis";
+    const value = this.check(argument, `${path}.${field}`);
     if (
       !fits(this.env, value.type, e.kind === "schedule-recurs" ? INT : NUMBER)
     ) {
