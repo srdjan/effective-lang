@@ -219,6 +219,21 @@ Deno.test("type completion offers every type word and the Effect error names", (
   ) assert(labels.has(word), `type completion lacks ${word}`);
 });
 
+Deno.test("rename counts configuration diagnostics on both sides of the speculative check", () => {
+  const text =
+    "type Int = int\nconst a = (x: Int): Int => { const other = 2; x + other }\n";
+  const config = '{"unknown": 1}';
+  const loaded = new Program("").update({
+    set: { "effective.json": config, "m.eff": text },
+  });
+  assert(loaded.ok);
+  assertEquals(loaded.value.diagnostics.map((d) => d.code), ["module/001"]);
+  assertEquals(loaded.value.inputs().get("effective.json"), config);
+  // `Number` adds one diagnostic, and the config diagnostic counts on both sides.
+  const result = renameAt(loaded.value, "m.eff", text.indexOf("x:"), "Number");
+  assertEquals(result.ok, false);
+});
+
 Deno.test("semantic classifications retain UTF-16 spans and lexical fallback on broken or stale text", () => {
   const text =
     "// 😀 comment\ntype Int = int\nconst f = (value: Int): Int => value + 1\nconst broken = (\n";

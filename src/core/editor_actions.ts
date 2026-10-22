@@ -1,7 +1,7 @@
 // Contract edits come from checked body effect sets, never diagnostic prose.
 import { Program, type Revision } from "./db.ts";
 import type { SourceEdit } from "./editor_rename.ts";
-import { applySourceEdits, revisionInputs } from "./editor_rename.ts";
+import { applySourceEdits } from "./editor_rename.ts";
 import { EFFECT_ERROR_IDS } from "./resolve.ts";
 import { childrenOf, kindOf, SyntaxKind } from "./syntax.ts";
 
@@ -128,7 +128,7 @@ export function contractActionsAt(
       if (i < 0) merged.push(edit);
       else merged[i] = { span: edit.span, text: merged[i].text + edit.text };
     }
-    const files = revisionInputs(revision);
+    const files = new Map(revision.inputs());
     files.set(path, applySourceEdits(text, merged));
     const checked = new Program(revision.project.root).update({ set: files });
     if (!checked.ok) continue;

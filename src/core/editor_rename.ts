@@ -122,7 +122,7 @@ export function renameAt(
     span: o.span,
     text: o.shorthand ? `${prepared.name}: ${name}` : name,
   }));
-  const files = revisionInputs(revision);
+  const files = new Map(revision.inputs());
   for (const [source, text] of files) {
     files.set(
       source,
@@ -173,22 +173,4 @@ export function renameAt(
     }
   }
   return { ok: true, value: edits };
-}
-
-export function revisionInputs(revision: Revision): Map<string, string> {
-  const files = new Map(revision.sourceTexts());
-  files.set(
-    "effective.json",
-    JSON.stringify({
-      host: Object.fromEntries(
-        [...revision.project.config.host].map((
-          [key, value],
-        ) => [key, {
-          interface: `./${value.interfacePath}`,
-          module: `./${value.modulePath}`,
-        }]),
-      ),
-    }),
-  );
-  return files;
 }

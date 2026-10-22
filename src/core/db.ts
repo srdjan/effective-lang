@@ -158,6 +158,8 @@ export class Revision {
     private readonly entries: ReadonlyMap<string, Entry>,
     private readonly texts: ReadonlyMap<string, string>,
     private readonly counters: Counters,
+    /** The files of the program when this revision started. */
+    private readonly files: ReadonlyMap<string, string>,
   ) {}
 
   /** All diagnostics of the project, sorted and without duplicates. */
@@ -189,6 +191,15 @@ export class Revision {
   /** The text of each file that the project loaded, keyed by root-relative path. */
   sourceTexts(): ReadonlyMap<string, string> {
     return this.texts;
+  }
+
+  /**
+   * The input files of this revision, keyed by root-relative path. They are the
+   * `.eff` and `.effi` files and the root `effective.json`. A speculative program
+   * starts from a copy of them.
+   */
+  inputs(): ReadonlyMap<string, string> {
+    return this.files;
   }
 
   /** The typed IR of an `.eff` module. A module with an error has an error value. */
@@ -431,6 +442,7 @@ export class Program {
       entries,
       texts,
       this.counters,
+      new Map(this.files),
     );
   }
 }
