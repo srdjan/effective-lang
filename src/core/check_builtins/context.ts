@@ -55,3 +55,12 @@ export function invocationOf(fn: FunctionNode | undefined): EffectSet {
     mode: fn.execution,
   };
 }
+
+/** One use of a local in a body. */
+export interface LocalUse {
+  readonly node: NodeId;
+  readonly parent: NodeId | undefined;
+  readonly grandparent: NodeId | undefined;
+  /** True when an arrow function between the body and the use encloses it. */
+  readonly nested: boolean;
+}

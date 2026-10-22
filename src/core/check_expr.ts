@@ -1,4 +1,17 @@
 import {
+  type FiberContext,
+  fiberOperation,
+  withFiberCall,
+} from "./check_builtins/fiber.ts";
+import {
+  checkBorrowedParameter,
+  forkScopedCall,
+  scopeCall,
+  type ScopeContext,
+  scopedCall,
+  withResourceCall,
+} from "./check_builtins/scope.ts";
+import {
   deferCall,
   type EffectContext,
   failCall,
@@ -48,7 +61,6 @@ import type {
   Execution,
   LocalId,
   Result,
-  ServiceId,
   TypeId,
   ValueId,
 } from "./ir.ts";
@@ -96,13 +108,14 @@ import {
   type TypeRef,
   type TypeTable,
 } from "./types.ts";
-import { isErrorId, isTypeId, serviceOfCapability, shortName } from "./ids.ts";
+import { isErrorId, isTypeId, shortName } from "./ids.ts";
 import {
   type Arg,
   type BuiltinContext,
   type FunctionNode,
   invocationOf,
   type LiteralField,
+  type LocalUse,
 } from "./check_builtins/context.ts";
 import {
   allCall,
@@ -162,15 +175,6 @@ export interface ConstantRun {
   /** The binding annotation, or the widened type of the initializer. */
   readonly type: TypeRef;
   readonly diagnostics: readonly Diagnostic[];
-}
-
-/** One use of a local in a body. */
-interface LocalUse {
-  readonly node: NodeId;
-  readonly parent: NodeId | undefined;
-  readonly grandparent: NodeId | undefined;
-  /** True when an arrow function between the body and the use encloses it. */
-  readonly nested: boolean;
 }
 
 interface ArrowContext {
@@ -527,7 +531,13 @@ function isPureInfo(info: NodeInfo): boolean {
 
 // Shared members are exposed only through BuiltinContext to family handlers.
 class BodyChecker
-  implements BuiltinContext, CollectionContext, EffectContext, LayerContext {
+  implements
+    BuiltinContext,
+    CollectionContext,
+    EffectContext,
+    LayerContext,
+    FiberContext,
+    ScopeContext {
   readonly sink: Diagnostic[] = [];
   readonly body: BodyTable;
   private readonly lowerer: TypeLowerer;
@@ -549,6 +559,14 @@ class BodyChecker
 
   get services(): Pick<TypeEnv["services"], "get"> {
     return this.benv.env.services;
+  }
+
+  get facts(): ReadonlyMap<NodeId, NodeFact> {
+    return this.body.facts;
+  }
+
+  valueType(id: ValueId): TypeRef {
+    return this.benv.values(id);
   }
 
   // -------------------------------------------------------------- helpers
@@ -1256,20 +1274,21 @@ class BodyChecker
     decode: (c, node, name, args) => codecOperation(c, node, name, args),
     encode: (c, node, name, args) => codecOperation(c, node, name, args),
     withFiber: (c, node, _name, args, expected) =>
-      c.withFiberCall(node, args, expected),
-    joinFiber: (c, node, name, args) => c.fiberOperation(node, name, args),
-    interruptFiber: (c, node, name, args) => c.fiberOperation(node, name, args),
+      withFiberCall(c, node, args, expected),
+    joinFiber: (c, node, name, args) => fiberOperation(c, node, name, args),
+    interruptFiber: (c, node, name, args) =>
+      fiberOperation(c, node, name, args),
     provide: (c, node, _name, args) => provideCall(c, node, args),
     defer: (c, node, _name, args) => deferCall(c, node, args),
     run: (c, node, _name, args) => runCall(c, node, args),
-    scoped: (c, node, _name, args) => c.scopedCall(node, args),
-    forkScoped: (c, node, _name, args) => c.forkScopedCall(node, args),
-    makeScope: (c, node, name, args) => c.scopeCall(node, name, args),
-    provideScope: (c, node, name, args) => c.scopeCall(node, name, args),
-    addScopeFinalizer: (c, node, name, args) => c.scopeCall(node, name, args),
-    closeScope: (c, node, name, args) => c.scopeCall(node, name, args),
+    scoped: (c, node, _name, args) => scopedCall(c, node, args),
+    forkScoped: (c, node, _name, args) => forkScopedCall(c, node, args),
+    makeScope: (c, node, name, args) => scopeCall(c, node, name, args),
+    provideScope: (c, node, name, args) => scopeCall(c, node, name, args),
+    addScopeFinalizer: (c, node, name, args) => scopeCall(c, node, name, args),
+    closeScope: (c, node, name, args) => scopeCall(c, node, name, args),
     withResource: (c, node, _name, args, expected) =>
-      c.withResourceCall(node, args, expected),
+      withResourceCall(c, node, args, expected),
     unfold: (c, node, _name, args) => c.unfoldCall(node, args),
     mapEffect: (c, node, _name, args) => c.mapEffectCall(node, args),
     mapGroups: (c, node, _name, args) => c.mapGroupsCall(node, args),
@@ -2762,99 +2781,12 @@ class BodyChecker
     return visit(body, finiteChoice) && found;
   }
 
-  private withFiberCall(
-    node: NodeId,
-    args: readonly Arg[],
-    expected: TypeRef | undefined,
-  ): NodeInfo {
-    const job = this.argInfo(args[0]);
-    const effect = this.table.node(this.table.unfold(job.type));
-    if (effect.kind !== "effect") {
-      this.report(
-        "type-mismatch/010",
-        "`withFiber` needs an Effect value",
-        args[0].node,
-      );
-      return this.finish(
-        node,
-        this.table.error,
-        combine([job, this.argInfo(args[1]), EFFECT_ONLY]),
-      );
-    }
-    if (
-      args[1].pre !== undefined ||
-      kindOf(this.tree, args[1].node) !== SyntaxKind.ArrowExpr
-    ) {
-      this.report(
-        "type-mismatch/010",
-        "`withFiber` needs an inline use callback",
-        args[1].node,
-      );
-    }
-    const fiber = this.table.fiber(effect.result, effect.failures);
-    const use = this.callback("withFiber", args[1], [fiber], expected, true);
-    if (!dataOnly(this.table, use.result, "value")) {
-      this.report(
-        "type-mismatch/010",
-        "the fiber use result must be data only",
-        args[1].node,
-      );
-    }
-    const fact = this.body.facts.get(args[1].node);
-    if (fact?.kind === "arrow" && fact.parameters[0]?.id !== undefined) {
-      const body = this.kids(args[1].node).at(-1);
-      if (body !== undefined) this.scopedFiberUses(body, fact.parameters[0].id);
-    }
-    const useFn = this.functionOf(use.info.type);
-    const invocation: EffectSet = invocationOf(useFn);
-    return this.finish(
-      node,
-      use.result,
-      combine([
-        job,
-        use.info,
-        { failures: [], requirements: effect.requirements, mode: "effect" },
-        invocation,
-        EFFECT_ONLY,
-      ]),
-    );
-  }
-
-  private fiberOperation(
-    node: NodeId,
-    name: "joinFiber" | "interruptFiber",
-    args: readonly Arg[],
-  ): NodeInfo {
-    const ref = this.argInfo(args[0]);
-    const fiber = this.table.node(this.table.unfold(ref.type));
-    if (fiber.kind !== "fiber") {
-      if (!this.isError(ref.type)) {
-        this.report(
-          "type-mismatch/010",
-          `\`${name}\` needs a Fiber value`,
-          args[0].node,
-        );
-      }
-      return this.finish(node, this.table.error, combine([ref, EFFECT_ONLY]));
-    }
-    return this.finish(
-      node,
-      name === "joinFiber" ? fiber.result : this.table.unit,
-      combine([
-        ref,
-        name === "joinFiber"
-          ? { failures: fiber.failures, requirements: [], mode: "effect" }
-          : EFFECT_ONLY,
-      ]),
-    );
-  }
-
   /**
    * The uses of a local in `body`, in syntax order. Each use has its two nearest
    * ancestors and tells whether an arrow function encloses it. With `shorthand`,
    * the name in a shorthand field such as `{ id }` also counts as a use.
    */
-  private localUses(
+  localUses(
     body: NodeId,
     id: LocalId,
     shorthand = false,
@@ -2882,353 +2814,6 @@ class BodyChecker
     };
     visit(body, undefined, undefined, false);
     return uses;
-  }
-
-  private scopedFiberUses(body: NodeId, id: LocalId): void {
-    for (
-      const { node, parent, grandparent, nested } of this.localUses(body, id)
-    ) {
-      const call = parent !== undefined &&
-          kindOf(this.tree, parent) === SyntaxKind.CallExpr
-        ? parent
-        : parent !== undefined &&
-            kindOf(this.tree, parent) === SyntaxKind.ArgList &&
-            grandparent !== undefined &&
-            kindOf(this.tree, grandparent) === SyntaxKind.CallExpr
-        ? grandparent
-        : undefined;
-      const callee = call === undefined ? undefined : this.kids(call)[0];
-      const called = callee === undefined
-        ? undefined
-        : this.targets.get(callee);
-      if (
-        nested || callee === undefined ||
-        (parent !== call &&
-          (parent === undefined || this.kids(parent).length !== 1 ||
-            this.kids(parent)[0] !== node)) ||
-        called?.kind !== "builtin" ||
-        (called.name !== "joinFiber" && called.name !== "interruptFiber")
-      ) {
-        this.report(
-          "type-mismatch/010",
-          "a borrowed fiber may only be joined or interrupted directly",
-          node,
-        );
-      }
-    }
-  }
-
-  private scopedCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const value = this.argInfo(args[0]);
-    const effect = this.table.node(this.table.unfold(value.type));
-    if (effect.kind !== "effect") {
-      this.report(
-        "type-mismatch/010",
-        "`scoped` needs an Effect value",
-        args[0].node,
-      );
-      return this.finish(node, this.table.error, combine([value, EFFECT_ONLY]));
-    }
-    return this.finish(
-      node,
-      effect.result,
-      combine([value, {
-        failures: effect.failures,
-        requirements: without(effect.requirements, [SCOPE_CAPABILITY]),
-        mode: "effect",
-      }]),
-    );
-  }
-
-  private forkScopedCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    const job = this.argInfo(args[0]);
-    const effect = this.table.node(this.table.unfold(job.type));
-    if (effect.kind !== "effect") {
-      this.report(
-        "type-mismatch/010",
-        "`forkScoped` needs an Effect value",
-        args[0].node,
-      );
-      return this.finish(node, this.table.error, combine([job, EFFECT_ONLY]));
-    }
-    if (effect.failures.length > 0) {
-      this.report(
-        "type-mismatch/010",
-        "`forkScoped` needs an Effect value without typed failures",
-        args[0].node,
-      );
-    }
-    return this.finish(
-      node,
-      this.table.unit,
-      combine([job, {
-        failures: [],
-        requirements: [...effect.requirements, SCOPE_CAPABILITY],
-        mode: "effect",
-      }]),
-    );
-  }
-
-  private scopeCall(
-    node: NodeId,
-    name: "makeScope" | "provideScope" | "addScopeFinalizer" | "closeScope",
-    args: readonly Arg[],
-  ): NodeInfo {
-    if (name === "makeScope") {
-      return this.finish(node, this.table.closeableScope, EFFECT_ONLY);
-    }
-    const owner = this.argInfo(args[0]);
-    this.fits(
-      args[0].node,
-      owner.type,
-      this.table.closeableScope,
-      "scope owner",
-    );
-    if (name === "closeScope") {
-      return this.finish(node, this.table.unit, combine([owner, EFFECT_ONLY]));
-    }
-    const job = this.argInfo(args[1]);
-    const effect = this.table.node(this.table.unfold(job.type));
-    if (effect.kind !== "effect") {
-      this.report(
-        "type-mismatch/010",
-        `\`${name}\` needs an Effect value`,
-        args[1].node,
-      );
-      return this.finish(
-        node,
-        this.table.error,
-        combine([owner, job, EFFECT_ONLY]),
-      );
-    }
-    if (name === "addScopeFinalizer") {
-      this.fits(
-        args[1].node,
-        effect.result,
-        this.table.unit,
-        "scope finalizer result",
-      );
-      if (
-        effect.failures.length > 0 ||
-        effect.requirements.includes(SCOPE_CAPABILITY)
-      ) {
-        this.report(
-          "type-mismatch/010",
-          "`addScopeFinalizer` needs an Effect without typed failures or the reserved Scope requirement",
-          args[1].node,
-        );
-      }
-    }
-    return this.finish(
-      node,
-      name === "provideScope" ? effect.result : this.table.unit,
-      combine([owner, job, {
-        failures: name === "provideScope" ? effect.failures : [],
-        requirements: name === "provideScope"
-          ? without(effect.requirements, [SCOPE_CAPABILITY])
-          : effect.requirements,
-        mode: "effect",
-      }]),
-    );
-  }
-
-  /** A scoped handle is usable only as `handle.operation(...)`. */
-  private scopedUses(body: NodeId, id: LocalId): void {
-    for (
-      const { node, parent, grandparent, nested } of this.localUses(body, id)
-    ) {
-      const directField = parent !== undefined &&
-        kindOf(this.tree, parent) === SyntaxKind.FieldExpr &&
-        this.kids(parent)[0] === node;
-      const directCall = grandparent !== undefined &&
-        kindOf(this.tree, grandparent) === SyntaxKind.CallExpr &&
-        this.kids(grandparent)[0] === parent;
-      if (nested || !directField || !directCall) {
-        this.report(
-          "type-mismatch/010",
-          "a scoped operation record may only be used as the direct receiver of an operation call",
-          node,
-        );
-      }
-    }
-  }
-
-  private operationRecord(ref: TypeRef, node: NodeId): boolean {
-    const type = this.table.node(this.table.unfold(ref));
-    if (
-      type.kind !== "record" || type.fields.length === 0 ||
-      type.fields.some((f) => f.optional)
-    ) {
-      this.report(
-        "type-mismatch/010",
-        "acquisition must return a nonempty record of required operations",
-        node,
-      );
-      return false;
-    }
-    let valid = true;
-    for (const field of type.fields) {
-      const fn = this.functionOf(field.type);
-      if (
-        fn === undefined || !fn.parameters.every((p) =>
-          dataOnly(this.table, p, "value")
-        ) ||
-        !dataOnly(this.table, fn.result, "value")
-      ) {
-        this.report(
-          "type-mismatch/010",
-          `operation ${field.name} must take and return data-only values`,
-          node,
-        );
-        valid = false;
-      }
-    }
-    return valid;
-  }
-
-  private withResourceCall(
-    node: NodeId,
-    args: readonly Arg[],
-    expected: TypeRef | undefined,
-  ): NodeInfo {
-    for (const arg of args) {
-      if (
-        arg.pre !== undefined ||
-        kindOf(this.tree, arg.node) !== SyntaxKind.ArrowExpr
-      ) {
-        this.report(
-          "type-mismatch/010",
-          "withResource requires three inline arrow callbacks",
-          arg.node,
-        );
-      }
-    }
-    const acquire = this.callback("withResource", args[0], [], undefined, true);
-    const opaque = this.opaqueHandle(acquire.result);
-    if (!opaque) this.operationRecord(acquire.result, args[0].node);
-    const use = this.callback(
-      "withResource",
-      args[1],
-      [acquire.result],
-      expected,
-      true,
-    );
-    const release = this.callback(
-      "withResource",
-      args[2],
-      [acquire.result],
-      this.table.unit,
-      true,
-    );
-    this.fits(
-      args[2].node,
-      release.result,
-      this.table.unit,
-      "the release result",
-    );
-    if (!dataOnly(this.table, use.result, "value")) {
-      this.report(
-        "type-mismatch/010",
-        "the use result must be data only",
-        args[1].node,
-      );
-    }
-    for (const arg of [args[1], args[2]]) {
-      const fact = this.body.facts.get(arg.node);
-      if (fact?.kind === "arrow" && fact.parameters[0]?.id !== undefined) {
-        const body = this.kids(arg.node).at(-1);
-        if (body !== undefined) {
-          if (opaque) this.scopedBorrowUses(body, fact.parameters[0].id);
-          else this.scopedUses(body, fact.parameters[0].id);
-        }
-      }
-    }
-    const invoked = [acquire.info, use.info, release.info].map((info) => {
-      const fn = this.functionOf(info.type);
-      return invocationOf(fn);
-    });
-    return this.finish(
-      node,
-      use.result,
-      combine([
-        acquire.info,
-        use.info,
-        release.info,
-        ...invoked,
-        EFFECT_ONLY,
-      ]),
-    );
-  }
-
-  private opaqueHandle(ref: TypeRef): boolean {
-    const type = this.table.node(this.table.unfold(ref));
-    return type.kind === "named" && isTypeId(type.id) &&
-      this.table.isOpaque(type.id);
-  }
-
-  private scopedBorrowUses(body: NodeId, id: LocalId): void {
-    for (
-      const { node, parent, grandparent, nested } of this.localUses(body, id)
-    ) {
-      const call = parent !== undefined &&
-          kindOf(this.tree, parent) === SyntaxKind.ArgList &&
-          grandparent !== undefined &&
-          kindOf(this.tree, grandparent) === SyntaxKind.CallExpr
-        ? grandparent
-        : undefined;
-      const callee = call === undefined ? undefined : this.kids(call)[0];
-      const method = callee === undefined
-        ? undefined
-        : this.targets.get(callee);
-      const index = parent === undefined ? -1 : this.kids(parent).indexOf(node);
-      const capability = method?.kind === "cap" ? method.id : undefined;
-      const serviceId: ServiceId | undefined = capability === undefined
-        ? undefined
-        : serviceOfCapability(capability);
-      const signature = serviceId === undefined
-        ? undefined
-        : this.benv.env.services.get(serviceId)?.methods.find((m) =>
-          m.id === capability
-        );
-      const functionType = method?.kind === "value"
-        ? this.functionOf(this.benv.values(method.id))
-        : undefined;
-      const borrowed = signature?.borrows?.[index] === true ||
-        functionType?.borrows?.[index] === true;
-      if (nested || index < 0 || !borrowed) {
-        this.report(
-          "type-mismatch/010",
-          "a borrowed handle may only pass to a borrow-qualified method",
-          node,
-        );
-      }
-    }
-  }
-
-  checkBorrowedParameter(
-    body: NodeId | undefined,
-    parameter: {
-      readonly id: LocalId | undefined;
-      readonly type: { readonly ref: TypeRef };
-    },
-    result: TypeRef,
-  ): void {
-    if (parameter.id === undefined) return;
-    if (!this.opaqueHandle(parameter.type.ref)) {
-      this.report(
-        "type-mismatch/010",
-        "a borrow parameter needs an opaque type",
-        body ?? this.tree.root,
-      );
-    }
-    if (!dataOnly(this.table, result, "value")) {
-      this.report(
-        "type-mismatch/010",
-        "a borrow function must return data only",
-        body ?? this.tree.root,
-      );
-    }
-    if (body !== undefined) this.scopedBorrowUses(body, parameter.id);
   }
 
   noPipeline(name: string, args: readonly Arg[]): void {
@@ -5745,7 +5330,7 @@ export function checkFunctionBody(
   const run = checker.checkBody(bodyNode, contract, undefined);
   for (const parameter of signature.parameters) {
     if (parameter.borrow) {
-      checker.checkBorrowedParameter(bodyNode, parameter, run.result);
+      checkBorrowedParameter(checker, bodyNode, parameter, run.result);
     }
   }
   const table = benv.env.table;
