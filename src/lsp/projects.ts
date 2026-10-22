@@ -8,7 +8,7 @@
 // wrapper is the only exception boundary.
 
 import type { CliFs } from "../host/io.ts";
-import { runSaveRound } from "../host/save_round.ts";
+import { ownedByRoot, runSaveRound } from "../host/save_round.ts";
 import { isSourcePath, readWorkspace } from "../host/workspace.ts";
 import {
   compareText,
@@ -501,14 +501,7 @@ export class ProjectSet {
    * own `effective.json`. The root itself does not count.
    */
   #owns(project: ProjectState, name: string): boolean {
-    const parts = name.split("/").slice(0, -1);
-    for (let n = 1; n <= parts.length; n++) {
-      const dir = joinPath(project.root, parts.slice(0, n).join("/"));
-      if (this.ports.fs.kind(joinPath(dir, CONFIG_FILE)) === "file") {
-        return false;
-      }
-    }
-    return true;
+    return ownedByRoot(this.ports.fs, project.root, name);
   }
 
   // ---- Discovery ----------------------------------------------------------

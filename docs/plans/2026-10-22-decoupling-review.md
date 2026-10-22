@@ -693,6 +693,8 @@ Size (M, `scripts/measure.ts` over the `.ts` files of `src/core`, `b888a6a` agai
 
 Edit sites after Phase 4. A new builtin in an existing family edits the `PRELUDE` row, the rows of the family, and the family code, and `check_expr.ts` does not change. A change of the removal or ownership rule of a save round edits `src/host/save_round.ts` only.
 
-Open item for the user, found in Phase 4 (N1). `effective build` writes the outputs of a module that a nested `effective.json` owns, and the language server does not. ED3 keeps this difference as the `owns` parameter, and `tests/cli_test.ts` pins it.
+Decision 5 (N1), found in Phase 4. `effective build` wrote the outputs of a module that a nested `effective.json` owns, and the language server did not. ED3 kept this difference as the `owns` parameter.
+
+The user chose (b) on 2026-10-22: the CLI uses the language server rule. `ownedByRoot` in `src/host/save_round.ts` now holds that rule for both callers. The ED3a test in `tests/cli_test.ts` now asserts that `build` skips those outputs, and a new test in `tests/watch_stale_test.ts` covers `watch`. Both tests fail with the old rule.
 
 Remaining: the deferred items IC2, IC4, the IC6 path helper, ED5, and the ED3 file splits. ED2 step 3 stays optional and needs the bench M4 measurement first.

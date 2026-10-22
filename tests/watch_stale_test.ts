@@ -137,3 +137,17 @@ Deno.test("watch prints every removed path before the removal notes of a round",
     "error: cannot remove old.ts.map",
   ]);
 });
+
+Deno.test("watch does not write or remove the outputs of a nested project", async () => {
+  const m = project();
+  m.files.set(`${ROOT}/inner/effective.json`, "{}");
+  m.files.set(`${ROOT}/inner/m.eff`, module("m"));
+  m.script = [() => {
+    m.files.set(`${ROOT}/inner/m.eff`, module("m") + "\n");
+  }, () => {
+    m.files.delete(`${ROOT}/inner/m.eff`);
+  }];
+  assertEquals(await main(["watch", ROOT], m.io), 0);
+  assertEquals(outputs(m).filter((path) => path.startsWith("inner/")), []);
+  assert(!m.err.join("").includes("removed: inner/"), m.err.join(""));
+});

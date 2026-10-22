@@ -556,8 +556,8 @@ Deno.test("an unexpected throw is an internal error with exit code 3", async () 
   assertEquals(m.out, []);
 });
 
-// Pins the current behavior, kept by N1: the CLI has no ownership filter, so `build` writes the outputs of a nested project.
-Deno.test("build writes the outputs of a module that a nested effective.json owns", async () => {
+// The nested project writes the outputs of its own modules, as in the language server.
+Deno.test("build does not write the outputs of a module that a nested effective.json owns", async () => {
   const mod = (name: string): string =>
     `type I = int\nexport const ${name}: I = 1\n`;
   const r = await run(["build", ROOT], {
@@ -567,7 +567,8 @@ Deno.test("build writes the outputs of a module that a nested effective.json own
     [`${ROOT}/inner/m.eff`]: mod("m"),
   });
   assertEquals(r.code, 0, r.stderr);
-  assert(r.m.files.has(`${ROOT}/inner/m.ts`));
-  assert(r.m.files.has(`${ROOT}/inner/m.ts.map`));
+  assert(!r.m.files.has(`${ROOT}/inner/m.ts`));
+  assert(!r.m.files.has(`${ROOT}/inner/m.ts.map`));
   assert(r.m.files.has(`${ROOT}/a.ts`));
+  assert(r.m.files.has(`${ROOT}/a.ts.map`));
 });

@@ -11,7 +11,11 @@ import type {
 } from "../core/mod.ts";
 import { formatDiagnostics, type TextOf } from "./format.ts";
 import type { CliIo } from "../host/io.ts";
-import { type ModuleRemoval, runSaveRound } from "../host/save_round.ts";
+import {
+  type ModuleRemoval,
+  ownedByRoot,
+  runSaveRound,
+} from "../host/save_round.ts";
 import { runTsc } from "./tsc.ts";
 
 export interface BuildOptions {
@@ -87,7 +91,7 @@ export async function buildRevision(
       revision,
       previous,
       removal: "forget",
-      owns: () => true,
+      owns: (name) => ownedByRoot(io.fs, root, name),
       validation,
       write: options.write,
     });

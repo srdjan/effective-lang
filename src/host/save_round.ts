@@ -5,7 +5,12 @@
 // The round is synchronous and prints and logs nothing. It returns one removal
 // record per module, so that each caller keeps its own messages and their order.
 
-import type { Diagnostic, Revision } from "../core/mod.ts";
+import {
+  CONFIG_FILE,
+  type Diagnostic,
+  joinPath,
+  type Revision,
+} from "../core/mod.ts";
 import type { CliFs } from "./io.ts";
 import { generationSource } from "./generation.ts";
 import {
@@ -29,7 +34,7 @@ export interface SaveRoundInput {
   /** The `modules` of the previous round. `build` passes `[]` and removes nothing. */
   readonly previous: readonly string[];
   readonly removal: RemovalRule;
-  /** False for a module that a nested project owns. The CLI passes `() => true`. */
+  /** False for a module that a nested project owns. Callers pass `ownedByRoot`. */
   readonly owns: (name: string) => boolean;
   readonly validation?: ReadonlyMap<string, readonly Diagnostic[]>;
   readonly write: boolean;
@@ -50,6 +55,20 @@ export interface SaveRound {
   /** The writable modules, before the `owns` filter. */
   readonly writable: readonly string[];
   readonly outputs: GeneratedOutputs;
+}
+
+/**
+ * True when the project at `root` owns the module `name`: no directory between
+ * the root and the module holds its own `effective.json`. A nested project
+ * writes and removes the outputs of its own modules.
+ */
+export function ownedByRoot(fs: CliFs, root: string, name: string): boolean {
+  const parts = name.split("/").slice(0, -1);
+  for (let n = 1; n <= parts.length; n++) {
+    const dir = joinPath(root, parts.slice(0, n).join("/"));
+    if (fs.kind(joinPath(dir, CONFIG_FILE)) === "file") return false;
+  }
+  return true;
 }
 
 export function runSaveRound(input: SaveRoundInput): SaveRound {

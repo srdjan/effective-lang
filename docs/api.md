@@ -308,6 +308,8 @@ The root is the project directory with `effective.json`. The modules are the `.e
 
 The `build` command writes a module only when the module has no error and every `.eff` module that it imports, directly or through other imports, is also written. The generated file of a module with an error is not written, so no written file imports a missing file. In an import cycle, one error stops every module of the cycle. The `watch` command leaves the last written file of a stopped module on disk. When a module leaves the project, for example after a rename, `watch` removes its `<module>.ts` and `<module>.ts.map` and prints `removed: <path>` on stderr for each file. It removes the `.ts` file only when the first line is the header that the emitter writes for that module. It removes the map only together with the `.ts` file. The `build` command never removes a file.
 
+A directory under the root that holds its own `effective.json` is a nested project. The walk still reads its `.eff` files, so the outer project checks them and prints their diagnostics. But `build` and `watch` of the outer project do not write or remove the outputs of those modules, as the language server does. Build the nested project from its own root.
+
 A diagnostic prints as `path:line:column: error code: message`. The path is relative to the root. The line and the column are one-based, and the column counts UTF-16 code units. The tool sorts the lines by path, position, and code.
 
 The message is one line. Stdout holds only diagnostics, except for `--help`, which prints the usage on stdout. A summary line and all other messages go to stderr.
@@ -395,7 +397,7 @@ When `effective.json` is missing or invalid, the server publishes one diagnostic
 ### Known limits
 
 - The server has no cancellation inside the core. `Program.update` runs as one synchronous call, and the server handles one message at a time. The plan, section 3, explains the reason. Measurement M1 measures the stall.
-- Nested projects are not supported. The disk walk of an outer project also reads the files of an inner project, so one file can belong to two programs. A save round of the outer project does not write or remove the outputs of the inner project.
+- Nested projects are not supported. The disk walk of an outer project also reads the files of an inner project, so one file can belong to two programs. A save round of the outer project does not write or remove the outputs of the inner project. The `build` and `watch` commands follow the same rule.
 - An `.effi` file that no `.eff` module imports is not in the module graph. For such a file, the server gives document symbols only. Hover and definition return `null`.
 - A generated `.ts` file has no go-to-definition into the `.eff` source.
 - Rename edits Effective source/interface references only; it does not rename TypeScript host code. Completion does not add imports, semantic tokens have no delta mode, and quick fixes target reliable explicit inline function contracts only. See [editor queries](editor.md).
