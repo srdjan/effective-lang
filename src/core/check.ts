@@ -1163,13 +1163,11 @@ class ModuleChecker {
   private readonly tree: SyntaxTree;
   private readonly table: TypeTable;
   private readonly types: TypeDecl[] = [];
-  private readonly guardedAliases = new Set<TypeId>();
   private readonly errors: ErrorDecl[] = [];
   private readonly services: ServiceDecl[] = [];
   private readonly methodTypes = new Map<CapabilityId, TypeRef>();
   private readonly values = new Map<ValueId, ValueSignature>();
   private readonly exports: DeclarationId[] = [];
-  private readonly typeInfos: TypeNodeInfo[] = [];
 
   constructor(
     private readonly info: ModuleInfo,
@@ -1195,12 +1193,13 @@ class ModuleChecker {
 
   run(): ModuleDeclarations {
     const entries = this.entries();
+    const infos: TypeNodeInfo[] = [];
     for (const entry of entries) {
-      if (entry.kind === "type") this.checkType(entry);
-      else if (entry.kind === "error") this.checkError(entry);
+      if (entry.kind === "type") infos.push(this.checkType(entry));
+      else if (entry.kind === "error") infos.push(this.checkError(entry));
     }
-    this.checkCycles();
-    this.checkDepths();
+    const guarded = this.checkCycles(infos);
+    this.checkDepths(infos, guarded);
     this.checkPrimitivePositions();
     for (const entry of entries) {
       if (entry.kind === "service") this.checkService(entry);
@@ -1298,7 +1297,7 @@ class ModuleChecker {
     );
   }
 
-  private checkType(entry: DeclEntry): void {
+  private checkType(entry: DeclEntry): TypeNodeInfo {
     const id = this.id("type", entry.name);
     const body = this.bodyOf(entry);
     const opaque = /^(?:export\s+)?opaque\s+type\b/.test(
@@ -1339,14 +1338,14 @@ class ModuleChecker {
       definition.kind === "alias" ? definition.type : definition.base,
       refs,
     );
-    this.typeInfos.push({
+    return {
       id,
       name: entry.name,
       nameSpan: entry.nameSpan,
       start: entry.span.start,
       kind,
       refs,
-    });
+    };
   }
 
   /** True when the node is `Brand<...>` or `Brand`. */
@@ -1358,7 +1357,7 @@ class ModuleChecker {
     return target?.kind === "builtin-type" && target.name === "Brand";
   }
 
-  private checkError(entry: DeclEntry): void {
+  private checkError(entry: DeclEntry): TypeNodeInfo {
     const id = this.id("error", entry.name);
     const record =
       this.lowerer.kidsOfKind(entry.node, SyntaxKind.RecordType)[0];
@@ -1375,24 +1374,26 @@ class ModuleChecker {
     });
     const refs = new Set<string>();
     for (const field of fields) referencedIds(field.type.ir, refs);
-    this.typeInfos.push({
+    return {
       id,
       name: entry.name,
       nameSpan: entry.nameSpan,
       start: entry.span.start,
       kind: "error",
       refs,
-    });
+    };
   }
 
   /**
    * Version 0 rejects recursive type definitions. Finds the strongly connected
    * components of the reference graph, reports one diagnostic for each cycle, and
    * redefines its aliases and brands as the error type so that compatibility ends.
+   * Returns the aliases that stay as guarded records.
    */
-  private checkCycles(): void {
+  private checkCycles(typeInfos: readonly TypeNodeInfo[]): Set<TypeId> {
+    const guardedAliases = new Set<TypeId>();
     const infos = new Map<string, TypeNodeInfo>();
-    for (const info of this.typeInfos) infos.set(info.id, info);
+    for (const info of typeInfos) infos.set(info.id, info);
     // The search starts from the declarations in source order, and follows the
     // references of each one in text order.
     const nodes = [...infos.values()];
@@ -1428,7 +1429,7 @@ class ModuleChecker {
           aliased !== undefined &&
           dataOnly(this.table, aliased, "schema")
         ) {
-          this.guardedAliases.add(first.id);
+          guardedAliases.add(first.id);
           this.table.markGuardedAlias(first.id);
           continue;
         }
@@ -1453,6 +1454,7 @@ class ModuleChecker {
         }
       }
     }
+    return guardedAliases;
   }
 
   /**
@@ -1487,11 +1489,14 @@ class ModuleChecker {
    * alias becomes the error type, so a later comparison never walks the chain.
    * The walk has a budget, so a cycle cannot loop.
    */
-  private checkDepths(): void {
+  private checkDepths(
+    typeInfos: readonly TypeNodeInfo[],
+    guardedAliases: ReadonlySet<TypeId>,
+  ): void {
     const memo = new Map<TypeRef, number>();
-    for (const info of this.typeInfos) {
+    for (const info of typeInfos) {
       if (info.kind !== "alias") continue;
-      if (this.guardedAliases.has(info.id)) continue;
+      if (guardedAliases.has(info.id)) continue;
       const body = this.table.aliasOf(info.id);
       if (body === undefined) continue;
       if (!this.table.exceedsDepth(body, MAX_TYPE_DEPTH, memo)) continue;
