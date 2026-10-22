@@ -138,7 +138,7 @@ import {
   PURE_EFFECTS,
   without,
 } from "./tables.ts";
-import { sortedUnique, type TypeRef, type TypeTable } from "./types.ts";
+import type { TypeRef, TypeTable } from "./types.ts";
 import { isErrorId, isTypeId, shortName } from "./ids.ts";
 import {
   type Arg,
@@ -183,9 +183,8 @@ export interface Contract {
   readonly requirements: readonly CapabilityId[];
 }
 
-/** What checking one function body produces. */
-export interface FunctionRun {
-  readonly table: BodyTable;
+/** What checking the body expression of a function produces. */
+export interface BodyOutcome {
   /** The info of the body expression. Absent when the body is missing. */
   readonly body: NodeInfo | undefined;
   /** The declared or inferred result type. */
@@ -195,6 +194,11 @@ export interface FunctionRun {
   readonly requirements: readonly CapabilityId[];
   /** The invocation mode. */
   readonly mode: Execution;
+}
+
+/** What checking one function body produces. */
+export interface FunctionRun extends BodyOutcome {
+  readonly table: BodyTable;
   /** The function type with that mode. */
   readonly type: TypeRef;
   readonly diagnostics: readonly Diagnostic[];
@@ -495,13 +499,7 @@ class BodyChecker
     bodyNode: NodeId | undefined,
     contract: Contract,
     hint: TypeRef | undefined,
-  ): {
-    readonly body: NodeInfo | undefined;
-    readonly result: TypeRef;
-    readonly failures: readonly ErrorId[];
-    readonly requirements: readonly CapabilityId[];
-    readonly execution: Execution;
-  } {
+  ): BodyOutcome {
     if (bodyNode === undefined) {
       const failures = contract.result === undefined ? [] : contract.failures;
       const requirements = contract.result === undefined
@@ -512,9 +510,7 @@ class BodyChecker
         result: contract.result ?? this.table.error,
         failures,
         requirements,
-        execution: failures.length + requirements.length > 0
-          ? "effect"
-          : "pure",
+        mode: failures.length + requirements.length > 0 ? "effect" : "pure",
       };
     }
     const body = this.expr(bodyNode, contract.result ?? hint);
@@ -524,7 +520,7 @@ class BodyChecker
         result: this.widen(body.type),
         failures: body.failures,
         requirements: body.requirements,
-        execution: body.mode,
+        mode: body.mode,
       };
     }
     this.fits(bodyNode, body.type, contract.result, "the function body");
@@ -553,7 +549,7 @@ class BodyChecker
       result: contract.result,
       failures: contract.failures,
       requirements: contract.requirements,
-      execution: contract.failures.length + contract.requirements.length > 0
+      mode: contract.failures.length + contract.requirements.length > 0
         ? "effect"
         : body.mode,
     };
@@ -2365,7 +2361,7 @@ class BodyChecker
     };
     const run = this.checkBody(bodyNode, contract, context?.result);
     const type = this.table.function({
-      execution: run.execution,
+      execution: run.mode,
       parameters: parameterFacts.map((p) => p.type),
       result: run.result,
       failures: run.failures,
@@ -3001,14 +2997,12 @@ export function checkFunctionBody(
   }
   const table = benv.env.table;
   const type = table.function({
-    execution: run.execution,
+    execution: run.mode,
     parameters: signature.parameters.map((p) => p.type.ref),
-    ...(signature.parameters.some((p) => p.borrow)
-      ? { borrows: signature.parameters.map((p) => p.borrow) }
-      : {}),
+    borrows: signature.parameters.map((p) => p.borrow),
     result: run.result,
-    failures: sortedUnique(run.failures),
-    requirements: sortedUnique(run.requirements),
+    failures: run.failures,
+    requirements: run.requirements,
   });
   return {
     table: checker.body,
@@ -3016,7 +3010,7 @@ export function checkFunctionBody(
     result: run.result,
     failures: run.failures,
     requirements: run.requirements,
-    mode: run.execution,
+    mode: run.mode,
     type,
     diagnostics: checker.sink,
   };

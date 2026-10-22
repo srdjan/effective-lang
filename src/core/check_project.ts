@@ -49,7 +49,7 @@ import {
   type ModuleInterface,
   reachableModules,
 } from "./interface.ts";
-import type { CapabilityId, ErrorId, Execution, ValueId } from "./ir.ts";
+import type { CapabilityId, Execution, ValueId } from "./ir.ts";
 import { solveModeGroup, stronglyConnectedComponents } from "./modes.ts";
 import type { ConfigError, ModuleInfo } from "./project.ts";
 import type { Result, SourceHost } from "./source.ts";
@@ -66,23 +66,11 @@ import { type TypeRef, TypeTable } from "./types.ts";
 // ------------------------------------------------------------------ results
 
 /** The checked body of a module-level function. */
-export interface FunctionBody {
+export interface FunctionBody extends Omit<FunctionRun, "diagnostics"> {
   readonly kind: "function";
   readonly signature: FunctionSignature;
   /** The body expression of the arrow, or undefined when the source is broken. */
   readonly bodyNode: NodeId | undefined;
-  readonly table: BodyTable;
-  /** The info of the body expression. */
-  readonly body: NodeInfo | undefined;
-  /** The declared or inferred result type. */
-  readonly result: TypeRef;
-  /** The invocation sets: declared for an explicit contract, inferred otherwise. */
-  readonly failures: readonly ErrorId[];
-  readonly requirements: readonly CapabilityId[];
-  /** The invocation mode, which is also the entry in the mode map. */
-  readonly mode: Execution;
-  /** The function type with that mode. */
-  readonly type: TypeRef;
 }
 
 /** The checked initializer of a module-level constant. */
@@ -310,7 +298,7 @@ function moduleValues(
       if (!run.entry.broken) diagnostics.push(...run.run.diagnostics);
       if (run.kind === "function") {
         const { signature, bodyNode } = run.entry;
-        const result = run.run;
+        const { diagnostics: _, ...result } = run.run;
         modes.set(signature.id, result.mode);
         if (signature.contract === "inferred" && !recursive) {
           inferred.set(signature.id, result.type);
@@ -319,13 +307,7 @@ function moduleValues(
           kind: "function",
           signature,
           bodyNode,
-          table: result.table,
-          body: result.body,
-          result: result.result,
-          failures: result.failures,
-          requirements: result.requirements,
-          mode: result.mode,
-          type: result.type,
+          ...result,
         });
       } else {
         const { signature, initNode } = run.entry;
