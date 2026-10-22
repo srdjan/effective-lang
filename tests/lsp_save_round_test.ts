@@ -280,6 +280,48 @@ Deno.test("a failed map removal is retried on the next round", () => {
   assertMatchesOracle(h);
 });
 
+/** The type-4, type-1, and type-3 logs of the harness, as "type message", in order. */
+function roundLogs(h: Harness): string[] {
+  return h.logs().filter((l) => l.type === 1 || l.type === 3 || l.type === 4)
+    .map((l) => `${l.type} ${l.message}`);
+}
+
+Deno.test("a round logs each removed path and each removal note in module order", () => {
+  const h = started({ "aa.eff": SOLO, "bb.eff": SOLO });
+  h.deliver(save(MAIN));
+  setDisk(h, "aa.eff", undefined);
+  setDisk(h, "bb.eff", undefined);
+  // The map goes first, so aa loses its map and then fails on its .ts file.
+  h.unwritable.add(`${ROOT}/aa.ts`);
+  h.clearSent();
+  h.deliver(save(MAIN));
+  assertEquals(roundLogs(h), [
+    "4 removed aa.ts.map",
+    "1 error: cannot remove aa.ts: permission denied",
+    "4 removed bb.ts.map",
+    "4 removed bb.ts",
+  ]);
+});
+
+Deno.test("a round logs removals, writes, write notes, and held modules in that order", () => {
+  const h = started({ "solo.eff": SOLO });
+  h.deliver(save(MAIN));
+  setDisk(h, "solo.eff", undefined);
+  setDisk(h, "extra.eff", SOLO);
+  setDisk(h, "users.eff", USERS_BROKEN);
+  h.unwritable.add(`${ROOT}/extra.ts.map`);
+  h.clearSent();
+  h.deliver(save(MAIN));
+  assertEquals(roundLogs(h), [
+    "4 removed solo.ts.map",
+    "4 removed solo.ts",
+    "4 wrote extra.ts",
+    "1 error: cannot write extra.ts.map: permission denied",
+    "3 users is not written: it has 1 diagnostics",
+    "3 main is not written: it imports users, which is not written",
+  ]);
+});
+
 Deno.test("a held module is logged once at type 3 and cleared when it is writable", () => {
   const h = started();
   setDisk(h, "users.eff", USERS_BROKEN);

@@ -92,3 +92,31 @@ Deno.test("build removes no file", async () => {
   assert(m.files.has(`${ROOT}/pay.ts`));
   assert(m.files.has(`${ROOT}/pay.ts.map`));
 });
+
+// Pins the current behavior, kept by Decision 3a: the watch loop forgets a module after a failed removal.
+Deno.test("watch forgets a module whose output removal failed", async () => {
+  const m = project();
+  m.script = [
+    () => {
+      m.files.delete(`${ROOT}/old.eff`);
+      m.unwritable.add(`${ROOT}/old.ts.map`);
+    },
+    () => {
+      m.unwritable.clear();
+      m.files.set(`${ROOT}/a.eff`, module("a") + "\n");
+    },
+  ];
+  assertEquals(await main(["watch", ROOT], m.io), 0);
+  const err = m.err.join("");
+  assert(err.includes("error: cannot remove old.ts.map"), err);
+  // The next round does not try again: the generated pair of old stays.
+  assertEquals(outputs(m), [
+    "a.ts",
+    "a.ts.map",
+    "old.ts",
+    "old.ts.map",
+    "pay.ts",
+    "pay.ts.map",
+  ]);
+  assert(!err.includes("removed: old"), err);
+});
