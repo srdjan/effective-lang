@@ -434,4 +434,18 @@ ED1 is `8ff12fa` and ED7 is `7c8a185`. The implementer ran `deno task check` bef
 
 Deviations, accepted after review. The order claim of the ED1 test was wrong, and the plan check repeated it. The loader queues the entry files in sorted path order, so `b.eff` that imports `a.eff` still loads a before b. The test now lets `a.eff` import `b.eff`: `moduleInfos()` gives a then b, and `moduleNames()` gives b then a. The plan also missed one read: the rename count test reads the analysis diagnostics. `Revision` has one more getter, `analysisDiagnostics`.
 
-Captures used temporary commits with the write overlay on both sides. ED1: source of `d7338bf` against source of `8ff12fa`, both with the `d7338bf` tests. The first two-revision run gave 9118 against 9115 records, with 0 new and 3 missing. The 3 missing records were clean `program` records (result `[]`) of two inputs. Single-revision runs of both sides then gave 9115 records each, with equal record sets, and neither run held the 3 records. So the 3 records were extra updates in the first base run, which is run variance. ED7: source of `8ff12fa` against source of `7c8a185`, both with the `7c8a185` tests. Each side had 9116 records, with 0 new and 0 missing.
+Captures used temporary commits with the write overlay on both sides. ED1: source of `d7338bf` against source of `8ff12fa`, both with the `d7338bf` tests. The first two-revision run gave 9118 against 9115 records, with 0 new and 3 missing. The 3 missing records were clean `program` records (result `[]`) of two inputs. Single-revision runs of both sides then gave 9115 records each, with equal record sets, and neither run held the 3 records. So the 3 records were extra updates in the first base run, which is run variance.
+
+ED7: source of `8ff12fa` against source of `7c8a185`, both with the `7c8a185` tests. Each side had 9116 records, with 0 new and 0 missing.
+
+ED2 step 2 is `7345a91`. `src/core/diagnostic_delta.ts` compares diagnostics by code, source, and moved span, as multisets. Rename rejects an added analysis diagnostic. A contract action must remove at least one diagnostic and add none. The coordinator reviewed the diff line by line and ran `deno task check` on `7345a91`: 1852 fast and 177 slow tests passed.
+
+The implementer's probe ran the old and the new code on the same inputs. 2800 renames over the 14 fixture projects gave 0 differences. The probe made 100 contract action cases. Each case deletes a `fails` clause, a `uses` clause, or both from an explicit contract. Each rule offered 98 actions, with 0 differences.
+
+One visible change was found outside the fixtures, and a new test pins it. In `const f = (x: Int): Int => { const t = w; const w = 2; t + w + x }`, the rename of `x` to `w` removes `unknown-name/001` and adds `declaration/001`. The old code rejected it with "The rename would capture another name." The new code rejects it with "The new name is reserved or conflicts with an existing binding." Only the message changes.
+
+Capture: source of `f351a21` against source of `7345a91`, both with the `f351a21` tests and the write overlay. Each side had 9116 records, with 0 new and 0 missing.
+
+Size (M, `scripts/measure.ts` over `src/core`, `430460b` against `7345a91`): filtered lines 34,393 to 34,521, and AST branches 7,961 to 7,970. The new `Revision` members and `diagnostic_delta.ts` add more than the editor files lose. Phase 3 narrows the editor boundary. It does not reduce code size.
+
+Remaining: Phase 4 is not started. Decision 3 waits for ED3. ED2 step 3 (speculative child programs) stays optional and needs the bench M4 measurement first.
