@@ -220,15 +220,38 @@ function collectEntries(args: CheckArguments): Entry[] {
   return entries;
 }
 
-/** Checks every body of one module and solves its execution modes. */
-function checkModuleBodies(args: CheckArguments): ModuleBodies {
-  const { analysis, module, declarations } = args;
-  const table = declarations.env.table;
-  const resolution = analysis.resolutions.get(module);
-  if (resolution === undefined) {
-    throw new Error(`module ${module} is not part of the analysis`);
-  }
+/**
+ * The value environment of one module and the results that its bodies publish.
+ * `publish` and `settle` are the only writers of the maps.
+ */
+interface ModuleValues {
+  /** The environment of a body check, with `view` as the mode of other functions. */
+  environment(view: ModeLookup): BodyEnv;
+  /** Records the final run of a declaration and publishes its diagnostics. */
+  publish(run: Run, recursive: boolean): void;
+  /** Records the modes that a recursive group settled on. */
+  settle(modes: ReadonlyMap<ValueId, Execution>): void;
+  /** The modes published so far. The map is live, so later writes show in it. */
+  settledModes(): ModeLookup;
+  /** The published bodies, in the order of publication. */
+  bodies(): {
+    readonly functions: ReadonlyMap<ValueId, FunctionBody>;
+    readonly constants: ReadonlyMap<ValueId, ConstantBody>;
+  };
+}
 
+/**
+ * The values of one module. A function with an inferred contract and a
+ * constant without a type read their type from the results that `publish`
+ * stores later. The callee-first component order makes that read safe.
+ * `diagnostics` receives the diagnostics of each published run.
+ */
+function moduleValues(
+  args: CheckArguments,
+  diagnostics: Diagnostic[],
+): ModuleValues {
+  const { declarations } = args;
+  const table = declarations.env.table;
   const importedValues = new Map<ValueId, TypeRef>();
   for (const iface of args.interfaces.values()) {
     for (const value of iface.payload.values) {
@@ -258,6 +281,8 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
   const modes = new Map<ValueId, Execution>();
   const inferred = new Map<ValueId, TypeRef>();
   const constantTypes = new Map<ValueId, TypeRef>();
+  const functions = new Map<ValueId, FunctionBody>();
+  const constants = new Map<ValueId, ConstantBody>();
   const values = (view: ModeLookup) => (id: ValueId): TypeRef => {
     const signature: ValueSignature | undefined = declarations.values.get(id);
     if (signature === undefined) return importedValues.get(id) ?? table.error;
@@ -275,25 +300,65 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
         return signature.type.ref;
     }
   };
-  const environment = (view: ModeLookup): BodyEnv => ({
-    env: declarations.env,
-    values: values(view),
-    methodType,
-  });
+  return {
+    environment: (view) => ({
+      env: declarations.env,
+      values: values(view),
+      methodType,
+    }),
+    publish(run, recursive) {
+      if (!run.entry.broken) diagnostics.push(...run.run.diagnostics);
+      if (run.kind === "function") {
+        const { signature, bodyNode } = run.entry;
+        const result = run.run;
+        modes.set(signature.id, result.mode);
+        if (signature.contract === "inferred" && !recursive) {
+          inferred.set(signature.id, result.type);
+        }
+        functions.set(signature.id, {
+          kind: "function",
+          signature,
+          bodyNode,
+          table: result.table,
+          body: result.body,
+          result: result.result,
+          failures: result.failures,
+          requirements: result.requirements,
+          mode: result.mode,
+          type: result.type,
+        });
+      } else {
+        const { signature, initNode } = run.entry;
+        constantTypes.set(signature.id, run.run.type);
+        constants.set(signature.id, {
+          kind: "constant",
+          signature,
+          initNode,
+          table: run.run.table,
+          init: run.run.init,
+          type: run.run.type,
+        });
+      }
+    },
+    settle(settled) {
+      for (const [id, mode] of settled) modes.set(id, mode);
+    },
+    settledModes: () => modes,
+    bodies: () => ({ functions, constants }),
+  };
+}
 
-  const entries = collectEntries(args);
-  const position = new Map<ValueId, number>();
-  entries.forEach((entry, i) => position.set(entry.signature.id, i));
-  const edges = entries.map((entry) =>
-    entry.references.map((id) => position.get(id)).filter((p): p is number =>
-      p !== undefined
-    ).sort((a, b) => a - b)
-  );
-
-  const functions = new Map<ValueId, FunctionBody>();
-  const constants = new Map<ValueId, ConstantBody>();
-  const diagnostics: Diagnostic[] = [];
-
+/**
+ * Checks every entry, callee first, and publishes each run into `values`. A
+ * recursive component runs through the mode solver. The execution mode
+ * diagnostics go to `diagnostics` in the order of the components.
+ */
+function scheduleRuns(
+  entries: readonly Entry[],
+  edges: readonly (readonly number[])[],
+  values: ModuleValues,
+  diagnostics: Diagnostic[],
+): void {
   const runEntry = (entry: Entry, benv: BodyEnv): Run =>
     entry.kind === "function"
       ? {
@@ -307,48 +372,16 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
         run: checkConstantBody(benv, entry.signature, entry.initNode),
       };
 
-  /** Records the final run of a declaration and publishes its diagnostics. */
-  const commit = (run: Run, recursive: boolean): void => {
-    if (!run.entry.broken) diagnostics.push(...run.run.diagnostics);
-    if (run.kind === "function") {
-      const { signature, bodyNode } = run.entry;
-      const result = run.run;
-      modes.set(signature.id, result.mode);
-      if (signature.contract === "inferred" && !recursive) {
-        inferred.set(signature.id, result.type);
-      }
-      functions.set(signature.id, {
-        kind: "function",
-        signature,
-        bodyNode,
-        table: result.table,
-        body: result.body,
-        result: result.result,
-        failures: result.failures,
-        requirements: result.requirements,
-        mode: result.mode,
-        type: result.type,
-      });
-    } else {
-      const { signature, initNode } = run.entry;
-      constantTypes.set(signature.id, run.run.type);
-      constants.set(signature.id, {
-        kind: "constant",
-        signature,
-        initNode,
-        table: run.run.table,
-        init: run.run.init,
-        type: run.run.type,
-      });
-    }
-  };
-
+  const modes = values.settledModes();
   for (const component of stronglyConnectedComponents(entries.length, edges)) {
     const members = component.map((i) => entries[i]);
     const recursive = members.length > 1 ||
       edges[component[0]].includes(component[0]);
     if (!recursive) {
-      commit(runEntry(members[0], environment(modes)), false);
+      values.publish(
+        runEntry(members[0], values.environment(modes)),
+        false,
+      );
       continue;
     }
     for (const member of members) {
@@ -370,7 +403,7 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
     }
     const solution = solveModeGroup(pending, (assumed) => {
       // Solver assumptions overlay settled modes without publishing into them.
-      const benv = environment({
+      const benv = values.environment({
         get: (id) => assumed.get(id) ?? modes.get(id),
       });
       const runs = members.map((entry) => runEntry(entry, benv));
@@ -384,7 +417,7 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
       });
       return { results: runs, computed };
     });
-    for (const [id, mode] of solution.modes) modes.set(id, mode);
+    values.settle(solution.modes);
     if (!solution.settled) {
       const first = members[0].signature;
       diagnostics.push(makeDiagnostic(
@@ -393,20 +426,27 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
         first.nameSpan,
       ));
     }
-    solution.results.forEach((run) => commit(run, true));
+    solution.results.forEach((run) => values.publish(run, true));
   }
+}
 
-  const initialization = buildInitializationGraph(
+/** The initialization graph of the entries, and one `module/004` diagnostic for each cycle. */
+function initializationDiagnostics(entries: readonly Entry[]): {
+  readonly graph: InitializationGraph;
+  readonly diagnostics: readonly Diagnostic[];
+} {
+  const graph = buildInitializationGraph(
     entries.map((entry) => ({
       id: entry.signature.id,
       kind: entry.signature.kind,
       references: entry.references,
     })),
   );
+  const diagnostics: Diagnostic[] = [];
   const signatures = new Map<ValueId, FunctionSignature | ConstantSignature>(
     entries.map((e) => [e.signature.id, e.signature]),
   );
-  for (const cycle of initialization.cycles) {
+  for (const cycle of graph.cycles) {
     // A cycle lists ids of `entries`, so every id has a signature.
     const members = cycle.map((id) => {
       const signature = signatures.get(id);
@@ -427,8 +467,36 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
       })),
     ));
   }
+  return { graph, diagnostics };
+}
+
+/** Checks every body of one module and solves its execution modes. */
+function checkModuleBodies(args: CheckArguments): ModuleBodies {
+  const { analysis, module } = args;
+  const resolution = analysis.resolutions.get(module);
+  if (resolution === undefined) {
+    throw new Error(`module ${module} is not part of the analysis`);
+  }
+
+  const entries = collectEntries(args);
+  const position = new Map<ValueId, number>();
+  entries.forEach((entry, i) => position.set(entry.signature.id, i));
+  const edges = entries.map((entry) =>
+    entry.references.map((id) => position.get(id)).filter((p): p is number =>
+      p !== undefined
+    ).sort((a, b) => a - b)
+  );
+
+  // The component diagnostics come first, then the initialization cycles,
+  // because `normalizeDiagnostics` resolves exact duplicates in push order.
+  const diagnostics: Diagnostic[] = [];
+  const values = moduleValues(args, diagnostics);
+  scheduleRuns(entries, edges, values, diagnostics);
+  const initialization = initializationDiagnostics(entries);
+  diagnostics.push(...initialization.diagnostics);
 
   // Source order for the maps, whatever order the components ran in.
+  const { functions, constants } = values.bodies();
   const orderedFunctions = new Map<ValueId, FunctionBody>();
   const orderedConstants = new Map<ValueId, ConstantBody>();
   const orderedModes = new Map<ValueId, Execution>();
@@ -446,7 +514,7 @@ function checkModuleBodies(args: CheckArguments): ModuleBodies {
     functions: orderedFunctions,
     constants: orderedConstants,
     modes: orderedModes,
-    initialization,
+    initialization: initialization.graph,
     diagnostics: normalizeDiagnostics(diagnostics),
   };
 }
