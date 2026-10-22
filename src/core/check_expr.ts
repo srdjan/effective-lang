@@ -27,6 +27,13 @@ import {
   nameTextOf,
   operatorOf,
 } from "./syntax_queries.ts";
+import { isBoolean, operatorResult } from "./check_binary.ts";
+import {
+  checkCoverage,
+  type MatchState,
+  pattern,
+  type PatternContext,
+} from "./check_patterns.ts";
 import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID } from "./ir.ts";
 import type {
   CapabilityId,
@@ -52,15 +59,7 @@ import {
   type TypeEnv,
   TypeLowerer,
 } from "./check.ts";
-import {
-  describeLiteral,
-  type Domain,
-  domainOf,
-  flattenMembers,
-  type LiteralValue,
-  narrowTagged,
-  taggedValues,
-} from "./patterns.ts";
+import { domainOf, flattenMembers, type LiteralValue } from "./patterns.ts";
 import {
   type ArrowParameterFact,
   type BodyTable,
@@ -71,7 +70,6 @@ import {
   newBodyTable,
   type NodeFact,
   type NodeInfo,
-  type PatternFact,
   PURE_EFFECTS,
   without,
 } from "./tables.ts";
@@ -160,13 +158,6 @@ function names(ids: readonly string[]): string {
   return ids.map(shortName).join(", ");
 }
 
-interface MatchState {
-  wildcard: boolean;
-  readonly covered: Set<string>;
-  /** The discriminator field of a tagged match, once an arm names it. */
-  tagField: string | undefined;
-}
-
 // ------------------------------------------------------------------ the checker
 
 // Family contexts expose only the checker operations and read views they need.
@@ -179,7 +170,8 @@ class BodyChecker
     FiberContext,
     ScopeContext,
     StreamContext,
-    SchemaContext {
+    SchemaContext,
+    PatternContext {
   readonly sink: Diagnostic[] = [];
   readonly body: BodyTable;
   private readonly lowerer: TypeLowerer;
@@ -1676,77 +1668,6 @@ class BodyChecker
 
   // -------------------------------------------------------------- operators
 
-  /** True when the type is `int` or `number` (literals included). */
-  private isNumeric(ref: TypeRef): boolean {
-    return this.table.isAssignable(ref, this.table.number) &&
-      !this.isError(ref) && ref !== this.table.never;
-  }
-
-  /**
-   * The brand id when the type, after aliases, is a brand of `int` or `number`.
-   * A brand of a literal union or of another brand is not numeric.
-   */
-  private numericBrand(ref: TypeRef): TypeId | undefined {
-    const node = this.table.node(this.table.unfold(ref));
-    if (node.kind !== "named" || isErrorId(node.id)) return undefined;
-    const id = node.id;
-    const base = this.table.brandBaseOf(id);
-    if (base === undefined) return undefined;
-    const baseNode = this.table.node(this.table.unfold(base));
-    return baseNode.kind === "primitive" &&
-        (baseNode.name === "int" || baseNode.name === "number")
-      ? id
-      : undefined;
-  }
-
-  /** The brand id when both operands have one numeric brand. */
-  private sharedNumericBrand(
-    left: TypeRef,
-    right: TypeRef,
-  ): TypeId | undefined {
-    const brand = this.numericBrand(left);
-    return brand !== undefined && brand === this.numericBrand(right)
-      ? brand
-      : undefined;
-  }
-
-  private isString(ref: TypeRef): boolean {
-    return this.table.isAssignable(ref, this.table.string) &&
-      !this.isError(ref) && ref !== this.table.never;
-  }
-
-  private isBoolean(ref: TypeRef): boolean {
-    return this.table.isAssignable(ref, this.table.boolean) &&
-      !this.isError(ref) && ref !== this.table.never;
-  }
-
-  /** The comparison class of a type: a primitive name or a brand identity. */
-  private comparisonClass(ref: TypeRef): string | undefined {
-    const members = flattenMembers(this.table, ref);
-    let found: string | undefined;
-    for (const member of members) {
-      const node = this.table.node(member);
-      let current: string | undefined;
-      if (node.kind === "literal") {
-        current = node.value === null ? "null" : typeof node.value;
-      } else if (node.kind === "primitive") {
-        if (node.name === "int" || node.name === "number") current = "number";
-        else if (node.name === "string" || node.name === "boolean") {
-          current = node.name;
-        }
-      } else if (node.kind === "named" && !isErrorId(node.id)) {
-        const base = this.table.brandBaseOf(node.id);
-        if (base !== undefined && this.comparisonClass(base) !== undefined) {
-          current = `brand:${node.id}`;
-        }
-      }
-      if (current === undefined) return undefined;
-      if (found !== undefined && found !== current) return undefined;
-      found = current;
-    }
-    return found;
-  }
-
   private binary(node: NodeId): NodeInfo {
     const kids = this.kids(node);
     const operator = operatorOf(this.tree, node);
@@ -1755,9 +1676,8 @@ class BodyChecker
     const equality = operator === "===" || operator === "!==";
     const right = this.expr(kids[1], equality ? left.type : undefined);
     const eff = combine([left, right]);
-    const table = this.table;
-    const either = this.isError(left.type) || this.isError(right.type);
-    const mismatch = (): void => {
+    const result = operatorResult(this.table, operator, left.type, right.type);
+    if (result.mismatch) {
       this.report(
         "type-mismatch/007",
         `the operator \`${operator}\` does not accept operands of type ${
@@ -1765,76 +1685,8 @@ class BodyChecker
         } and ${this.show(right.type)}`,
         node,
       );
-    };
-    switch (operator) {
-      case "&&":
-      case "||": {
-        if (
-          !either && !(this.isBoolean(left.type) && this.isBoolean(right.type))
-        ) mismatch();
-        return this.finish(node, table.boolean, eff);
-      }
-      case "<":
-      case "<=":
-      case ">":
-      case ">=": {
-        if (
-          !either &&
-          !(this.isNumeric(left.type) && this.isNumeric(right.type)) &&
-          this.sharedNumericBrand(left.type, right.type) === undefined
-        ) mismatch();
-        return this.finish(node, table.boolean, eff);
-      }
-      case "===":
-      case "!==": {
-        if (!either) {
-          const l = this.comparisonClass(left.type);
-          const r = this.comparisonClass(right.type);
-          const isNull = (ref: TypeRef) => {
-            const type = table.node(table.unfold(ref));
-            return type.kind === "literal" && type.value === null;
-          };
-          const nullable =
-            (isNull(left.type) && table.isAssignable(left.type, right.type)) ||
-            (isNull(right.type) && table.isAssignable(right.type, left.type));
-          if (!nullable && (l === undefined || r === undefined || l !== r)) {
-            mismatch();
-          }
-        }
-        return this.finish(node, table.boolean, eff);
-      }
-      case "+":
-      case "-":
-      case "*":
-      case "/": {
-        // An error operand hides whether the result is int or number.
-        if (either) return this.finish(node, table.error, eff);
-        if (operator === "+" || operator === "-") {
-          const brand = this.sharedNumericBrand(left.type, right.type);
-          if (brand !== undefined) {
-            return this.finish(node, table.named(brand), eff);
-          }
-        }
-        if (this.isNumeric(left.type) && this.isNumeric(right.type)) {
-          const integral = operator !== "/" &&
-            table.isAssignable(left.type, table.int) &&
-            table.isAssignable(right.type, table.int);
-          return this.finish(node, integral ? table.int : table.number, eff);
-        }
-        if (
-          operator === "+" && this.isString(left.type) &&
-          this.isString(right.type)
-        ) {
-          return this.finish(node, table.string, eff);
-        }
-        mismatch();
-        return this.finish(node, table.error, eff);
-      }
-      default: {
-        const unreachable: never = operator;
-        return unreachable;
-      }
     }
+    return this.finish(node, result.type, eff);
   }
 
   // -------------------------------------------------------------- arrows
@@ -2017,7 +1869,7 @@ class BodyChecker
     const condition = kids[0];
     if (condition === undefined) return this.errorInfo(node);
     const cond = this.expr(condition);
-    if (!this.isError(cond.type) && !this.isBoolean(cond.type)) {
+    if (!this.isError(cond.type) && !isBoolean(this.table, cond.type)) {
       this.report(
         "type-mismatch/007",
         `a condition must be boolean, but it has type ${this.show(cond.type)}`,
@@ -2161,7 +2013,7 @@ class BodyChecker
       );
       const bodyNode = parts.filter((k) => k !== patternNode).pop();
       if (patternNode !== undefined) {
-        this.pattern(patternNode, domain, state);
+        pattern(this, patternNode, domain, state);
       }
       if (bodyNode === undefined) continue;
       const info = this.expr(bodyNode, expected);
@@ -2169,339 +2021,9 @@ class BodyChecker
       branches.push({ node: bodyNode, type: info.type });
       this.finish(arm, info.type, info);
     }
-    if (!state.wildcard) this.checkCoverage(node, domain, state, arms.length);
+    if (!state.wildcard) checkCoverage(this, node, domain, state, arms.length);
     const type = this.joinResults(branches, expected);
     return this.finish(node, type, combine(infos));
-  }
-
-  /**
-   * The values that a match still needs, or undefined when the domain has no
-   * coverage rule (the error type and unsupported types).
-   */
-  private missing(domain: Domain, state: MatchState): string[] | undefined {
-    const missing: string[] = [];
-    switch (domain.kind) {
-      case "option":
-        if (!state.covered.has("Some")) missing.push("Some(_)");
-        if (!state.covered.has("None")) missing.push("None");
-        return missing;
-      case "errors":
-        for (const id of domain.ids) {
-          if (!state.covered.has(`E:${id}`)) {
-            missing.push(`${shortName(id)}(_)`);
-          }
-        }
-        return missing;
-      case "literals":
-        for (const value of domain.values) {
-          if (!state.covered.has(`L:${JSON.stringify(value)}`)) {
-            missing.push(describeLiteral(value));
-          }
-        }
-        return missing;
-      case "open":
-        return ["_"];
-      case "tagged": {
-        const field = state.tagField;
-        if (field === undefined) {
-          return domain.members.length > 0 ? ["a tagged arm"] : [];
-        }
-        if (domain.members.some((m) => !m.literals.has(field))) return ["_"];
-        for (const value of taggedValues(domain.members, field)) {
-          if (!state.covered.has(`T:${field}:${JSON.stringify(value)}`)) {
-            missing.push(`{ ${field}: ${describeLiteral(value)} }`);
-          }
-        }
-        return missing;
-      }
-      case "error":
-      case "unsupported":
-        return undefined;
-    }
-  }
-
-  private checkCoverage(
-    node: NodeId,
-    domain: Domain,
-    state: MatchState,
-    armCount: number,
-  ): void {
-    const missing = this.missing(domain, state);
-    if (missing === undefined) return;
-    if (missing.length === 0 && armCount > 0) return;
-    this.report(
-      "pattern/001",
-      missing.length === 0
-        ? "the match has no arms"
-        : `the match is not exhaustive; it needs ${missing.join(", ")}`,
-      node,
-    );
-  }
-
-  /** Reports a duplicate or unreachable arm. Returns true when the arm can run. */
-  private reach(
-    node: NodeId,
-    state: MatchState,
-    key: string | undefined,
-  ): boolean {
-    if (state.wildcard) {
-      this.report(
-        "pattern/002",
-        "this arm is unreachable, because an earlier `_` arm matches every value",
-        node,
-      );
-      return false;
-    }
-    if (key !== undefined) {
-      if (state.covered.has(key)) {
-        this.report(
-          "pattern/002",
-          "this arm is unreachable, because an earlier arm matches the same value",
-          node,
-        );
-        return false;
-      }
-      state.covered.add(key);
-    }
-    return true;
-  }
-
-  private foreign(node: NodeId, what: string, domain: Domain): void {
-    this.report(
-      "pattern/003",
-      `${what} does not belong to the subject (${describeDomain(domain)})`,
-      node,
-    );
-  }
-
-  private bindLocal(
-    nameNode: NodeId | undefined,
-    type: TypeRef,
-  ): LocalId | undefined {
-    if (nameNode === undefined) return undefined;
-    const target = this.targets.get(nameNode);
-    if (target?.kind !== "local") return undefined;
-    this.body.locals.set(target.id, type);
-    return target.id;
-  }
-
-  private patternFact(node: NodeId, pattern: PatternFact): void {
-    this.fact(node, { kind: "pattern", pattern });
-  }
-
-  private pattern(node: NodeId, domain: Domain, state: MatchState): void {
-    const kind = kindOf(this.tree, node);
-    const names = this.kidsOfKind(node, SyntaxKind.Name);
-    const silent = domain.kind === "error" || domain.kind === "unsupported";
-    switch (kind) {
-      case SyntaxKind.WildcardPattern: {
-        if (this.reach(node, state, undefined)) {
-          const needed = this.missing(domain, state);
-          if (needed !== undefined && needed.length === 0) {
-            this.report(
-              "pattern/002",
-              "this arm is unreachable, because the earlier arms already cover every value",
-              node,
-            );
-          }
-        }
-        state.wildcard = true;
-        this.patternFact(node, { kind: "wildcard" });
-        return;
-      }
-      case SyntaxKind.NamePattern: {
-        const target = names[0] === undefined
-          ? undefined
-          : this.targets.get(names[0]);
-        if (target?.kind === "builtin" && target.name === "None") {
-          if (domain.kind === "option") {
-            this.reach(node, state, "None");
-          } else if (!silent) {
-            this.foreign(node, "`None`", domain);
-          }
-          this.patternFact(node, { kind: "none" });
-        } else {
-          if (target !== undefined && target.kind !== "unresolved") {
-            this.report(
-              "pattern/004",
-              "a constructor pattern needs a binding, as in `Some(x)` or `E(x)`",
-              node,
-            );
-          }
-          this.patternFact(node, { kind: "invalid" });
-        }
-        return;
-      }
-      case SyntaxKind.CtorPattern: {
-        const target = names[0] === undefined
-          ? undefined
-          : this.targets.get(names[0]);
-        const bindingNode = names[1];
-        if (target?.kind === "builtin" && target.name === "Some") {
-          let element = this.table.error;
-          if (domain.kind === "option") {
-            element = domain.element;
-            this.reach(node, state, "Some");
-          } else if (!silent) {
-            this.foreign(node, "`Some`", domain);
-          }
-          const binding = this.bindLocal(bindingNode, element);
-          this.patternFact(node, { kind: "some", binding });
-        } else if (target?.kind === "builtin") {
-          this.report(
-            "pattern/004",
-            `\`${target.name}\` cannot be a constructor pattern with a binding`,
-            node,
-          );
-          this.bindLocal(bindingNode, this.table.error);
-          this.patternFact(node, { kind: "invalid" });
-        } else if (target?.kind === "error") {
-          let type = this.table.error;
-          if (domain.kind === "errors" && domain.ids.includes(target.id)) {
-            type = this.table.named(target.id);
-            this.reach(node, state, `E:${target.id}`);
-          } else if (!silent) {
-            this.foreign(node, `\`${shortName(target.id)}\``, domain);
-          }
-          const binding = this.bindLocal(bindingNode, type);
-          this.patternFact(node, { kind: "error", error: target.id, binding });
-        } else {
-          this.bindLocal(bindingNode, this.table.error);
-          this.patternFact(node, { kind: "invalid" });
-        }
-        return;
-      }
-      case SyntaxKind.LiteralPattern: {
-        const value = literalOf(this.tree, node);
-        if (value === undefined) {
-          this.patternFact(node, { kind: "invalid" });
-          return;
-        }
-        let fits = false;
-        if (domain.kind === "literals") {
-          fits = domain.values.includes(value);
-        } else if (domain.kind === "open") {
-          fits = domain.primitive === "string"
-            ? typeof value === "string"
-            : domain.primitive === "int"
-            ? typeof value === "number" && Number.isSafeInteger(value)
-            : typeof value === "number";
-        }
-        if (fits) {
-          this.reach(node, state, `L:${JSON.stringify(value)}`);
-        } else if (!silent) {
-          this.foreign(node, describeLiteral(value), domain);
-        }
-        this.patternFact(node, { kind: "literal", value });
-        return;
-      }
-      case SyntaxKind.RecordPattern:
-        this.recordPattern(node, domain, state, silent);
-        return;
-      default:
-        this.patternFact(node, { kind: "invalid" });
-    }
-  }
-
-  private recordPattern(
-    node: NodeId,
-    domain: Domain,
-    state: MatchState,
-    silent: boolean,
-  ): void {
-    const parts = this.kids(node);
-    const fields = parts.filter((k) =>
-      kindOf(this.tree, k) === SyntaxKind.PatternField
-    );
-    const spread = parts.find((k) =>
-      kindOf(this.tree, k) === SyntaxKind.SpreadPattern
-    );
-    const spreadName = spread === undefined
-      ? undefined
-      : this.kidsOfKind(spread, SyntaxKind.Name)[0];
-    const invalid = (
-      message?: string,
-      code: DiagnosticCode = "pattern/004",
-    ): void => {
-      if (message !== undefined) this.report(code, message, node);
-      this.bindLocal(spreadName, this.table.error);
-      this.patternFact(node, { kind: "invalid" });
-    };
-    if (domain.kind !== "tagged") {
-      if (silent) return invalid();
-      this.foreign(node, "a tagged record pattern", domain);
-      return invalid();
-    }
-    if (fields.length !== 1) {
-      return invalid(
-        'a tagged record pattern needs exactly one discriminator field, as in `{ kind: "circle", ...c }`',
-      );
-    }
-    const fieldParts = this.kids(fields[0]);
-    const labelNode = fieldParts.find((k) =>
-      kindOf(this.tree, k) === SyntaxKind.Name
-    );
-    const literalNode = fieldParts.find((k) =>
-      kindOf(this.tree, k) === SyntaxKind.LiteralPattern
-    );
-    const label = labelNode === undefined
-      ? undefined
-      : nameTextOf(this.tree, labelNode);
-    const value = literalNode === undefined
-      ? undefined
-      : literalOf(this.tree, literalNode);
-    if (label === undefined || value === undefined) return invalid();
-    if (typeof value !== "string") {
-      return invalid(
-        "the discriminator of a tagged record pattern must be a string literal",
-      );
-    }
-    if (state.tagField !== undefined && state.tagField !== label) {
-      return invalid(
-        `an earlier arm matches on the field \`${state.tagField}\`; every arm must use the same discriminator field`,
-      );
-    }
-    state.tagField = label;
-    const known = taggedValues(domain.members, label);
-    const narrowed = narrowTagged(this.table, domain.members, label, value).map(
-      (m) => m.type,
-    );
-    if (narrowed.length === 0) {
-      this.foreign(
-        node,
-        known.length === 0
-          ? `the field \`${label}\``
-          : `${label}: ${describeLiteral(value)}`,
-        domain,
-      );
-      return invalid();
-    }
-    this.reach(node, state, `T:${label}:${JSON.stringify(value)}`);
-    const binding = this.bindLocal(spreadName, this.table.union(narrowed));
-    this.patternFact(node, {
-      kind: "tag",
-      field: label,
-      value,
-      binding: binding ?? null,
-    });
-  }
-}
-
-function describeDomain(domain: Domain): string {
-  switch (domain.kind) {
-    case "option":
-      return "an option";
-    case "errors":
-      return `the errors ${domain.ids.map(shortName).join(" | ")}`;
-    case "tagged":
-      return "a tagged record union";
-    case "literals":
-      return `the values ${domain.values.map(describeLiteral).join(" | ")}`;
-    case "open":
-      return `a ${domain.primitive}`;
-    case "error":
-    case "unsupported":
-      return "an unsupported type";
   }
 }
 
