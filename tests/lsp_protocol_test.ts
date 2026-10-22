@@ -2,11 +2,15 @@ import { assert, assertEquals } from "@std/assert";
 import {
   DEFAULT_INITIALIZATION_OPTIONS,
   FileChangeType,
+  narrowCodeActionParams,
   narrowDidChange,
   narrowDidChangeWatchedFiles,
   narrowDidOpen,
+  narrowEditorPositionParams,
   narrowInitializeParams,
   narrowPositionParams,
+  narrowReferencesParams,
+  narrowRenameParams,
   narrowTextDocumentParams,
   SERVER_CAPABILITIES,
   TextDocumentSyncKind,
@@ -551,4 +555,81 @@ Deno.test("an invalid option gives its exact warning and the default", () => {
   assertEquals(notObject.value.warnings, [
     "initializationOptions must be an object; using the defaults",
   ]);
+});
+
+Deno.test("editor params check position before optional version and request fields", () => {
+  const invalid = {
+    textDocument: { uri: URI, version: "old" },
+    position: { line: -1, character: 0 },
+    context: null,
+    newName: null,
+  };
+  for (
+    const narrow of [
+      narrowEditorPositionParams,
+      narrowReferencesParams,
+      narrowRenameParams,
+    ]
+  ) {
+    assertError(
+      narrow(invalid),
+      "position.line must be a non-negative integer",
+    );
+    assertError(
+      narrow({ ...invalid, position: POSITION }),
+      "textDocument.version must be an integer",
+    );
+  }
+  const validPosition = { textDocument: { uri: URI }, position: POSITION };
+  for (const context of [undefined, null, {}, { includeDeclaration: "yes" }]) {
+    assertError(
+      narrowReferencesParams({ ...validPosition, context }),
+      "context.includeDeclaration must be a boolean",
+    );
+  }
+  assertError(narrowRenameParams(validPosition), "newName must be a string");
+  assertError(
+    narrowCodeActionParams({ textDocument: { uri: "" }, range: null }),
+    "textDocument.uri must be a non-empty string",
+  );
+  assertError(
+    narrowCodeActionParams({ textDocument: { uri: URI }, range: null }),
+    "range must be an object",
+  );
+});
+
+Deno.test("editor params omit absent versions and preserve explicit integer versions", () => {
+  const position = { textDocument: { uri: URI }, position: POSITION };
+  for (const textDocument of [{ uri: URI }, { uri: URI, version: undefined }]) {
+    assertEquals(narrowEditorPositionParams({ ...position, textDocument }), {
+      ok: true,
+      value: position,
+    });
+  }
+  assertEquals(
+    narrowReferencesParams({
+      ...position,
+      textDocument: { uri: URI, version: -1 },
+      context: { includeDeclaration: false, extra: true },
+    }),
+    {
+      ok: true,
+      value: { ...position, documentVersion: -1, includeDeclaration: false },
+    },
+  );
+  assertEquals(narrowRenameParams({ ...position, newName: "" }), {
+    ok: true,
+    value: { ...position, newName: "" },
+  });
+  assertEquals(
+    narrowCodeActionParams({
+      textDocument: { uri: URI },
+      range: RANGE,
+      context: null,
+    }),
+    {
+      ok: true,
+      value: { textDocument: { uri: URI }, range: RANGE },
+    },
+  );
 });

@@ -1,7 +1,7 @@
 // The subset of the Language Server Protocol that this server uses: the wire
 // types, and narrowing functions from `unknown` for every incoming params
-// shape. A narrowing function returns a Result. Its error text is fit for the
-// message of a -32602 response.
+// shape. Ordered field schemas share primitive, object, array and optional
+// checks. Narrowers return a Result whose error text fits a -32602 response.
 
 import {
   isRecord,
@@ -241,40 +241,97 @@ function isInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value);
 }
 
-function narrowPosition(value: unknown, where: string): Narrowed<Position> {
-  if (!isRecord(value)) return fail(`${where} must be an object`);
-  if (!isIndex(value.line)) {
-    return fail(`${where}.line must be a non-negative integer`);
+type Check<T> = (value: unknown, where: string) => Narrowed<T>;
+type Shape = Readonly<Record<string, Check<unknown>>>;
+type Checked<C> = C extends Check<infer T> ? T : never;
+type Out<S extends Shape> =
+  & {
+    readonly [K in keyof S as undefined extends Checked<S[K]> ? never : K]:
+      Checked<S[K]>;
   }
-  if (!isIndex(value.character)) {
-    return fail(`${where}.character must be a non-negative integer`);
-  }
-  return ok({ line: value.line, character: value.character });
+  & {
+    readonly [K in keyof S as undefined extends Checked<S[K]> ? K : never]?:
+      Exclude<Checked<S[K]>, undefined>;
+  };
+
+function primitive<T>(
+  test: (value: unknown) => value is T,
+  description: string,
+): Check<T> {
+  return (value, where) =>
+    test(value) ? ok(value) : fail(`${where} must be ${description}`);
 }
 
-function narrowRange(value: unknown, where: string): Narrowed<Range> {
-  if (!isRecord(value)) return fail(`${where} must be an object`);
-  const start = narrowPosition(value.start, `${where}.start`);
-  if (!start.ok) return start;
-  const end = narrowPosition(value.end, `${where}.end`);
-  if (!end.ok) return end;
-  return ok({ start: start.value, end: end.value });
+function object<S extends Shape>(shape: S): Check<Out<S>> {
+  return (value, where) => {
+    if (!isRecord(value)) return fail(`${where} must be an object`);
+    const out: Record<string, unknown> = {};
+    for (const [key, check] of Object.entries(shape)) {
+      const field = check(value[key], where === "" ? key : `${where}.${key}`);
+      if (!field.ok) return field;
+      if (field.value !== undefined) out[key] = field.value;
+    }
+    // Every field passed its check; undefined optional fields stay absent.
+    return ok(out as Out<S>);
+  };
 }
 
-function narrowUri(value: unknown, where: string): Narrowed<string> {
-  return typeof value === "string" && value !== ""
-    ? ok(value)
-    : fail(`${where} must be a non-empty string`);
+function array<T>(check: Check<T>): Check<readonly T[]> {
+  return (value, where) => {
+    if (!Array.isArray(value)) return fail(`${where} must be an array`);
+    const out: T[] = [];
+    for (let i = 0; i < value.length; i++) {
+      const item = check(value[i], `${where}[${i}]`);
+      if (!item.ok) return item;
+      out.push(item.value);
+    }
+    return ok(out);
+  };
 }
 
-function narrowDocument(
-  value: unknown,
-  where: string,
-): Narrowed<TextDocumentIdentifier> {
-  if (!isRecord(value)) return fail(`${where} must be an object`);
-  const uri = narrowUri(value.uri, `${where}.uri`);
-  return uri.ok ? ok({ uri: uri.value }) : uri;
+function optional<T>(check: Check<T>): Check<T | undefined> {
+  return (value, where) =>
+    value === undefined ? ok(undefined) : check(value, where);
 }
+
+function params<S extends Shape>(
+  method: string,
+  shape: S,
+): (value: unknown) => Narrowed<Out<S>> {
+  const check = object(shape);
+  return (value) => {
+    const record = narrowParamsRecord(value, method);
+    return record.ok ? check(record.value, "") : record;
+  };
+}
+
+const string = primitive(
+  (value): value is string => typeof value === "string",
+  "a string",
+);
+const uri = primitive(
+  (value): value is string => typeof value === "string" && value !== "",
+  "a non-empty string",
+);
+const integer = primitive(isInteger, "an integer");
+const index = primitive(isIndex, "a non-negative integer");
+const fileChangeType = primitive(
+  (value): value is FileChangeTypeValue =>
+    value === 1 || value === 2 || value === 3,
+  "1, 2, or 3",
+);
+const narrowPosition = object({ line: index, character: index });
+const narrowRange = object({ start: narrowPosition, end: narrowPosition });
+const narrowDocument = object({ uri });
+
+// Validate text before range, but retain the wire result's range/text key order.
+const changeFields = object({ text: string, range: optional(narrowRange) });
+const narrowChange: Check<TextChange> = (value, where) => {
+  const change = changeFields(value, where);
+  if (!change.ok) return change;
+  const { text, range } = change.value;
+  return ok(range === undefined ? { text } : { range, text });
+};
 
 function narrowParamsRecord(
   params: unknown,
@@ -344,30 +401,17 @@ export interface DidOpenParams {
   readonly textDocument: TextDocumentItem;
 }
 
+const didOpen = params("textDocument/didOpen", {
+  textDocument: object({
+    uri,
+    languageId: string,
+    version: integer,
+    text: string,
+  }),
+});
+
 export function narrowDidOpen(params: unknown): Narrowed<DidOpenParams> {
-  const record = narrowParamsRecord(params, "textDocument/didOpen");
-  if (!record.ok) return record;
-  const item = record.value.textDocument;
-  if (!isRecord(item)) return fail("textDocument must be an object");
-  const uri = narrowUri(item.uri, "textDocument.uri");
-  if (!uri.ok) return uri;
-  if (typeof item.languageId !== "string") {
-    return fail("textDocument.languageId must be a string");
-  }
-  if (!isInteger(item.version)) {
-    return fail("textDocument.version must be an integer");
-  }
-  if (typeof item.text !== "string") {
-    return fail("textDocument.text must be a string");
-  }
-  return ok({
-    textDocument: {
-      uri: uri.value,
-      languageId: item.languageId,
-      version: item.version,
-      text: item.text,
-    },
-  });
+  return didOpen(params);
 }
 
 export interface DidChangeParams {
@@ -375,38 +419,13 @@ export interface DidChangeParams {
   readonly contentChanges: readonly TextChange[];
 }
 
+const didChange = params("textDocument/didChange", {
+  textDocument: object({ uri, version: integer }),
+  contentChanges: array(narrowChange),
+});
+
 export function narrowDidChange(params: unknown): Narrowed<DidChangeParams> {
-  const record = narrowParamsRecord(params, "textDocument/didChange");
-  if (!record.ok) return record;
-  const document = record.value.textDocument;
-  if (!isRecord(document)) return fail("textDocument must be an object");
-  const uri = narrowUri(document.uri, "textDocument.uri");
-  if (!uri.ok) return uri;
-  if (!isInteger(document.version)) {
-    return fail("textDocument.version must be an integer");
-  }
-  const raw = record.value.contentChanges;
-  if (!Array.isArray(raw)) return fail("contentChanges must be an array");
-  const changes: TextChange[] = [];
-  for (let i = 0; i < raw.length; i++) {
-    const change: unknown = raw[i];
-    const where = `contentChanges[${i}]`;
-    if (!isRecord(change)) return fail(`${where} must be an object`);
-    if (typeof change.text !== "string") {
-      return fail(`${where}.text must be a string`);
-    }
-    if (change.range === undefined) {
-      changes.push({ text: change.text });
-      continue;
-    }
-    const range = narrowRange(change.range, `${where}.range`);
-    if (!range.ok) return range;
-    changes.push({ range: range.value, text: change.text });
-  }
-  return ok({
-    textDocument: { uri: uri.value, version: document.version },
-    contentChanges: changes,
-  });
+  return didChange(params);
 }
 
 export interface TextDocumentParams {
@@ -421,11 +440,10 @@ export interface TextDocumentParams {
 export function narrowTextDocumentParams(
   params: unknown,
 ): Narrowed<TextDocumentParams> {
-  const record = narrowParamsRecord(params, "request");
-  if (!record.ok) return record;
-  const document = narrowDocument(record.value.textDocument, "textDocument");
-  return document.ok ? ok({ textDocument: document.value }) : document;
+  return textDocumentParams(params);
 }
+
+const textDocumentParams = params("request", { textDocument: narrowDocument });
 
 export interface PositionParams {
   readonly textDocument: TextDocumentIdentifier;
@@ -436,14 +454,13 @@ export interface PositionParams {
 export function narrowPositionParams(
   params: unknown,
 ): Narrowed<PositionParams> {
-  const record = narrowParamsRecord(params, "request");
-  if (!record.ok) return record;
-  const document = narrowDocument(record.value.textDocument, "textDocument");
-  if (!document.ok) return document;
-  const position = narrowPosition(record.value.position, "position");
-  if (!position.ok) return position;
-  return ok({ textDocument: document.value, position: position.value });
+  return positionParams(params);
 }
+
+const positionParams = params("request", {
+  textDocument: narrowDocument,
+  position: narrowPosition,
+});
 
 export interface FileEvent {
   readonly uri: string;
@@ -457,28 +474,12 @@ interface DidChangeWatchedFilesParams {
 export function narrowDidChangeWatchedFiles(
   params: unknown,
 ): Narrowed<DidChangeWatchedFilesParams> {
-  const record = narrowParamsRecord(
-    params,
-    "workspace/didChangeWatchedFiles",
-  );
-  if (!record.ok) return record;
-  const raw = record.value.changes;
-  if (!Array.isArray(raw)) return fail("changes must be an array");
-  const changes: FileEvent[] = [];
-  for (let i = 0; i < raw.length; i++) {
-    const event: unknown = raw[i];
-    const where = `changes[${i}]`;
-    if (!isRecord(event)) return fail(`${where} must be an object`);
-    const uri = narrowUri(event.uri, `${where}.uri`);
-    if (!uri.ok) return uri;
-    const type = event.type;
-    if (type !== 1 && type !== 2 && type !== 3) {
-      return fail(`${where}.type must be 1, 2, or 3`);
-    }
-    changes.push({ uri: uri.value, type });
-  }
-  return ok({ changes });
+  return didChangeWatchedFiles(params);
 }
+
+const didChangeWatchedFiles = params("workspace/didChangeWatchedFiles", {
+  changes: array(object({ uri, type: fileChangeType })),
+});
 
 /** Editor mutation requests may carry an explicit document version. */
 export interface EditorPositionParams extends PositionParams {
@@ -494,6 +495,7 @@ export interface CodeActionParams extends TextDocumentParams {
   readonly range: Range;
 }
 
+// Editor requests validate the position before an optional document version.
 export function narrowEditorPositionParams(
   params: unknown,
 ): Narrowed<EditorPositionParams> {
@@ -534,12 +536,13 @@ export function narrowRenameParams(params: unknown): Narrowed<RenameParams> {
   return ok({ ...position.value, newName: params.newName });
 }
 
+const codeActionParams = params("request", {
+  textDocument: narrowDocument,
+  range: narrowRange,
+});
+
 export function narrowCodeActionParams(
   params: unknown,
 ): Narrowed<CodeActionParams> {
-  const document = narrowTextDocumentParams(params);
-  if (!document.ok) return document;
-  if (!isRecord(params)) return fail("params must be an object");
-  const range = narrowRange(params.range, "range");
-  return range.ok ? ok({ ...document.value, range: range.value }) : range;
+  return codeActionParams(params);
 }
