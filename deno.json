@@ -1,6 +1,6 @@
 {
   "name": "@srdjan/effective-lang",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "license": "MIT",
   "exports": "./src/core/mod.ts",
   "exclude": [
