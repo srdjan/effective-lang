@@ -31,7 +31,8 @@ import {
   property,
   soft,
 } from "./doc.ts";
-import { at, ExprEmitter } from "./expr.ts";
+import { at } from "./emitted.ts";
+import { ExprEmitter } from "./expr.ts";
 import {
   type Scope,
   serviceOfCapability,

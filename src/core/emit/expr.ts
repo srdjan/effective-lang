@@ -19,7 +19,6 @@ import type {
   Handler,
   Parameter,
   Pattern,
-  Span,
   Step,
   Type,
   ValueId,
@@ -43,11 +42,32 @@ import {
   line,
   member,
   property,
-  soft,
   spanEnds,
   spanned,
   through,
 } from "./doc.ts";
+import { codecStructural } from "./families/codec.ts";
+import type { ExprCore } from "./families/context.ts";
+import { fiberLeaf } from "./families/fiber.ts";
+import { layerLeaf, layerStructural } from "./families/layer.ts";
+import {
+  at,
+  callArguments,
+  type Chain,
+  type ChainHead,
+  type ChainTail,
+  concurrencyArguments,
+  concurrencyText,
+  type CondChain,
+  type Emitted,
+  emitted,
+  flush,
+  free,
+  type Kid,
+  type Mode,
+  PREC,
+  type Run,
+} from "./emitted.ts";
 import {
   type ExprScope,
   internal,
@@ -76,19 +96,6 @@ import { builtinInstanceName, isLocalId } from "../ids.ts";
 
 // ------------------------------------------------------------------ precedence
 
-/** Precedence levels of the printed expressions. A larger number binds tighter. */
-const PREC = {
-  yield: 0,
-  conditional: 1,
-  or: 2,
-  and: 3,
-  equality: 4,
-  relational: 5,
-  additive: 6,
-  multiplicative: 7,
-  member: 10,
-} as const;
-
 function binaryPrecedence(operator: string): number {
   switch (operator) {
     case "||":
@@ -111,95 +118,7 @@ function binaryPrecedence(operator: string): number {
   }
 }
 
-/** The parameter list of one arrow of a chain, with the source span of that arrow. */
-interface ChainHead {
-  readonly doc: Doc;
-  readonly span: Span | undefined;
-}
-
-/** The body at the end of an arrow chain. */
-type ChainTail =
-  | { readonly kind: "expr"; readonly body: Emitted }
-  | { readonly kind: "block"; readonly statements: readonly Doc[] };
-
-/**
- * An arrow function, seen as a chain of arrows: `(a) => (b) => body` has two
- * heads. `deno fmt` lays out a chain as a unit, so the printer needs the parts.
- */
-interface Chain {
-  readonly heads: readonly ChainHead[];
-  readonly tail: ChainTail;
-}
-
-/** A printed expression with the facts that its parent needs. */
-interface Emitted {
-  readonly doc: Doc;
-  readonly prec: number;
-  /** The text starts with `{`, so a statement or an arrow body needs parentheses. */
-  readonly brace: boolean;
-  /** An array or tuple literal: an arrow body stays on the line of the arrow. */
-  readonly bracket?: true;
-  /** A function or object literal that a call can print after the other arguments. */
-  readonly huggable: boolean;
-  /** Present when the expression is an arrow function. */
-  readonly chain?: Chain;
-  /** Present when the expression is a binary operation. A larger run can take its operands. */
-  readonly run?: Run;
-  /** Present when the expression is an arrow with an expression body. Names the group of the body. */
-  readonly bodyGroup?: GroupId;
-  /** Present when the expression is a conditional. A conditional in its else branch joins it. */
-  readonly condChain?: CondChain;
-  /**
-   * The doc for a position that starts on a line of its own at the indentation
-   * of the expression, as the body of an arrow or an array element. Present
-   * only when it differs from `doc`.
-   */
-  readonly flush?: Doc;
-}
-
-function emitted(
-  doc: Doc,
-  prec: number = PREC.member,
-  flags: {
-    readonly brace?: boolean;
-    readonly bracket?: true;
-    readonly huggable?: boolean;
-    readonly chain?: Chain;
-    readonly run?: Run;
-    readonly flush?: Doc;
-    readonly bodyGroup?: GroupId;
-    readonly condChain?: CondChain;
-  } = {},
-): Emitted {
-  return {
-    ...flags,
-    doc,
-    prec,
-    brace: flags.brace ?? false,
-    huggable: flags.huggable ?? false,
-  };
-}
-
-/** The doc of `e` for a position that starts on a line of its own. */
-function flush(e: Emitted): Doc {
-  return e.flush ?? e.doc;
-}
-
 // ------------------------------------------------------------------ conditionals
-
-/**
- * A chain `t0 ? a0 : t1 ? a1 : last`. `deno fmt` prints every `?` and `:` of
- * the chain at one indentation level.
- */
-interface CondChain {
-  readonly tests: readonly Emitted[];
-  readonly arms: readonly Doc[];
-  readonly last: Doc;
-  /** The span of the conditional that starts at `tests[j + 1]`, for each `j`. */
-  readonly nested: readonly Span[];
-  /** The span of the whole chain. Set when the conditional is tagged. */
-  readonly self: Span | undefined;
-}
 
 /** The test of a conditional. `tail` is the depth of the lines after the first, if the test breaks. */
 function testDoc(test: Emitted, tail: number): Doc {
@@ -345,25 +264,6 @@ function condDoc(chain: CondChain, tail: number): Doc {
 
 // ------------------------------------------------------------------ binary runs
 
-/**
- * A chain of binary operations of one precedence level, such as
- * `a && b && c`. `deno fmt` flattens it and puts the operator at the end of
- * the line. It breaks after an operator only where the next operand does not
- * fit. A break indents the lines after the first by one level, except for an
- * arrow body and an array element.
- */
-interface Run {
-  readonly operands: readonly Doc[];
-  /** `operators[i]` stands between `operands[i]` and `operands[i + 1]`. */
-  readonly operators: readonly string[];
-  /**
-   * The spans of the operations inside the chain: `inner[j]` covers the
-   * operands `0` to `j + 1`. The span of the whole chain is `top`.
-   */
-  readonly inner: readonly Span[];
-  readonly top: Span | undefined;
-}
-
 /** The doc of a run. `tail` is the indentation depth of the lines after the first. */
 function runDoc(run: Run, tail: number): Doc {
   const ends = run.inner.map(spanEnds);
@@ -455,16 +355,6 @@ function chainDocOf(chain: Chain): Doc {
   return alt([options.oneLine, options.bodyDown, split]);
 }
 
-/** The doc of `e`, in parentheses when `e` binds weaker than `min`. */
-export function at(e: Emitted, min: number): Doc {
-  return e.prec < min ? ["(", e.doc, ")"] : e.doc;
-}
-
-/** The doc in a position that needs no parentheses. It adds none, and braces get no special case. */
-function free(e: Emitted): Doc {
-  return e.doc;
-}
-
 /** True when the doc that `at(e, min)` prints starts with `{`. */
 function leadingBrace(e: Emitted, min: number): boolean {
   return e.prec >= min && e.brace;
@@ -472,36 +362,6 @@ function leadingBrace(e: Emitted, min: number): boolean {
 
 function asStatement(e: Emitted): Doc {
   return e.brace ? ["(", e.doc, ")"] : e.doc;
-}
-
-/** Call arguments: one line, or the last function or object printed in place, or one for each line. */
-function callArguments(args: readonly Emitted[]): Doc {
-  if (args.length === 0) return "()";
-  const docs = args.map(free);
-  const expanded = (brk: boolean): Doc =>
-    group(
-      ["(", indent([soft, join([",", line], docs)]), ifBreak(","), soft, ")"],
-      brk,
-    );
-  const last = args[args.length - 1];
-  const others = args.slice(0, -1);
-  if (!last.huggable || others.some((o) => o.huggable)) return expanded(false);
-  const head = others.flatMap((o) => [free(o), ", "]);
-  const lastDoc = free(last);
-  // A chain stays on the line of the call only when its heads fit there. Else
-  // the arguments break, and each head gets a line of its own.
-  if (last.chain !== undefined && last.chain.heads.length > 1) {
-    return alt([["(", ...head, lastDoc, ")"], expanded(true)]);
-  }
-  // When the body of the last arrow moves down, `)` moves down with it.
-  const close: Doc = last.bodyGroup === undefined
-    ? ")"
-    : [ifBroke(last.bodyGroup, hard), ")"];
-  return alt([
-    ["(", ...head, lastDoc, ")"],
-    ["(", ...head, group(lastDoc, true), close],
-    expanded(true),
-  ]);
 }
 
 /** `left === right`. When it does not fit, `right` moves down two levels, as `deno fmt` prints it. */
@@ -545,24 +405,7 @@ function effectCollectionBuiltin(
   return name === "all" || name === "traverse" ? name : undefined;
 }
 
-/** The text of a concurrency limit: a number, or `"unbounded"` with its quotes. */
-function concurrencyText(limit: number | "unbounded"): string {
-  return limit === "unbounded" ? '"unbounded"' : String(limit);
-}
-
-/** The options argument `{ concurrency: n }`, or no argument when the program sets no limit. */
-function concurrencyArguments(
-  limit: number | "unbounded" | undefined,
-): Emitted[] {
-  return limit === undefined
-    ? []
-    : [emitted(`{ concurrency: ${concurrencyText(limit)} }`)];
-}
-
-type Mode = "pure" | "gen";
-type Kid = (e: Expr, expected?: Type) => Emitted;
-
-export class ExprEmitter {
+export class ExprEmitter implements ExprCore {
   constructor(readonly scope: ExprScope) {}
 
   /** True for a function type, or an alias of one, that runs as an effect. */
@@ -749,7 +592,7 @@ export class ExprEmitter {
   }
 
   /** The function type that `type` stands for, through aliases. */
-  private functionTypeOf(type: Type): FunctionType | undefined {
+  functionTypeOf(type: Type): FunctionType | undefined {
     const resolved = this.scope.resolve(type);
     return resolved.kind === "function" ? resolved : undefined;
   }
@@ -1244,7 +1087,7 @@ export class ExprEmitter {
         ]);
       }
       case "layer":
-        return this.sourceLayer(e);
+        return layerStructural(this, e);
       case "retry-schedule": {
         const schedule = this.scope.effect("Schedule");
         const effect = this.scope.effect("Effect");
@@ -1271,86 +1114,12 @@ export class ExprEmitter {
           `return ${effect}.succeed([${metadata}.attempt, ${duration}.millis(${decision}.value)] as [number, ${duration}.Duration]); }))`,
         ]);
       }
-      case "codec": {
-        const type = this.scope.resolve(e.type);
-        if (type.kind !== "codec") throw internal("codec has wrong type");
-        const schema = this.scope.effect("Schema");
-        const option = this.scope.effect("Option");
-        const decode = this.pure(e.decode);
-        const encode = this.pure(e.encode);
-        const encodedSchema = schemaDoc(this.scope, type.encoded);
-        const decodedSchema = schemaDoc(this.scope, type.decoded);
-        const input = this.scope.temp();
-        const value = this.scope.temp();
-        return emitted([
-          "{ decode: (",
-          input,
-          ": unknown) => { try { return ",
-          `${option}.flatMap(`,
-          `${schema}.decodeUnknownOption(`,
-          encodedSchema,
-          ")(",
-          free(
-            this.adaptedInput(emitted(input), type.encoded, "encoded", true),
-          ),
-          "), (",
-          value,
-          ") => ",
-          `${schema}.decodeUnknownOption(`,
-          decodedSchema,
-          ")(",
-          free(
-            this.adaptedInput(
-              emitted([at(decode, PREC.member), "(", value, ")"]),
-              type.decoded,
-              "decoded",
-              true,
-            ),
-          ),
-          ")); } catch { return ",
-          `${option}.none()`,
-          "; } }, ",
-          "encode: (",
-          input,
-          ": ",
-          typeDoc(this.scope, type.decoded),
-          ") => { try { return ",
-          `${option}.flatMap(`,
-          `${schema}.decodeUnknownOption(`,
-          decodedSchema,
-          ")(",
-          free(
-            this.adaptedInput(emitted(input), type.decoded, "decoded", true),
-          ),
-          "), (",
-          value,
-          ") => ",
-          `${schema}.decodeUnknownOption(`,
-          encodedSchema,
-          ")(",
-          free(
-            this.adaptedInput(
-              emitted([at(encode, PREC.member), "(", value, ")"]),
-              type.encoded,
-              "encoded",
-              true,
-            ),
-          ),
-          ")); } catch { return ",
-          `${option}.none()`,
-          "; } } }",
-        ]);
-      }
-      case "schema":
-        return this.schemaExpr(e, kid);
+      case "codec":
       case "decode":
       case "encode":
-        return emitted([
-          at(kid(e.codec), PREC.member),
-          ".",
-          e.kind,
-          callArguments([kid(e.input)]),
-        ]);
+        return codecStructural(this, e, kid);
+      case "schema":
+        return this.schemaExpr(e, kid);
       case "call":
         return this.nonLeafCall(e, kid);
       case "block":
@@ -1778,61 +1547,6 @@ export class ExprEmitter {
     }
   }
 
-  private sourceLayer(e: Extract<Expr, { kind: "layer" }>): Emitted {
-    const declaration = this.scope.typeLevelDeclaration(e.service);
-    const acquire = this.functionTypeOf(e.acquire.type);
-    const implementation = acquire === undefined
-      ? undefined
-      : this.scope.resolve(acquire.result);
-    if (declaration?.kind !== "service" || implementation?.kind !== "record") {
-      throw internal("a source layer needs a checked service implementation");
-    }
-    const effect = this.scope.effect("Effect");
-    const layer = this.scope.effect("Layer");
-    const instance = this.scope.temp();
-    const fields: Doc[] = declaration.methods.map((method) => {
-      const field = implementation.fields.find((f) => f.name === method.name);
-      const source = field === undefined
-        ? undefined
-        : this.scope.resolve(field.type);
-      if (source?.kind !== "function") {
-        throw internal(`the layer method ${method.name} is not a function`);
-      }
-      const names = method.type.parameters.map(() => this.scope.temp());
-      const parameters = bracketed(
-        "(",
-        ")",
-        names.map((
-          name,
-          i,
-        ) => [name, ": ", typeDoc(this.scope, method.type.parameters[i])]),
-        false,
-      );
-      const invoke = emitted([
-        instance,
-        ".",
-        method.name,
-        callArguments(names.map((name) => emitted(name))),
-      ]);
-      const body = source.execution === "pure"
-        ? emitted([`${effect}.succeed`, callArguments([invoke])])
-        : invoke;
-      return [fieldKey(method.name), ": ", this.arrow(parameters, body)];
-    });
-    const assembled = this.objectLiteral(fields, []);
-    const mapped = emitted([
-      `${effect}.map`,
-      callArguments([
-        this.suspended(e.acquire),
-        emitted(this.arrow(`(${instance})`, assembled)),
-      ]),
-    ]);
-    return emitted([
-      `${layer}.effect`,
-      callArguments([emitted(this.scope.nameOf(e.service)), mapped]),
-    ]);
-  }
-
   private literal(value: string | number | boolean | null): Doc {
     if (value === null) return "undefined";
     if (typeof value === "string") return JSON.stringify(value);
@@ -1908,7 +1622,7 @@ export class ExprEmitter {
     ]);
   }
 
-  private adaptedInput(
+  adaptedInput(
     input: Emitted,
     type: Type,
     direction: "decoded" | "encoded" | "make",
@@ -1925,7 +1639,7 @@ export class ExprEmitter {
     ]);
   }
 
-  private objectLiteral(
+  objectLiteral(
     fields: readonly Doc[],
     spreads: readonly Doc[],
   ): Emitted {
@@ -2166,13 +1880,13 @@ export class ExprEmitter {
     );
   }
 
-  private callback(arg: Expr, kid: Kid): Emitted {
+  callback(arg: Expr, kid: Kid): Emitted {
     return arg.kind === "closure"
       ? this.tag(arg, this.closure(arg, false))
       : kid(arg);
   }
 
-  private effectCallback(arg: Expr): Emitted {
+  effectCallback(arg: Expr): Emitted {
     const from = this.functionTypeOf(arg.type);
     if (from === undefined) {
       throw internal("a stream callback is not a function");
@@ -2776,33 +2490,12 @@ export class ExprEmitter {
           `${effect}.retry`,
           callArguments([this.suspended(e.job), this.pure(e.options)]),
         ]);
-      case "with-fiber": {
-        const fiber = this.scope.effect("Fiber");
-        const job = children[0] ?? this.pure(e.job);
-        return emitted([
-          `${effect}.acquireUseRelease`,
-          callArguments([
-            emitted([`${effect}.forkChild`, callArguments([job])]),
-            this.effectCallback(e.use),
-            emitted(`${fiber}.interrupt`),
-          ]),
-        ]);
-      }
+      case "with-fiber":
       case "join-fiber":
-      case "interrupt-fiber": {
-        const fiber = this.scope.effect("Fiber");
-        return emitted([
-          `${fiber}.${e.kind === "join-fiber" ? "join" : "interrupt"}`,
-          callArguments([children[0] ?? this.pure(e.fiber)]),
-        ]);
-      }
-      case "provide": {
-        const job = this.suspended(e.job);
-        return emitted([
-          `${effect}.provide`,
-          callArguments([job, this.pure(e.provider)]),
-        ]);
-      }
+      case "interrupt-fiber":
+        return fiberLeaf(this, e, children);
+      case "provide":
+        return layerLeaf(this, e);
       case "catch":
         return this.catchEffect(e);
       default:
@@ -2817,7 +2510,7 @@ export class ExprEmitter {
   }
 
   /** `Effect.suspend(job)`. A pure job is lifted, because `suspend` needs an effect. */
-  private suspended(job: Expr): Emitted {
+  suspended(job: Expr): Emitted {
     const effect = this.scope.effect("Effect");
     const from = this.functionTypeOf(job.type);
     const value = from !== undefined && from.execution === "pure"
