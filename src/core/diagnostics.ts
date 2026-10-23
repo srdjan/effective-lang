@@ -290,6 +290,11 @@ export const DIAGNOSTIC_CODES = {
     description:
       "A primitive type (string, int, number, boolean, or a literal type) appears outside the body of a type, data, or error declaration.",
   },
+  "declaration/014": {
+    category: "declaration",
+    description:
+      "The base of a Brand type is a record, a data type, or a union with such a member. Declare a nominal record with data.",
+  },
   "declaration/015": {
     category: "declaration",
     description:

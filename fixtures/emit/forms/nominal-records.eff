@@ -1,11 +1,11 @@
 type UserId = Brand<string>
 
-export type User = Brand<{
+export data User = {
   id: UserId,
   name: string,
   active: boolean,
   nickname?: string
-}>
+}
 
 type Dog = {
   id: UserId,

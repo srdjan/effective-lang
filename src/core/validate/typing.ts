@@ -412,22 +412,17 @@ export function unionOf(env: TypeEnv, types: readonly Type[]): Type {
   return kept.length === 1 ? kept[0] : { kind: "union", members: kept };
 }
 
-/** The fields of a record type, of a named error or data type, or of a brand of a record. */
+/** The fields of a record type, or of a named error or data type. */
 export function fieldsOf(
   env: TypeEnv,
   type: Type,
-  depth = 0,
 ): readonly Field[] | undefined {
-  if (depth > MAX_DEPTH) return undefined;
   const unfolded = unfold(env, type);
   if (unfolded.kind === "record") return unfolded.fields;
   if (unfolded.kind === "named") {
     const error = env.errors.get(unfolded.id);
     if (error !== undefined) return error;
-    const data = env.data.get(unfolded.id);
-    if (data !== undefined) return data.fields;
-    const base = env.brands.get(unfolded.id);
-    return base === undefined ? undefined : fieldsOf(env, base, depth + 1);
+    return env.data.get(unfolded.id)?.fields;
   }
   return undefined;
 }

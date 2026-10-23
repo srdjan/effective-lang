@@ -42,6 +42,7 @@ import type {
 } from "./ir.ts";
 import { TokenKind } from "./lex.ts";
 import { stronglyConnectedComponents } from "./modes.ts";
+import { flattenMembers } from "./patterns.ts";
 import type { ModuleInfo } from "./project.ts";
 import type { Target } from "./resolve.ts";
 import type { Result, Span } from "./source.ts";
@@ -1256,6 +1257,11 @@ class ModuleChecker {
   private readonly errors: ErrorDecl[] = [];
   /** The fields of every data and error declaration, for the deferred-type rule. */
   private readonly nominalFields: LoweredField[] = [];
+  /** The base of every `Brand<T>` declaration, for rule 12. */
+  private readonly brandBases: {
+    readonly id: TypeId;
+    readonly span: Span;
+  }[] = [];
   private readonly services: ServiceDecl[] = [];
   private readonly methodTypes = new Map<CapabilityId, TypeRef>();
   private readonly values = new Map<ValueId, ValueSignature>();
@@ -1294,6 +1300,7 @@ class ModuleChecker {
     const guarded = this.checkCycles(infos);
     this.checkDepths(infos, guarded);
     this.checkDeferredFields();
+    this.checkBrandBases();
     this.checkPrimitivePositions();
     for (const entry of entries) {
       if (entry.kind === "service") this.checkService(entry);
@@ -1411,7 +1418,15 @@ class ModuleChecker {
       kind = "brand";
     } else if (body !== undefined && this.isBrand(body)) {
       const base = this.lowerer.brandBase(body);
+      const argsNode = this.lowerer.kidsOfKind(body, SyntaxKind.TypeArgs)[0];
+      const arg = argsNode === undefined
+        ? undefined
+        : this.lowerer.kids(argsNode)[0];
       this.table.defineBrand(id, base.ref);
+      this.brandBases.push({
+        id,
+        span: nodeSpan(this.tree, arg ?? body),
+      });
       definition = { kind: "brand", base: base.ir };
       kind = "brand";
     } else {
@@ -1674,6 +1689,31 @@ class ModuleChecker {
         `the field \`${field.name}\` has a function or deferred type, which a data or error declaration cannot hold`,
         field.typeSpan,
       );
+    }
+  }
+
+  /**
+   * Rule 12: the base of a brand cannot be a record or a data type, or a union
+   * with such a member, after aliases unfold. A nominal record is a data type.
+   * The brand becomes the error type so that its uses report nothing more.
+   */
+  private checkBrandBases(): void {
+    for (const brand of this.brandBases) {
+      const base = this.table.brandBaseOf(brand.id);
+      if (base === undefined) continue;
+      const nominal = flattenMembers(this.table, base).some((member) => {
+        const node = this.table.node(member);
+        return node.kind === "record" ||
+          (node.kind === "named" && !isErrorId(node.id) &&
+            this.table.dataRecordOf(node.id) !== undefined);
+      });
+      if (!nominal) continue;
+      this.lowerer.report(
+        "declaration/014",
+        "a brand base cannot be a record or a data type; declare a nominal record with `data`",
+        brand.span,
+      );
+      this.table.defineBrand(brand.id, this.table.error);
     }
   }
 

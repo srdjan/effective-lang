@@ -3414,11 +3414,11 @@ Deno.test("a chain of 5000 aliases gives declaration/012 and no exception", () =
   assert(codes(project).every((code) => code === "declaration/012"));
 });
 
-// ------------------------------------------------------------------ record brands
+// ------------------------------------------------------------------ nominal records
 
 const NOMINAL_RECORDS = `
 type UserId = Brand<string>
-type User = Brand<{ id: UserId, name: string, active: boolean, nickname?: string }>
+data User = { id: UserId, name: string, active: boolean, nickname?: string }
 type Dog = { id: UserId, name: string, active: boolean, nickname?: string }
 const nameOf = (user: User): Text => user.name
 const nick = (user: User): Text =>
@@ -3430,7 +3430,7 @@ const activate = (user: User): User => ({ ...user, active: true })
 type Text = string
 `;
 
-Deno.test("a field read and a record update see through a brand of a record", () => {
+Deno.test("a field read and a record update see through a data type", () => {
   const project = checkText(NOMINAL_RECORDS);
   assertEquals(messages(project), []);
   const activate = fn(project, "m", "activate");
@@ -3446,7 +3446,7 @@ Deno.test("a field read and a record update see through a brand of a record", ()
   assert(result.id.endsWith("#User"), result.id);
 });
 
-Deno.test("a record brand stays nominal against a structural record of equal fields", () => {
+Deno.test("a data type stays nominal against a structural record of equal fields", () => {
   const project = checkText(`${NOMINAL_RECORDS}
 const dog: Dog = { id: UserId("d1"), name: "barki", active: false }
 const wrong = (): User => activate(dog)
@@ -3454,7 +3454,7 @@ const wrong = (): User => activate(dog)
   assertEquals(codes(project), ["type-mismatch/003"]);
 });
 
-Deno.test("a record update through a brand rejects a field that the base lacks", () => {
+Deno.test("a record update through a data type rejects a field that the base lacks", () => {
   const project = checkText(`${NOMINAL_RECORDS}
 const owned = (user: User): User => ({ ...user, owner: "x" })
 `);
@@ -3521,6 +3521,27 @@ const right = (u: User): Twin => Twin(unbrand(u))
 `);
   assertEquals(codes(project), ["type-mismatch/003"]);
   assertEquals(project.diagnostics[0].message.includes("Twin"), true);
+});
+
+Deno.test("a brand base cannot be a record, a data type, or a union with one", () => {
+  const project = checkText(`
+type Text = string
+type Plain = { id: Text }
+data Row = { id: Text }
+type FromRecord = Brand<{ id: Text }>
+type FromAlias = Brand<Plain>
+type FromData = Brand<Row>
+type FromUnion = Brand<Row | Text>
+type FromAliasLater = Brand<Later>
+type Later = Plain | Text
+type FromString = Brand<Text>
+type FromArray = Brand<Plain[]>
+type FromLiterals = Brand<"a" | "b">
+type FromOption = Brand<Option<Plain>>
+type FromBrand = Brand<FromString>
+`);
+  assertEquals(codes(project), Array(5).fill("declaration/014"));
+  assert(project.diagnostics[0].message.includes("`data`"));
 });
 
 Deno.test("a data constructor takes one argument", () => {

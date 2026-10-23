@@ -19,6 +19,7 @@ import {
   dataOnly,
   isNever,
   MAX_DEPTH,
+  members,
   same,
   type TypeEnv,
   unfold,
@@ -543,6 +544,20 @@ function checkTypeDecl(ctx: Ctx, d: TypeDecl, path: string): void {
       )
     );
     return;
+  }
+  if (
+    d.definition.kind === "brand" &&
+    members(ctx.world.env, d.definition.base).some((m) =>
+      m.kind === "record" ||
+      (m.kind === "named" && ctx.world.env.data.has(m.id))
+    )
+  ) {
+    ctx.report.add(
+      AREA.types,
+      `${path}.definition.base`,
+      "a brand base cannot be a record or a data type; declare a nominal record with data",
+      d.span,
+    );
   }
   const type = d.definition.kind === "alias"
     ? d.definition.type

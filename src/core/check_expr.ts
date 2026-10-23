@@ -1286,7 +1286,7 @@ class BodyChecker
     return this.finish(node, read.type, baseInfo);
   }
 
-  /** The record fields of a type that is a record or a named error. */
+  /** The record fields of a type that is a record, a named error, or a data type. */
   private recordFields(ref: TypeRef):
     | readonly {
       readonly name: string;
@@ -1305,9 +1305,8 @@ class BodyChecker
           : this.table.node(record);
         return recordNode?.kind === "record" ? recordNode.fields : undefined;
       }
-      // A data type, or a brand of a record, has the fields of its base.
-      const base = this.table.dataRecordOf(node.id) ??
-        this.table.brandBaseOf(node.id);
+      // A data type has the fields of its base record.
+      const base = this.table.dataRecordOf(node.id);
       if (base !== undefined) return this.recordFields(base);
     }
     return undefined;

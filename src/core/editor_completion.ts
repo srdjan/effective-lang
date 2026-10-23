@@ -53,7 +53,7 @@ function recordFields(
   if (node.kind === "record") return node.fields.map((f) => f.name);
   if (node.kind === "named") {
     const target = isTypeId(node.id)
-      ? table.aliasOf(node.id) ?? table.brandBaseOf(node.id)
+      ? table.aliasOf(node.id) ?? table.dataRecordOf(node.id)
       : isErrorId(node.id)
       ? table.errorRecordOf(node.id)
       : undefined;

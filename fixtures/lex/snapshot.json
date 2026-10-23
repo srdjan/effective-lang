@@ -68,12 +68,12 @@
       "d75b912da2bd4fcf"
     ],
     "fixtures/emit/forms/nominal-records.eff": [
-      "76e0a76b712d8605",
-      "9ba0ef270cfcd4d5"
+      "ac457514c1fd5936",
+      "00b7557df8da9fdb"
     ],
     "fixtures/emit/forms/optional-fields.eff": [
-      "db2e31ae730ad0e8",
-      "93420e4722a498b1"
+      "7cccdeb744fb2ab5",
+      "be6ce0974d71703d"
     ],
     "fixtures/emit/forms/recursive-data.eff": [
       "744ad1a92f71d0b3",
@@ -210,6 +210,10 @@
     "fixtures/errors/declaration-brand-position.eff": [
       "5a6e77269c59ebd0",
       "3ab1e87e456bfed8"
+    ],
+    "fixtures/errors/declaration-brand-record-base.eff": [
+      "3e42e3bbdbd9d381",
+      "f77742756ed0dbb3"
     ],
     "fixtures/errors/declaration-data-tag-field.eff": [
       "c7415ac4f49e6f76",
@@ -456,8 +460,8 @@
       "13eed4d40161adb6"
     ],
     "fixtures/errors/type-mismatch-nominal-record.eff": [
-      "ac045d4c8db438da",
-      "23a8b60d38060e9b"
+      "8bc9e9b104e6a463",
+      "3d62dcc3d632c129"
     ],
     "fixtures/errors/type-mismatch-not-callable.eff": [
       "e2be4a2beb8b2ba5",

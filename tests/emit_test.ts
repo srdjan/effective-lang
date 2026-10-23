@@ -632,17 +632,19 @@ Deno.test("emitting twice gives identical text", () => {
   );
 });
 
-Deno.test("a record brand emits field reads and updates that keep the brand", () => {
+Deno.test("a nominal record emits field reads and updates that keep the data type", () => {
   const emitted = emitFiles(projectFiles("emit/forms"), [
     "nominal-records.eff",
   ]).get("nominal-records");
   assert(emitted !== undefined, "module nominal-records was not emitted");
   const text = emitted.text;
-  assertStringIncludes(text, '.pipe(Schema.brand("nominal-records#User"))');
+  assertStringIncludes(text, '"nominal-records#User"');
+  assertStringIncludes(text, "Schema.TaggedStruct(");
+  assertStringIncludes(text, "export type User = typeof User.Type;");
   assertStringIncludes(text, "(user: User): Text => user.name;");
-  // An optional field read through the brand becomes an Option.
+  // An optional field read through the data type becomes an Option.
   assertStringIncludes(text, "Option.fromUndefinedOr(user.nickname)");
-  // The update is a plain spread; it keeps the brand in the TypeScript type.
+  // The update is a plain spread; it keeps the data type in the TypeScript type.
   assertStringIncludes(text, "({ ...user, active: true })");
   assertStringIncludes(text, "User.make({ id: UserId.make(");
 });
@@ -703,13 +705,13 @@ export const ts = (o: Odd): Option<Text> => o.toString
   assertStringIncludes(output, '$optionalField<Text>(o, "toString")');
 });
 
-Deno.test("an optional field read through a union, a brand, or an error becomes an Option", () => {
+Deno.test("an optional field read through a union, a data type, or an error becomes an Option", () => {
   const emitted = emitFiles(projectFiles("emit/forms"), [
     "optional-fields.eff",
   ]).get("optional-fields");
   assert(emitted !== undefined, "module optional-fields was not emitted");
   const text = emitted.text;
-  // nickOfUnion, nickOfNested, and nickOfBrand each read x.nickname once.
+  // nickOfUnion, nickOfNested, and nickOfBrand (a data type) each read x.nickname once.
   assertEquals(
     text.split("Option.fromUndefinedOr(x.nickname)").length - 1,
     3,

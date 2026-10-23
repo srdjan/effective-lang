@@ -899,30 +899,21 @@ export class ExprEmitter implements ExprCore {
     return property(fieldKey(name), free(kid(value, expected)));
   }
 
-  /** The declared type of a field of a record type, a data type, or a brand of a record. */
+  /** The declared type of a field of a record type or a data type. */
   private fieldType(type: Type, name: string): Type | undefined {
     return this.recordFieldsOf(type)?.find((f) => f.name === name)?.type;
   }
 
-  /** The fields of a record type, seen through aliases, data types, and brands of a record. */
-  private recordFieldsOf(
-    type: Type,
-    depth = 0,
-  ): readonly Field[] | undefined {
-    if (depth >= 64) return undefined;
+  /** The fields of a record type, seen through aliases, or of a data type. */
+  private recordFieldsOf(type: Type): readonly Field[] | undefined {
     const resolved = this.scope.resolve(type);
     if (resolved.kind === "record") return resolved.fields;
     if (resolved.kind !== "named") return undefined;
     const declaration = this.scope.typeLevelDeclaration(resolved.id);
-    if (declaration?.kind !== "type") return undefined;
-    switch (declaration.definition.kind) {
-      case "data":
-        return declaration.definition.fields;
-      case "brand":
-        return this.recordFieldsOf(declaration.definition.base, depth + 1);
-      case "alias":
-        return undefined;
-    }
+    return declaration?.kind === "type" &&
+        declaration.definition.kind === "data"
+      ? declaration.definition.fields
+      : undefined;
   }
 
   private errorFieldType(error: ErrorId, name: string): Type | undefined {
@@ -1011,7 +1002,7 @@ export class ExprEmitter implements ExprCore {
   /**
    * True when one member of the type has the field as optional. The checker
    * reads an optional field of one union member as an option, so the emitter
-   * looks through unions, aliases, brands of a record, and named errors.
+   * looks through unions, aliases, data types, and named errors.
    */
   private isOptionalField(type: Type, field: string, depth = 0): boolean {
     if (depth >= 64) return false;

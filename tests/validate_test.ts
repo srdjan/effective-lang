@@ -2952,10 +2952,10 @@ Deno.test("compatibility: the lift applies only at the top of a value position",
   assert(!same(ENV, pure, effect));
 });
 
-Deno.test("a field read and a record update through a record brand validate", () => {
+Deno.test("a field read and a record update through a data type validate", () => {
   const lowered = lowerText(`
 type UserId = Brand<string>
-type User = Brand<{ id: UserId, name: string, active: boolean, nickname?: string }>
+data User = { id: UserId, name: string, active: boolean, nickname?: string }
 const nameOf = (user: User): Text => user.name
 const nick = (user: User): Text =>
   match user.nickname {
@@ -3198,6 +3198,36 @@ error Failed = { count: Count }
       assertEquals(forged(name, type), ["validation/002"], name);
     }
   }
+});
+
+Deno.test("data: a brand base cannot be a record, a data type, or a union with one", () => {
+  const lowered = lowerText(`
+type Text = string
+type Plain = { id: Text }
+data Row = { id: Text }
+type Id = Brand<Text>
+type Ids = Brand<Text[]>
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const forge = (base: Type): string[] => {
+    const ir = copy(lowered.ir);
+    const id = ir.declarations.find((d) => d.name === "Id");
+    assert(id?.kind === "type" && id.definition.kind === "brand");
+    Object.assign(id.definition, { base });
+    return codesOf(ir, lowered.sources);
+  };
+  const row: Type = { kind: "named", id: "type:m#Row" };
+  const text: Type = { kind: "named", id: "type:m#Text" };
+  assertEquals(forge({ kind: "record", fields: [] }), ["validation/002"]);
+  assertEquals(forge(row), ["validation/002"]);
+  assertEquals(forge({ kind: "named", id: "type:m#Plain" }), [
+    "validation/002",
+  ]);
+  assertEquals(forge({ kind: "union", members: [row, text] }), [
+    "validation/002",
+  ]);
+  assertEquals(forge({ kind: "array", element: row }), []);
+  assertEquals(forge({ kind: "option", element: row }), []);
 });
 
 Deno.test("data: recursive data types validate and an unguarded cycle is rejected", () => {

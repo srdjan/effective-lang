@@ -3,7 +3,7 @@ type B = { kind: "b", nickname: string }
 type C = { kind: "c", nickname?: string }
 type AB = A | B
 type ABC = AB | C
-type U = Brand<{ kind: "u", nickname?: string }>
+data U = { kind: "u", nickname?: string }
 
 export error Oops = { detail?: string }
 

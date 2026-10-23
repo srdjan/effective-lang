@@ -1,6 +1,6 @@
 type UserId = Brand<string>
 
-type User = Brand<{ id: UserId, name: string, active: boolean }>
+data User = { id: UserId, name: string, active: boolean }
 
 type Dog = { id: UserId, name: string, active: boolean }
 
