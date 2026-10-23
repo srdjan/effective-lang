@@ -263,6 +263,7 @@ export interface EmitNames {
   intSchemaName(): string;
   intFunction(): string;
   unmatched(): string;
+  hostCheck(): string;
   scopeRuntime(): ScopeRuntimeNames;
   serviceParameter(): string;
   fieldHelper(key: string): string;
@@ -288,6 +289,7 @@ export interface ImportLedger {
   hostImports(): ImportGroup[];
   usesIntFunction(): boolean;
   usesUnmatched(): boolean;
+  usesHostCheck(): boolean;
   usesIntSchema(): boolean;
   usesScopeRuntime(): boolean;
 }
@@ -350,6 +352,7 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
 
   private intHelper: string | undefined;
   private unmatchedHelper: string | undefined;
+  private hostCheckHelper: string | undefined;
   private intSchema: string | undefined;
   private serviceName: string | undefined;
   private scopeRuntimeNames: ScopeRuntimeNames | undefined;
@@ -506,6 +509,12 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
     return this.unmatchedHelper;
   }
 
+  /** The helper `$hostCheck` that a wrapped host provider calls for a data result. */
+  hostCheck(): string {
+    this.hostCheckHelper ??= this.fresh("$hostCheck");
+    return this.hostCheckHelper;
+  }
+
   /** The `int` schema `$Int`. */
   intSchemaName(): string {
     this.intSchema ??= this.fresh("$Int");
@@ -524,6 +533,10 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
 
   usesUnmatched(): boolean {
     return this.unmatchedHelper !== undefined;
+  }
+
+  usesHostCheck(): boolean {
+    return this.hostCheckHelper !== undefined;
   }
 
   usesIntSchema(): boolean {

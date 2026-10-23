@@ -5039,3 +5039,194 @@ console.log(JSON.stringify({
     });
   });
 });
+
+// ------------------------------------------------------------------ host checks (HB4)
+
+const HOST_CHECKS_ENTRIES = ["main.eff"];
+
+const HOST_CHECKS_SCRIPT = `
+import { Cause, Effect, Exit, Layer, Option, Stream } from "effect";
+import * as C from "./contracts.ts";
+import * as M from "./main.ts";
+
+const ClockLive = Layer.succeed(C.Clock)({ now: () => Effect.succeed(7) });
+const exitOf = <A, E>(job: Effect.Effect<A, E, C.Clock>) =>
+  Effect.runPromiseExit(job.pipe(Effect.provide(ClockLive)));
+const value = async <A, E>(job: Effect.Effect<A, E, C.Clock>): Promise<A> => {
+  const exit = await exitOf(job);
+  if (Exit.isFailure(exit)) throw new Error(Cause.pretty(exit.cause));
+  return exit.value;
+};
+const defect = async <A, E>(job: Effect.Effect<A, E, C.Clock>): Promise<string> => {
+  const exit = await exitOf(job);
+  return Exit.isFailure(exit) && Cause.hasDies(exit.cause) && !Cause.hasFails(exit.cause)
+    ? (Cause.squash(exit.cause) as Error).message
+    : "no defect";
+};
+const streamValue = <A, E>(job: Effect.Effect<Stream.Stream<A, E, C.Clock>, E, C.Clock>) =>
+  job.pipe(Effect.flatMap((stream) => Effect.all([Stream.runCollect(stream), Stream.runCollect(Stream.chunks(stream))])));
+`;
+
+function buildHostChecks(dir: string): Built {
+  copyDirectory(new URL("emit/host-checks/", FIXTURES), dir);
+  return buildProject(dir, HOST_CHECKS_ENTRIES);
+}
+
+Deno.test("a wrapped host provider passes correct values, keeps stream chunks, and leaves other methods alone", async () => {
+  await withTemporary(async (dir) => {
+    const built = buildHostChecks(dir);
+    assertEquals([...built.paths].sort(), ["contracts.ts", "main.ts"]);
+    await check(dir, ["main.ts", "contracts.ts", "host.ts"]);
+    const main = built.emitted.get("main")?.text ?? "";
+    assert(main.includes("Layer.mergeAll("), main);
+    const result = await runScript(
+      dir,
+      HOST_CHECKS_SCRIPT + `
+const boom = await exitOf(M.get("boom"));
+const [items, chunks] = await value(streamValue(M.watch()));
+console.log(JSON.stringify({
+  get: await value(M.get("k")),
+  find: await value(M.find("f")),
+  list: await value(M.list()),
+  summary: await value(M.summary()),
+  items,
+  chunks: chunks.length,
+  total: await value(M.total()),
+  ping: await value(M.ping()),
+  token: await Effect.runPromise(M.token()),
+  boomFails: Exit.isFailure(boom) && Cause.hasFails(boom.cause) && !Cause.hasDies(boom.cause),
+}));
+`,
+    );
+    assertEquals(result, {
+      get: { _tag: "contracts#Row", id: "k1" },
+      find: {
+        _id: "Option",
+        _tag: "Some",
+        value: { _tag: "contracts#Row", id: "f" },
+      },
+      list: [{ _tag: "contracts#Row", id: "r" }, {
+        _tag: "contracts#Gap",
+        id: "g",
+      }],
+      summary: { count: 2, first: { _tag: "contracts#Row", id: "first" } },
+      items: [
+        { _tag: "contracts#Row", id: "s1" },
+        { _tag: "contracts#Gap", id: "s2" },
+        { _tag: "contracts#Row", id: "s3" },
+      ],
+      chunks: 1,
+      total: 7,
+      ping: "pong",
+      token: { _tag: "host#Token", id: "t" },
+      boomFails: true,
+    });
+  });
+});
+
+Deno.test("a wrong tag through a cast dies on each checked method and names the method and the issue path", async () => {
+  await withTemporary(async (dir) => {
+    buildHostChecks(dir);
+    Deno.copyFileSync(`${dir}/host-wrong.ts`, `${dir}/host.ts`);
+    await check(dir, ["main.ts", "contracts.ts", "host.ts"]);
+    const result = await runScript(
+      dir,
+      HOST_CHECKS_SCRIPT + `
+console.log(JSON.stringify({
+  get: await defect(M.get("k")),
+  find: await defect(M.find("f")),
+  list: await defect(M.list()),
+  watch: await defect(streamValue(M.watch())),
+  summary: await defect(M.summary()),
+  total: await value(M.total()),
+  ping: await value(M.ping()),
+  token: await Effect.runPromise(M.token()),
+}));
+`,
+    );
+    assert(typeof result === "object" && result !== null);
+    const found = result as Record<string, unknown>;
+    const message = (method: string, path: string) => {
+      const text = found[method];
+      assert(typeof text === "string", `${method}: ${JSON.stringify(text)}`);
+      assert(
+        text.startsWith(
+          `host value of Rows.${method} does not match its type: `,
+        ),
+        text,
+      );
+      assert(!text.includes("\n"), text);
+      assert(path === "" || text.includes(path), `${method}: ${text}`);
+    };
+    message("get", "");
+    message("find", "");
+    message("list", "at [1]");
+    message("watch", "");
+    message("summary", 'at ["first"]');
+    // A method without a data result and a provider of a host interface type pass the value through.
+    assertEquals(found.total, 1.5);
+    assertEquals(found.ping, "pong");
+    assertEquals(found.token, { _tag: "host#Nope", id: "t" });
+  });
+});
+
+Deno.test("the emitted host check modules are a fixed point of deno fmt", async () => {
+  await withTemporary(async (dir) => {
+    const built = buildHostChecks(dir);
+    const run = await deno(dir, ["fmt", "--check", ...built.paths]);
+    assertEquals(run.code, 0, `deno fmt --check failed:\n${run.stderr}`);
+    assert(
+      run.stderr.includes("Checked 2 files"),
+      `deno fmt did not check both files:\n${run.stderr}`,
+    );
+  });
+});
+
+Deno.test("a host module with its own service class and a missing method gives one host-boundary diagnostic on the wrapped provider", async () => {
+  await withTemporary(async (dir) => {
+    const built = buildHostChecks(dir);
+    Deno.writeTextFileSync(
+      `${dir}/host.ts`,
+      [
+        'import { Context, Effect, Layer, Schema } from "effect";',
+        'import { Pings, Row } from "./contracts.ts";',
+        'export const Token = Schema.TaggedStruct("host#Token", { id: Schema.String });',
+        "export type Token = typeof Token.Type;",
+        'export class Auth extends Context.Service<Auth, { readonly token: () => Effect.Effect<Token> }>()("host#Auth") {}',
+        'export const AuthLive = Layer.succeed(Auth)({ token: () => Effect.succeed(Token.make({ id: "t" })) });',
+        'class OwnRows extends Context.Service<OwnRows, { readonly get: (key: string) => Effect.Effect<Row> }>()("contracts#Rows") {}',
+        "export const RowsLive = Layer.merge(",
+        '  Layer.succeed(OwnRows)({ get: () => Effect.succeed(Row.make({ id: "x" })) }),',
+        '  Layer.succeed(Pings)({ ping: () => Effect.succeed("pong") }),',
+        ");",
+        "",
+      ].join("\n"),
+    );
+    const run = await deno(dir, [
+      "check",
+      "--config",
+      "deno.json",
+      ...built.paths,
+      "host.ts",
+    ]);
+    assertEquals(run.code, 1, `deno check should fail:\n${run.stderr}`);
+    const output = parseDenoCheck(run.stderr, Deno.realPathSync(dir));
+    assertEquals(output.other, [], run.stderr);
+    const imports = hostImportSpans(built.project);
+    const tables = new Map(
+      [...built.emitted].map(([name, module]) => [
+        module.path,
+        buildSpanTable(module, imports.get(name)),
+      ]),
+    );
+    const mapped = output.diagnostics.map((d) => mapTscDiagnostic(d, tables));
+    assertEquals(mapped.length, 1, run.stderr);
+    const only = mapped[0];
+    assert(only.tag === "host-boundary", JSON.stringify(only));
+    assertEquals(only.diagnostic.code, "host-boundary/001");
+    const source = Deno.readTextFileSync(
+      `${dir}/${only.diagnostic.span.source}`,
+    );
+    assertEquals(spanText(source, only.diagnostic.span), "RowsLive");
+  });
+});

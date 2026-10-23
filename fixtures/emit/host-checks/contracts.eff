@@ -1,0 +1,19 @@
+// Services whose method results contain data types. A provider that provides
+// them is wrapped, and a data result is checked when the host returns it.
+export type Text = string
+export type Count = int
+export data Row = { id: Text }
+export data Gap = { id: Text }
+export type Entry = Row | Gap
+export error Boom = {}
+
+export service Clock { now(): Count }
+export service Rows {
+  get(key: Text, version: Count): Entry fails Boom
+  find(key: Text): Option<Row>
+  list(): Entry[]
+  watch(): Stream<Entry, Boom, Clock.now>
+  summary(): { count: Count, first: Row }
+  total(): Count
+}
+export service Pings { ping(): Text }

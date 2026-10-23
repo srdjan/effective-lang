@@ -1,0 +1,26 @@
+import { Text, Count, Entry, Row, Boom, Clock, Rows, Pings } from "./contracts.eff"
+import { RowsLive, AuthLive, Auth, Token } from "host:store"
+
+export const get = (key: Text): Entry fails Boom uses Clock.now =>
+  provide(RowsLive, () => Rows.get(key, 1))
+
+export const find = (key: Text): Option<Row> fails Boom uses Clock.now =>
+  provide(RowsLive, () => Rows.find(key))
+
+export const list = (): Entry[] fails Boom uses Clock.now =>
+  provide(RowsLive, () => Rows.list())
+
+export const watch = (): Stream<Entry, Boom, Clock.now> fails Boom uses Clock.now =>
+  provide(RowsLive, () => Rows.watch())
+
+export const summary = (): { count: Count, first: Row } fails Boom uses Clock.now =>
+  provide(RowsLive, () => Rows.summary())
+
+export const total = (): Count fails Boom uses Clock.now =>
+  provide(RowsLive, () => Rows.total())
+
+export const ping = (): Text fails Boom uses Clock.now =>
+  provide(RowsLive, () => Pings.ping())
+
+export const token = (): Token =>
+  provide(AuthLive, () => Auth.token())

@@ -1,0 +1,9 @@
+import { Text, Boom, Clock, Rows, Pings } from "./contracts.eff"
+
+export provider RowsLive provides Rows | Pings fails Boom uses Clock.now
+
+// A data type that the host interface declares has no schema value in the
+// generated module, so this provider keeps the plain assertion.
+export data Token = { id: Text }
+export service Auth { token(): Token }
+export provider AuthLive provides Auth

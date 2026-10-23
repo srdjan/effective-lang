@@ -127,11 +127,13 @@ function build(ir: ModuleIR, context: EmitContext): EmittedModule {
   const functionDocs = printed(functions);
   const constantDocs = printed(constants);
 
+  // The host assertions come first: their check schemas register `$Int` and `$hostCheck`.
+  const hostAssertions = emitter.hostAssertions();
   const helpers: Doc[][] = [];
   if (scope.usesIntSchema()) helpers.push([emitter.intSchemaDeclaration()]);
   if (scope.usesIntFunction()) helpers.push([emitter.intFunctionDeclaration()]);
   if (scope.usesUnmatched()) helpers.push([emitter.unmatchedDeclaration()]);
-  const hostAssertions = emitter.hostAssertions();
+  if (scope.usesHostCheck()) helpers.push([emitter.hostCheckDeclaration()]);
   if (scope.usesScopeRuntime()) helpers.push([scopeRuntimeDeclaration(scope)]);
 
   helpers.push(fieldHelperDeclarations(scope));

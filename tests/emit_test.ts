@@ -919,6 +919,93 @@ Deno.test("imports and host modules are rewritten relative to a nested module", 
   );
 });
 
+// ------------------------------------------------------------------ host checks
+
+function hostChecksMain(): { text: string; start: number; end: number } {
+  const emitted = emitFiles(projectFiles("emit/host-checks"), ["main.eff"])
+    .get("main");
+  assert(emitted !== undefined, "module main was not emitted");
+  assertEquals(emitted.hostAssertions.map((a) => a.name), [
+    "RowsLive$host",
+    "AuthLive$host",
+  ]);
+  const { start, end } = emitted.hostAssertions[0];
+  return { text: emitted.text, start, end };
+}
+
+Deno.test("a provider with data results is wrapped, with a check for each data method", () => {
+  const { text, start, end } = hostChecksMain();
+  // The helper and the check constants come once, before the assertion.
+  assertEquals(text.split("const $hostCheck = ").length - 1, 1);
+  for (
+    const line of [
+      'const RowsLive$get = $hostCheck(Entry, "Rows.get");',
+      'const RowsLive$find = $hostCheck(Schema.Option(Row), "Rows.find");',
+      'const RowsLive$list = $hostCheck(Schema.Array(Entry), "Rows.list");',
+      'const RowsLive$watch = $hostCheck(Entry, "Rows.watch");',
+      "Schema.Struct({ count: Count, first: Row }),",
+    ]
+  ) assertStringIncludes(text, line);
+  assertEquals(text.split("= $hostCheck(").length - 1, 5);
+  assert(
+    indexOfOrFail(text, "const $hostCheck = ") <
+      indexOfOrFail(text, "const RowsLive$get = "),
+  );
+  // Each service is rebuilt with every method named. The result and stream checks are synchronous.
+  const wrapper = text.slice(start, end);
+  assertStringIncludes(
+    wrapper,
+    "const RowsLive$host: Layer.Layer<Pings | Rows, Boom, Clock> = Layer.mergeAll(",
+  );
+  assertStringIncludes(wrapper, "Layer.effect(Pings)(");
+  assertStringIncludes(wrapper, "Layer.effect(Rows)(");
+  assertStringIncludes(wrapper, "const $s = yield* Rows;");
+  assertStringIncludes(wrapper, "ping: () => $s.ping(),");
+  assertStringIncludes(
+    wrapper,
+    "get: (a, b) => Effect.map($s.get(a, b), RowsLive$get),",
+  );
+  assertStringIncludes(wrapper, "total: () => $s.total(),");
+  assertStringIncludes(
+    wrapper,
+    "(stream) => Stream.map(stream, RowsLive$watch)",
+  );
+  assertEquals(wrapper.includes("mapEffect"), false);
+  assertEquals(wrapper.includes("..."), false);
+  assert(wrapper.endsWith(").pipe(Layer.provide(RowsLive));"), wrapper);
+  // The helper names the method and the issue, and throws a TypeError.
+  assertStringIncludes(text, "throw new TypeError(");
+  assertStringIncludes(text, "host value of ${label} does not match its type");
+});
+
+Deno.test("a provider whose data type comes from its host interface keeps the plain assertion", () => {
+  const { text } = hostChecksMain();
+  assertStringIncludes(
+    text,
+    "const AuthLive$host: Layer.Layer<Auth> = AuthLive;",
+  );
+  assertEquals(text.includes("AuthLive$token"), false);
+});
+
+Deno.test("a provider without data results keeps the plain assertion and emits no helper", () => {
+  const main = emitExamples().get("main")?.text ?? "";
+  assertStringIncludes(
+    main,
+    "const UsersLive$host: Layer.Layer<Users> = UsersLive;",
+  );
+  assertEquals(main.includes("$hostCheck"), false);
+});
+
+Deno.test("the names of the host check helper and constants are fresh names", () => {
+  const files = projectFiles("emit/host-checks");
+  files["main.eff"] += '\nexport const $hostCheck = (): Text => "x"\n' +
+    'export const RowsLive$get = (): Text => "y"\n';
+  const text = emitFiles(files, ["main.eff"]).get("main")?.text ?? "";
+  assertStringIncludes(text, "const $hostCheck$1 = <T>(");
+  assertStringIncludes(text, "const RowsLive$get$1 = $hostCheck$1(Entry,");
+  assertStringIncludes(text, "Effect.map($s.get(a, b), RowsLive$get$1)");
+});
+
 // ------------------------------------------------------------------ forms
 
 Deno.test("the forms fixture emits the plan's control forms", () => {

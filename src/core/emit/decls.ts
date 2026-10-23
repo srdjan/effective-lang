@@ -17,6 +17,7 @@ import type {
 } from "../ir.ts";
 import { SCOPE_CAPABILITY } from "../ir.ts";
 import { stronglyConnectedComponents } from "../modes.ts";
+import { moduleNameOf, normalizeRelative } from "../project.ts";
 import {
   assignment,
   braces,
@@ -27,6 +28,7 @@ import {
   hard,
   ifBreak,
   indent,
+  join,
   line,
   marked,
   member,
@@ -36,14 +38,20 @@ import {
 import { at } from "./emitted.ts";
 import { ExprEmitter } from "./expr.ts";
 import {
+  internal,
+  isDeferredType,
+  moduleOfId,
+  nameOfId,
   type Scope,
   serviceOfCapability,
+  servicesOf,
   tokenOfId,
   unsupported,
 } from "./scope.ts";
 import {
   effectTypeDoc,
   encodedTypeDoc,
+  parameterName,
   schemaDoc,
   typeArguments,
   typeDoc,
@@ -733,6 +741,263 @@ export class DeclarationEmitter {
     ];
   }
 
+  /** `const $hostCheck = ...`: the synchronous check of a wrapped host provider. */
+  hostCheckDeclaration(): Doc {
+    const name = this.scope.hostCheck();
+    const schema = this.scope.effect("Schema");
+    const exit = this.scope.effect("Exit");
+    const cause = this.scope.effect("Cause");
+    return [
+      `const ${name} = <T>(`,
+      indent([
+        hard,
+        `schema: ${schema}.Top & { readonly Type: T },`,
+        hard,
+        "label: string,",
+      ]),
+      hard,
+      ") => ",
+      braces([
+        `const is = ${schema}.is(schema);`,
+        `const decode = ${schema}.decodeUnknownExit(${schema}.toType(schema));`,
+        [
+          "return (value: T): T => ",
+          braces([
+            "if (is(value)) return value;",
+            "const exit = decode(value);",
+            `const failure = ${exit}.isFailure(exit) ? ${cause}.squash(exit.cause) : undefined;`,
+            [
+              "const issue = failure instanceof Error",
+              indent([
+                hard,
+                '? failure.message.replace(/\\s*\\n\\s*/g, " ")',
+                hard,
+                ': "unknown issue";',
+              ]),
+            ],
+            [
+              "throw new TypeError(",
+              indent([
+                hard,
+                "`host value of ${label} does not match its type: ${issue}`,",
+              ]),
+              hard,
+              ");",
+            ],
+          ]),
+          ";",
+        ],
+      ]),
+      ";",
+    ];
+  }
+
+  /** The names of the declarations that the `.effi` files of the host registry declare. */
+  private hostInterfaceModules(): Set<string> {
+    const modules = new Set<string>();
+    for (const host of this.scope.config.host.values()) {
+      const path = normalizeRelative(host.interfacePath);
+      if (path !== undefined) modules.add(moduleNameOf(path));
+    }
+    return modules;
+  }
+
+  /**
+   * How a result type can be checked at the host boundary: `data` when it
+   * has a schema value in this module and contains a data type, `plain` when
+   * it has a schema and no data type, `none` when it has no schema value (a
+   * function, a deferred, opaque, or host interface type).
+   */
+  private checkKind(
+    type: Type,
+    hostModules: ReadonlySet<string>,
+    seen: Set<DeclarationId>,
+  ): "data" | "plain" | "none" {
+    if (isDeferredType(type)) return "none";
+    const all = (types: readonly Type[]) => {
+      let kind: "data" | "plain" | "none" = "plain";
+      for (const t of types) {
+        const found = this.checkKind(t, hostModules, seen);
+        if (found === "none") return "none";
+        if (found === "data") kind = "data";
+      }
+      return kind;
+    };
+    switch (type.kind) {
+      case "primitive":
+      case "literal":
+        return "plain";
+      case "named": {
+        if (seen.has(type.id)) return "plain";
+        seen.add(type.id);
+        const declaration = this.scope.typeLevelDeclaration(type.id);
+        if (declaration === undefined || declaration.kind === "service") {
+          return "none";
+        }
+        if (hostModules.has(moduleOfId(type.id))) return "none";
+        if (declaration.kind === "error") return "plain";
+        if (declaration.opaque === true) return "none";
+        switch (declaration.definition.kind) {
+          case "data":
+            return "data";
+          case "brand":
+            return "plain";
+          case "alias":
+            return this.checkKind(
+              declaration.definition.type,
+              hostModules,
+              seen,
+            );
+        }
+        break;
+      }
+      case "record":
+        return all(type.fields.map((f) => f.type));
+      case "array":
+      case "option":
+        return all([type.element]);
+      case "tuple":
+        return all(type.elements);
+      case "union":
+        return all(type.members);
+    }
+    throw internal("unreachable type in a host check");
+  }
+
+  /** The type that a provided method checks: its result, or the element of a result stream. */
+  private checkedType(
+    result: Type,
+    hostModules: ReadonlySet<string>,
+  ): { readonly type: Type; readonly stream: boolean } | undefined {
+    const resolved = this.scope.resolve(result);
+    const stream = resolved.kind === "stream";
+    const type = resolved.kind === "stream" ? resolved.element : result;
+    return this.checkKind(type, hostModules, new Set()) === "data"
+      ? { type, stream }
+      : undefined;
+  }
+
+  /**
+   * The wrapped value of a host provider, or undefined when no method of its
+   * services needs a check: each provided service is rebuilt with every method
+   * named, and a method with a data result goes through a `$hostCheck`
+   * constant. `checks` are the constants, which come before the assertion.
+   */
+  private wrappedProvider(
+    host: { readonly local: string },
+    provider: Extract<Type, { readonly kind: "provider" }>,
+  ): { readonly checks: Doc[]; readonly value: Doc } | undefined {
+    const hostModules = this.hostInterfaceModules();
+    const services = servicesOf(provider.provides).map((id) => {
+      const declaration = this.scope.typeLevelDeclaration(id);
+      if (declaration?.kind !== "service") {
+        throw internal(`the provided service ${id} is not a service`);
+      }
+      return declaration;
+    });
+    const planned = services.map((service) =>
+      service.methods.map((method) => ({
+        method,
+        checked: this.checkedType(method.type.result, hostModules),
+      }))
+    );
+    if (!planned.some((methods) => methods.some((m) => m.checked))) {
+      return undefined;
+    }
+    const layer = this.scope.effect("Layer");
+    const effect = this.scope.effect("Effect");
+    const checks: Doc[] = [];
+    const rebuilt = services.map((service, i) => {
+      const serviceName = this.scope.nameOf(service.id);
+      const self = this.scope.serviceParameter();
+      const entries = planned[i].map(({ method, checked }) => {
+        const names = method.type.parameters.map((_, k) => parameterName(k));
+        const call: Doc = [
+          `${self}.${method.name}`,
+          bracketed("(", ")", names, false),
+        ];
+        let body: Doc = call;
+        if (checked !== undefined) {
+          const check = this.scope.fresh(`${host.local}$${method.name}`);
+          const label = `${nameOfId(service.id)}.${method.name}`;
+          checks.push([
+            assignment(
+              `const ${check}`,
+              [
+                this.scope.hostCheck(),
+                bracketed(
+                  "(",
+                  ")",
+                  [schemaDoc(this.scope, checked.type), JSON.stringify(label)],
+                  false,
+                ),
+              ],
+            ),
+            ";",
+          ]);
+          if (checked.stream) {
+            const stream = this.scope.effect("Stream");
+            body = [
+              `${effect}.map`,
+              bracketed("(", ")", [
+                call,
+                group([
+                  "(stream) =>",
+                  indent([
+                    line,
+                    `${stream}.map`,
+                    bracketed("(", ")", ["stream", check], false),
+                  ]),
+                ]),
+              ], false),
+            ];
+          } else {
+            body = [`${effect}.map`, bracketed("(", ")", [call, check], false)];
+          }
+        }
+        return [
+          `${method.name}: (${names.join(", ")}) =>`,
+          group(indent([line, body])),
+        ];
+      });
+      const object: Doc = entries.length === 0 ? "{}" : [
+        "{",
+        indent([hard, join([",", hard], entries), ","]),
+        hard,
+        "}",
+      ];
+      return [
+        `${layer}.effect(${serviceName})(`,
+        indent([
+          hard,
+          `${effect}.gen(function* () {`,
+          indent([
+            hard,
+            `const ${self} = yield* ${serviceName};`,
+            hard,
+            "return ",
+            object,
+            ";",
+          ]),
+          hard,
+          "}),",
+        ]),
+        hard,
+        ")",
+      ];
+    });
+    const merged: Doc = rebuilt.length === 1 ? rebuilt[0] : [
+      `${layer}.mergeAll(`,
+      indent([hard, join(hard, rebuilt.map((r) => [r, ","]))]),
+      hard,
+      ")",
+    ];
+    return {
+      checks,
+      value: [merged, `.pipe(${layer}.provide(${host.local}))`],
+    };
+  }
+
   /** The assertion constants of the host imports: `const UsersLive$host: Layer.Layer<Users> = UsersLive;` */
   hostAssertions(): Doc[] {
     const result: Doc[] = [];
@@ -745,10 +1010,14 @@ export class DeclarationEmitter {
       if (provider === undefined || provider.kind !== "provider") {
         throw unsupported(`the host binding ${host.local} is not a provider`);
       }
+      const wrapped = this.wrappedProvider(host, provider);
+      if (wrapped !== undefined) result.push(...wrapped.checks);
       result.push(marked(host.hostName, [
         `const ${host.hostName}: `,
         typeDoc(this.scope, provider),
-        ` = ${host.local};`,
+        " = ",
+        wrapped === undefined ? host.local : wrapped.value,
+        ";",
       ]));
     }
     return result;

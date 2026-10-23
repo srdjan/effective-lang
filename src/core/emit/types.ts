@@ -38,7 +38,7 @@ function literalText(value: string | number | boolean | null): string {
 }
 
 /** Parameter names of function types: `a`, `b`, `c`, ... */
-function parameterName(index: number): string {
+export function parameterName(index: number): string {
   return index < 26 ? String.fromCharCode(97 + index) : `a${index}`;
 }
 

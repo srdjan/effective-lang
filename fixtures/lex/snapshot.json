@@ -99,6 +99,18 @@
       "701e65959cfa44bf",
       "a28f4f7094df438a"
     ],
+    "fixtures/emit/host-checks/contracts.eff": [
+      "b567352ef85feda0",
+      "c7905a710a5e1b4b"
+    ],
+    "fixtures/emit/host-checks/host.effi": [
+      "9b7d65f9d89992c3",
+      "626df46ad700459c"
+    ],
+    "fixtures/emit/host-checks/main.eff": [
+      "3e3afdecf19ac4d2",
+      "08525f150fe07ddf"
+    ],
     "fixtures/emit/schedules/composition.eff": [
       "b012eb53381c3d61",
       "3bcd17fe88076604"
