@@ -882,3 +882,29 @@ A Fable agent checked this section against HEAD `3ef0ab6`. It rated IC8c and IC4
 - IC4: each call stays at the position of its `resolve` call.
 
 What not to touch in Phase 5: `ir.ts`, the `OPERAND_CALLS` and `LEAF_CALLS` rows, `emit/doc.ts`, the conditional-chain and binary-run printers, `catchEffect`, `perform`, the `call` case, and the order of `case` labels in `structural` and `leaf` outside the family cases.
+
+### Phase 5 results (2026-10-23)
+
+The six units are on local `main`. IC2 is `6310211`. IC8a is `da53bfa`, IC8b is `ef3b744`, IC8c is `bef55e3`, and IC8d is `9ea3af3`. IC4 is `5fb9dc1`.
+
+The implementer ran `deno task check` before each commit. The coordinator reviewed each diff and ran the gate again on `5fb9dc1`: 1863 fast and 177 slow tests passed. `fixtures/golden/` and `fixtures/emit/forms/` did not change.
+
+Captures, each with the write overlay (`/tmp/p5/capture.ts`):
+
+- `ec8f81e` against `9ea3af3` (IC2 and IC8): 9198 records on each side, with 1749 `emit` records, 0 new, and 0 missing.
+- `9ea3af3` against `5fb9dc1` (IC4): 9198 records on each side, with 0 new and 0 missing.
+
+The moved-code comparison (`/tmp/p5/compare.py`) matched 38 items with 0 differences: 6 in IC8a, 14 in IC8b, 15 in IC8c, and 3 in IC8d. The import test of `tests/emit_families_test.ts` rejected a planted `import "../expr.ts"`.
+
+Deviations, accepted after review:
+
+- `layerStructural`, `layerLeaf`, and `schemaStructural` hold one kind each, so they have no outer `switch`. Their kind types still give the compile check.
+- `schema-make`, `schema-decode`, and `schema-encode` share one IR member (`ir.ts:203`), as the schedule kinds do. So the default arm of `schemaLeaf` tests `e.kind` against `never`. The plan check did not find this.
+- The multi-operand IC4 sites share one `message` constant. The texts and the call order do not change.
+- `resolvedAs` uses a private `hasKind` type predicate, so IC4 adds no cast.
+
+Size (M, `scripts/measure.ts` over the `.ts` files of `src/core`, `ec8f81e` against `5fb9dc1`): 87 to 98 files. Filtered lines go from 35,184 to 35,626, and AST branches from 7,969 to 8,003. `emit/expr.ts` falls from 2741 to 1633 filtered lines (2898 to 1769 raw lines). The new files hold the moved code, their imports, their kind types, and their default arms, so the total grows. The cause of the 34 new branches is probable, not measured: the family `switch` statements, their default arms, and `hasKind`.
+
+Edit sites after Phase 5. A new builtin in an existing family edits the family file in each of the three stages: `check_builtins/`, `validate/families/`, and `emit/families/`. A new IR kind of a family also edits the case list in `structural` or `leaf`, and the compiler rejects an omission in either direction.
+
+Remaining: the IC6 path helper, ED5, and the ED3 file splits stay deferred. ED2 step 3 stays optional and needs the bench M4 measurement first.
