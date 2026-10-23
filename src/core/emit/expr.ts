@@ -54,13 +54,13 @@ import { fiberLeaf } from "./families/fiber.ts";
 import { layerLeaf, layerStructural } from "./families/layer.ts";
 import { scheduleStructural } from "./families/schedule.ts";
 import { scopeLeaf } from "./families/scope.ts";
+import { streamLeaf, streamStructural } from "./families/stream.ts";
 import {
   at,
   callArguments,
   type Chain,
   type ChainHead,
   type ChainTail,
-  concurrencyArguments,
   type CondChain,
   type Emitted,
   emitted,
@@ -80,7 +80,6 @@ import {
   unsupported,
 } from "./scope.ts";
 import {
-  channelTypeArguments,
   hasSchemaMetadata,
   schemaDoc,
   typeArguments,
@@ -776,232 +775,26 @@ export class ExprEmitter implements ExprCore {
       case "defer":
       case "retry-schedule":
         return effectStructural(this, e, kid, mode);
-      case "unfold": {
-        const stream = this.scope.effect("Stream");
-        const effect = this.scope.effect("Effect");
-        const option = this.scope.effect("Option");
-        const state = this.scope.temp();
-        const callback = this.effectCallback(e.next);
-        const next = emitted([
-          `${effect}.map`,
-          callArguments([
-            emitted([
-              at(callback, PREC.member),
-              callArguments([emitted(state)]),
-            ]),
-            emitted(`${option}.getOrUndefined`),
-          ]),
-        ]);
-        return emitted([
-          `${stream}.unfold`,
-          callArguments([
-            kid(e.seed),
-            emitted(this.arrow(`(${state})`, next)),
-          ]),
-        ]);
-      }
-      case "map-effect": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.mapEffect`,
-          callArguments([
-            kid(e.stream),
-            this.effectCallback(e.transform),
-            ...concurrencyArguments(e.concurrency),
-          ]),
-        ]);
-      }
-      case "map-groups": {
-        const stream = this.scope.effect("Stream");
-        const effect = this.scope.effect("Effect");
-        const key = this.scope.fresh("$key");
-        const group = this.scope.fresh("$group");
-        const pull = this.scope.fresh("$pull");
-        const use = this.effectCallback(e.use);
-        const owned = this.genCall([
-          [`const ${pull} = yield* ${stream}.toPull(${group});`],
-          [
-            "return yield* (",
-            use.doc,
-            `)(${key}, ${stream}.fromPull(${effect}.succeed(${pull})));`,
-          ],
-        ]);
-        const callback = emitted(this.arrow(
-          `([${key}, ${group}])`,
-          emitted([
-            `${stream}.fromEffect(${effect}.scoped(`,
-            owned.doc,
-            "))",
-          ]),
-        ));
-        return emitted([
-          `${stream}.flatMap`,
-          callArguments([
-            emitted([
-              `${stream}.groupByKey`,
-              callArguments([
-                kid(e.stream),
-                this.callback(e.key, kid),
-                emitted(`{ bufferSize: ${e.bufferSize} }`),
-              ]),
-            ]),
-            callback,
-            emitted('{ concurrency: "unbounded", bufferSize: 1 }'),
-          ]),
-        ]);
-      }
-      case "scan-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.scan`,
-          callArguments([
-            kid(e.stream),
-            emitted(this.arrow("()", kid(e.seed)), PREC.conditional, {
-              huggable: true,
-            }),
-            this.callback(e.update, kid),
-          ]),
-        ]);
-      }
-      case "map-accum-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.mapAccum`,
-          callArguments([
-            kid(e.stream),
-            emitted(this.arrow("()", kid(e.seed)), PREC.conditional, {
-              huggable: true,
-            }),
-            this.callback(e.update, kid),
-          ]),
-        ]);
-      }
-      case "flat-map-streams": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.flatMap`,
-          callArguments([
-            kid(e.stream),
-            this.callback(e.transform, kid),
-            ...concurrencyArguments(e.concurrency),
-          ]),
-        ]);
-      }
-      case "debounce-stream": {
-        const stream = this.scope.effect("Stream");
-        const duration = this.scope.effect("Duration");
-        return emitted([
-          `${stream}.debounce`,
-          callArguments([
-            kid(e.stream),
-            emitted(`${duration}.millis(${e.delayMs})`),
-          ]),
-        ]);
-      }
-      case "throttle-stream": {
-        const stream = this.scope.effect("Stream");
-        const duration = this.scope.effect("Duration");
-        return emitted([
-          `${stream}.throttle`,
-          callArguments([
-            emitted([
-              `${stream}.rechunk`,
-              callArguments([kid(e.stream), emitted("1")]),
-            ]),
-            emitted(
-              `{ cost: (arr) => arr.length, units: ${e.units}, duration: ${duration}.millis(${e.durationMs}), strategy: "${e.strategy}" }`,
-            ),
-          ]),
-        ]);
-      }
-      case "take-sink": {
-        const type = this.scope.resolve(e.type);
-        if (type.kind !== "sink") throw internal("takeSink has no Sink type");
-        return emitted([
-          `${this.scope.effect("Sink")}.take`,
-          typeArguments([typeDoc(this.scope, type.input)]),
-          callArguments([emitted(String(e.count))]),
-        ]);
-      }
-      case "transduce-stream": {
-        const source = this.scope.resolve(e.stream.type);
-        const sink = this.scope.resolve(e.sink.type);
-        if (source.kind !== "stream" || sink.kind !== "sink") {
-          throw internal("transduction has invalid operands");
-        }
-        return emitted([
-          `${this.scope.effect("Stream")}.transduce`,
-          typeArguments([
-            typeDoc(this.scope, sink.input),
-            ...channelTypeArguments(this.scope, source.effects),
-            typeDoc(this.scope, sink.result),
-            ...channelTypeArguments(this.scope, sink.effects),
-          ]),
-          callArguments([kid(e.stream), kid(e.sink)]),
-        ]);
-      }
-      case "aggregate-stream": {
-        const source = this.scope.resolve(e.stream.type);
-        const sink = this.scope.resolve(e.sink.type);
-        if (source.kind !== "stream" || sink.kind !== "sink") {
-          throw internal("aggregation has invalid operands");
-        }
-        return emitted([
-          `${this.scope.effect("Stream")}.aggregate`,
-          typeArguments([
-            typeDoc(this.scope, source.element),
-            ...channelTypeArguments(this.scope, source.effects),
-            typeDoc(this.scope, sink.result),
-            sink.leftover === undefined
-              ? "never"
-              : typeDoc(this.scope, sink.leftover),
-            ...channelTypeArguments(this.scope, sink.effects),
-          ]),
-          callArguments([kid(e.stream), kid(e.sink)]),
-        ]);
-      }
-      case "aggregate-within-stream": {
-        const source = this.scope.resolve(e.stream.type);
-        const sink = this.scope.resolve(e.sink.type);
-        const schedule = this.scope.resolve(e.schedule.type);
-        if (
-          source.kind !== "stream" || sink.kind !== "sink" ||
-          schedule.kind !== "schedule"
-        ) {
-          throw internal("scheduled aggregation has invalid operands");
-        }
-        return emitted([
-          `${this.scope.effect("Stream")}.aggregateWithin`,
-          typeArguments([
-            typeDoc(this.scope, source.element),
-            ...channelTypeArguments(this.scope, source.effects),
-            typeDoc(this.scope, sink.result),
-            sink.leftover === undefined
-              ? "never"
-              : typeDoc(this.scope, sink.leftover),
-            ...channelTypeArguments(this.scope, sink.effects),
-            typeDoc(this.scope, schedule.output),
-            ...channelTypeArguments(this.scope, schedule.effects),
-          ]),
-          callArguments([kid(e.stream), kid(e.sink), kid(e.schedule)]),
-        ]);
-      }
+      case "unfold":
+      case "map-effect":
+      case "map-groups":
+      case "scan-stream":
+      case "map-accum-stream":
+      case "flat-map-streams":
+      case "debounce-stream":
+      case "throttle-stream":
+      case "take-sink":
+      case "transduce-stream":
+      case "aggregate-stream":
+      case "aggregate-within-stream":
+      case "buffer-stream":
+        return streamStructural(this, e, kid);
       case "schedule-spaced":
       case "schedule-map":
       case "schedule-max":
       case "schedule-min":
       case "schedule-from-step":
         return scheduleStructural(this, e, kid);
-      case "buffer-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.buffer`,
-          callArguments([
-            kid(e.stream),
-            emitted(`{ capacity: ${e.capacity}, strategy: "suspend" }`),
-          ]),
-        ]);
-      }
       case "layer":
         return layerStructural(this, e);
       case "codec":
@@ -2286,32 +2079,9 @@ export class ExprEmitter implements ExprCore {
       case "fork-scoped":
       case "with-resource":
         return scopeLeaf(this, e, children);
-      case "fold-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.runFold`,
-          callArguments([
-            children[0],
-            emitted(this.arrow("()", children[1]), PREC.conditional, {
-              huggable: true,
-            }),
-            children[2],
-          ]),
-        ]);
-      }
-      case "fold-effect-stream": {
-        const stream = this.scope.effect("Stream");
-        return emitted([
-          `${stream}.runFoldEffect`,
-          callArguments([
-            children[0],
-            emitted(this.arrow("()", children[1]), PREC.conditional, {
-              huggable: true,
-            }),
-            this.effectCallback(e.update),
-          ]),
-        ]);
-      }
+      case "fold-stream":
+      case "fold-effect-stream":
+        return streamLeaf(this, e, children);
       case "with-fiber":
       case "join-fiber":
       case "interrupt-fiber":
