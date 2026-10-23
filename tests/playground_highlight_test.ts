@@ -101,11 +101,11 @@ Deno.test("a prelude name is a builtin", () => {
 });
 
 Deno.test("a builtin type name or a capitalized name is a type", () => {
-  assertEquals(slices("string int Option Brand User"), [
+  assertEquals(slices("string int Option Ref User"), [
     ["string", "type"],
     ["int", "type"],
     ["Option", "type"],
-    ["Brand", "type"],
+    ["Ref", "type"],
     ["User", "type"],
   ]);
   assertEquals(slices("user"), []);
