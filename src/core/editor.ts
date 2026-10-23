@@ -296,6 +296,7 @@ export type EditorSymbolKind =
   | "constant"
   | "type"
   | "error"
+  | "data"
   | "service"
   | "method"
   | "provider";

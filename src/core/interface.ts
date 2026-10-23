@@ -112,10 +112,19 @@ type GraphDecl = TypeDecl | ErrorDecl | ServiceDecl;
 function declarationRefs(d: GraphDecl, into: Set<string>): void {
   switch (d.kind) {
     case "type":
-      referencedIds(
-        d.definition.kind === "alias" ? d.definition.type : d.definition.base,
-        into,
-      );
+      switch (d.definition.kind) {
+        case "alias":
+          referencedIds(d.definition.type, into);
+          return;
+        case "brand":
+          referencedIds(d.definition.base, into);
+          return;
+        case "data":
+          for (const field of d.definition.fields) {
+            referencedIds(field.type, into);
+          }
+          return;
+      }
       return;
     case "error":
       for (const field of d.fields) referencedIds(field.type, into);

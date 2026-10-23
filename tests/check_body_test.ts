@@ -3461,6 +3461,132 @@ const owned = (user: User): User => ({ ...user, owner: "x" })
   assertEquals(codes(project), ["type-mismatch/005"]);
 });
 
+// ------------------------------------------------------------------ data types
+
+const DATA_TYPES = `
+type UserId = Brand<string>
+type Text = string
+data User = { id: UserId, name: Text, nick?: Text }
+data Twin = { id: UserId, name: Text, nick?: Text }
+data Marker = {}
+type Dog = { id: UserId, name: Text, nick?: Text }
+const user = (): User => User({ id: UserId("u"), name: "Ann" })
+`;
+
+Deno.test("a data type is constructed, read, updated, and unbranded", () => {
+  const project = checkText(`${DATA_TYPES}
+const nameOf = (u: User): Text => u.name
+const nick = (u: User): Option<Text> => u.nick
+const rename = (u: User): User => ({ ...u, name: "Bo" })
+const base = (u: User): Dog => unbrand(u)
+const twin = (u: User): Twin => Twin(unbrand(u))
+const piped = (u: User): Twin => unbrand(u) |> Twin
+const marker = (): Marker => Marker({})
+`);
+  assertEquals(messages(project), []);
+  const facts = [...fn(project, "m", "twin").table.facts.values()];
+  assert(facts.some((f) => f.kind === "data-construction"));
+  const result = fn(project, "m", "rename").type;
+  const type = project.table.node(result);
+  assert(type.kind === "function");
+  const user = project.table.node(type.result);
+  assert(user.kind === "named" && user.id === "type:m#User", String(user.kind));
+});
+
+Deno.test("a structural record does not fit a data type", () => {
+  const project = checkText(`${DATA_TYPES}
+const wrong: User = { id: UserId("u"), name: "Ann" }
+`);
+  assertEquals(codes(project), ["type-mismatch/003"]);
+});
+
+Deno.test("a data type does not fit a structural record of equal fields", () => {
+  const project = checkText(`${DATA_TYPES}
+const wrong = (u: User): Dog => u
+`);
+  assertEquals(codes(project), ["type-mismatch/003"]);
+});
+
+Deno.test("two data types with equal fields are distinct", () => {
+  const project = checkText(`${DATA_TYPES}
+const wrong = (u: User): Twin => u
+`);
+  assertEquals(codes(project), ["type-mismatch/003"]);
+});
+
+Deno.test("a data constructor rejects a data argument and takes it after unbrand", () => {
+  const project = checkText(`${DATA_TYPES}
+const wrong = (u: User): Twin => Twin(u)
+const right = (u: User): Twin => Twin(unbrand(u))
+`);
+  assertEquals(codes(project), ["type-mismatch/003"]);
+  assertEquals(project.diagnostics[0].message.includes("Twin"), true);
+});
+
+Deno.test("a data constructor takes one argument", () => {
+  const project = checkText(`${DATA_TYPES}
+const wrong = (): Marker => Marker()
+`);
+  assertEquals(codes(project), ["type-mismatch/004"]);
+});
+
+Deno.test("a data field named _tag is rejected, as it is in an error", () => {
+  const project = checkText(`
+data Tagged = { _tag: string }
+error Failed = { _tag: string }
+`);
+  assertEquals(codes(project), ["declaration/009", "declaration/009"]);
+});
+
+Deno.test("equality rejects data values", () => {
+  const project = checkText(`${DATA_TYPES}
+type Flag = boolean
+const same = (a: User, b: User): Flag => a === b
+`);
+  assertEquals(codes(project), ["type-mismatch/007"]);
+});
+
+Deno.test("a data type has no field that its record lacks", () => {
+  const project = checkText(`${DATA_TYPES}
+const wrong = (u: User): Text => u.owner
+`);
+  assertEquals(codes(project), ["type-mismatch/006"]);
+});
+
+Deno.test("a data type that refers to itself keeps the recursion rejection", () => {
+  const project = checkText(`
+data Loop = { next: Option<Loop> }
+`);
+  assertEquals(codes(project), ["declaration/007"]);
+});
+
+Deno.test("data stays legal as a variable and a function name", () => {
+  const project = checkText(`
+type Int = int
+const data = (x: Int): Int => x
+const use = (data: Int): Int => data
+const call = (): Int => data(1)
+`);
+  assertEquals(messages(project), []);
+});
+
+Deno.test("a data type is legal in a host interface file", () => {
+  const project = checkFiles({
+    "effective.json": JSON.stringify({
+      host: { rows: { interface: "./rows.effi", module: "./rows.ts" } },
+    }),
+    "rows.effi": `
+export data Row = { id: string, total: int }
+export service Rows { next(): Row }
+`,
+    "main.eff": `
+import { Row, Rows } from "host:rows"
+export const first = (): Row uses Rows.next => Rows.next()
+`,
+  }, ["main.eff"]);
+  assertEquals(messages(project), []);
+});
+
 // Characterization tests for the Schema builtins. Each case lists the complete
 // diagnostic list of a module: code, message, source text of the span, and the
 // order that the checker reports. They pin the behavior of `schemaCall` before

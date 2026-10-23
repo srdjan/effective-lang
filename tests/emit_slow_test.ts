@@ -130,6 +130,7 @@ function buildForms(dir: string): string[] {
     "names.eff",
     "conditional-chains.eff",
     "nominal-records.eff",
+    "data-types.eff",
     "optional-fields.eff",
     "brand-operators.eff",
     "inline-records.eff",
@@ -3158,6 +3159,78 @@ console.log(JSON.stringify({ good: Option.getOrUndefined(good), bad: Option.isNo
     assertEquals(result, { good: 5, bad: true, encoded: 4 });
   });
 });
+Deno.test("data values carry a tag, lose it through unbrand, and round trip through a schema and a codec", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/forms/", FIXTURES), dir);
+    build(dir, ["data-types.eff"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect } from "effect";
+import * as M from "./data-types.ts";
+const user = M.make();
+const encoded = await Effect.runPromise(M.encodeUser(user));
+const decoded = await Effect.runPromise(M.decodeUser(encoded));
+const rejected = await Effect.runPromise(Effect.flip(M.decodeUser({ id: "u1", name: "Ann" })));
+console.log(JSON.stringify({
+  user,
+  plain: M.plain(user),
+  twin: M.twin(user),
+  piped: M.piped(),
+  renamed: M.rename(user, "Bo"),
+  mark: M.mark(),
+  encoded,
+  decoded,
+  untaggedRejected: rejected._tag,
+}));
+`,
+    );
+    const ann = { _tag: "data-types#User", id: "u1", name: "Ann" };
+    assertEquals(result, {
+      user: ann,
+      plain: { id: "u1", name: "Ann" },
+      twin: { _tag: "data-types#Twin", id: "u1", name: "Ann" },
+      piped: { _tag: "data-types#Pin", id: "p1" },
+      renamed: { ...ann, name: "Bo" },
+      mark: { _tag: "data-types#Marker" },
+      encoded: ann,
+      decoded: ann,
+      untaggedRejected: "SchemaError",
+    });
+  });
+});
+Deno.test("a pure codec over a data type decodes into data and encodes back", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Text = string",
+        "export data Name = { text: Text }",
+        "export const names: Codec<Name, Text> = codec((text: Text): Name => Name({ text }), (name: Name): Text => name.text)",
+        "export const parse = (input: unknown): Option<Name> => decode(names, input)",
+        "export const print = (name: Name): Option<Text> => encode(names, name)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    const result = await runScript(
+      dir,
+      `
+import { Option } from "effect";
+import { Name, parse, print } from "./main.ts";
+console.log(JSON.stringify({
+  parsed: Option.getOrUndefined(parse("Zed")),
+  printed: Option.getOrUndefined(print(Name.make({ text: "Amy" }))),
+}));
+`,
+    );
+    assertEquals(result, {
+      parsed: { _tag: "main#Name", text: "Zed" },
+      printed: "Amy",
+    });
+  });
+});
 Deno.test("withFiber interrupts its child and waits for finalizers", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
@@ -3644,6 +3717,7 @@ Deno.test("the emitted forms are a fixed point of deno fmt", async () => {
         "array-bodies.ts",
         "brand-operators.ts",
         "conditional-chains.ts",
+        "data-types.ts",
         "forms.ts",
         "inline-records.ts",
         "names.ts",
@@ -3654,8 +3728,8 @@ Deno.test("the emitted forms are a fixed point of deno fmt", async () => {
     const run = await deno(dir, ["fmt", "--check", ...generated]);
     assertEquals(run.code, 0, `deno fmt --check failed:\n${run.stderr}`);
     assert(
-      run.stderr.includes("Checked 9 files"),
-      `deno fmt did not check the nine files:\n${run.stderr}`,
+      run.stderr.includes("Checked 10 files"),
+      `deno fmt did not check the ten files:\n${run.stderr}`,
     );
   });
 });

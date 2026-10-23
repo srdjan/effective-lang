@@ -22,6 +22,11 @@ error NotFound = { id: Id }
 error Empty = {}
 export error Exported2 = { reason: string, }
 
+data Account = { id: Id, nick?: string }
+data Marker = {}
+export data Exported3 = { reason: string, }
+const data = 1
+
 service Store {
   find(id: Id): Option<Profile> fails NotFound
   save(p: Profile): void; list(): Profile[] fails NotFound | Empty

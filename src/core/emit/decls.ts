@@ -7,6 +7,7 @@ import type {
   Declaration,
   DeclarationId,
   ErrorDecl,
+  Field,
   FunctionDecl,
   ModuleIR,
   ServiceDecl,
@@ -155,12 +156,17 @@ function interfaceReferences(declaration: Declaration): Set<DeclarationId> {
       namedIn(declaration.type, out);
       break;
     case "type":
-      namedIn(
-        declaration.definition.kind === "alias"
-          ? declaration.definition.type
-          : declaration.definition.base,
-        out,
-      );
+      switch (declaration.definition.kind) {
+        case "alias":
+          namedIn(declaration.definition.type, out);
+          break;
+        case "brand":
+          namedIn(declaration.definition.base, out);
+          break;
+        case "data":
+          for (const f of declaration.definition.fields) namedIn(f.type, out);
+          break;
+      }
       break;
     case "error":
       for (const f of declaration.fields) namedIn(f.type, out);
@@ -384,6 +390,11 @@ export class DeclarationEmitter {
           callWith(`${schema}.brand`, JSON.stringify(tokenOfId(d.id))),
         ),
       );
+    } else if (d.definition.kind === "data") {
+      value = [
+        `${schema}.TaggedStruct`,
+        this.tagArguments(d.id, d.definition.fields),
+      ];
     } else {
       value = schemaDoc(this.scope, d.definition.type);
     }
@@ -418,9 +429,10 @@ export class DeclarationEmitter {
     }
   }
 
-  private errorDeclaration(d: ErrorDecl): Doc {
+  /** The `(tag, { fields })` arguments of `TaggedError` and `TaggedStruct`. */
+  private tagArguments(id: DeclarationId, declared: readonly Field[]): Doc {
     const schema = this.scope.effect("Schema");
-    const fields = d.fields.map((f) => {
+    const fields = declared.map((f) => {
       const inner = schemaDoc(this.scope, f.type);
       return property(
         fieldKey(f.name),
@@ -430,13 +442,18 @@ export class DeclarationEmitter {
     const object: Doc = fields.length === 0
       ? "{}"
       : bracketed("{", "}", fields, true);
-    const args: Doc = group([
+    return group([
       "(",
-      indent([soft, JSON.stringify(tokenOfId(d.id)), ",", line, object]),
+      indent([soft, JSON.stringify(tokenOfId(id)), ",", line, object]),
       ifBreak(","),
       soft,
       ")",
     ]);
+  }
+
+  private errorDeclaration(d: ErrorDecl): Doc {
+    const schema = this.scope.effect("Schema");
+    const args = this.tagArguments(d.id, d.fields);
     const keyword = this.exportKeyword(d.id);
     const heritage: Doc = [
       `${schema}.TaggedError`,

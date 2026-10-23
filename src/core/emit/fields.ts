@@ -1,6 +1,6 @@
 // Property semantics at the JavaScript boundary. Adapters follow declared data
 // shapes only: they do not traverse arbitrary host objects or deferred values.
-import type { Type } from "../ir.ts";
+import type { Type, TypeDecl } from "../ir.ts";
 import { type Doc, hard } from "./doc.ts";
 import type { ExprScope, TypeLookup } from "./scope.ts";
 
@@ -17,6 +17,18 @@ export function sensitiveField(name: string): boolean {
     ["message", "name", "stack"].includes(name);
 }
 
+/** The type that a type declaration stands for: the alias target, the brand base, or the data record. */
+function definitionType(d: TypeDecl): Type {
+  switch (d.definition.kind) {
+    case "alias":
+      return d.definition.type;
+    case "brand":
+      return d.definition.base;
+    case "data":
+      return { kind: "record", fields: d.definition.fields };
+  }
+}
+
 export function needsFieldAdapter(
   scope: TypeLookup,
   type: Type,
@@ -29,13 +41,7 @@ export function needsFieldAdapter(
       const declaration = scope.typeLevelDeclaration(type.id);
       if (declaration?.kind === "error") return false;
       return declaration?.kind === "type" &&
-        needsFieldAdapter(
-          scope,
-          declaration.definition.kind === "alias"
-            ? declaration.definition.type
-            : declaration.definition.base,
-          next,
-        );
+        needsFieldAdapter(scope, definitionType(declaration), next);
     }
     case "record":
       return type.fields.some((f) =>
@@ -79,12 +85,7 @@ function adapterBody(
   if (type.kind === "named") {
     const d = scope.typeLevelDeclaration(type.id);
     if (d?.kind === "type") {
-      return `return ${
-        apply(
-          d.definition.kind === "alias" ? d.definition.type : d.definition.base,
-          "value",
-        )
-      };`;
+      return `return ${apply(definitionType(d), "value")};`;
     }
     if (d?.kind !== "error") return "return value;";
     // Compiler-derived error schemas are nominal identity schemas. Never clone
@@ -155,6 +156,19 @@ export function fieldHelperDeclarations(scope: ExprScope): Doc[] {
   if (presence !== undefined) {
     helpers.push(
       `const ${presence} = globalThis.Symbol.for("effective/source-fields");`,
+    );
+  }
+  const untagged = scope.fieldHelpers.get("untagged");
+  if (untagged !== undefined) {
+    helpers.push(
+      `// A data value carries \`_tag\`. The copy leaves it out and has no prototype.
+const ${untagged} = <T>(value: object): T =>
+  globalThis.Object.assign(
+    globalThis.Object.create(null),
+    globalThis.Object.fromEntries(
+      globalThis.Object.entries(value).filter(([key]) => key !== "_tag"),
+    ),
+  );`,
     );
   }
   const record = scope.fieldHelpers.get("record");

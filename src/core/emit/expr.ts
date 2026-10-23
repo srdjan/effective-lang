@@ -709,13 +709,14 @@ export class ExprEmitter implements ExprCore {
         );
       }
       case "brand":
+      case "data":
         return emitted(member(
-          this.scope.nameOf(e.brand),
+          this.scope.nameOf(e.kind === "brand" ? e.brand : e.data),
           "make",
           callArguments([kid(e.value)]),
         ));
       case "unbrand":
-        return kid(e.value);
+        return this.unbrand(e, kid);
       case "some": {
         const option = this.scope.effect("Option");
         const resolved = resolvedAs(
@@ -811,6 +812,24 @@ export class ExprEmitter implements ExprCore {
     }
   }
 
+  /** A brand is bare at run time. A data value carries `_tag`, which the copy leaves out. */
+  private unbrand(e: Extract<Expr, { kind: "unbrand" }>, kid: Kid): Emitted {
+    const resolved = this.scope.resolve(e.value.type);
+    const declaration = resolved.kind === "named"
+      ? this.scope.typeLevelDeclaration(resolved.id)
+      : undefined;
+    if (
+      declaration?.kind !== "type" || declaration.definition.kind !== "data"
+    ) return kid(e.value);
+    return emitted([
+      this.scope.fieldHelper("untagged"),
+      "<",
+      typeDoc(this.scope, e.type),
+      ">",
+      callArguments([kid(e.value)]),
+    ]);
+  }
+
   /** A structural kind that prints as `callee(operands)`. */
   private operandCall<K extends OperandCallKind>(
     kind: K,
@@ -880,12 +899,12 @@ export class ExprEmitter implements ExprCore {
     return property(fieldKey(name), free(kid(value, expected)));
   }
 
-  /** The declared type of a field of a record type or of a brand of a record. */
+  /** The declared type of a field of a record type, a data type, or a brand of a record. */
   private fieldType(type: Type, name: string): Type | undefined {
     return this.recordFieldsOf(type)?.find((f) => f.name === name)?.type;
   }
 
-  /** The fields of a record type, seen through aliases and brands of a record. */
+  /** The fields of a record type, seen through aliases, data types, and brands of a record. */
   private recordFieldsOf(
     type: Type,
     depth = 0,
@@ -895,10 +914,15 @@ export class ExprEmitter implements ExprCore {
     if (resolved.kind === "record") return resolved.fields;
     if (resolved.kind !== "named") return undefined;
     const declaration = this.scope.typeLevelDeclaration(resolved.id);
-    return declaration?.kind === "type" &&
-        declaration.definition.kind === "brand"
-      ? this.recordFieldsOf(declaration.definition.base, depth + 1)
-      : undefined;
+    if (declaration?.kind !== "type") return undefined;
+    switch (declaration.definition.kind) {
+      case "data":
+        return declaration.definition.fields;
+      case "brand":
+        return this.recordFieldsOf(declaration.definition.base, depth + 1);
+      case "alias":
+        return undefined;
+    }
   }
 
   private errorFieldType(error: ErrorId, name: string): Type | undefined {
@@ -1547,6 +1571,7 @@ export class ExprEmitter implements ExprCore {
       case "get":
         return this.isTrivial(e.record);
       case "brand":
+      case "data":
       case "unbrand":
       case "some":
         return this.isTrivial(e.value);

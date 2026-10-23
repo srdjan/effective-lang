@@ -61,6 +61,7 @@ const ROWS = {
     leaf: "structural",
   },
   brand: { children: (e) => [e.value], leaf: "structural" },
+  data: { children: (e) => [e.value], leaf: "structural" },
   unbrand: { children: (e) => [e.value], leaf: "structural" },
   some: { children: (e) => [e.value], leaf: "structural" },
   none: { children: () => [], leaf: "structural" },

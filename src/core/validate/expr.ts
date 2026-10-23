@@ -543,6 +543,8 @@ export class BodyValidator implements ValidatorCore {
         return this.update(e, path);
       case "brand":
         return this.brand(e, path);
+      case "data":
+        return this.dataConstruction(e, path);
       case "unbrand":
         return this.unbrand(e, path);
       case "some": {
@@ -970,7 +972,7 @@ export class BodyValidator implements ValidatorCore {
       this.add(
         AREA.types,
         `${path}.brand`,
-        `${e.brand} is a type alias, not a brand`,
+        `${e.brand} is not a brand`,
         e.span,
       );
     } else if (decl.opaque === true) {
@@ -993,6 +995,42 @@ export class BodyValidator implements ValidatorCore {
     return derivedResult({ kind: "named", id: e.brand }, combine([v]));
   }
 
+  private dataConstruction(
+    e: Extract<Expr, { kind: "data" }>,
+    path: string,
+  ): Comp {
+    const v = this.check(e.value, `${path}.value`);
+    const decl = this.ctx.world.types.get(e.data);
+    const record = this.env.data.get(e.data);
+    if (decl === undefined) {
+      this.add(
+        AREA.identity,
+        `${path}.data`,
+        `the data type ${e.data} is not a declared type`,
+        e.span,
+      );
+      return checkedResult(combine([v]));
+    }
+    if (decl.definition.kind !== "data" || record === undefined) {
+      this.add(
+        AREA.types,
+        `${path}.data`,
+        `${e.data} is not a data type`,
+        e.span,
+      );
+    } else if (!fits(this.env, v.type, record)) {
+      this.add(
+        AREA.types,
+        `${path}.value`,
+        `the value has type ${show(v.type)}, which does not fit the base ${
+          show(record)
+        }`,
+        e.value.span,
+      );
+    }
+    return derivedResult({ kind: "named", id: e.data }, combine([v]));
+  }
+
   private unbrand(e: Extract<Expr, { kind: "unbrand" }>, path: string): Comp {
     const v = this.check(e.value, `${path}.value`);
     const unfolded = unfold(this.env, v.type);
@@ -1009,13 +1047,15 @@ export class BodyValidator implements ValidatorCore {
       return this.poison();
     }
     const base = unfolded.kind === "named"
-      ? this.env.brands.get(unfolded.id)
+      ? this.env.data.get(unfolded.id) ?? this.env.brands.get(unfolded.id)
       : undefined;
     if (base === undefined) {
       this.add(
         AREA.types,
         `${path}.value`,
-        `unbrand needs a brand value, but the value has type ${show(v.type)}`,
+        `unbrand needs a brand or data value, but the value has type ${
+          show(v.type)
+        }`,
         e.value.span,
       );
       return checkedResult(combine([v]));

@@ -25,7 +25,7 @@ import {
   type SyntaxTree,
 } from "./syntax.ts";
 
-type DeclKind = "type" | "error" | "service" | "provider" | "const";
+type DeclKind = "type" | "error" | "data" | "service" | "provider" | "const";
 
 export interface MethodEntry {
   readonly name: string;
@@ -217,6 +217,7 @@ function splitDecl(
       return splitAtEquals(tree, decl, true);
     case "type":
     case "error":
+    case "data":
       return splitAtEquals(tree, decl, false);
     case "service": {
       const brace = childrenOf(tree, decl).find((c) =>
@@ -238,6 +239,7 @@ function splitDecl(
 const DECL_KINDS: ReadonlyMap<SyntaxKind, DeclKind> = new Map([
   [SyntaxKind.TypeDecl, "type"],
   [SyntaxKind.ErrorDecl, "error"],
+  [SyntaxKind.DataDecl, "data"],
   [SyntaxKind.ServiceDecl, "service"],
   [SyntaxKind.ProviderDecl, "provider"],
   [SyntaxKind.ConstDecl, "const"],

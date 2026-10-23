@@ -23,6 +23,7 @@ export enum SyntaxKind {
   ImportDecl,
   TypeDecl,
   ErrorDecl,
+  DataDecl,
   ServiceDecl,
   ServiceMethod,
   ProviderDecl,

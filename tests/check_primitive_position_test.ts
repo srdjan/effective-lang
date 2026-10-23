@@ -22,7 +22,7 @@ Deno.test("a string parameter outside a type declaration gives declaration/013 w
       "type Count = int\nconst f = (name: string): Count => 1\n",
     ),
     [
-      "declaration/013 the primitive type `string` can occur only inside a type or error declaration",
+      "declaration/013 the primitive type `string` can occur only inside a type, data, or error declaration",
     ],
   );
 });
@@ -33,7 +33,7 @@ Deno.test("a literal type outside a type declaration gives declaration/013 with 
       'type Count = int\nconst f = (s: "paid"): Count => 1\n',
     ),
     [
-      'declaration/013 the primitive type `"paid"` can occur only inside a type or error declaration',
+      'declaration/013 the primitive type `"paid"` can occur only inside a type, data, or error declaration',
     ],
   );
 });

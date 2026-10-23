@@ -7,6 +7,7 @@ import { assert, assertEquals } from "@std/assert";
 import { checkProject } from "../src/core/check_project.ts";
 import { describeCode, registeredCodes } from "../src/core/diagnostics.ts";
 import type { Execution, Field, ModuleIR, Type } from "../src/core/ir.ts";
+import { SCHEMA_ERROR_ID } from "../src/core/ir.ts";
 import { lowerProject } from "../src/core/lower.ts";
 import { memoryHost } from "../src/core/source.ts";
 import { validateModule } from "../src/core/validate/index.ts";
@@ -2789,6 +2790,7 @@ const ENV: TypeEnv = {
     }],
   ]),
   brands: new Map<string, Type>([["type:m#Id", STRING]]),
+  data: new Map(),
   errors: new Map<string, readonly Field[]>(),
 };
 
@@ -2969,6 +2971,106 @@ type Text = string
   assert(nameOf?.kind === "function" && nameOf.body.kind === "get");
   setAt(nameOf, "body.field", "missing");
   assertEquals(codesOf(mutated, lowered.sources), ["validation/002"]);
+});
+
+const DATA_SOURCE = `
+type UserId = Brand<string>
+type Text = string
+data User = { id: UserId, name: Text, nick?: Text }
+data Twin = { id: UserId, name: Text }
+error Failed = { reason: Text }
+type Dog = { id: UserId, name: Text, nick?: Text }
+const userSchema: Schema<User> = schema()
+const make = (): User => User({ id: UserId("u"), name: "Ann" })
+const nameOf = (user: User): Text => user.name
+const rename = (user: User): User => ({ ...user, name: "Bo" })
+const base = (user: User): Dog => unbrand(user)
+const twin = (user: User): Twin => Twin({ id: user.id, name: user.name })
+`;
+
+Deno.test("data: a data type validates and each forged rule is rejected", () => {
+  const lowered = lowerText(DATA_SOURCE);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const forge = (change: (ir: ModuleIR) => void): string[] => {
+    const ir = copy(lowered.ir);
+    change(ir);
+    return codesOf(ir, lowered.sources);
+  };
+  // A data node needs a data type, not a brand, an alias, or an unknown identity.
+  for (const id of ["type:m#UserId", "type:m#Text", "type:m#Missing"]) {
+    const found = forge((ir) => {
+      const make = ir.declarations.find((d) => d.name === "make");
+      assert(make?.kind === "function" && make.body.kind === "data");
+      setAt(make, "body.data", id);
+    });
+    assert(found.length > 0, id);
+  }
+  // The value must fit the base record of the data type.
+  assertEquals(
+    forge((ir) => {
+      const make = ir.declarations.find((d) => d.name === "make");
+      assert(make?.kind === "function" && make.body.kind === "data");
+      setAt(make, "body.data", "type:m#Twin");
+    }),
+    ["validation/002"],
+  );
+  // A field read and an update name a field of the base record.
+  assertEquals(
+    forge((ir) => {
+      const nameOf = ir.declarations.find((d) => d.name === "nameOf");
+      assert(nameOf?.kind === "function" && nameOf.body.kind === "get");
+      setAt(nameOf, "body.field", "missing");
+    }),
+    ["validation/002"],
+  );
+  assertEquals(
+    forge((ir) => {
+      const rename = ir.declarations.find((d) => d.name === "rename");
+      assert(rename?.kind === "function" && rename.body.kind === "update");
+      setAt(rename, "body.fields[0].name", "missing");
+    }),
+    ["validation/002"],
+  );
+  // The reserved tag name is rejected in a data declaration and in an error.
+  for (const name of ["User", "Failed"]) {
+    assertEquals(
+      forge((ir) => {
+        const declared = ir.declarations.find((d) => d.name === name);
+        assert(declared !== undefined);
+        const fields = declared.kind === "type" &&
+            declared.definition.kind === "data"
+          ? declared.definition.fields
+          : declared.kind === "error"
+          ? declared.fields
+          : undefined;
+        assert(fields !== undefined);
+        Object.assign(fields[0], { name: "_tag" });
+      }),
+      ["validation/002"],
+      name,
+    );
+  }
+  // A data type that refers to itself breaks the recursion rule of version 0.
+  assertEquals(
+    forge((ir) => {
+      const user = ir.declarations.find((d) => d.name === "User");
+      assert(user?.kind === "type" && user.definition.kind === "data");
+      Object.assign(user.definition.fields[1], {
+        type: { kind: "named", id: "type:m#User" },
+      });
+    }).includes("validation/002"),
+    true,
+  );
+  // A data type with a reserved error field is not data only for a Schema.
+  assert(
+    forge((ir) => {
+      const user = ir.declarations.find((d) => d.name === "User");
+      assert(user?.kind === "type" && user.definition.kind === "data");
+      Object.assign(user.definition.fields[1], {
+        type: { kind: "named", id: SCHEMA_ERROR_ID },
+      });
+    }).includes("validation/002"),
+  );
 });
 
 Deno.test("a guarded recursive alias with literal alias tags validates and its aliases are rechecked", () => {

@@ -128,6 +128,7 @@ export type Expr =
   | Node<{ kind: "get"; record: Expr; field: string }>
   | Node<{ kind: "update"; record: Expr; fields: readonly { readonly name: string; readonly value: Expr }[] }>
   | Node<{ kind: "brand"; brand: TypeId; value: Expr }>
+  | Node<{ kind: "data"; data: TypeId; value: Expr }>
   | Node<{ kind: "unbrand"; value: Expr }>
   | Node<{ kind: "some"; value: Expr }>
   | Node<{ kind: "none" }>
@@ -227,7 +228,8 @@ export interface TypeDecl {
   readonly name: string;
   readonly definition:
     | { readonly kind: "alias"; readonly type: Type }
-    | { readonly kind: "brand"; readonly base: Type };
+    | { readonly kind: "brand"; readonly base: Type }
+    | { readonly kind: "data"; readonly fields: readonly Field[] };
   readonly opaque?: boolean;
   readonly span: Span;
 }

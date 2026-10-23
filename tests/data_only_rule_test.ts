@@ -60,9 +60,29 @@ for (const [name] of NOT_DATA) {
   });
 }
 
+Deno.test("the checker accepts a Schema over a data type with data-only fields", () => {
+  assertEquals(
+    check(
+      "type Int = int\ndata Box = { n: Int }\nexport const s: Schema<Box> = schema()",
+    ),
+    [],
+  );
+});
+
+Deno.test("the checker rejects a Schema over a data type with a reserved error field once", () => {
+  assertEquals(
+    check(
+      "data Bad = { e: SchemaError }\nexport const s: Schema<Bad> = schema()",
+    ).map((d) => [d.code, d.message]),
+    [["type-mismatch/010", DATA_ONLY]],
+  );
+});
+
 // ---------------------------------------------------------------- validator
 
 const BASE = `type Int = int
+data Box = { n: Int }
+data Bad = { e: SchemaError }
 export const ok: Schema<Int> = schema()
 `;
 
@@ -95,6 +115,27 @@ Deno.test("the validator accepts the Schema over Int", () => {
   assertEquals(
     validateModule(lowerBase(), new Map([["m.eff", BASE]])),
     [],
+  );
+});
+
+Deno.test("the validator accepts a forged Schema over a data type with data-only fields", () => {
+  const module = lowerBase();
+  retype(module, { kind: "named", id: "type:m#Box" });
+  assertEquals(validateModule(module, new Map([["m.eff", BASE]])), []);
+});
+
+Deno.test("the validator reports a forged Schema over a data type with a reserved error field", () => {
+  const module = lowerBase();
+  retype(module, { kind: "named", id: "type:m#Bad" });
+  const found = validateModule(module, new Map([["m.eff", BASE]]));
+  assert(found.length > 0);
+  assertEquals(
+    [
+      ...new Set(
+        found.map((d) => d.message.slice(d.message.indexOf(": ") + 2)),
+      ),
+    ],
+    [DATA_ONLY],
   );
 });
 

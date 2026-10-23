@@ -1,7 +1,7 @@
 // Interned types and type compatibility. Equal structural types share one
 // integer id (a `TypeRef`), so type equality is id equality. Aliases keep their
 // name: a `named` type points at the alias `TypeId`, and compatibility unfolds
-// the alias on demand. Brands and errors are nominal by identity.
+// the alias on demand. Brands, data types, and errors are nominal by identity.
 //
 // The table is mutable and deterministic. A project owns one table. The ids
 // depend on the order of interning, so no output may depend on a raw id. The
@@ -309,7 +309,8 @@ interface DefinitionSource {
     readonly opaque?: boolean;
     readonly definition:
       | { readonly kind: "alias"; readonly type: Type }
-      | { readonly kind: "brand"; readonly base: Type };
+      | { readonly kind: "brand"; readonly base: Type }
+      | { readonly kind: "data"; readonly fields: readonly Field[] };
   }[];
   readonly errors: readonly {
     readonly id: ErrorId;
@@ -330,6 +331,7 @@ export type TypeReader = Pick<
   | "node"
   | "aliasOf"
   | "brandBaseOf"
+  | "dataRecordOf"
   | "errorRecordOf"
   | "error"
   | "size"
@@ -343,6 +345,7 @@ export class TypeTable {
   private readonly aliases = new Map<TypeId, TypeRef>();
   private readonly guardedAliases = new Set<TypeId>();
   private readonly brands = new Map<TypeId, TypeRef>();
+  private readonly dataRecords = new Map<TypeId, TypeRef>();
   private readonly opaque = new Set<TypeId>();
   private readonly errorRecords = new Map<ErrorId, TypeRef>();
 
@@ -738,6 +741,7 @@ export class TypeTable {
   /** Registers the definition of an alias. The last definition wins. */
   defineAlias(id: TypeId, target: TypeRef): void {
     this.brands.delete(id);
+    this.dataRecords.delete(id);
     this.opaque.delete(id);
     this.guardedAliases.delete(id);
     this.aliases.set(id, target);
@@ -749,9 +753,19 @@ export class TypeTable {
 
   defineBrand(id: TypeId, base: TypeRef): void {
     this.aliases.delete(id);
+    this.dataRecords.delete(id);
     this.guardedAliases.delete(id);
     this.opaque.delete(id);
     this.brands.set(id, base);
+  }
+
+  /** Registers the base record of a `data` declaration. */
+  defineData(id: TypeId, record: TypeRef): void {
+    this.aliases.delete(id);
+    this.brands.delete(id);
+    this.opaque.delete(id);
+    this.guardedAliases.delete(id);
+    this.dataRecords.set(id, record);
   }
 
   markOpaque(id: TypeId): void {
@@ -775,6 +789,10 @@ export class TypeTable {
     return this.brands.get(id);
   }
 
+  dataRecordOf(id: TypeId): TypeRef | undefined {
+    return this.dataRecords.get(id);
+  }
+
   errorRecordOf(id: ErrorId): TypeRef | undefined {
     return this.errorRecords.get(id);
   }
@@ -783,7 +801,8 @@ export class TypeTable {
   isDefined(id: TypeId | ErrorId): boolean {
     return isErrorId(id)
       ? this.errorRecords.has(id)
-      : this.aliases.has(id) || this.brands.has(id);
+      : this.aliases.has(id) || this.brands.has(id) ||
+        this.dataRecords.has(id);
   }
 
   /**
@@ -819,6 +838,15 @@ export class TypeTable {
         if (guardedRecord(decl.definition.type, decl.id, tagOf)) {
           this.markGuardedAlias(decl.id);
         }
+      } else if (decl.definition.kind === "data") {
+        this.defineData(
+          decl.id,
+          this.record(decl.definition.fields.map((f) => ({
+            name: f.name,
+            type: this.fromIr(f.type),
+            optional: f.optional,
+          }))),
+        );
       } else {
         this.defineBrand(decl.id, this.fromIr(decl.definition.base));
         if (decl.opaque === true) this.markOpaque(decl.id);
@@ -1545,7 +1573,7 @@ export function dataOnly(
       ) return false;
       const record = isErrorId(type.id)
         ? table.errorRecordOf(type.id)
-        : table.brandBaseOf(type.id);
+        : table.dataRecordOf(type.id) ?? table.brandBaseOf(type.id);
       return record !== undefined && nested(record);
     }
     case "error":

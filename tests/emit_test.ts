@@ -647,6 +647,46 @@ Deno.test("a record brand emits field reads and updates that keep the brand", ()
   assertStringIncludes(text, "User.make({ id: UserId.make(");
 });
 
+Deno.test("a data type emits a TaggedStruct, a make call, and an unbrand copy without the tag", () => {
+  const emitted = emitFiles(projectFiles("emit/forms"), ["data-types.eff"]).get(
+    "data-types",
+  );
+  assert(emitted !== undefined, "module data-types was not emitted");
+  const text = emitted.text;
+  assertStringIncludes(
+    text,
+    'export const User = Schema.TaggedStruct(\n  "data-types#User"',
+  );
+  assertStringIncludes(text, "nick: Schema.optionalKey(Text)");
+  assertStringIncludes(text, "export type User = typeof User.Type;");
+  // An empty body gives a variant with no fields.
+  assertStringIncludes(text, 'Schema.TaggedStruct("data-types#Marker", {})');
+  assertStringIncludes(text, "User.make({ id: UserId.make(");
+  assertStringIncludes(text, "Marker.make({})");
+  assertStringIncludes(text, "(user: User): Text => user.name;");
+  assertStringIncludes(text, "Option.fromUndefinedOr(user.nick)");
+  assertStringIncludes(text, "({ ...user, name })");
+  // A data value in an error needs no adapter.
+  assertStringIncludes(text, "{ user: User, reason: Text }");
+  // A piped record literal reaches the constructor.
+  assertStringIncludes(text, "return Pin.make($p1);");
+  // The copy that unbrand makes leaves the tag out.
+  assertEquals(text.split("$untagged<").length - 1, 2);
+  assertStringIncludes(text, 'key !== "_tag"');
+});
+
+Deno.test("a data type with field names from Object.prototype keeps them valid", () => {
+  const output = oneModule(`
+type Text = string
+export data Odd = { constructor: Text, __proto__: Text, toString?: Text }
+export const make = (): Odd => Odd({ constructor: "c", __proto__: "p" })
+export const ts = (o: Odd): Option<Text> => o.toString
+`);
+  assertStringIncludes(output, '["__proto__"]: Text');
+  assertStringIncludes(output, "Odd.make(");
+  assertStringIncludes(output, '$optionalField<Text>(o, "toString")');
+});
+
 Deno.test("an optional field read through a union, a brand, or an error becomes an Option", () => {
   const emitted = emitFiles(projectFiles("emit/forms"), [
     "optional-fields.eff",

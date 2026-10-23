@@ -40,7 +40,7 @@ export const t: Schema<T> = schemaRecursive((self: Schema<T>): Schema<T> =>
     ["declaration/007", "defined in terms of itself", "T"],
     [
       "declaration/013",
-      "can occur only inside a type or error declaration",
+      "can occur only inside a type, data, or error declaration",
       '"a"',
     ],
     ["type-mismatch/010", GUARD, CALLBACK],

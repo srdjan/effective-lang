@@ -582,8 +582,12 @@ class BodyChecker
         return this.builtinCall(node, target.name, args, expected);
       case "error":
         return this.errorConstruction(node, target.id, args);
-      case "type":
-        return this.brandConstruction(node, target.id, args);
+      case "type": {
+        const record = this.table.dataRecordOf(target.id);
+        return record === undefined
+          ? this.brandConstruction(node, target.id, args)
+          : this.dataConstruction(node, target.id, record, args);
+      }
       case "cap":
         return this.perform(node, target.id, args);
       case "local":
@@ -783,10 +787,31 @@ class BodyChecker
       return this.finish(node, this.table.error, combine(infos));
     }
     this.fact(node, { kind: "brand-construction", brand: id });
+    return this.constructFrom(node, id, base, "brand", args);
+  }
+
+  private dataConstruction(
+    node: NodeId,
+    id: TypeId,
+    record: TypeRef,
+    args: readonly Arg[],
+  ): NodeInfo {
+    this.fact(node, { kind: "data-construction", data: id });
+    return this.constructFrom(node, id, record, "data type", args);
+  }
+
+  /** The single argument of a brand or data constructor must fit the base type. */
+  private constructFrom(
+    node: NodeId,
+    id: TypeId,
+    base: TypeRef,
+    noun: "brand" | "data type",
+    args: readonly Arg[],
+  ): NodeInfo {
     if (args.length !== 1) {
       this.report(
         "type-mismatch/004",
-        `the brand \`${
+        `the ${noun} \`${
           shortName(id)
         }\` takes one argument, but ${args.length} are given`,
         node,
@@ -930,14 +955,15 @@ class BodyChecker
         return this.finish(node, this.table.error, combine(infos));
       }
       const base = unfolded.kind === "named" && !isErrorId(unfolded.id)
-        ? this.table.brandBaseOf(unfolded.id)
+        ? this.table.dataRecordOf(unfolded.id) ??
+          this.table.brandBaseOf(unfolded.id)
         : undefined;
       if (base !== undefined) {
         type = base;
       } else if (!this.isError(infos[0].type)) {
         this.report(
           "type-mismatch/010",
-          `\`unbrand\` needs a brand value, but the value has type ${
+          `\`unbrand\` needs a brand or data value, but the value has type ${
             this.show(infos[0].type)
           }`,
           args[0].node,
@@ -1279,8 +1305,9 @@ class BodyChecker
           : this.table.node(record);
         return recordNode?.kind === "record" ? recordNode.fields : undefined;
       }
-      // A brand of a record has the fields of its base.
-      const base = this.table.brandBaseOf(node.id);
+      // A data type, or a brand of a record, has the fields of its base.
+      const base = this.table.dataRecordOf(node.id) ??
+        this.table.brandBaseOf(node.id);
       if (base !== undefined) return this.recordFields(base);
     }
     return undefined;

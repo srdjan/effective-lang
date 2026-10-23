@@ -24,6 +24,8 @@ export interface TypeEnv {
   readonly aliases: ReadonlyMap<string, Type>;
   /** Brand identity to the base type. */
   readonly brands: ReadonlyMap<string, Type>;
+  /** Data type identity to the base record type. */
+  readonly data: ReadonlyMap<string, Extract<Type, { kind: "record" }>>;
   /** Error identity to its fields. */
   readonly errors: ReadonlyMap<string, readonly Field[]>;
 }
@@ -115,7 +117,7 @@ export function dataOnly(
         (value.id === SCHEMA_ERROR_ID || value.id === SCHEMA_ISSUE_ID)
       ) return false;
       const errorFields = env.errors.get(value.id);
-      const base = env.brands.get(value.id) ??
+      const base = env.data.get(value.id) ?? env.brands.get(value.id) ??
         (errorFields !== undefined
           ? { kind: "record" as const, fields: errorFields }
           : undefined);
@@ -410,7 +412,7 @@ export function unionOf(env: TypeEnv, types: readonly Type[]): Type {
   return kept.length === 1 ? kept[0] : { kind: "union", members: kept };
 }
 
-/** The fields of a record type, of a named error, or of a brand of a record. */
+/** The fields of a record type, of a named error or data type, or of a brand of a record. */
 export function fieldsOf(
   env: TypeEnv,
   type: Type,
@@ -422,6 +424,8 @@ export function fieldsOf(
   if (unfolded.kind === "named") {
     const error = env.errors.get(unfolded.id);
     if (error !== undefined) return error;
+    const data = env.data.get(unfolded.id);
+    if (data !== undefined) return data.fields;
     const base = env.brands.get(unfolded.id);
     return base === undefined ? undefined : fieldsOf(env, base, depth + 1);
   }

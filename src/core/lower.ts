@@ -203,6 +203,7 @@ type SpecialKind =
   | "builtin"
   | "error-construction"
   | "brand-construction"
+  | "data-construction"
   | "retry"
   | "schema"
   | "with-fiber"
@@ -841,6 +842,13 @@ class BodyLowerer {
         return {
           kind: "brand",
           brand: fact.brand,
+          value: arg(0),
+          ...annotation,
+        };
+      case "data-construction":
+        return {
+          kind: "data",
+          data: fact.data,
           value: arg(0),
           ...annotation,
         };

@@ -643,7 +643,7 @@ export class TypeLowerer {
 
   /**
    * The fields of a record type in source order. Reports duplicate names, void
-   * fields, and, for an error declaration, a field named `_tag`.
+   * fields, and, for a data or error declaration, a field named `_tag`.
    */
   fields(node: NodeId, errorDeclaration: boolean): LoweredField[] {
     const result: LoweredField[] = [];
@@ -666,7 +666,7 @@ export class TypeLowerer {
       if (errorDeclaration && name === "_tag") {
         this.report(
           "declaration/009",
-          "the field name `_tag` is reserved for generated error tags",
+          "the field name `_tag` is reserved for generated tags",
           nameSpan,
         );
         continue;
@@ -1156,7 +1156,7 @@ type TypeNodeInfo =
     readonly refs: ReadonlySet<string>;
   }
   & (
-    | { readonly kind: "alias" | "brand"; readonly id: TypeId }
+    | { readonly kind: "alias" | "brand" | "data"; readonly id: TypeId }
     | { readonly kind: "error"; readonly id: ErrorId }
   );
 
@@ -1202,6 +1202,7 @@ class ModuleChecker {
     const infos: TypeNodeInfo[] = [];
     for (const entry of entries) {
       if (entry.kind === "type") infos.push(this.checkType(entry));
+      else if (entry.kind === "data") infos.push(this.checkData(entry));
       else if (entry.kind === "error") infos.push(this.checkError(entry));
     }
     const guarded = this.checkCycles(infos);
@@ -1218,6 +1219,8 @@ class ModuleChecker {
       if (!entry.exported) continue;
       const prefix = entry.kind === "const" || entry.kind === "provider"
         ? "value"
+        : entry.kind === "data"
+        ? "type"
         : entry.kind;
       this.exports.push(this.id(prefix, entry.name));
     }
@@ -1236,7 +1239,7 @@ class ModuleChecker {
   }
 
   /**
-   * Rule R1: a primitive type node can occur only inside a type or error declaration.
+   * Rule R1: a primitive type node can occur only inside a type, data, or error declaration.
    * The walk skips those declarations and the regions that the parser already reported.
    * A broken declaration is checked, because its annotations parsed.
    */
@@ -1245,15 +1248,15 @@ class ModuleChecker {
     walk(tree, tree.root, (node) => {
       const kind = kindOf(tree, node);
       if (
-        kind === SyntaxKind.TypeDecl || kind === SyntaxKind.ErrorDecl ||
-        kind === SyntaxKind.Error
+        kind === SyntaxKind.TypeDecl || kind === SyntaxKind.DataDecl ||
+        kind === SyntaxKind.ErrorDecl || kind === SyntaxKind.Error
       ) return false;
       if (kind === SyntaxKind.LiteralType || this.isPrimitiveName(node)) {
         this.lowerer.report(
           "declaration/013",
           `the primitive type \`${
             nodeText(tree, node)
-          }\` can occur only inside a type or error declaration`,
+          }\` can occur only inside a type, data, or error declaration`,
           nodeSpan(tree, node),
         );
       }
@@ -1361,6 +1364,33 @@ class ModuleChecker {
     if (nameNode === undefined) return false;
     const target = this.env.targets.get(nameNode);
     return target?.kind === "builtin-type" && target.name === "Brand";
+  }
+
+  private checkData(entry: DeclEntry): TypeNodeInfo {
+    const id = this.id("type", entry.name);
+    const record =
+      this.lowerer.kidsOfKind(entry.node, SyntaxKind.RecordType)[0];
+    const fields = record === undefined
+      ? []
+      : this.lowerer.fields(record, true);
+    this.table.defineData(id, this.lowerer.recordOf(fields).ref);
+    this.types.push({
+      kind: "type",
+      id,
+      name: entry.name,
+      definition: { kind: "data", fields: fields.map(toIrField) },
+      span: entry.span,
+    });
+    const refs = new Set<string>();
+    for (const field of fields) referencedIds(field.type.ir, refs);
+    return {
+      id,
+      name: entry.name,
+      nameSpan: entry.nameSpan,
+      start: entry.span.start,
+      kind: "data",
+      refs,
+    };
   }
 
   private checkError(entry: DeclEntry): TypeNodeInfo {

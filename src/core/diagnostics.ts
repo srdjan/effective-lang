@@ -269,7 +269,7 @@ export const DIAGNOSTIC_CODES = {
   "declaration/009": {
     category: "declaration",
     description:
-      "An error declaration has a field named _tag, which generated error tags reserve.",
+      "A data or error declaration has a field named _tag, which generated tags reserve.",
   },
   "declaration/010": {
     category: "declaration",
@@ -288,7 +288,7 @@ export const DIAGNOSTIC_CODES = {
   "declaration/013": {
     category: "declaration",
     description:
-      "A primitive type (string, int, number, boolean, or a literal type) appears outside the body of a type or error declaration.",
+      "A primitive type (string, int, number, boolean, or a literal type) appears outside the body of a type, data, or error declaration.",
   },
   "module/001": {
     category: "module",

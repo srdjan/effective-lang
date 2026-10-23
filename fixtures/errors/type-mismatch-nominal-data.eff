@@ -1,0 +1,33 @@
+type UserId = Brand<string>
+
+data User = { id: UserId, name: string, nick?: string }
+
+data Twin = { id: UserId, name: string, nick?: string }
+
+type Dog = { id: UserId, name: string, nick?: string }
+
+const make = (): User => User({ id: UserId("u1"), name: "Ann" })
+
+const structural = (): User =>
+  // error: type-mismatch/003
+  ({ id: UserId("u2"), name: "Bo" })
+
+const asRecord = (user: User): Dog =>
+  // error: type-mismatch/003
+  user
+
+const asTwin = (user: User): Twin =>
+  // error: type-mismatch/003
+  user
+
+const wrapped = (user: User): Twin =>
+  // error: type-mismatch/003
+  Twin(user)
+
+const unwrapped = (user: User): Twin => Twin(unbrand(user))
+
+const same = (a: User, b: User): Flag =>
+  // error: type-mismatch/007
+  a === b
+
+type Flag = boolean

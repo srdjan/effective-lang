@@ -118,15 +118,25 @@ export function buildWorld(ir: ModuleIR): World {
   }
   const aliases = new Map<string, Type>();
   const brands = new Map<string, Type>();
+  const data = new Map<string, Extract<Type, { kind: "record" }>>();
   for (const t of types.values()) {
-    if (t.definition.kind === "alias") aliases.set(t.id, t.definition.type);
-    else brands.set(t.id, t.definition.base);
+    switch (t.definition.kind) {
+      case "alias":
+        aliases.set(t.id, t.definition.type);
+        break;
+      case "brand":
+        brands.set(t.id, t.definition.base);
+        break;
+      case "data":
+        data.set(t.id, { kind: "record", fields: t.definition.fields });
+        break;
+    }
   }
   const errorFields = new Map<string, readonly Field[]>();
   for (const e of errors.values()) errorFields.set(e.id, e.fields);
   return {
     module: ir.module,
-    env: { aliases, brands, errors: errorFields },
+    env: { aliases, brands, data, errors: errorFields },
     types,
     errors,
     services,
@@ -299,9 +309,18 @@ function checkFieldNames(
   fields: readonly Field[],
   path: string,
   span: Span,
+  tagReserved = false,
 ): void {
   const seen = new Set<string>();
   fields.forEach((f, i) => {
+    if (tagReserved && f.name === "_tag") {
+      ctx.report.add(
+        AREA.types,
+        `${path}[${i}]`,
+        "the field name _tag is reserved for generated tags",
+        span,
+      );
+    }
     if (seen.has(f.name)) {
       ctx.report.add(
         AREA.types,
@@ -443,6 +462,24 @@ function checkTypeDecl(ctx: Ctx, d: TypeDecl, path: string): void {
       d.span,
     );
   }
+  if (d.definition.kind === "data") {
+    checkFieldNames(
+      ctx,
+      d.definition.fields,
+      `${path}.definition.fields`,
+      d.span,
+      true,
+    );
+    d.definition.fields.forEach((f, i) =>
+      checkDeclaredType(
+        ctx,
+        f.type,
+        `${path}.definition.fields[${i}].type`,
+        d.span,
+      )
+    );
+    return;
+  }
   const type = d.definition.kind === "alias"
     ? d.definition.type
     : d.definition.base;
@@ -453,7 +490,7 @@ function checkTypeDecl(ctx: Ctx, d: TypeDecl, path: string): void {
 }
 
 function checkErrorDecl(ctx: Ctx, d: ErrorDecl, path: string): void {
-  checkFieldNames(ctx, d.fields, `${path}.fields`, d.span);
+  checkFieldNames(ctx, d.fields, `${path}.fields`, d.span, true);
   d.fields.forEach((f, i) =>
     checkDeclaredType(ctx, f.type, `${path}.fields[${i}].type`, d.span)
   );
@@ -701,7 +738,7 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
     state.set(id, 1);
     const alias = world.env.aliases.get(id);
     const brand = world.env.brands.get(id);
-    const fields = world.env.errors.get(id);
+    const fields = world.env.data.get(id)?.fields ?? world.env.errors.get(id);
     if (alias !== undefined) reaches(alias, id, 0);
     if (brand !== undefined) reaches(brand, id, 0);
     if (fields !== undefined) fields.forEach((f) => reaches(f.type, id, 0));

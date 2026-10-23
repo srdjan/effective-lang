@@ -1,0 +1,46 @@
+type UserId = Brand<string>
+type Text = string
+
+export data User = { id: UserId, name: Text, nick?: Text }
+
+data Twin = { id: UserId, name: Text, nick?: Text }
+
+export data Marker = {}
+
+export error Rejected = { user: User, reason: Text }
+
+data Pin = { id: UserId }
+
+const userSchema: Schema<User> = schema()
+
+export const make = (): User =>
+  User({ id: UserId("u1"), name: "Ann" })
+
+export const mark = (): Marker => Marker({})
+
+export const nameOf = (user: User): Text => user.name
+
+export const nick = (user: User): Text =>
+  match user.nick {
+    Some(n) => n,
+    None => "none"
+  }
+
+export const rename = (user: User, name: Text): User =>
+  ({ ...user, name })
+
+export const plain = (user: User): { id: UserId, name: Text, nick?: Text } =>
+  unbrand(user)
+
+export const twin = (user: User): Twin => Twin(unbrand(user))
+
+export const piped = (): Pin => ({ id: UserId("p1") }) |> Pin
+
+export const reject = (user: User): Rejected =>
+  Rejected({ user, reason: "no" })
+
+export const decodeUser = (input: unknown): User fails SchemaError =>
+  schemaDecode(userSchema, input)
+
+export const encodeUser = (user: User): User fails SchemaError =>
+  schemaEncode(userSchema, user)

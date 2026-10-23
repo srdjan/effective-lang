@@ -72,6 +72,7 @@ const DECL_WORDS: ReadonlySet<string> = new Set([
   "type",
   "opaque",
   "error",
+  "data",
   "service",
   "provider",
 ]);
@@ -742,8 +743,8 @@ class Parser {
       } else if (word === "opaque") {
         kind = SyntaxKind.TypeDecl;
         this.parseOpaqueTypeBody();
-      } else if (word === "error") {
-        kind = SyntaxKind.ErrorDecl;
+      } else if (word === "error" || word === "data") {
+        kind = word === "error" ? SyntaxKind.ErrorDecl : SyntaxKind.DataDecl;
         this.parseErrorBody();
       } else if (word === "service") {
         kind = SyntaxKind.ServiceDecl;

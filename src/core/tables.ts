@@ -118,6 +118,7 @@ export type NodeFact =
   | { readonly kind: "perform"; readonly capability: CapabilityId }
   | { readonly kind: "error-construction"; readonly error: ErrorId }
   | { readonly kind: "brand-construction"; readonly brand: TypeId }
+  | { readonly kind: "data-construction"; readonly data: TypeId }
   | { readonly kind: "unbrand" }
   | { readonly kind: "some" }
   | { readonly kind: "none" }

@@ -1,0 +1,6 @@
+// error: declaration/007
+data Loop = { next: Loop }
+
+data Fine = { items: Other[] }
+
+data Other = { value: int }

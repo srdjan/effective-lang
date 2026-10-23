@@ -51,6 +51,10 @@
       "c70a0e1f253ad9b9",
       "f6c105e227115704"
     ],
+    "fixtures/emit/forms/data-types.eff": [
+      "157b3cfc7f365d4a",
+      "1a0e351be2a1af25"
+    ],
     "fixtures/emit/forms/forms.eff": [
       "c95b3acb15c99c11",
       "b65bb286621868b0"
@@ -203,6 +207,10 @@
       "5a6e77269c59ebd0",
       "3ab1e87e456bfed8"
     ],
+    "fixtures/errors/declaration-data-tag-field.eff": [
+      "c7415ac4f49e6f76",
+      "27911a4b71b511c9"
+    ],
     "fixtures/errors/declaration-duplicate-field.eff": [
       "f7022abd903f6717",
       "ae9519a5a4676fcf"
@@ -250,6 +258,10 @@
     "fixtures/errors/declaration-provides-method/users.eff": [
       "2429c94c7e8742c6",
       "fe7d90a3d1f05661"
+    ],
+    "fixtures/errors/declaration-recursive-data.eff": [
+      "612a053b9c26456d",
+      "f73cf68a95336480"
     ],
     "fixtures/errors/declaration-recursive-type.eff": [
       "231e61d68cfdfb7c",
@@ -419,6 +431,10 @@
       "41d6da54b4ddaf4e",
       "7721fd50abb3aa7e"
     ],
+    "fixtures/errors/type-mismatch-nominal-data.eff": [
+      "da22fd712eb5177f",
+      "13eed4d40161adb6"
+    ],
     "fixtures/errors/type-mismatch-nominal-record.eff": [
       "ac045d4c8db438da",
       "23a8b60d38060e9b"
@@ -508,16 +524,16 @@
       "31acdba459dcf9d2"
     ],
     "fixtures/parse/ok-forms.eff": [
-      "a43378c8308673ae",
-      "921f872a83c922d8"
+      "6a501bf7dac80d39",
+      "752a29f40ecc811a"
     ],
     "fixtures/parse/ok-forms.effi": [
-      "1429ed00bc2faa22",
-      "e3de9629686ac75b"
+      "7d424553c85d82d5",
+      "cde0e2e8495f1736"
     ],
     "fixtures/parse/recovery-after-broken-declaration.eff": [
-      "d83a2334fb4cbf86",
-      "b3bbb053dc2a6005"
+      "cd0371bca08c4e32",
+      "99e2b941107b2d83"
     ],
     "fixtures/parse/recovery-in-block.eff": [
       "01f81781b2fe84bf",
