@@ -114,8 +114,12 @@ opaque type (`declaration/016`). A data
 type can be recursive when every cycle has a base case. The editor, the TextMate
 grammar and the playground highlighter know the word `data`.
 
-A data type that a `.effi` file declares is imported as a type only, so `.eff`
-code cannot call its constructor. A brand in an `.effi` file has the same limit.
+Each `.effi` file has a generated companion module, such as `host.effi.ts`
+([plan](plans/2026-10-23-host-interface-companion.md)). It holds the types,
+errors, data types, and services of the interface. Source modules and host
+modules import them from it, so the compiler owns every tag string. So `.eff`
+code can construct an `.effi` data type, and a provider result of such a type is
+checked at run time.
 The website and the canonical specification describe data types from draft 0.59.
 
 Data values from unsound host code fail loudly at run time

@@ -45,7 +45,8 @@ deno task effective watch fixtures/examples
 ```
 
 `check` prints the diagnostics. `build` also writes `<module>.ts` and
-`<module>.ts.map` next to each source file. `watch` builds again after each
+`<module>.ts.map` next to each source file, and a companion module
+`<name>.effi.ts` for each host interface file. `watch` builds again after each
 source change. [docs/api.md](docs/api.md) describes the command-line tool, the
 language server, the VS Code client, and the playground.
 

@@ -70,6 +70,13 @@ The pattern domain of a `match` subject whose members are all data types or erro
 
 Arms name the members, as in `Circle(c)`, and coverage needs one arm for each member or `_`. A record pattern does not apply to a nominal domain. A subject that mixes nominal and structural members has no domain, and the checker reports it.
 
+### Companion module
+
+The generated TypeScript module of a host interface file: `host.effi` gives `host.effi.ts`.
+
+It holds the types, errors, data types, and services of the interface, so the compiler owns each tag string. Source modules and the host module import those values from it. The host module supplies only the opaque types and the providers.
+_Avoid: interface module, host types module_
+
 ## Verification
 
 ### Behavior capture

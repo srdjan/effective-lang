@@ -338,15 +338,21 @@ map from it.
 value. Expected failures are error values with the tag `unsupported` or
 `internal`.
 
-An import of another module becomes a relative `.ts` specifier. A host import
-becomes a relative path to the host module of `effective.json`. The emitter
-checks provider imports against the registry:
+An import of another module becomes a relative `.ts` specifier. An import of an
+`.effi` declaration becomes a relative path to its companion module, such as
+`host.effi.ts`. An opaque type and a provider come from the host module of
+`effective.json`. The emitter checks provider imports against the registry:
 `const UsersLive$host: Layer.Layer<Users> = UsersLive`. When a provided service
 method returns a data value, the constant wraps the host Layer with run-time
-checks of those results, and keeps the same declared type
-([host boundary checks](archive/plans/2026-10-23-host-boundary-checks.md)). Host interfaces may also
-export opaque types and service tags; their TypeScript host module supplies the
-corresponding type and value exports.
+checks ([host boundary checks](archive/plans/2026-10-23-host-boundary-checks.md)).
+The wrapped constant keeps the same declared type.
+
+The emitter also emits a companion module for each `.effi` file, such as
+`host.effi.ts`. It holds the types, errors, data types, and services of the
+interface, all exported, with the tags of the interface module. The TypeScript
+host module imports these from the companion module. It supplies only the
+opaque types and the providers
+([companion module](plans/2026-10-23-host-interface-companion.md)).
 
 The emitter adds `export` to each declaration that the source exports and to
 each declaration that an exported interface reaches. It never renames a source
@@ -499,7 +505,7 @@ task runs in the repository directory, so pass an explicit root, for example
 | Command                                       | What it does                                                                                              |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `deno task effective check [root]`            | Prints the diagnostics of the project.                                                                    |
-| `deno task effective build [root]`            | Also writes `<module>.ts` and `<module>.ts.map` next to each source for each module that no error blocks. |
+| `deno task effective build [root]`            | Also writes `<module>.ts` and `<module>.ts.map` next to each source for each module that no error blocks, and `<name>.effi.ts` for each imported `.effi` file. |
 | `deno task effective build [root] --validate` | Also runs the IR validator and prints its diagnostics.                                                    |
 | `deno task effective build [root] --tsc`      | Also runs `deno check` over the written files and the host modules, and maps each error to the source.    |
 | `deno task effective watch [root] [--tsc]`    | Builds once, then builds again after each change of a source file. It prints the modules that it checked. |
@@ -512,13 +518,14 @@ skips a link to a directory that it already visited, and a link to a directory
 outside the root.
 
 The `build` command writes a module only when the module has no error and every
-`.eff` module that it imports, directly or through other imports, is also
-written. The generated file of a module with an error is not written, so no
-written file imports a missing file. In an import cycle, one error stops every
-module of the cycle. The `watch` command leaves the last written file of a
-stopped module on disk. When a module leaves the project, for example after a
-rename, `watch` removes its `<module>.ts` and `<module>.ts.map` and prints
-`removed: <path>` on stderr for each file. It removes the `.ts` file only when
+module that it imports, directly or through other imports, is also written. A
+companion module counts as an import. The generated file of a module with an
+error is not written, so no written file imports a missing file. In an import
+cycle, one error stops every module of the cycle. The `watch` command leaves the
+last written file of a stopped module on disk. When a module leaves the project,
+for example after a rename, `watch` removes its `<module>.ts` or
+`<module>.effi.ts` and the map. It prints `removed: <path>` on stderr for each
+file. It removes the `.ts` file only when
 the first line is the header that the emitter writes for that module. It removes
 the map only together with the `.ts` file. The `build` command never removes a
 file.
