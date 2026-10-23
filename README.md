@@ -1,26 +1,42 @@
 # effective-lang
 
-Effective is a small functional language that transpiles to Effect-TS 4. This repository holds the transpiler core library, its command-line tool, a language server, a VS Code client, and a browser playground.
+Effective is a small functional language that transpiles to Effect-TS 4. This
+repository holds the transpiler core library, its command-line tool, a language
+server, a VS Code client, and a browser playground.
 
-The canonical specification is in the sibling repository `../effective/public/effective-spec.html` and governs the language. The implemented language rules are in [docs/language-rules.md](docs/language-rules.md).
+The canonical specification is in the sibling repository
+`../effective/public/effective-spec.html` and governs the language. The
+implemented language rules are in
+[docs/language-rules.md](docs/language-rules.md).
 
 ## Features
 
-The command-line tool checks a project, writes the generated TypeScript with source maps, and can run `deno check` over the result. The `watch` command builds again after each source change. The language server gives diagnostics, hover, go-to-definition, references, rename, completion, semantic tokens, and contract quick fixes. The VS Code client shows the generated TypeScript and writes it on save. The playground runs the core in the browser and shows the problems and the generated TypeScript.
+The command-line tool checks a project, writes the generated TypeScript with
+source maps, and can run `deno check` over the result. The `watch` command
+builds again after each source change. The language server gives diagnostics,
+hover, go-to-definition, references, rename, completion, semantic tokens, and
+contract quick fixes. The VS Code client shows the generated TypeScript and
+writes it on save. The playground runs the core in the browser and shows the
+problems and the generated TypeScript.
 
 ## Requirements
 
-The project needs Deno 2.9.8. The first test run downloads `@std/assert` from jsr, so it needs network access once. Generated TypeScript targets Effect 4.0.5. To build the VS Code extension, you also need Node 20 or later with npm.
+The project needs Deno 2.9.8. The first test run downloads `@std/assert` from
+jsr, so it needs network access once. Generated TypeScript targets Effect 4.0.5.
+To build the VS Code extension, you also need Node 20 or later with npm.
 
 ## Installation
 
-To use the tools from a checkout, clone the repository and run the tasks from its root. No other installation step is necessary.
+To use the tools from a checkout, clone the repository and run the tasks from
+its root. No other installation step is necessary.
 
-To install the standalone command-line tool and the VS Code extension, read [docs/installation.md](docs/installation.md).
+To install the standalone command-line tool and the VS Code extension, read
+[docs/installation.md](docs/installation.md).
 
 ## Usage
 
-Run each command from the repository root. Give the project directory that holds `effective.json`:
+Run each command from the repository root. Give the project directory that holds
+`effective.json`:
 
 ```sh
 deno task effective check fixtures/examples
@@ -28,13 +44,19 @@ deno task effective build fixtures/examples
 deno task effective watch fixtures/examples
 ```
 
-`check` prints the diagnostics. `build` also writes `<module>.ts` and `<module>.ts.map` next to each source file. `watch` builds again after each source change. [docs/api.md](docs/api.md) describes the command-line tool, the language server, the VS Code client, and the playground.
+`check` prints the diagnostics. `build` also writes `<module>.ts` and
+`<module>.ts.map` next to each source file. `watch` builds again after each
+source change. [docs/api.md](docs/api.md) describes the command-line tool, the
+language server, the VS Code client, and the playground.
 
 ## Development
 
-Run `deno task check` before each commit. It runs the format check, the lint, the type check, the fast tests, and the slow tests. Run `deno task test` for the fast tests only.
+Run `deno task check` before each commit. It runs the format check, the lint,
+the type check, the fast tests, and the slow tests. Run `deno task test` for the
+fast tests only.
 
-[docs/development.md](docs/development.md) lists every task, the repository layout, the error fixture convention, and the format and lint scope.
+[docs/development.md](docs/development.md) lists every task, the repository
+layout, the error fixture convention, and the format and lint scope.
 
 ## Project layout
 
@@ -75,8 +97,14 @@ Run `deno task check` before each commit. It runs the format check, the lint, th
 
 ## Status
 
-All parts of the Phase A plan, the language server plan, and the playground plan exist. The three application gates pass with existing language forms. [docs/status.md](docs/status.md) gives the project status, the application stopping rule, the open items, and the deferred gaps.
+All parts of the Phase A plan, the language server plan, and the playground plan
+exist. The three application gates pass with existing language forms. A fourth
+application, order-lifecycle, is a witness for nominal data types and is not a
+gate. [docs/status.md](docs/status.md) gives the project status, the application
+stopping rule, the open items, and the deferred gaps.
 
 ## Contributing
 
-[AGENTS.md](AGENTS.md) gives the repository rules: structure, commands, style, tests, commits, and plan ID prefixes. Use one commit for each complete unit of work, and run `deno task check` before each commit.
+[AGENTS.md](AGENTS.md) gives the repository rules: structure, commands, style,
+tests, commits, and plan ID prefixes. Use one commit for each complete unit of
+work, and run `deno task check` before each commit.

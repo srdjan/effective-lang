@@ -1,0 +1,78 @@
+import { OrderId, Cents, Text, Bool, StateName, Receipt, Tracking, Reason, Pending, Paid, Shipped, Cancelled, Order, InvalidTransition, Fixed, Times, Capped, Sum, Rule, OrderInput } from "./contracts.eff"
+
+const inputSchema: Schema<OrderInput> = schema()
+const orderSchema: Schema<Order> = schema()
+
+export const fromInput = (input: unknown): Pending fails SchemaError => {
+  const raw = schemaDecode(inputSchema, input)
+  Pending({ id: OrderId(raw.id), total: Cents(raw.total) })
+}
+
+export const decodeOrder = (input: unknown): Order fails SchemaError =>
+  schemaDecode(orderSchema, input)
+
+export const encodeOrder = (order: Order): Order fails SchemaError =>
+  schemaEncode(orderSchema, order)
+
+export const pay = (order: Pending, receipt: Receipt): Paid =>
+  Paid({ id: order.id, total: order.total, receipt })
+
+export const ship = (order: Paid, tracking: Tracking): Shipped =>
+  Shipped({ id: order.id, receipt: order.receipt, tracking })
+
+export const cancel = (order: Pending | Paid, reason: Reason): Cancelled =>
+  match order {
+    Pending(p) => Cancelled({ id: p.id, reason }),
+    Paid(p) => Cancelled({ id: p.id, reason })
+  }
+
+export const stateOf = (order: Order): StateName =>
+  match order {
+    Pending(p) => "pending",
+    Paid(p) => "paid",
+    Shipped(s) => "shipped",
+    Cancelled(c) => "cancelled"
+  }
+
+export const isOpen = (order: Order): Bool =>
+  match order {
+    Pending(p) => true,
+    Paid(p) => true,
+    Shipped(s) => false,
+    Cancelled(c) => false
+  }
+
+export const describe = (order: Order): Text =>
+  match order {
+    Pending(p) => "pending",
+    Paid(p) => p.receipt.number,
+    Shipped(s) => s.tracking.code,
+    Cancelled(c) => c.reason.note
+  }
+
+export const cancelAny = (order: Order, reason: Reason): Cancelled fails InvalidTransition =>
+  match order {
+    Pending(p) => Cancelled({ id: p.id, reason }),
+    Paid(p) => Cancelled({ id: p.id, reason }),
+    Shipped(s) => fail(InvalidTransition({ id: s.id, state: "shipped" })),
+    Cancelled(c) => fail(InvalidTransition({ id: c.id, state: "cancelled" }))
+  }
+
+const min = (left: Cents, right: Cents): Cents =>
+  if (left < right) { left } else { right }
+
+export const price = (rule: Rule, base: Cents): Cents =>
+  match rule {
+    Fixed(f) => f.amount,
+    Times(t) => Cents(unbrand(base) * t.factor),
+    Capped(c) => min(price(c.rule, base), c.cap),
+    Sum(s) => s.parts |> fold(Cents(0), (acc, part) => acc + price(part, base))
+  }
+
+export const total = (order: Pending, rule: Rule): Cents =>
+  order.total + price(rule, order.total)
+
+export const sampleRule: Rule = Capped({
+  rule: Sum({ parts: [Fixed({ amount: Cents(50) }), Times({ factor: 3 })] }),
+  cap: Cents(2500)
+})

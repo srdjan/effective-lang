@@ -1,4 +1,4 @@
-// Slow tests of the three application fixtures under `fixtures/applications/`.
+// Slow tests of the application fixtures under `fixtures/applications/`.
 // Each test checks, lowers, and validates its application, writes the emitted
 // modules and the host files into a temporary directory, and runs `deno check`,
 // `deno test`, and `deno run` there. Each command must exit with code 0.
@@ -20,6 +20,12 @@ interface Report {
   readonly committed?: readonly unknown[];
   readonly active?: number;
   readonly batches?: readonly (readonly { readonly id: number }[])[];
+  readonly tags?: readonly string[];
+  readonly states?: readonly string[];
+  readonly described?: readonly string[];
+  readonly sampleRulePrice?: number;
+  readonly hostRulePrice?: number;
+  readonly rejected?: string;
 }
 
 interface Application {
@@ -77,6 +83,26 @@ const APPLICATIONS: readonly Application[] = [
         [[1, 2], [3, 4], [5]],
       );
       assertEquals(report.active, 0);
+    },
+  },
+  {
+    name: "order lifecycle application passes nominal data and decoding checks",
+    directory: "order-lifecycle",
+    sources: ["effective.json", "contracts.eff", "orders.eff"],
+    entry: "orders.eff",
+    prefix: "effective-application-orders-",
+    hostFiles: ["runtime_test.ts", "main.ts"],
+    verify: (report) => {
+      assertEquals(report.tags, [
+        "contracts#Pending",
+        "contracts#Paid",
+        "contracts#Shipped",
+      ]);
+      assertEquals(report.states, ["pending", "paid", "shipped"]);
+      assertEquals(report.described, ["pending", "R1", "T1"]);
+      assertEquals(report.sampleRulePrice, 2500);
+      assertEquals(report.hostRulePrice, 2050);
+      assertEquals(report.rejected, "Failure");
     },
   },
 ];
