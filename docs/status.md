@@ -117,6 +117,25 @@ A data type that a `.effi` file declares is imported as a type only, so `.eff`
 code cannot call its constructor. A brand in an `.effi` file has the same limit.
 The website and the canonical specification describe data types from draft 0.59.
 
+Data values from unsound host code fail loudly at run time
+([plan](plans/2026-10-23-host-boundary-checks.md)). A `match` whose last arm is
+not `_` tests that arm and throws for a value outside its type. A host provider
+whose methods return data values is wrapped, and each such result or stream
+element goes through `Schema.is`. The language rules list the positions that
+stay trusted, under "Host provider checks".
+
+The table gives the measured cost on emitted code, with an in-memory host. The
+machine was an Apple M4 Pro with Deno 2.9.8 and Effect 4.0.5. The cost in an
+application with real I/O is not measured.
+
+| Case                                   | Plain alias | Wrapped provider | Added cost                     |
+| -------------------------------------- | ----------- | ---------------- | ------------------------------ |
+| One `provide`, one data result         | 3.7 us      | 9.0 us           | 5.3 us                         |
+| One `provide`, 100 calls               | 12.0 us     | 31.6 us          | about 0.14 us for each call    |
+| One `provide`, one array of 100 values | 3.6 us      | 19.4 us          | 15.8 us                        |
+| One `provide`, a stream of 1000 values | 6.6 us      | 133.4 us         | about 0.13 us for each element |
+| The extra arm test of one `match`      | -           | -                | about 0.27 ns                  |
+
 ### Separate release acceptance
 
 Editor behavior, packaging, performance and external integration acceptance are
