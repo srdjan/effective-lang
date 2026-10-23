@@ -1413,7 +1413,7 @@ class ModuleChecker {
       this.table.defineBrand(id, this.table.unknown);
       this.table.markOpaque(id);
       definition = {
-        kind: "brand",
+        kind: "nominal",
         base: { kind: "primitive", name: "unknown" },
       };
       kind = "brand";
@@ -1428,7 +1428,7 @@ class ModuleChecker {
         id,
         span: nodeSpan(this.tree, arg ?? body),
       });
-      definition = { kind: "brand", base: base.ir };
+      definition = { kind: "nominal", base: base.ir };
       kind = "brand";
     } else {
       const lowered = body === undefined
@@ -1488,7 +1488,10 @@ class ModuleChecker {
       kind: "type",
       id,
       name: entry.name,
-      definition: { kind: "data", fields: fields.map(toIrField) },
+      definition: {
+        kind: "nominal",
+        base: { kind: "record", fields: fields.map(toIrField) },
+      },
       span: entry.span,
     });
     const refs = new Set<string>();
@@ -1625,8 +1628,8 @@ class ModuleChecker {
       const declaration = this.types.find((d) => d.id === m.id);
       const definition = declaration?.definition;
       // The record keeps the optional flag of each field.
-      if (definition?.kind === "data") {
-        return [{ kind: "record", fields: definition.fields }];
+      if (definition?.kind === "nominal" && definition.base.kind === "record") {
+        return [definition.base];
       }
       return definition?.kind === "alias" ? [definition.type] : [];
     });

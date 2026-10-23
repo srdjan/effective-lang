@@ -1,4 +1,5 @@
 import {
+  dataFields,
   fieldAdapter,
   fieldKey,
   needsFieldAdapter,
@@ -172,11 +173,8 @@ function interfaceReferences(declaration: Declaration): Set<DeclarationId> {
         case "alias":
           namedIn(declaration.definition.type, out);
           break;
-        case "brand":
+        case "nominal":
           namedIn(declaration.definition.base, out);
-          break;
-        case "data":
-          for (const f of declaration.definition.fields) namedIn(f.type, out);
           break;
       }
       break;
@@ -231,7 +229,7 @@ export function recursiveGroups(
     const declarations = members.map((n) => group[n]);
     const cycle = members.length > 1 || edges[members[0]].includes(members[0]);
     const hasData = declarations.some((d) =>
-      d.kind === "type" && d.definition.kind === "data"
+      d.kind === "type" && dataFields(d) !== undefined
     );
     if (!cycle || !hasData) continue;
     const ids = new Set(declarations.map((d) => d.id));
@@ -388,8 +386,9 @@ export class DeclarationEmitter {
   private typeDeclaration(d: TypeDecl): Doc {
     const keyword = this.exportKeyword(d.id);
     const grouped = this.groups.get(d.id);
-    if (d.definition.kind === "data" && grouped !== undefined) {
-      return this.recursiveData(d, d.definition.fields, grouped);
+    const fields = dataFields(d);
+    if (fields !== undefined && grouped !== undefined) {
+      return this.recursiveData(d, fields, grouped);
     }
     if (
       d.definition.kind === "alias" &&
@@ -436,7 +435,9 @@ export class DeclarationEmitter {
     }
     const schema = this.scope.effect("Schema");
     let value: Doc;
-    if (d.definition.kind === "brand") {
+    if (fields !== undefined) {
+      value = [`${schema}.TaggedStruct`, this.tagArguments(d.id, fields)];
+    } else if (d.definition.kind === "nominal") {
       value = member(
         schemaDoc(this.scope, d.definition.base),
         "pipe",
@@ -445,11 +446,6 @@ export class DeclarationEmitter {
           callWith(`${schema}.brand`, JSON.stringify(tokenOfId(d.id))),
         ),
       );
-    } else if (d.definition.kind === "data") {
-      value = [
-        `${schema}.TaggedStruct`,
-        this.tagArguments(d.id, d.definition.fields),
-      ];
     } else {
       value = schemaDoc(this.scope, d.definition.type);
     }
@@ -831,15 +827,10 @@ export class DeclarationEmitter {
         }
         if (declaration.kind === "error") return "plain";
         if (declaration.opaque === true) return "none";
-        switch (declaration.definition.kind) {
-          case "data":
-            return "data";
-          case "brand":
-            return "plain";
-          case "alias":
-            return this.checkKind(declaration.definition.type, seen);
-        }
-        break;
+        if (dataFields(declaration) !== undefined) return "data";
+        return declaration.definition.kind === "alias"
+          ? this.checkKind(declaration.definition.type, seen)
+          : "plain";
       }
       case "record":
         return all(type.fields.map((f) => f.type));

@@ -1,6 +1,6 @@
 // Property semantics at the JavaScript boundary. Adapters follow declared data
 // shapes only: they do not traverse arbitrary host objects or deferred values.
-import type { Type, TypeDecl } from "../ir.ts";
+import type { Field, Type, TypeDecl } from "../ir.ts";
 import { type Doc, hard } from "./doc.ts";
 import type { ExprScope, TypeLookup } from "./scope.ts";
 
@@ -17,16 +17,16 @@ export function sensitiveField(name: string): boolean {
     ["message", "name", "stack"].includes(name);
 }
 
-/** The type that a type declaration stands for: the alias target, the brand base, or the data record. */
+/** The fields of a nominal type over a record, which lowers to a tagged record. Other declarations give undefined. */
+export function dataFields(d: TypeDecl): readonly Field[] | undefined {
+  return d.definition.kind === "nominal" && d.definition.base.kind === "record"
+    ? d.definition.base.fields
+    : undefined;
+}
+
+/** The type that a type declaration stands for: the alias target or the nominal base. */
 function definitionType(d: TypeDecl): Type {
-  switch (d.definition.kind) {
-    case "alias":
-      return d.definition.type;
-    case "brand":
-      return d.definition.base;
-    case "data":
-      return { kind: "record", fields: d.definition.fields };
-  }
+  return d.definition.kind === "alias" ? d.definition.type : d.definition.base;
 }
 
 export function needsFieldAdapter(

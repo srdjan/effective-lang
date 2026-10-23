@@ -1,4 +1,5 @@
 import {
+  dataFields,
   fieldAdapter,
   fieldKey,
   needsFieldAdapter,
@@ -713,25 +714,18 @@ export class ExprEmitter implements ExprCore {
           expected ?? e.type,
         );
       }
-      case "brand":
-        return emitted(member(
-          this.scope.nameOf(e.brand),
-          "make",
-          callArguments([kid(e.value)]),
-        ));
-      case "data": {
-        const declaration = this.scope.typeLevelDeclaration(e.data);
-        const fields = declaration?.kind === "type" &&
-            declaration.definition.kind === "data"
-          ? declaration.definition.fields
-          : [];
+      case "nominal": {
+        const declaration = this.scope.typeLevelDeclaration(e.nominal);
+        const fields = declaration?.kind === "type"
+          ? dataFields(declaration)
+          : undefined;
         // `make` reads a missing optional field through the prototype chain,
         // so a nested data value with such a field needs a copy without one.
-        const value = fields.some((f) => needsFieldAdapter(this.scope, f.type))
+        const value = fields?.some((f) => needsFieldAdapter(this.scope, f.type))
           ? this.adaptedInput(kid(e.value), { kind: "record", fields }, "make")
           : kid(e.value);
         return emitted(member(
-          this.scope.nameOf(e.data),
+          this.scope.nameOf(e.nominal),
           "make",
           callArguments([value]),
         ));
@@ -839,9 +833,9 @@ export class ExprEmitter implements ExprCore {
     const declaration = resolved.kind === "named"
       ? this.scope.typeLevelDeclaration(resolved.id)
       : undefined;
-    if (
-      declaration?.kind !== "type" || declaration.definition.kind !== "data"
-    ) return kid(e.value);
+    if (declaration?.kind !== "type" || dataFields(declaration) === undefined) {
+      return kid(e.value);
+    }
     return emitted([
       this.scope.fieldHelper("untagged"),
       "<",
@@ -939,10 +933,7 @@ export class ExprEmitter implements ExprCore {
     if (resolved.kind === "record") return resolved.fields;
     if (resolved.kind !== "named") return undefined;
     const declaration = this.scope.typeLevelDeclaration(resolved.id);
-    return declaration?.kind === "type" &&
-        declaration.definition.kind === "data"
-      ? declaration.definition.fields
-      : undefined;
+    return declaration?.kind === "type" ? dataFields(declaration) : undefined;
   }
 
   private errorFieldType(error: ErrorId, name: string): Type | undefined {
@@ -1105,7 +1096,9 @@ export class ExprEmitter implements ExprCore {
     if (resolved.kind !== "named") return undefined;
     const declaration = this.scope.typeLevelDeclaration(resolved.id);
     if (
-      declaration?.kind !== "type" || declaration.definition.kind !== "brand"
+      declaration?.kind !== "type" ||
+      declaration.definition.kind !== "nominal" ||
+      declaration.definition.base.kind === "record"
     ) return undefined;
     const base = this.scope.resolve(declaration.definition.base);
     if (isIntType(base)) return { id: resolved.id, integral: true };
@@ -1469,10 +1462,10 @@ export class ExprEmitter implements ExprCore {
           `${selector}._tag`,
           JSON.stringify(errorTag(pattern.error)),
         );
-      case "data":
+      case "nominal":
         return armEquality(
           `${selector}._tag`,
-          JSON.stringify(tokenOfId(pattern.data)),
+          JSON.stringify(tokenOfId(pattern.nominal)),
         );
       case "tag": {
         const left = `${selector}.${pattern.field}`;
@@ -1599,8 +1592,7 @@ export class ExprEmitter implements ExprCore {
         return e.elements.every((x) => this.isTrivial(x));
       case "get":
         return this.isTrivial(e.record);
-      case "brand":
-      case "data":
+      case "nominal":
       case "unbrand":
       case "some":
         return this.isTrivial(e.value);

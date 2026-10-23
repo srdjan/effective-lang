@@ -29,12 +29,12 @@ Deno.test("emitter alias resolution reaches deep targets and stops at cycles, br
     kind: "type",
     id: "type:main#Brand",
     name: "Brand",
-    definition: { kind: "brand", base: leaf },
+    definition: { kind: "nominal", base: leaf },
     span,
   });
   const ir: ModuleIR = {
     format: "light-functional-ir",
-    version: 2,
+    version: 3,
     module: "main",
     sources: ["main.eff"],
     imports: [],

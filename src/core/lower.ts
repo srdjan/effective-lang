@@ -839,15 +839,15 @@ class BodyLowerer {
       }
       case "brand-construction":
         return {
-          kind: "brand",
-          brand: fact.brand,
+          kind: "nominal",
+          nominal: fact.brand,
           value: arg(0),
           ...annotation,
         };
       case "data-construction":
         return {
-          kind: "data",
-          data: fact.data,
+          kind: "nominal",
+          nominal: fact.data,
           value: arg(0),
           ...annotation,
         };
@@ -1372,8 +1372,8 @@ class BodyLowerer {
         };
       case "data":
         return {
-          kind: "data",
-          data: pattern.data,
+          kind: "nominal",
+          nominal: pattern.data,
           binding: this.bindingOf(pattern.binding, names[1]),
           span,
         };
@@ -1674,7 +1674,7 @@ export function lowerModule(
       ok: true,
       value: {
         format: "light-functional-ir",
-        version: 2,
+        version: 3,
         module,
         sources: [checkedModule.path],
         imports: prelude === undefined

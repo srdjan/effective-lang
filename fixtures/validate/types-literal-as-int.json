@@ -40,7 +40,7 @@
           "kind": "primitive",
           "name": "string"
         },
-        "kind": "brand"
+        "kind": "nominal"
       },
       "id": "type:pay#OrderId",
       "kind": "type",
@@ -1377,5 +1377,5 @@
   "sources": [
     "pay.eff"
   ],
-  "version": 2
+  "version": 3
 }

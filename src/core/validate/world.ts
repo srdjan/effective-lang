@@ -125,11 +125,10 @@ export function buildWorld(ir: ModuleIR): World {
       case "alias":
         aliases.set(t.id, t.definition.type);
         break;
-      case "brand":
-        brands.set(t.id, t.definition.base);
-        break;
-      case "data":
-        data.set(t.id, { kind: "record", fields: t.definition.fields });
+      case "nominal":
+        if (t.definition.base.kind === "record") {
+          data.set(t.id, t.definition.base);
+        } else brands.set(t.id, t.definition.base);
         break;
     }
   }
@@ -511,7 +510,8 @@ function checkTypeDecl(ctx: Ctx, d: TypeDecl, path: string): void {
   }
   if (
     d.opaque === true &&
-    (d.definition.kind !== "brand" || d.definition.base.kind !== "primitive" ||
+    (d.definition.kind !== "nominal" ||
+      d.definition.base.kind !== "primitive" ||
       d.definition.base.name !== "unknown")
   ) {
     ctx.report.add(
@@ -521,32 +521,18 @@ function checkTypeDecl(ctx: Ctx, d: TypeDecl, path: string): void {
       d.span,
     );
   }
-  if (d.definition.kind === "data") {
-    checkFieldNames(
-      ctx,
-      d.definition.fields,
-      `${path}.definition.fields`,
-      d.span,
-      true,
-    );
-    checkDeferredFields(
-      ctx,
-      d.definition.fields,
-      `${path}.definition.fields`,
-      d.span,
-    );
-    d.definition.fields.forEach((f, i) =>
-      checkDeclaredType(
-        ctx,
-        f.type,
-        `${path}.definition.fields[${i}].type`,
-        d.span,
-      )
+  if (d.definition.kind === "nominal" && d.definition.base.kind === "record") {
+    const { fields } = d.definition.base;
+    const at = `${path}.definition.base.fields`;
+    checkFieldNames(ctx, fields, at, d.span, true);
+    checkDeferredFields(ctx, fields, at, d.span);
+    fields.forEach((f, i) =>
+      checkDeclaredType(ctx, f.type, `${at}[${i}].type`, d.span)
     );
     return;
   }
   if (
-    d.definition.kind === "brand" &&
+    d.definition.kind === "nominal" &&
     members(ctx.world.env, d.definition.base).some((m) =>
       m.kind === "record" ||
       (m.kind === "named" && ctx.world.env.data.has(m.id))

@@ -1541,7 +1541,7 @@ Deno.test("version 1 IR is rejected with the required wire version", () => {
   assert(
     diagnostics.some((diagnostic) =>
       diagnostic.code === "validation/008" &&
-      diagnostic.message.includes("light-functional-ir version 2") &&
+      diagnostic.message.includes("light-functional-ir version 3") &&
       diagnostic.message.includes("version 1")
     ),
   );
@@ -2263,7 +2263,7 @@ Deno.test("identity: a named type must resolve", () => {
     mutated(FORMS, "forms", (ir, base) =>
       setAt(
         ir,
-        `${base("brand")}.body.brand`,
+        `${base("brand")}.body.nominal`,
         "type:forms#Nope",
       )),
     ["validation/001"],
@@ -2424,7 +2424,7 @@ Deno.test("types: a brand construction needs a brand and a value of its base", (
       FORMS,
       "forms",
       (ir, base) =>
-        setAt(ir, `${base("brand")}.body.brand`, "type:forms#Status"),
+        setAt(ir, `${base("brand")}.body.nominal`, "type:forms#Status"),
     ),
     ["validation/002"],
   );
@@ -3001,8 +3001,8 @@ Deno.test("data: a data type validates and each forged rule is rejected", () => 
   for (const id of ["type:m#UserId", "type:m#Text", "type:m#Missing"]) {
     const found = forge((ir) => {
       const make = ir.declarations.find((d) => d.name === "make");
-      assert(make?.kind === "function" && make.body.kind === "data");
-      setAt(make, "body.data", id);
+      assert(make?.kind === "function" && make.body.kind === "nominal");
+      setAt(make, "body.nominal", id);
     });
     assert(found.length > 0, id);
   }
@@ -3010,8 +3010,8 @@ Deno.test("data: a data type validates and each forged rule is rejected", () => 
   assertEquals(
     forge((ir) => {
       const make = ir.declarations.find((d) => d.name === "make");
-      assert(make?.kind === "function" && make.body.kind === "data");
-      setAt(make, "body.data", "type:m#Twin");
+      assert(make?.kind === "function" && make.body.kind === "nominal");
+      setAt(make, "body.nominal", "type:m#Twin");
     }),
     ["validation/002"],
   );
@@ -3039,8 +3039,9 @@ Deno.test("data: a data type validates and each forged rule is rejected", () => 
         const declared = ir.declarations.find((d) => d.name === name);
         assert(declared !== undefined);
         const fields = declared.kind === "type" &&
-            declared.definition.kind === "data"
-          ? declared.definition.fields
+            declared.definition.kind === "nominal" &&
+            declared.definition.base.kind === "record"
+          ? declared.definition.base.fields
           : declared.kind === "error"
           ? declared.fields
           : undefined;
@@ -3055,8 +3056,11 @@ Deno.test("data: a data type validates and each forged rule is rejected", () => 
   assertEquals(
     forge((ir) => {
       const user = ir.declarations.find((d) => d.name === "User");
-      assert(user?.kind === "type" && user.definition.kind === "data");
-      Object.assign(user.definition.fields[1], {
+      assert(
+        user?.kind === "type" && user.definition.kind === "nominal" &&
+          user.definition.base.kind === "record",
+      );
+      Object.assign(user.definition.base.fields[1], {
         type: { kind: "named", id: "type:m#User" },
       });
     }).includes("validation/002"),
@@ -3066,8 +3070,11 @@ Deno.test("data: a data type validates and each forged rule is rejected", () => 
   assert(
     forge((ir) => {
       const user = ir.declarations.find((d) => d.name === "User");
-      assert(user?.kind === "type" && user.definition.kind === "data");
-      Object.assign(user.definition.fields[1], {
+      assert(
+        user?.kind === "type" && user.definition.kind === "nominal" &&
+          user.definition.base.kind === "record",
+      );
+      Object.assign(user.definition.base.fields[1], {
         type: { kind: "named", id: SCHEMA_ERROR_ID },
       });
     }).includes("validation/002"),
@@ -3107,13 +3114,13 @@ Deno.test("data: a name pattern needs a subject of data and error types and a me
   };
   // The first arm of `area` is a data pattern. Its name must be a member of the subject.
   assertEquals(
-    forge("area", (p) => Object.assign(p as object, { data: "type:m#Id" })),
+    forge("area", (p) => Object.assign(p as object, { nominal: "type:m#Id" })),
     ["validation/002"],
   );
   assertEquals(
     forge(
       "area",
-      (p) => Object.assign(p as object, { data: "type:m#Missing" }),
+      (p) => Object.assign(p as object, { nominal: "type:m#Missing" }),
     ),
     ["validation/002"],
   );
@@ -3130,7 +3137,10 @@ Deno.test("data: a name pattern needs a subject of data and error types and a me
     forge(
       "outcome",
       (p) =>
-        Object.assign(p as object, { kind: "data", data: "type:m#Circle" }),
+        Object.assign(p as object, {
+          kind: "nominal",
+          nominal: "type:m#Circle",
+        }),
     ),
     [],
   );
@@ -3172,8 +3182,9 @@ error Failed = { count: Count }
     const declared = ir.declarations.find((d) => d.name === name);
     assert(declared !== undefined);
     const fields = declared.kind === "type" &&
-        declared.definition.kind === "data"
-      ? declared.definition.fields
+        declared.definition.kind === "nominal" &&
+        declared.definition.base.kind === "record"
+      ? declared.definition.base.fields
       : declared.kind === "error"
       ? declared.fields
       : undefined;
@@ -3213,13 +3224,14 @@ type Ids = Brand<Text[]>
   const forge = (base: Type): string[] => {
     const ir = copy(lowered.ir);
     const id = ir.declarations.find((d) => d.name === "Id");
-    assert(id?.kind === "type" && id.definition.kind === "brand");
+    assert(id?.kind === "type" && id.definition.kind === "nominal");
     Object.assign(id.definition, { base });
     return codesOf(ir, lowered.sources);
   };
   const row: Type = { kind: "named", id: "type:m#Row" };
   const text: Type = { kind: "named", id: "type:m#Text" };
-  assertEquals(forge({ kind: "record", fields: [] }), ["validation/002"]);
+  // A record base is a data type in the IR, so it is legal.
+  assertEquals(forge({ kind: "record", fields: [] }), []);
   assertEquals(forge(row), ["validation/002"]);
   assertEquals(forge({ kind: "named", id: "type:m#Plain" }), [
     "validation/002",
@@ -3246,8 +3258,11 @@ type List = Cons | Nil
   const forge = (name: string, field: number, type: Type): string[] => {
     const ir = copy(lowered.ir);
     const declared = ir.declarations.find((d) => d.name === name);
-    assert(declared?.kind === "type" && declared.definition.kind === "data");
-    Object.assign(declared.definition.fields[field], { type });
+    assert(
+      declared?.kind === "type" && declared.definition.kind === "nominal" &&
+        declared.definition.base.kind === "record",
+    );
+    Object.assign(declared.definition.base.fields[field], { type });
     return codesOf(ir, lowered.sources);
   };
   const named = (id: `type:${string}`): Type => ({ kind: "named", id });

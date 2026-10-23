@@ -464,7 +464,7 @@ type B = Brand<string>
   assert(!table.isAssignable(table.string, a));
   const decl = project.modules.get("m")!.declarations.types[0];
   assertEquals(decl.definition, {
-    kind: "brand",
+    kind: "nominal",
     base: { kind: "primitive", name: "string" },
   });
 });

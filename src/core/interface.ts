@@ -116,13 +116,8 @@ function declarationRefs(d: GraphDecl, into: Set<string>): void {
         case "alias":
           referencedIds(d.definition.type, into);
           return;
-        case "brand":
+        case "nominal":
           referencedIds(d.definition.base, into);
-          return;
-        case "data":
-          for (const field of d.definition.fields) {
-            referencedIds(field.type, into);
-          }
           return;
       }
       return;

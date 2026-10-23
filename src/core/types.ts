@@ -309,8 +309,7 @@ interface DefinitionSource {
     readonly opaque?: boolean;
     readonly definition:
       | { readonly kind: "alias"; readonly type: Type }
-      | { readonly kind: "brand"; readonly base: Type }
-      | { readonly kind: "data"; readonly fields: readonly Field[] };
+      | { readonly kind: "nominal"; readonly base: Type };
   }[];
   readonly errors: readonly {
     readonly id: ErrorId;
@@ -838,15 +837,9 @@ export class TypeTable {
         if (guardedRecord(decl.definition.type, decl.id, tagOf)) {
           this.markGuardedAlias(decl.id);
         }
-      } else if (decl.definition.kind === "data") {
-        this.defineData(
-          decl.id,
-          this.record(decl.definition.fields.map((f) => ({
-            name: f.name,
-            type: this.fromIr(f.type),
-            optional: f.optional,
-          }))),
-        );
+      } else if (decl.definition.base.kind === "record") {
+        // A nominal type over a record is a tagged record at run time.
+        this.defineData(decl.id, this.fromIr(decl.definition.base));
       } else {
         this.defineBrand(decl.id, this.fromIr(decl.definition.base));
         if (decl.opaque === true) this.markOpaque(decl.id);

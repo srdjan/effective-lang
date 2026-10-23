@@ -593,7 +593,6 @@ Deno.test("every expression kind and pattern kind lowers", () => {
     [
       "binary",
       "block",
-      "brand",
       "call",
       "catch",
       "closure",
@@ -603,6 +602,7 @@ Deno.test("every expression kind and pattern kind lowers", () => {
       "if",
       "literal",
       "match",
+      "nominal",
       "none",
       "perform",
       "provide",
@@ -689,7 +689,7 @@ Deno.test("serialization is canonical JSON with a trailing newline", () => {
   assert(
     text.startsWith('{\n  "declarations": [\n    {\n      "definition": {'),
   );
-  assert(text.endsWith('  "version": 2\n}\n'));
+  assert(text.endsWith('  "version": 3\n}\n'));
   assert(text.includes('"imports": []'));
   // Keys are sorted at every level.
   const reparsed = JSON.parse(text);

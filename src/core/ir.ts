@@ -97,7 +97,7 @@ export type Pattern =
   | { readonly kind: "none"; readonly span: Span }
   | { readonly kind: "some"; readonly binding: Parameter; readonly span: Span }
   | { readonly kind: "error"; readonly error: ErrorId; readonly binding: Parameter; readonly span: Span }
-  | { readonly kind: "data"; readonly data: TypeId; readonly binding: Parameter; readonly span: Span }
+  | { readonly kind: "nominal"; readonly nominal: TypeId; readonly binding: Parameter; readonly span: Span }
   | { readonly kind: "tag"; readonly field: string; readonly value: string; readonly binding: Parameter | null; readonly span: Span };
 
 export interface Arm {
@@ -128,8 +128,7 @@ export type Expr =
   | Node<{ kind: "tuple"; elements: readonly Expr[] }>
   | Node<{ kind: "get"; record: Expr; field: string }>
   | Node<{ kind: "update"; record: Expr; fields: readonly { readonly name: string; readonly value: Expr }[] }>
-  | Node<{ kind: "brand"; brand: TypeId; value: Expr }>
-  | Node<{ kind: "data"; data: TypeId; value: Expr }>
+  | Node<{ kind: "nominal"; nominal: TypeId; value: Expr }>
   | Node<{ kind: "unbrand"; value: Expr }>
   | Node<{ kind: "some"; value: Expr }>
   | Node<{ kind: "none" }>
@@ -229,8 +228,7 @@ export interface TypeDecl {
   readonly name: string;
   readonly definition:
     | { readonly kind: "alias"; readonly type: Type }
-    | { readonly kind: "brand"; readonly base: Type }
-    | { readonly kind: "data"; readonly fields: readonly Field[] };
+    | { readonly kind: "nominal"; readonly base: Type };
   readonly opaque?: boolean;
   readonly span: Span;
 }
@@ -297,7 +295,7 @@ export interface Import {
 
 export interface ModuleIR {
   readonly format: "light-functional-ir";
-  readonly version: 2;
+  readonly version: 3;
   readonly module: string;
   /** A validator also receives immutable source texts keyed by these identifiers. */
   readonly sources: readonly string[];

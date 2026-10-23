@@ -541,10 +541,8 @@ export class BodyValidator implements ValidatorCore {
         return this.get(e, path);
       case "update":
         return this.update(e, path);
-      case "brand":
-        return this.brand(e, path);
-      case "data":
-        return this.dataConstruction(e, path);
+      case "nominal":
+        return this.nominal(e, path);
       case "unbrand":
         return this.unbrand(e, path);
       case "some": {
@@ -956,29 +954,29 @@ export class BodyValidator implements ValidatorCore {
     return derivedResult(base.type, active);
   }
 
-  private brand(e: Extract<Expr, { kind: "brand" }>, path: string): Comp {
+  private nominal(e: Extract<Expr, { kind: "nominal" }>, path: string): Comp {
     const v = this.check(e.value, `${path}.value`);
-    const decl = this.ctx.world.types.get(e.brand);
+    const decl = this.ctx.world.types.get(e.nominal);
     if (decl === undefined) {
       this.add(
         AREA.identity,
-        `${path}.brand`,
-        `the brand ${e.brand} is not a declared type`,
+        `${path}.nominal`,
+        `the nominal type ${e.nominal} is not a declared type`,
         e.span,
       );
       return checkedResult(combine([v]));
     }
-    if (decl.definition.kind !== "brand") {
+    if (decl.definition.kind !== "nominal") {
       this.add(
         AREA.types,
-        `${path}.brand`,
-        `${e.brand} is not a brand`,
+        `${path}.nominal`,
+        `${e.nominal} is not a nominal type`,
         e.span,
       );
     } else if (decl.opaque === true) {
       this.add(
         AREA.types,
-        `${path}.brand`,
+        `${path}.nominal`,
         "an opaque type cannot be constructed in source",
         e.span,
       );
@@ -992,43 +990,7 @@ export class BodyValidator implements ValidatorCore {
         e.value.span,
       );
     }
-    return derivedResult({ kind: "named", id: e.brand }, combine([v]));
-  }
-
-  private dataConstruction(
-    e: Extract<Expr, { kind: "data" }>,
-    path: string,
-  ): Comp {
-    const v = this.check(e.value, `${path}.value`);
-    const decl = this.ctx.world.types.get(e.data);
-    const record = this.env.data.get(e.data);
-    if (decl === undefined) {
-      this.add(
-        AREA.identity,
-        `${path}.data`,
-        `the data type ${e.data} is not a declared type`,
-        e.span,
-      );
-      return checkedResult(combine([v]));
-    }
-    if (decl.definition.kind !== "data" || record === undefined) {
-      this.add(
-        AREA.types,
-        `${path}.data`,
-        `${e.data} is not a data type`,
-        e.span,
-      );
-    } else if (!fits(this.env, v.type, record)) {
-      this.add(
-        AREA.types,
-        `${path}.value`,
-        `the value has type ${show(v.type)}, which does not fit the base ${
-          show(record)
-        }`,
-        e.value.span,
-      );
-    }
-    return derivedResult({ kind: "named", id: e.data }, combine([v]));
+    return derivedResult({ kind: "named", id: e.nominal }, combine([v]));
   }
 
   private unbrand(e: Extract<Expr, { kind: "unbrand" }>, path: string): Comp {
@@ -1442,9 +1404,9 @@ export class BodyValidator implements ValidatorCore {
         }
         return added;
       case "error":
-      case "data": {
+      case "nominal": {
         // A name pattern needs a subject of data and error types only, and the name must be one of them.
-        const id = p.kind === "error" ? p.error : p.data;
+        const id = p.kind === "error" ? p.error : p.nominal;
         const ms = members(env, subject);
         const ok = ms.length > 0 &&
           ms.every((m) =>
