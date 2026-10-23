@@ -32,6 +32,20 @@ Deno.test("type, error, service, and provider are keywords at the start of a lin
   assertEquals(slices("a type"), []);
 });
 
+Deno.test("data is a keyword at the start of a declaration and a name elsewhere", () => {
+  assertEquals(slices("data U = { id: int }\n")[0], ["data", "keyword"]);
+  assertEquals(slices("export data U = {}\n").slice(0, 2), [
+    ["export", "keyword"],
+    ["data", "keyword"],
+  ]);
+  assertEquals(slices("a data"), []);
+  assertEquals(slices("const data = 1\n").map(([word]) => word), [
+    "const",
+    "=",
+    "1",
+  ]);
+});
+
 Deno.test("type, error, service, and provider are keywords after export", () => {
   assertEquals(slices("export type A = int\n").slice(0, 2), [
     ["export", "keyword"],

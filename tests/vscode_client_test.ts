@@ -140,6 +140,19 @@ Deno.test("the grammar names the scope and every lexer keyword", () => {
   }
 });
 
+Deno.test("the grammar highlights data only as a declaration word", () => {
+  const matchers = collectMatches(
+    readJson("syntaxes/effective.tmLanguage.json"),
+  )
+    .map((match) => new RegExp(match));
+  const found = (text: string): string | undefined =>
+    matchers.map((m) => m.exec(text)?.[0]).find((hit) => hit === "data");
+  assertEquals(found("data User = { id: string }"), "data");
+  assertEquals(found("export data User = {}"), "data");
+  assertEquals(found("const data = 1"), undefined);
+  assertEquals(found("const f = (data: Int): Int => data"), undefined);
+});
+
 Deno.test("the builtin-types rule matches every builtin type name exactly", () => {
   const rule = field(
     field(readJson("syntaxes/effective.tmLanguage.json"), "repository"),

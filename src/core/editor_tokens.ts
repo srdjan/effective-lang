@@ -29,6 +29,7 @@ export interface SemanticClassification {
 const contextualKeywords = new Set([
   "type",
   "error",
+  "data",
   "service",
   "provider",
   "opaque",
@@ -44,6 +45,9 @@ function resolvedKind(
 ): SemanticClassification["type"] {
   switch (occurrence.target.kind) {
     case "type":
+      return revision.types.dataRecordOf(occurrence.target.id) === undefined
+        ? "type"
+        : "class";
     case "builtin-type":
       return "type";
     case "error":
@@ -158,7 +162,7 @@ export function semanticClassifications(
         );
         const type = declaration?.kind === "type"
           ? "type"
-          : declaration?.kind === "error"
+          : declaration?.kind === "error" || declaration?.kind === "data"
           ? "class"
           : declaration?.kind === "service"
           ? "interface"

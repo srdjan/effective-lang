@@ -192,7 +192,7 @@ export function completionsAt(
       make(
         name,
         kind === "type"
-          ? "type"
+          ? declaration?.kind === "data" ? "class" : "type"
           : kind === "error"
           ? "class"
           : kind === "service"

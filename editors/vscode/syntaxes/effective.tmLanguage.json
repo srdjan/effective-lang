@@ -66,6 +66,10 @@
           "match": "\\b(?:type|error|service|provider)\\b"
         },
         {
+          "name": "storage.type.declaration.effective",
+          "match": "\\bdata\\b(?=\\s+[A-Za-z_$][A-Za-z0-9_$]*\\s*=)"
+        },
+        {
           "name": "keyword.other.clause.effective",
           "match": "\\b(?:fails|uses|provides|from)\\b"
         }
