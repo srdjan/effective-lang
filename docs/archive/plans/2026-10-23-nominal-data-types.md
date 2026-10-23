@@ -1,6 +1,6 @@
 # Plan: nominal data types (`data` declarations)
 
-Status: done in this repository, 2026-10-23. NT5 to NT11 landed in commits 2a57d9c (NT5), 2404446 (NT6), 2285033 (NT7), 6b21dc2 (NT8), ac90799 (NT9), 8ab15c0 (NT10), and the NT11 documentation commit. NT12 (the spec site in the sibling repository `../effective/public/`) is a separate commit there and stays open. Fable validated the draft and reported 5 major and 8 minor findings. Opus accepted 12. The user decided finding 1 with NT13 (a). Section 8 maps each finding to its resolution.
+Status: done, 2026-10-23. NT5 to NT11 landed in commits 2a57d9c (NT5), 2404446 (NT6), 2285033 (NT7), 6b21dc2 (NT8), ac90799 (NT9), 8ab15c0 (NT10), and 24f3937 (NT11). NT12 landed as 91529b5 in the sibling repository `../effective/`. Fable validated the draft and reported 5 major and 8 minor findings. Opus accepted 12. The user decided finding 1 with NT13 (a). Section 8 maps each finding to its resolution.
 
 This plan uses the ID prefix NT. NT1 to NT4 and NT13 are the user's decisions. NT5 to NT12 are work items.
 
