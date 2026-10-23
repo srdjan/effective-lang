@@ -128,6 +128,26 @@ export function isDeferredType(type: Type): type is DeferredType {
   return Object.hasOwn(DEFERRED_KINDS, type.kind);
 }
 
+/** True when `type` has the kind `kind`. */
+function hasKind<K extends Type["kind"]>(
+  type: Type,
+  kind: K,
+): type is Extract<Type, { readonly kind: K }> {
+  return type.kind === kind;
+}
+
+/** `type` after `resolve`, when it has `kind`. Else an internal failure with `message`. */
+export function resolvedAs<K extends Type["kind"]>(
+  scope: TypeLookup,
+  type: Type,
+  kind: K,
+  message: string,
+): Extract<Type, { readonly kind: K }> {
+  const resolved = scope.resolve(type);
+  if (!hasKind(resolved, kind)) throw internal(message);
+  return resolved;
+}
+
 // ------------------------------------------------------------------ identities
 
 /** The module part of an identity such as `type:users#User`. */

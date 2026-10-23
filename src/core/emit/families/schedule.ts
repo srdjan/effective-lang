@@ -8,7 +8,7 @@ import {
   type Kid,
   PREC,
 } from "../emitted.ts";
-import { internal } from "../scope.ts";
+import { internal, resolvedAs } from "../scope.ts";
 import type { ExprOf } from "../shape.ts";
 import { typeDoc } from "../types.ts";
 import type { ExprCore } from "./context.ts";
@@ -72,10 +72,12 @@ export function scheduleStructural(
       ]);
     }
     case "schedule-from-step": {
-      const policy = c.scope.resolve(e.type);
-      if (policy.kind !== "schedule") {
-        throw internal("scheduleFromStep has wrong type");
-      }
+      const policy = resolvedAs(
+        c.scope,
+        e.type,
+        "schedule",
+        "scheduleFromStep has wrong type",
+      );
       const schedule = c.scope.effect("Schedule");
       const effect = c.scope.effect("Effect");
       const cause = c.scope.effect("Cause");
@@ -86,10 +88,12 @@ export function scheduleStructural(
       const decision = c.scope.temp();
       const initialCallback = c.effectCallback(e.initial);
       const decideCallback = c.effectCallback(e.decide);
-      const decideType = c.scope.resolve(e.decide.type);
-      if (decideType.kind !== "function") {
-        throw internal("schedule decision is not a function");
-      }
+      const decideType = resolvedAs(
+        c.scope,
+        e.decide.type,
+        "function",
+        "schedule decision is not a function",
+      );
       return emitted([
         `${schedule}.fromStepWithMetadata(${effect}.suspend(() => ${effect}.map(`,
         at(initialCallback, PREC.member),

@@ -76,6 +76,7 @@ import {
   type ExprScope,
   internal,
   methodOfCapability,
+  resolvedAs,
   serviceOfCapability,
   tokenOfId,
   unsupported,
@@ -717,10 +718,12 @@ export class ExprEmitter implements ExprCore {
         return kid(e.value);
       case "some": {
         const option = this.scope.effect("Option");
-        const resolved = this.scope.resolve(e.type);
-        if (resolved.kind !== "option") {
-          throw internal("a Some expression has a non-option type");
-        }
+        const resolved = resolvedAs(
+          this.scope,
+          e.type,
+          "option",
+          "a Some expression has a non-option type",
+        );
         // Keep the checked context through generic wrappers and lifted callbacks.
         // Inferring `some` can widen tuple payloads and record discriminants.
         return emitted([
@@ -962,10 +965,12 @@ export class ExprEmitter implements ExprCore {
           callArguments([emitted(access)]),
         ]);
       }
-      const resultType = this.scope.resolve(e.type);
-      if (resultType.kind !== "option") {
-        throw internal("optional read has a non-option type");
-      }
+      const resultType = resolvedAs(
+        this.scope,
+        e.type,
+        "option",
+        "optional read has a non-option type",
+      );
       return emitted([
         this.scope.fieldHelper("optionalField"),
         "<",

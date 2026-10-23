@@ -10,7 +10,7 @@ import {
   type Kid,
   PREC,
 } from "../emitted.ts";
-import { internal } from "../scope.ts";
+import { resolvedAs } from "../scope.ts";
 import type { ExprOf } from "../shape.ts";
 import { channelTypeArguments, typeArguments, typeDoc } from "../types.ts";
 import type { ExprCore } from "./context.ts";
@@ -177,8 +177,12 @@ export function streamStructural(
       ]);
     }
     case "take-sink": {
-      const type = c.scope.resolve(e.type);
-      if (type.kind !== "sink") throw internal("takeSink has no Sink type");
+      const type = resolvedAs(
+        c.scope,
+        e.type,
+        "sink",
+        "takeSink has no Sink type",
+      );
       return emitted([
         `${c.scope.effect("Sink")}.take`,
         typeArguments([typeDoc(c.scope, type.input)]),
@@ -186,11 +190,9 @@ export function streamStructural(
       ]);
     }
     case "transduce-stream": {
-      const source = c.scope.resolve(e.stream.type);
-      const sink = c.scope.resolve(e.sink.type);
-      if (source.kind !== "stream" || sink.kind !== "sink") {
-        throw internal("transduction has invalid operands");
-      }
+      const message = "transduction has invalid operands";
+      const source = resolvedAs(c.scope, e.stream.type, "stream", message);
+      const sink = resolvedAs(c.scope, e.sink.type, "sink", message);
       return emitted([
         `${c.scope.effect("Stream")}.transduce`,
         typeArguments([
@@ -203,11 +205,9 @@ export function streamStructural(
       ]);
     }
     case "aggregate-stream": {
-      const source = c.scope.resolve(e.stream.type);
-      const sink = c.scope.resolve(e.sink.type);
-      if (source.kind !== "stream" || sink.kind !== "sink") {
-        throw internal("aggregation has invalid operands");
-      }
+      const message = "aggregation has invalid operands";
+      const source = resolvedAs(c.scope, e.stream.type, "stream", message);
+      const sink = resolvedAs(c.scope, e.sink.type, "sink", message);
       return emitted([
         `${c.scope.effect("Stream")}.aggregate`,
         typeArguments([
@@ -223,15 +223,15 @@ export function streamStructural(
       ]);
     }
     case "aggregate-within-stream": {
-      const source = c.scope.resolve(e.stream.type);
-      const sink = c.scope.resolve(e.sink.type);
-      const schedule = c.scope.resolve(e.schedule.type);
-      if (
-        source.kind !== "stream" || sink.kind !== "sink" ||
-        schedule.kind !== "schedule"
-      ) {
-        throw internal("scheduled aggregation has invalid operands");
-      }
+      const message = "scheduled aggregation has invalid operands";
+      const source = resolvedAs(c.scope, e.stream.type, "stream", message);
+      const sink = resolvedAs(c.scope, e.sink.type, "sink", message);
+      const schedule = resolvedAs(
+        c.scope,
+        e.schedule.type,
+        "schedule",
+        message,
+      );
       return emitted([
         `${c.scope.effect("Stream")}.aggregateWithin`,
         typeArguments([

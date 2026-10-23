@@ -9,7 +9,7 @@ import {
   type Kid,
   PREC,
 } from "../emitted.ts";
-import { internal } from "../scope.ts";
+import { resolvedAs } from "../scope.ts";
 import type { ExprOf } from "../shape.ts";
 import { schemaDoc, typeDoc } from "../types.ts";
 import type { ExprCore } from "./context.ts";
@@ -23,8 +23,7 @@ export function codecStructural(
 ): Emitted {
   switch (e.kind) {
     case "codec": {
-      const type = c.scope.resolve(e.type);
-      if (type.kind !== "codec") throw internal("codec has wrong type");
+      const type = resolvedAs(c.scope, e.type, "codec", "codec has wrong type");
       const schema = c.scope.effect("Schema");
       const option = c.scope.effect("Option");
       const decode = c.pure(e.decode);

@@ -9,7 +9,7 @@ import {
   type Mode,
   PREC,
 } from "../emitted.ts";
-import { internal } from "../scope.ts";
+import { resolvedAs } from "../scope.ts";
 import type { ExprOf } from "../shape.ts";
 import { typeDoc } from "../types.ts";
 import type { ExprCore } from "./context.ts";
@@ -39,10 +39,12 @@ export function effectStructural(
       const option = c.scope.effect("Option");
       const cause = c.scope.effect("Cause");
       const duration = c.scope.effect("Duration");
-      const type = c.scope.resolve(e.type);
-      if (type.kind !== "retry-schedule") {
-        throw internal("retry schedule has wrong type");
-      }
+      const type = resolvedAs(
+        c.scope,
+        e.type,
+        "retry-schedule",
+        "retry schedule has wrong type",
+      );
       const error = typeDoc(c.scope, type.error);
       const step = c.pure(e.step);
       const metadata = c.scope.temp();

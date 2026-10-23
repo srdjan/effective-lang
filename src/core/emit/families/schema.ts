@@ -11,7 +11,7 @@ import {
   type Kid,
   PREC,
 } from "../emitted.ts";
-import { internal } from "../scope.ts";
+import { internal, resolvedAs } from "../scope.ts";
 import type { ExprOf } from "../shape.ts";
 import { hasSchemaMetadata, schemaDoc, typeDoc } from "../types.ts";
 import type { ExprCore } from "./context.ts";
@@ -41,10 +41,12 @@ export function schemaStructural(
       : value;
   switch (e.op) {
     case "constructor-default": {
-      const sourceType = c.scope.resolve(args[0].type);
-      if (sourceType.kind !== "schema") {
-        throw internal("constructor default needs a Schema");
-      }
+      const sourceType = resolvedAs(
+        c.scope,
+        args[0].type,
+        "schema",
+        "constructor default needs a Schema",
+      );
       const effect = c.scope.effect("Effect");
       const callback = c.pure(args[1]);
       const effectful = isEffectfulCallback(args[1].type);
@@ -64,10 +66,12 @@ export function schemaStructural(
       ]));
     }
     case "identity": {
-      const type = c.scope.resolve(e.type);
-      if (type.kind !== "schema") {
-        throw internal("schema identity has wrong type");
-      }
+      const type = resolvedAs(
+        c.scope,
+        e.type,
+        "schema",
+        "schema identity has wrong type",
+      );
       return emitted([
         `${schema}.toType(`,
         schemaDoc(c.scope, type.decoded),
