@@ -1598,6 +1598,60 @@ export function dataOnly(
   }
 }
 
+/**
+ * Whether the type contains a function or deferred type at any depth: a value
+ * without an encoded form, such as an Effect, a Stream, or a Ref. An alias
+ * unfolds, and a repeated alias stops a cycle. A data type, an error, and a
+ * brand stop the walk, because their own declarations are checked on their own.
+ */
+export function containsDeferredType(
+  table: TypeTable,
+  ref: TypeRef,
+  seen = new Set<TypeRef>(),
+): boolean {
+  if (seen.has(ref)) return false;
+  seen.add(ref);
+  const type = table.node(ref);
+  const any = (children: readonly TypeRef[]): boolean =>
+    children.some((child) => containsDeferredType(table, child, seen));
+  switch (type.kind) {
+    case "function":
+    case "effect":
+    case "fiber":
+    case "stream":
+    case "sink":
+    case "schedule":
+    case "retry-schedule":
+    case "ref":
+    case "codec":
+    case "schema":
+    case "provider":
+    case "closeable-scope":
+      return true;
+    case "named": {
+      const alias = isErrorId(type.id) ? undefined : table.aliasOf(type.id);
+      return alias !== undefined && any([alias]);
+    }
+    case "record":
+      return any(type.fields.map((f) => f.type));
+    case "array":
+    case "option":
+      return any([type.element]);
+    case "tuple":
+      return any(type.elements);
+    case "union":
+      return any(type.members);
+    case "primitive":
+    case "literal":
+    case "error":
+      return false;
+    default: {
+      const unreachable: never = type;
+      return unreachable;
+    }
+  }
+}
+
 function idName(id: string): string {
   const hash = id.indexOf("#");
   return hash < 0 ? id : id.slice(hash + 1);

@@ -333,6 +333,64 @@ function checkFieldNames(
   });
 }
 
+/** The type kinds without an encoded form. */
+const DEFERRED_KINDS: ReadonlySet<Type["kind"]> = new Set([
+  "function",
+  "effect",
+  "fiber",
+  "stream",
+  "sink",
+  "schedule",
+  "retry-schedule",
+  "ref",
+  "codec",
+  "schema",
+  "provider",
+  "closeable-scope",
+]);
+
+/**
+ * True when the type contains a function or deferred type, directly or
+ * through an alias. A repeated alias stops a cycle. Data types, errors, and
+ * brands stop the walk, because their own declarations are checked on their own.
+ */
+function containsDeferred(
+  env: TypeEnv,
+  type: Type,
+  seen = new Set<string>(),
+  depth = 0,
+): boolean {
+  if (DEFERRED_KINDS.has(type.kind)) return true;
+  if (depth > MAX_DEPTH) return false;
+  if (type.kind === "named") {
+    const alias = env.aliases.get(type.id);
+    if (alias === undefined || seen.has(type.id)) return false;
+    return containsDeferred(env, alias, new Set([...seen, type.id]), depth + 1);
+  }
+  return typeChildren(type).some((c) =>
+    containsDeferred(env, c.type, seen, depth + 1)
+  );
+}
+
+/** Reports each field of a data or error declaration that holds a function or deferred type. */
+function checkDeferredFields(
+  ctx: Ctx,
+  fields: readonly Field[],
+  path: string,
+  span: Span,
+): void {
+  fields.forEach((f, i) => {
+    if (containsDeferred(ctx.world.env, f.type)) {
+      ctx.report.add(
+        AREA.types,
+        `${path}[${i}].type`,
+        `the field ${f.name} has a function or deferred type, which a data or error declaration cannot hold`,
+        span,
+      );
+    }
+  });
+}
+
 /** Checks the field names of every record type inside a type. */
 export function checkRecordFields(
   ctx: Ctx,
@@ -470,6 +528,12 @@ function checkTypeDecl(ctx: Ctx, d: TypeDecl, path: string): void {
       d.span,
       true,
     );
+    checkDeferredFields(
+      ctx,
+      d.definition.fields,
+      `${path}.definition.fields`,
+      d.span,
+    );
     d.definition.fields.forEach((f, i) =>
       checkDeclaredType(
         ctx,
@@ -491,6 +555,7 @@ function checkTypeDecl(ctx: Ctx, d: TypeDecl, path: string): void {
 
 function checkErrorDecl(ctx: Ctx, d: ErrorDecl, path: string): void {
   checkFieldNames(ctx, d.fields, `${path}.fields`, d.span, true);
+  checkDeferredFields(ctx, d.fields, `${path}.fields`, d.span);
   d.fields.forEach((f, i) =>
     checkDeclaredType(ctx, f.type, `${path}.fields[${i}].type`, d.span)
   );

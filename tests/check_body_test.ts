@@ -3683,6 +3683,40 @@ const guarded = (): Text fails Broken =>
   assertEquals(codes(project), ["unknown-name/004"]);
 });
 
+Deno.test("a data or error field cannot hold a function type at any depth", () => {
+  const project = checkText(`
+type Count = int
+type Step = (n: Count) => Count
+data Direct = { run: Step }
+error Failed = { run: Step }
+data Nested = { a: Option<Step>, b: Step[], c: [Count, Step], d: { e: Step } }
+data Aliased = { steps: Later }
+type Later = Step[]
+`);
+  assertEquals(codes(project), Array(7).fill("declaration/015"));
+});
+
+Deno.test("a data or error field that names another data type with a function field is not reported twice", () => {
+  const project = checkText(`
+type Count = int
+data Inner = { run: (n: Count) => Count }
+data Outer = { inner: Inner }
+error Wrap = { inner: Inner }
+`);
+  assertEquals(codes(project), ["declaration/015"]);
+  assertEquals(project.diagnostics[0].message.includes("`run`"), true);
+});
+
+Deno.test("a function type stays legal in a record and in a brand-free alias", () => {
+  const project = checkText(`
+type Count = int
+type Step = (n: Count) => Count
+type Plain = { run: Step }
+data Fine = { count: Count }
+`);
+  assertEquals(messages(project), []);
+});
+
 Deno.test("data stays legal as a variable and a function name", () => {
   const project = checkText(`
 type Int = int

@@ -231,6 +231,10 @@
       "e109eacd18a1e547",
       "6e8906bfb55db459"
     ],
+    "fixtures/errors/declaration-function-field.eff": [
+      "86296a9cfde6478e",
+      "e38a514a697f60b4"
+    ],
     "fixtures/errors/declaration-parameter-annotation.eff": [
       "e8d3a7449d4f2172",
       "ec634e3b1bb77b65"

@@ -57,6 +57,7 @@ import {
   walk,
 } from "./syntax.ts";
 import {
+  containsDeferredType,
   dataOnly,
   guardedRecord,
   sortedUnique,
@@ -686,7 +687,13 @@ export class TypeLowerer {
         kindOf(this.tree, c) === SyntaxKind.Token &&
         this.tree.lexed.kinds[this.tree.tokens[c]] === TokenKind.Question
       );
-      result.push({ name, optional, type, span: this.span(fieldNode) });
+      result.push({
+        name,
+        optional,
+        type,
+        span: this.span(fieldNode),
+        typeSpan: this.span(typeNode ?? fieldNode),
+      });
     }
     return result;
   }
@@ -1048,6 +1055,8 @@ interface LoweredField {
   readonly optional: boolean;
   readonly type: Lowered;
   readonly span: Span;
+  /** The span of the field type, or of the whole field when the type is missing. */
+  readonly typeSpan: Span;
 }
 
 function toIrField(field: LoweredField): Field {
@@ -1170,6 +1179,8 @@ class ModuleChecker {
   private readonly table: TypeTable;
   private readonly types: TypeDecl[] = [];
   private readonly errors: ErrorDecl[] = [];
+  /** The fields of every data and error declaration, for the deferred-type rule. */
+  private readonly nominalFields: LoweredField[] = [];
   private readonly services: ServiceDecl[] = [];
   private readonly methodTypes = new Map<CapabilityId, TypeRef>();
   private readonly values = new Map<ValueId, ValueSignature>();
@@ -1207,6 +1218,7 @@ class ModuleChecker {
     }
     const guarded = this.checkCycles(infos);
     this.checkDepths(infos, guarded);
+    this.checkDeferredFields();
     this.checkPrimitivePositions();
     for (const entry of entries) {
       if (entry.kind === "service") this.checkService(entry);
@@ -1373,6 +1385,7 @@ class ModuleChecker {
     const fields = record === undefined
       ? []
       : this.lowerer.fields(record, true);
+    this.nominalFields.push(...fields);
     this.table.defineData(id, this.lowerer.recordOf(fields).ref);
     this.types.push({
       kind: "type",
@@ -1400,6 +1413,7 @@ class ModuleChecker {
     const fields = record === undefined
       ? []
       : this.lowerer.fields(record, true);
+    this.nominalFields.push(...fields);
     this.table.defineError(id, this.lowerer.recordOf(fields).ref);
     this.errors.push({
       kind: "error",
@@ -1542,6 +1556,22 @@ class ModuleChecker {
         info.nameSpan,
       );
       this.table.defineAlias(info.id, this.table.error);
+    }
+  }
+
+  /**
+   * A data or error field cannot hold a function or deferred type, at any
+   * depth, after aliases unfold. The emitter has no schema for one. The check
+   * runs after every alias is defined, so a field may name a later alias.
+   */
+  private checkDeferredFields(): void {
+    for (const field of this.nominalFields) {
+      if (!containsDeferredType(this.table, field.type.ref)) continue;
+      this.lowerer.report(
+        "declaration/015",
+        `the field \`${field.name}\` has a function or deferred type, which a data or error declaration cannot hold`,
+        field.typeSpan,
+      );
     }
   }
 

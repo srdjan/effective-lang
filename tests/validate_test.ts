@@ -3150,6 +3150,56 @@ Deno.test("data: a name pattern needs a subject of data and error types and a me
   assert(codesOf(ir, lowered.sources).includes("validation/002"));
 });
 
+Deno.test("data: a data or error field cannot hold a function or deferred type", () => {
+  const lowered = lowerText(`
+type Count = int
+type Step = (n: Count) => Count
+data Box = { count: Count }
+error Failed = { count: Count }
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const step: Type = { kind: "named", id: "type:m#Step" };
+  const direct: Type = {
+    kind: "function",
+    execution: "pure",
+    parameters: [],
+    result: { kind: "primitive", name: "int" },
+    effects: { failures: [], requirements: [] },
+  };
+  const forged = (name: string, type: Type): string[] => {
+    const ir = copy(lowered.ir);
+    const declared = ir.declarations.find((d) => d.name === name);
+    assert(declared !== undefined);
+    const fields = declared.kind === "type" &&
+        declared.definition.kind === "data"
+      ? declared.definition.fields
+      : declared.kind === "error"
+      ? declared.fields
+      : undefined;
+    assert(fields !== undefined);
+    Object.assign(fields[0], { type });
+    return codesOf(ir, lowered.sources);
+  };
+  const wrapped: Type[] = [
+    direct,
+    step,
+    { kind: "option", element: step },
+    { kind: "array", element: direct },
+    { kind: "union", members: [step, { kind: "primitive", name: "int" }] },
+    { kind: "ref", element: { kind: "primitive", name: "int" } },
+    {
+      kind: "effect",
+      result: { kind: "primitive", name: "int" },
+      effects: { failures: [], requirements: [] },
+    },
+  ];
+  for (const name of ["Box", "Failed"]) {
+    for (const type of wrapped) {
+      assertEquals(forged(name, type), ["validation/002"], name);
+    }
+  }
+});
+
 Deno.test("a guarded recursive alias with literal alias tags validates and its aliases are rechecked", () => {
   const lowered = lowerText(`
 type T = { tag: A, next: T } | { tag: B }
