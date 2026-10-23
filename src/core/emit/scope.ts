@@ -235,7 +235,52 @@ export interface ImportGroup {
   }[];
 }
 
-export class Scope {
+/** Names for the emitted module. Each member records the name on first use. */
+export interface EmitNames {
+  effect(module: EffectModule): string;
+  nameOf(id: DeclarationId): string;
+  encodedMirrorName(id: DeclarationId): string;
+  intSchemaName(): string;
+  intFunction(): string;
+  scopeRuntime(): ScopeRuntimeNames;
+  serviceParameter(): string;
+  fieldHelper(key: string): string;
+}
+
+export interface Temporaries {
+  fresh(base: string): string;
+  temp(): string;
+}
+
+/** Reads of the module IR and the config. No member records anything. */
+export interface TypeLookup {
+  resolve(type: Type): Type;
+  typeLevelDeclaration(
+    id: DeclarationId,
+  ): TypeDecl | ErrorDecl | ServiceDecl | undefined;
+}
+
+/** What `emit.ts` reads after all printing. */
+export interface ImportLedger {
+  moduleImports(): ImportGroup[];
+  effectImports(): { readonly exported: string; readonly local: string }[];
+  hostImports(): ImportGroup[];
+  usesIntFunction(): boolean;
+  usesIntSchema(): boolean;
+  usesScopeRuntime(): boolean;
+}
+
+/**
+ * What the expression emitter, the type printers, and the field adapters read.
+ * It has no import ledger and no `resetTemporaries`.
+ */
+export type ExprScope =
+  & EmitNames
+  & Temporaries
+  & TypeLookup
+  & Pick<Scope, "locals" | "hostBinding" | "fieldAdapters" | "fieldHelpers">;
+
+export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
   readonly module: string;
   /** The path of the generated file, relative to the project root. */
   readonly path: string;

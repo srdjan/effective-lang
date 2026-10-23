@@ -26,9 +26,9 @@ import {
   soft,
 } from "./doc.ts";
 import {
+  type EmitNames,
   internal,
   isDeferredType,
-  type Scope,
   servicesOf,
   unsupported,
 } from "./scope.ts";
@@ -57,7 +57,7 @@ function unionDoc(members: readonly Doc[]): Doc {
 }
 
 function failureUnion(
-  scope: Scope,
+  scope: EmitNames,
   failures: readonly ErrorId[],
 ): Doc | undefined {
   if (failures.length === 0) return undefined;
@@ -65,7 +65,7 @@ function failureUnion(
 }
 
 function requirementUnion(
-  scope: Scope,
+  scope: EmitNames,
   capabilities: readonly CapabilityId[],
 ): Doc | undefined {
   const services = servicesOf(capabilities);
@@ -78,7 +78,7 @@ function requirementUnion(
 
 /** The failure and requirement type arguments of an effect set, `never` when empty. */
 export function channelTypeArguments(
-  scope: Scope,
+  scope: EmitNames,
   effects: Effects,
 ): readonly Doc[] {
   return [
@@ -92,7 +92,7 @@ export function channelTypeArguments(
  * failure and requirement sets are already in sorted identity order.
  */
 export function effectTypeDoc(
-  scope: Scope,
+  scope: EmitNames,
   result: Doc,
   effects: Effects,
 ): Doc {
@@ -102,7 +102,7 @@ export function effectTypeDoc(
 }
 
 function deferredArguments(
-  scope: Scope,
+  scope: EmitNames,
   results: readonly Doc[],
   effects: Effects,
 ): Doc {
@@ -118,7 +118,7 @@ function deferredArguments(
 
 /** `Layer.Layer<S1 | S2, E, Rq>` for a provider type. */
 function layerTypeDoc(
-  scope: Scope,
+  scope: EmitNames,
   provides: readonly CapabilityId[],
   acquisition: Effects,
 ): Doc {
@@ -128,7 +128,7 @@ function layerTypeDoc(
   return [`${layer}.Layer`, args];
 }
 
-function functionTypeDoc(scope: Scope, type: FunctionType): Doc {
+function functionTypeDoc(scope: EmitNames, type: FunctionType): Doc {
   const parameters = type.parameters.map((p, i) =>
     property(parameterName(i), typeDoc(scope, p))
   );
@@ -166,7 +166,7 @@ export function hasSchemaMetadata(
     type.decodedOptionalKey === true;
 }
 
-export function typeDoc(scope: Scope, type: Type): Doc {
+export function typeDoc(scope: EmitNames, type: Type): Doc {
   switch (type.kind) {
     case "primitive":
       return type.name === "int"
@@ -310,7 +310,7 @@ export function typeDoc(scope: Scope, type: Type): Doc {
 // ------------------------------------------------------------------ schemas
 
 function schemaOfLiterals(
-  scope: Scope,
+  scope: EmitNames,
   values: readonly (string | number | boolean | null)[],
 ): Doc {
   const schema = scope.effect("Schema");
@@ -338,7 +338,7 @@ function schemaOfLiterals(
  * name becomes the generated mirror type. The type has no function in it.
  */
 export function encodedTypeDoc(
-  scope: Scope,
+  scope: EmitNames,
   type: Type,
   recursiveId?: string,
 ): Doc {
@@ -401,7 +401,11 @@ export function encodedTypeDoc(
 }
 
 /** The Effect Schema value of a type. The type has no function or provider in it. */
-export function schemaDoc(scope: Scope, type: Type, recursiveId?: string): Doc {
+export function schemaDoc(
+  scope: EmitNames,
+  type: Type,
+  recursiveId?: string,
+): Doc {
   const schema = scope.effect("Schema");
   if (isDeferredType(type)) {
     throw unsupported("a deferred or function type has no schema");

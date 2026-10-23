@@ -2,7 +2,7 @@
 // shapes only: they do not traverse arbitrary host objects or deferred values.
 import type { Type } from "../ir.ts";
 import { type Doc, hard } from "./doc.ts";
-import type { Scope } from "./scope.ts";
+import type { ExprScope, TypeLookup } from "./scope.ts";
 
 export function fieldKey(name: string): string {
   return name === "__proto__" ? '["__proto__"]' : name;
@@ -18,7 +18,7 @@ export function sensitiveField(name: string): boolean {
 }
 
 export function needsFieldAdapter(
-  scope: Scope,
+  scope: TypeLookup,
   type: Type,
   seen = new Set<string>(),
 ): boolean {
@@ -54,7 +54,7 @@ export function needsFieldAdapter(
 }
 
 export function fieldAdapter(
-  scope: Scope,
+  scope: ExprScope,
   type: Type,
   direction: "decoded" | "encoded" | "make",
 ): string {
@@ -67,7 +67,7 @@ export function fieldAdapter(
 }
 
 function adapterBody(
-  scope: Scope,
+  scope: ExprScope,
   type: Type,
   direction: "decoded" | "encoded" | "make",
 ): string {
@@ -139,7 +139,7 @@ return out;`;
 }
 
 /** Emit only the helpers requested by this module, allocating dependencies first. */
-export function fieldHelperDeclarations(scope: Scope): Doc[] {
+export function fieldHelperDeclarations(scope: ExprScope): Doc[] {
   const adapters: string[] = [];
   for (const { name, type, direction } of scope.fieldAdapters.values()) {
     adapters.push(

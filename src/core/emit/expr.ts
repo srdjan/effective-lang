@@ -49,9 +49,9 @@ import {
   through,
 } from "./doc.ts";
 import {
+  type ExprScope,
   internal,
   methodOfCapability,
-  type Scope,
   serviceOfCapability,
   tokenOfId,
   unsupported,
@@ -563,7 +563,7 @@ type Mode = "pure" | "gen";
 type Kid = (e: Expr, expected?: Type) => Emitted;
 
 export class ExprEmitter {
-  constructor(readonly scope: Scope) {}
+  constructor(readonly scope: ExprScope) {}
 
   /** True for a function type, or an alias of one, that runs as an effect. */
   private isEffectfulFunction(type: Type): boolean {
