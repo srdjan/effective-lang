@@ -5,8 +5,8 @@
 import { assert, assertEquals } from "@std/assert";
 import { decodeMappings } from "../src/core/emit/sourcemap.ts";
 import { tscConfig } from "../src/cli/tsc.ts";
-import { copyDirectory, FIXTURES } from "./helpers.ts";
-import { type Run, withTemporaryDirectory } from "./process_helpers.ts";
+import { COMPANION_FILES, copyDirectory, FIXTURES } from "./helpers.ts";
+import { deno, type Run, withTemporaryDirectory } from "./process_helpers.ts";
 
 const REPOSITORY = new URL("../", import.meta.url).pathname;
 
@@ -35,7 +35,7 @@ Deno.test("check on fixtures/examples prints nothing and exits 0", async () => {
   const run = await effective(["check", "fixtures/examples"]);
   assertEquals(run.code, 0, run.stderr);
   assertEquals(run.stdout, "");
-  assert(run.stderr.includes("5 modules, 0 diagnostics"), run.stderr);
+  assert(run.stderr.includes("6 modules, 0 diagnostics"), run.stderr);
   // The check wrote nothing next to the fixtures.
   for (const name of MODULES) {
     assertEquals(
@@ -131,6 +131,52 @@ Deno.test("build --tsc --validate writes the golden files and the source maps, a
       "users.ts",
       "users.ts.map",
     ]);
+  });
+});
+
+Deno.test("build --tsc checks the companion module of a host interface, and deno fmt accepts it unchanged", async () => {
+  await withTemporary(async (dir) => {
+    const files = {
+      ...COMPANION_FILES,
+      "host.ts": [
+        'import { Effect, Layer } from "effect";',
+        'import { Boom, Store } from "./host.effi.ts";',
+        "",
+        "export { Boom, Store };",
+        "export type Conn = { readonly name: string };",
+        "export const StoreLive = Layer.succeed(",
+        "  Store,",
+        "  Store.of({",
+        '    open: () => Effect.succeed({ name: "c" }),',
+        '    fetch: (_c, id) => Effect.succeed({ _tag: "domain#Item" as const, id }),',
+        "    token: () =>",
+        "      Effect.succeed({",
+        '        _tag: "host#Token" as const,',
+        '        id: "a",',
+        '        handle: "h",',
+        "      }),",
+        "  }),",
+        ");",
+        "",
+      ].join("\n"),
+    };
+    for (const [path, text] of Object.entries(files)) {
+      Deno.writeTextFileSync(`${dir}/${path}`, text);
+    }
+    const run = await effective(["build", dir, "--tsc"]);
+    assertEquals(run.code, 0, `${run.stdout}${run.stderr}`);
+    assert(run.stderr.includes("3 modules, 0 diagnostics"), run.stderr);
+    assertEquals(
+      Deno.readTextFileSync(`${dir}/host.effi.ts`).split("\n", 1)[0],
+      "// Generated from host.effi by the Effective compiler. Do not edit.",
+    );
+    const map: unknown = JSON.parse(
+      Deno.readTextFileSync(`${dir}/host.effi.ts.map`),
+    );
+    assert(typeof map === "object" && map !== null && "sources" in map);
+    assertEquals(map.sources, ["host.effi"]);
+    const fmt = await deno(dir, ["fmt", "--check", "host.effi.ts"]);
+    assertEquals(fmt.code, 0, `deno fmt --check failed:\n${fmt.stderr}`);
   });
 });
 

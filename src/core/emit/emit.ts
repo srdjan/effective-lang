@@ -117,7 +117,10 @@ function build(ir: ModuleIR, context: EmitContext): EmittedModule {
     recursiveGroups(ir),
   );
 
-  const typeLevel = orderTypeLevel(ir);
+  // An opaque type has no value: the host module declares it.
+  const typeLevel = orderTypeLevel(ir).filter((d) =>
+    !(d.kind === "type" && d.opaque === true)
+  );
   const functions = ir.declarations.filter((d) => d.kind === "function");
   const constants = orderConstants(ir);
   const printed = (declarations: readonly (typeof ir.declarations)[number][]) =>
@@ -152,15 +155,22 @@ function build(ir: ModuleIR, context: EmitContext): EmittedModule {
   for (const group of scope.moduleImports()) imports.push(importLine(group));
   for (const group of scope.hostImports()) imports.push(importLine(group));
 
-  const source = ir.sources[0] ?? `${ir.module}.eff`;
   const header: Doc =
-    `// Generated from ${source} by the Effective compiler. Do not edit.`;
+    `// Generated from ${scope.source} by the Effective compiler. Do not edit.`;
+  const declarationDocs = [...typeDocs, ...functionDocs, ...constantDocs];
+  // A companion module without a declaration would not be a module without this line.
+  const moduleMarker: Doc[] =
+    scope.source.endsWith(".effi") && declarationDocs.length === 0 &&
+      imports.length === 0
+      ? ["export {};"]
+      : [];
   const doc = blankSeparated([
     [header],
     imports,
     ...helpers,
     hostAssertions,
-    ...[...typeDocs, ...functionDocs, ...constantDocs].map((d) => [d]),
+    ...declarationDocs.map((d) => [d]),
+    moduleMarker,
   ]);
   const mapName = `${scope.path.slice(scope.path.lastIndexOf("/") + 1)}.map`;
   const rendered = render([doc, hard, `//# sourceMappingURL=${mapName}`, hard]);

@@ -107,7 +107,7 @@ export function readTargetInputs(
     ok: true,
     value: new Map(
       [...read.value].filter(([, text]) =>
-        !/^\/\/ Generated from .+\.eff by the Effective compiler\. Do not edit\./
+        !/^\/\/ Generated from .+\.effi? by the Effective compiler\. Do not edit\./
           .test(text)
       ),
     ),

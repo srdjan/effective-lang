@@ -71,7 +71,7 @@ Deno.test("check on the examples prints no diagnostic and exits 0", async () => 
   const r = await run(["check", ROOT], under(ROOT, exampleFiles()));
   assertEquals(r.code, 0);
   assertEquals(r.stdout, "");
-  assertEquals(r.stderr, "5 modules, 0 diagnostics\n");
+  assertEquals(r.stderr, "6 modules, 0 diagnostics\n");
 });
 
 Deno.test("check writes no file", async () => {
@@ -225,16 +225,25 @@ Deno.test("build writes each .ts and .ts.map next to its source", async () => {
     assert(map !== undefined, name);
     assertEquals(JSON.parse(map).file, `${name}.ts`);
   }
-  assertEquals(r.stderr, "5 modules, 0 diagnostics, wrote 10 files\n");
+  // The host interface gives the companion module `host/providers.effi.ts`.
+  assertEquals(
+    r.m.files.get(`${ROOT}/host/providers.effi.ts`),
+    Deno.readTextFileSync(new URL("golden/host/providers.effi.ts", FIXTURES)),
+  );
+  const companionMap = r.m.files.get(`${ROOT}/host/providers.effi.ts.map`);
+  assert(companionMap !== undefined);
+  assertEquals(JSON.parse(companionMap).file, "providers.effi.ts");
+  assertEquals(r.stderr, "6 modules, 0 diagnostics, wrote 12 files\n");
 });
 
-Deno.test("build writes no host interface file and a second build writes nothing", async () => {
+Deno.test("build writes the companion of the host interface, and a second build writes nothing", async () => {
   const first = await run(["build", ROOT], under(ROOT, exampleFiles()));
   assertEquals(first.m.files.has(`${ROOT}/host/providers.ts`), false);
+  assert(first.m.files.has(`${ROOT}/host/providers.effi.ts`));
   const again = memoryIo(Object.fromEntries(first.m.files));
   const code = await main(["build", ROOT], again.io);
   assertEquals(code, 0);
-  assertEquals(again.err.join(""), "5 modules, 0 diagnostics\n");
+  assertEquals(again.err.join(""), "6 modules, 0 diagnostics\n");
 });
 
 Deno.test("build writes nothing for a module with an error and keeps its last good file", async () => {
@@ -317,6 +326,7 @@ Deno.test("build --tsc runs deno check over the generated files and the host mod
   assertEquals(request.cwd, ROOT);
   assertEquals([...request.files].sort(), [
     "collections.ts",
+    "host/providers.effi.ts",
     "log.ts",
     "main.ts",
     "pay.ts",
@@ -357,7 +367,7 @@ Deno.test("build --tsc prints a host-boundary diagnostic at the import and a hos
     lines[1],
     "users-live.ts:21:14: error host-boundary/001: Type 'string' is not assignable to type 'number'.",
   );
-  assertEquals(r.stderr, "5 modules, 2 diagnostics, wrote 10 files\n");
+  assertEquals(r.stderr, "6 modules, 2 diagnostics, wrote 12 files\n");
 });
 
 Deno.test("build --tsc prints a source error at the .eff position and a generated error at the generated position", async () => {

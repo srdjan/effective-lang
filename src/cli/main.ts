@@ -63,7 +63,7 @@ async function watchLoop(
         if (!options.tsc) return;
         const outcome = await session.build(synced.revision, options, []);
         io.stderr("host inputs changed; rechecked: (none)\n");
-        printOutcome(io, outcome, synced.revision.effModuleNames().length);
+        printOutcome(io, outcome, synced.revision.moduleNames().length);
         return;
       }
       case "revision": {
@@ -82,7 +82,7 @@ async function watchLoop(
         }
         previous = outcome.modules;
         io.stderr(`rechecked: ${rechecked(synced.revision.rechecked)}\n`);
-        printOutcome(io, outcome, synced.revision.effModuleNames().length);
+        printOutcome(io, outcome, synced.revision.moduleNames().length);
       }
     }
   };
@@ -162,7 +162,7 @@ async function execute(
   }
   if (synced.tag === "unchanged") return EXIT_OK;
   const outcome = await session.build(synced.revision, options, []);
-  printOutcome(io, outcome, synced.revision.effModuleNames().length);
+  printOutcome(io, outcome, synced.revision.moduleNames().length);
   return outcome.failed ? EXIT_DIAGNOSTICS : EXIT_OK;
 }
 

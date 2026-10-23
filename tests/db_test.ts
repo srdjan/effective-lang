@@ -10,10 +10,9 @@ import {
   serializeSourceMap,
 } from "../src/core/emit/sourcemap.ts";
 import { buildSpanTable, hostImportSpans } from "../src/core/emit/spans.ts";
-import { lowerProject } from "../src/core/lower.ts";
 import { serializeModule } from "../src/core/serialize.ts";
 import { memoryHost } from "../src/core/source.ts";
-import { exampleFiles } from "./helpers.ts";
+import { exampleFiles, lowerWithInterfaces } from "./helpers.ts";
 
 type Files = Record<string, string>;
 
@@ -22,7 +21,7 @@ function fromScratch(files: Files): unknown {
   const entries = Object.keys(files).filter((p) => p.endsWith(".eff")).sort();
   const checked = checkProject(memoryHost(files), "", entries);
   if (!checked.ok) return { config: checked.error };
-  const lowered = lowerProject(checked.value);
+  const lowered = lowerWithInterfaces(checked.value);
   const emitted = emitProject(lowered, {
     config: checked.value.analysis.project.config,
   });
@@ -48,7 +47,7 @@ function fromScratch(files: Files): unknown {
 /** What the revision of the program gives, in the same shape. */
 function fromProgram(revision: Revision): unknown {
   const modules: Record<string, unknown> = {};
-  for (const name of revision.effModuleNames()) {
+  for (const name of revision.moduleNames()) {
     const result = revision.lowered(name);
     const out = revision.emitted(name);
     if (result === undefined) continue;

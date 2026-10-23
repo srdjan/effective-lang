@@ -25,7 +25,7 @@ Deno.test("writableModules writes no member of an import cycle with an error", (
   );
 });
 
-Deno.test("writableModules ignores a host interface target", () => {
+Deno.test("writableModules writes the companion of a host interface target", () => {
   const read = (path: string) =>
     Deno.readTextFileSync(
       new URL(`../fixtures/examples/${path}`, import.meta.url),
@@ -40,7 +40,11 @@ Deno.test("writableModules ignores a host interface target", () => {
   });
   if (!revision.ok) throw new Error(JSON.stringify(revision));
   assertEquals(revision.value.diagnostics.map((d) => d.code), []);
-  assertEquals(writableModules(revision.value).sort(), ["main", "users"]);
+  assertEquals(writableModules(revision.value).sort(), [
+    "host/providers",
+    "main",
+    "users",
+  ]);
 });
 
 Deno.test("writableModules writes every module of a clean chain", () => {
@@ -54,4 +58,31 @@ Deno.test("writableModules writes every module of a clean chain", () => {
     }).sort(),
     ["a", "b", "c"],
   );
+});
+
+Deno.test("writableModules writes no module whose imported host interface has an error", () => {
+  const read = (path: string) =>
+    Deno.readTextFileSync(
+      new URL(`../fixtures/examples/${path}`, import.meta.url),
+    );
+  const revision = new Program().update({
+    set: {
+      "effective.json": read("effective.json"),
+      "users.eff": read("users.eff"),
+      "host/providers.effi": `${
+        read("host/providers.effi")
+      }type Bad = Missing\n`,
+      "main.eff": read("main.eff"),
+    },
+  });
+  if (!revision.ok) throw new Error(JSON.stringify(revision));
+  assertEquals(
+    revision.value.diagnostics.map((d) => d.span.source),
+    ["host/providers.effi"],
+  );
+  // The broken companion stays in the list, and `writeGenerated` skips it. Main is out.
+  assertEquals(writableModules(revision.value).sort(), [
+    "host/providers",
+    "users",
+  ]);
 });

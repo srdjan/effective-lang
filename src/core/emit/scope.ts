@@ -22,7 +22,11 @@ import {
   nameOfId as coreNameOfId,
   serviceOfCapability as coreServiceOfCapability,
 } from "../ids.ts";
-import { normalizeRelative, type ProjectConfig } from "../project.ts";
+import {
+  generatedPathOf,
+  normalizeRelative,
+  type ProjectConfig,
+} from "../project.ts";
 import { compareText } from "../util.ts";
 import { collectBinderNames } from "./walk.ts";
 
@@ -306,6 +310,8 @@ export type ExprScope =
 
 export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
   readonly module: string;
+  /** The source file of the module, as its header names it. */
+  readonly source: string;
   /** The path of the generated file, relative to the project root. */
   readonly path: string;
   /** Every name in use: declarations, imports, locals, and allocated names. */
@@ -319,6 +325,8 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
   >();
   /** Names that the Effective source binds in its imports. */
   private readonly bound = new Map<DeclarationId, string>();
+  /** The import of each bound name that a companion module has not used yet. */
+  private readonly unusedImports = new Map<DeclarationId, () => void>();
   /** Names that the emitter allocated for foreign declarations. */
   private readonly allocated = new Map<DeclarationId, string>();
   private readonly foreignImports = new Map<
@@ -363,7 +371,8 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
 
   constructor(readonly ir: ModuleIR, readonly config: ProjectConfig) {
     this.module = ir.module;
-    this.path = `${ir.module}.ts`;
+    this.source = ir.sources[0] ?? `${ir.module}.eff`;
+    this.path = generatedPathOf(this.source);
     for (const declaration of ir.declarations) {
       this.localDecls.set(declaration.id, declaration);
       this.taken.add(declaration.name);
@@ -391,12 +400,17 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
       }
       for (const binding of imported.bindings) {
         this.bound.set(binding.target, binding.name);
-        this.addImport(
-          moduleOfId(binding.target),
-          nameOfId(binding.target),
-          binding.name,
-          this.isTypeOnly(binding.target),
-        );
+        const use = () =>
+          this.addImport(
+            moduleOfId(binding.target),
+            nameOfId(binding.target),
+            binding.name,
+            this.isTypeOnly(binding.target),
+          );
+        // A companion module prints only the imports that its declarations use.
+        if (this.source.endsWith(".effi")) {
+          this.unusedImports.set(binding.target, use);
+        } else use();
       }
     }
   }
@@ -441,6 +455,22 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
         this.hostDeclarations.set(specifier, names);
       }
     }
+  }
+
+  /** An opaque type of a companion module lives in the host module: import it from there. */
+  private importOwnOpaque(name: string): void {
+    for (const host of this.config.host.values()) {
+      if (normalizeRelative(host.interfacePath) !== this.source) continue;
+      const target = normalizeRelative(host.modulePath);
+      if (target === undefined) break;
+      const specifier = relativeSpecifier(this.path, target);
+      const names = this.hostDeclarations.get(specifier) ??
+        new Map<string, ImportedName>();
+      names.set(name, { local: name, typeOnly: true });
+      this.hostDeclarations.set(specifier, names);
+      return;
+    }
+    throw unsupported(`the interface ${this.source} has no host module`);
   }
 
   // -------------------------------------------------------------- allocation
@@ -575,8 +605,9 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
   }
 
   /**
-   * True when the declaration has no runtime value: an alias whose definition
-   * contains a function or provider type, directly or through another alias.
+   * True when the declaration has no runtime value: an opaque type, or an alias
+   * whose definition contains a function, provider, or opaque type, directly or
+   * through another alias.
    */
   isTypeOnly(id: DeclarationId): boolean {
     const known = this.typeOnlyMemo.get(id);
@@ -584,7 +615,10 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
     this.typeOnlyMemo.set(id, false);
     const declaration = this.typeLevelDeclaration(id);
     let result = false;
-    if (
+    if (declaration?.kind === "type" && declaration.opaque === true) {
+      // The host module declares an opaque type as a type: it has no value.
+      result = true;
+    } else if (
       declaration?.kind === "type" && declaration.definition.kind === "alias"
     ) {
       result = this.containsFunction(declaration.definition.type);
@@ -639,9 +673,18 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
       return `${this.effect("SchemaIssue")}.Issue`;
     }
     const local = this.localDecls.get(id);
-    if (local !== undefined) return local.name;
+    if (local !== undefined) {
+      if (local.kind === "type" && local.opaque === true) {
+        this.importOwnOpaque(local.name);
+      }
+      return local.name;
+    }
     const bound = this.bound.get(id);
-    if (bound !== undefined) return bound;
+    if (bound !== undefined) {
+      this.unusedImports.get(id)?.();
+      this.unusedImports.delete(id);
+      return bound;
+    }
     const allocated = this.allocated.get(id);
     if (allocated !== undefined) return allocated;
     const exported = nameOfId(id);

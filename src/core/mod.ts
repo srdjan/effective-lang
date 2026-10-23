@@ -83,7 +83,12 @@ export {
 export type { DenoCheckOutput, TscDiagnostic, TscMapping } from "./emit/tsc.ts";
 
 // The project file and the source host.
-export { CONFIG_FILE, describeConfigError, joinPath } from "./project.ts";
+export {
+  CONFIG_FILE,
+  describeConfigError,
+  generatedPathOf,
+  joinPath,
+} from "./project.ts";
 export type { ConfigError, Project, ProjectConfig } from "./project.ts";
 export { lineIndexOf, lineStarts, memoryHost, positionOf } from "./source.ts";
 export type { ReadError, Result, SourceHost } from "./source.ts";

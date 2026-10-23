@@ -56,6 +56,11 @@ export function moduleNameOf(path: string): string {
   return path;
 }
 
+/** The generated file of a source path: `x.eff` gives `x.ts`, `x.effi` gives `x.effi.ts`. */
+export function generatedPathOf(path: string): string {
+  return path.endsWith(".effi") ? `${path}.ts` : `${moduleNameOf(path)}.ts`;
+}
+
 // ------------------------------------------------------------------ configuration
 
 interface HostModuleConfig {

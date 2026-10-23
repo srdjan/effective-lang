@@ -8,6 +8,7 @@ import { relativeSpecifier } from "../src/core/emit/scope.ts";
 import { lowerProject } from "../src/core/lower.ts";
 import { memoryHost } from "../src/core/source.ts";
 import {
+  COMPANION_FILES,
   emitExamples,
   emitFiles,
   EXAMPLE_ENTRIES,
@@ -593,6 +594,7 @@ Deno.test("each example emits exactly its golden file", () => {
   const emitted = emitExamples();
   assertEquals([...emitted.keys()].sort(), [
     "collections",
+    "host/providers",
     "log",
     "main",
     "pay",
@@ -600,11 +602,54 @@ Deno.test("each example emits exactly its golden file", () => {
   ]);
   for (const [name, module] of emitted) {
     const golden = Deno.readTextFileSync(
-      new URL(`golden/${name}.ts`, FIXTURES),
+      new URL(`golden/${module.path}`, FIXTURES),
     );
-    assertEquals(module.text, golden, `golden file ${name}.ts differs`);
-    assertEquals(module.path, `${name}.ts`);
+    assertEquals(module.text, golden, `golden file ${module.path} differs`);
+    // The companion module of `host/providers.effi` is `host/providers.effi.ts`.
+    assertEquals(
+      module.path,
+      name === "host/providers" ? `${name}.effi.ts` : `${name}.ts`,
+    );
   }
+});
+
+Deno.test("an interface emits a companion module with every declaration exported", () => {
+  const emitted = emitFiles(COMPANION_FILES, ["main.eff"]).get("host");
+  assert(emitted !== undefined, "no companion module for host.effi");
+  assertEquals(emitted.path, "host.effi.ts");
+  const text = emitted.text;
+  assert(
+    text.startsWith(
+      "// Generated from host.effi by the Effective compiler. Do not edit.\n",
+    ),
+    text,
+  );
+  // The opaque type is a type import from the host module, and has no code here.
+  assertStringIncludes(text, 'import { type Conn } from "./host.ts";');
+  assertStringIncludes(text, 'import { Id, Item } from "./domain.ts";');
+  assert(!/^(?:export )?(?:const|type|class) Conn\b/m.test(text), text);
+  // An alias of the opaque type is a type alias, because the import has no value.
+  assertStringIncludes(text, "export type Link = Conn;");
+  // The provider has no code.
+  assert(!text.includes("StoreLive"), text);
+  // Every declaration is exported, also `Label`, `Boom`, and `Token`.
+  for (
+    const form of [
+      "export const Handle =",
+      "export type Handle =",
+      "export const Label =",
+      "export class Boom ",
+      "export const Token =",
+      "export type Token =",
+      "export class Store ",
+    ]
+  ) {
+    assertStringIncludes(text, form);
+  }
+  assert(!/^(?:const|type|class) (?!\$)/m.test(text), text);
+  // The tags keep the module name of the interface.
+  assertStringIncludes(text, '"host#Token"');
+  assertStringIncludes(text, '"host#Boom"');
 });
 
 Deno.test("traverse emits exactly its golden file", () => {

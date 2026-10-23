@@ -43,7 +43,7 @@ Deno.test("real watch --tsc reports and clears a local dependency error without 
         `${dir}/helper.ts`,
         'export const value: string = "fixed";\n',
       );
-      await until("5 modules, 0 diagnostics", broken);
+      await until("6 modules, 0 diagnostics", broken);
       assert(
         log.slice(initial).includes("host inputs changed; rechecked: (none)"),
         log,

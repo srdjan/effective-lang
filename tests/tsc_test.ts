@@ -17,6 +17,7 @@ import {
 } from "../src/core/emit/tsc.ts";
 import { lineStarts, positionOf, spanText } from "../src/core/source.ts";
 import {
+  COMPANION_FILES,
   emitFilesWithProject,
   EXAMPLE_ENTRIES,
   exampleFiles,
@@ -184,6 +185,26 @@ Deno.test("a diagnostic inside a printed node maps to its source span", () => {
   assertEquals(
     spanText(sources["users.eff"], mapped.span),
     "UserMissing({ id })",
+  );
+});
+
+Deno.test("a diagnostic inside a companion declaration maps to its .effi span", () => {
+  const companion = emitFilesWithProject(COMPANION_FILES, ["main.eff"]);
+  const module = companion.emitted.get("host");
+  assert(module !== undefined);
+  assertEquals(module.path, "host.effi.ts");
+  const table = buildSpanTable(module, undefined);
+  const offset = module.text.indexOf("Schema.TaggedStruct");
+  const position = positionOf(lineStarts(module.text), module.text, offset);
+  const mapped = mapTscDiagnostic(
+    diagnosticAt(module.path, position.line, position.column),
+    new Map([[module.path, table]]),
+  );
+  assert(mapped.tag === "source", JSON.stringify(mapped));
+  assertEquals(mapped.span.source, "host.effi");
+  assertEquals(
+    spanText(COMPANION_FILES["host.effi"], mapped.span),
+    "data Token = { id: Label, handle: Handle }",
   );
 });
 

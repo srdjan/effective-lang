@@ -84,7 +84,7 @@ export function emitSources(
     };
   }
   const generated = new Map<string, string>();
-  for (const name of revision.effModuleNames()) {
+  for (const name of revision.moduleNames()) {
     const emitted = revision.emitted(name);
     if (emitted === undefined || !emitted.ok) {
       return {
@@ -97,7 +97,7 @@ export function emitSources(
   return { ok: true, value: generated };
 }
 
-/** The five examples, emitted, with `users-live.ts`. The gate compares them with the golden files. */
+/** The five examples and the companion module, emitted, with `users-live.ts`. The gate compares them with the golden files. */
 export function exampleTarget(): Result<Target, M5Error> {
   const fixtures = new URL("../fixtures/", import.meta.url).pathname;
   const tree = new Map<string, string>();

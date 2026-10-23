@@ -174,16 +174,12 @@ export class Revision {
     return this.checked.diagnostics;
   }
 
-  /** The module names, imported modules before their importers. */
+  /**
+   * The module names, imported modules before their importers. Each `.eff` and
+   * `.effi` module has one generated module, so this is also the list of those.
+   */
   moduleNames(): readonly string[] {
     return [...this.entries.keys()];
-  }
-
-  /** The names of the `.eff` modules, in topological order. */
-  effModuleNames(): readonly string[] {
-    return this.moduleNames().filter((name) =>
-      this.project.modules.get(name)?.mode === "eff"
-    );
   }
 
   checkedModule(name: string): CheckedModule | undefined {
@@ -286,11 +282,10 @@ export class Revision {
     return this.files;
   }
 
-  /** The typed IR of an `.eff` module. A module with an error has an error value. */
+  /** The typed IR of a module. A module with an error has an error value. */
   lowered(name: string): Result<ModuleIR, LowerError> | undefined {
     const entry = this.entries.get(name);
     if (entry === undefined) return undefined;
-    if (this.project.modules.get(name)?.mode !== "eff") return undefined;
     if (entry.lowered === undefined) {
       this.counters.lowerings++;
       entry.lowered = lowerModule(this.checked, name);
@@ -298,7 +293,7 @@ export class Revision {
     return entry.lowered;
   }
 
-  /** The emitted TypeScript of an `.eff` module. */
+  /** The emitted TypeScript of a module: its generated file. */
   emitted(name: string): Result<EmittedModule, EmitProjectError> | undefined {
     const entry = this.entries.get(name);
     const lowered = this.lowered(name);

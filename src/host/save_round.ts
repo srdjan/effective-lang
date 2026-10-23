@@ -73,7 +73,7 @@ export function ownedByRoot(fs: CliFs, root: string, name: string): boolean {
 
 export function runSaveRound(input: SaveRoundInput): SaveRound {
   const { fs, root, revision, owns } = input;
-  const names = revision.effModuleNames();
+  const names = revision.moduleNames();
   const present = new Set(names);
   const removals: ModuleRemoval[] = [];
   const kept: string[] = [];

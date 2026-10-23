@@ -4,6 +4,7 @@
 
 import {
   type Diagnostic,
+  generatedPathOf,
   joinPath,
   type LowerError,
   type Revision,
@@ -41,7 +42,7 @@ function describeLowerError(error: LowerError): string {
 }
 
 /**
- * The modules that a build writes, in the order of `revision.effModuleNames()`.
+ * The modules that a build writes, in the order of `revision.moduleNames()`.
  * A module that lowered and failed validation is reported, and not written.
  * A module that imports a module that is not written is not written either,
  * because its generated import would not load.
@@ -51,7 +52,7 @@ export function writableModules(
   validation: ReadonlyMap<string, readonly Diagnostic[]> = new Map(),
 ): string[] {
   const passed = new Set(
-    revision.effModuleNames().filter((name) => {
+    revision.moduleNames().filter((name) => {
       const lowered = revision.lowered(name);
       return lowered === undefined || !lowered.ok ||
         (validation.get(name) ?? []).length === 0;
@@ -62,15 +63,11 @@ export function writableModules(
     return lowered !== undefined && lowered.ok && passed.has(name);
   };
   // A fixpoint, because one forward pass is wrong inside an import cycle.
-  // The graph also holds host interface targets, which the build does not write.
+  // The graph also holds host interface targets: their companion modules count.
   for (let changed = true; changed;) {
     changed = false;
     for (const name of [...passed]) {
-      if (
-        revision.imports(name).some((target) =>
-          revision.moduleInfo(target)?.mode === "eff" && !writable(target)
-        )
-      ) {
+      if (revision.imports(name).some((target) => !writable(target))) {
         passed.delete(name);
         changed = true;
       }
@@ -80,10 +77,10 @@ export function writableModules(
 }
 
 /**
- * Emits the named modules of the revision. With `write` true, it writes
- * `<module>.ts` and `<module>.ts.map` under `root` for each module whose text
- * changed. A module with diagnostics is skipped without a note: the caller
- * reports it. The caller also leaves out the modules that failed validation.
+ * Emits the named modules of the revision. With `write` true, it writes the
+ * generated file and its map under `root` for each module whose text changed:
+ * `<module>.ts` for `.eff`, `<module>.effi.ts` for `.effi`. A module with
+ * diagnostics is skipped without a note: the caller reports it. The caller also leaves out the modules that failed validation.
  */
 export function writeGenerated(
   fs: CliFs,
@@ -148,18 +145,19 @@ export function writeGenerated(
   return { written, generated, tables, notes, failed };
 }
 
-/** The first line that the emitter writes for a module. Keep it equal to `emit.ts`. */
-function generatedHeader(module: string): string {
-  return `// Generated from ${module}.eff by the Effective compiler. Do not edit.`;
+/** The first line that the emitter writes for a source file. Keep it equal to `emit.ts`. */
+function generatedHeader(source: string): string {
+  return `// Generated from ${source} by the Effective compiler. Do not edit.`;
 }
 
 /**
- * Removes the outputs of modules that left the project. Each named module has
- * a `<module>.ts` and a `<module>.ts.map`. A `.ts` file goes only when its
- * first line is the emitter header of that module, so a hand-written file at
- * the same path stays. The map goes only together with its `.ts` file, and
- * before it. Returns the root-relative paths that it removed, and messages for
- * stderr.
+ * Removes the outputs of modules that left the project. A module that left has
+ * no known mode, so each named module tries `<module>.ts` for `<module>.eff` and
+ * `<module>.effi.ts` for `<module>.effi`, each with its `.map`. A `.ts` file goes
+ * only when its first line is the emitter header of that source, so a
+ * hand-written file at the same path stays. The map goes only together with its
+ * `.ts` file, and before it. Returns the root-relative paths that it removed,
+ * and messages for stderr.
  */
 export function removeStaleOutputs(
   fs: CliFs,
@@ -169,26 +167,28 @@ export function removeStaleOutputs(
   const removed: string[] = [];
   const notes: string[] = [];
   for (const module of modules) {
-    const path = `${module}.ts`;
-    const read = fs.readText(joinPath(root, path));
-    if (!read.ok) {
-      if (read.error.tag === "unreadable") {
-        notes.push(`error: cannot read ${path}: ${read.error.message}`);
+    for (const source of [`${module}.eff`, `${module}.effi`]) {
+      const path = generatedPathOf(source);
+      const read = fs.readText(joinPath(root, path));
+      if (!read.ok) {
+        if (read.error.tag === "unreadable") {
+          notes.push(`error: cannot read ${path}: ${read.error.message}`);
+        }
+        continue;
       }
-      continue;
-    }
-    if (read.value.split("\n", 1)[0] !== generatedHeader(module)) continue;
-    // The map goes first. When it fails, the `.ts` file keeps the header that
-    // proves ownership, so a later call can retry. A missing file counts as removed.
-    for (const target of [`${path}.map`, path]) {
-      const full = joinPath(root, target);
-      const existed = fs.kind(full) !== "missing";
-      const result = fs.remove(full);
-      if (result.ok) {
-        if (existed) removed.push(target);
-      } else {
-        notes.push(`error: cannot remove ${target}: ${result.error.message}`);
-        break;
+      if (read.value.split("\n", 1)[0] !== generatedHeader(source)) continue;
+      // The map goes first. When it fails, the `.ts` file keeps the header that
+      // proves ownership, so a later call can retry. A missing file counts as removed.
+      for (const target of [`${path}.map`, path]) {
+        const full = joinPath(root, target);
+        const existed = fs.kind(full) !== "missing";
+        const result = fs.remove(full);
+        if (result.ok) {
+          if (existed) removed.push(target);
+        } else {
+          notes.push(`error: cannot remove ${target}: ${result.error.message}`);
+          break;
+        }
       }
     }
   }

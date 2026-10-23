@@ -25,6 +25,7 @@ import {
   EXAMPLE_ENTRIES,
   FIXTURES,
   hostBoundaryManifest,
+  listFixtures,
 } from "./helpers.ts";
 import { deno, runScript, withTemporaryDirectory } from "./process_helpers.ts";
 
@@ -3799,9 +3800,7 @@ Deno.test("deno fmt does not exclude the golden files, and it accepts them uncha
   const root = new URL("../", import.meta.url).pathname;
   const run = await deno(root, ["fmt", "--check", "fixtures/golden"]);
   assertEquals(run.code, 0, `deno fmt --check failed:\n${run.stderr}`);
-  const goldenCount =
-    [...Deno.readDirSync(new URL("../fixtures/golden/", import.meta.url))]
-      .filter((entry) => entry.isFile && entry.name.endsWith(".ts")).length;
+  const goldenCount = listFixtures("golden", /\.ts$/).length;
   assert(
     run.stderr.includes(`Checked ${goldenCount} files`),
     `deno fmt did not check all ${goldenCount} golden files:\n${run.stderr}`,

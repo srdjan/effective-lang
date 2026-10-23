@@ -115,6 +115,19 @@ Deno.test("the first round writes every writable module and its map, as the orac
   assert(logsOf(h, 4).includes("wrote main.ts"));
 });
 
+Deno.test("a save of an .effi file writes its companion module", () => {
+  const h = started();
+  h.deliver(save(MAIN));
+  const companion = `${ROOT}/host/providers.effi.ts`;
+  assertStringIncludes(h.files.get(companion) ?? "", "export {};");
+  const effi = "host/providers.effi";
+  setDisk(h, effi, `${F[effi]}export data Extra = { n: int }\n`);
+  h.deliver(save(exampleUri(effi)));
+  assertStringIncludes(h.files.get(companion) ?? "", "export const Extra =");
+  assert(h.files.has(`${companion}.map`));
+  assertMatchesOracle(h);
+});
+
 Deno.test("a save with no change writes and logs nothing", () => {
   const h = started();
   h.deliver(save(MAIN));
@@ -318,7 +331,8 @@ Deno.test("a round logs removals, writes, write notes, and held modules in that 
     "4 wrote extra.ts",
     "1 error: cannot write extra.ts.map: permission denied",
     "3 users is not written: it has 1 diagnostics",
-    "3 main is not written: it imports users, which is not written",
+    "3 host/providers is not written: it imports users, which is not written",
+    "3 main is not written: it imports host/providers, which is not written",
   ]);
 });
 
@@ -327,11 +341,17 @@ Deno.test("a held module is logged once at type 3 and cleared when it is writabl
   setDisk(h, "users.eff", USERS_BROKEN);
   h.deliver(save(MAIN));
   const held = logsOf(h, 3);
-  assertEquals(held.length, 2);
+  assertEquals(held.length, 3);
   assert(held.includes("users is not written: it has 1 diagnostics"));
+  // The companion module of the host interface imports users.
   assert(
     held.includes(
-      "main is not written: it imports users, which is not written",
+      "host/providers is not written: it imports users, which is not written",
+    ),
+  );
+  assert(
+    held.includes(
+      "main is not written: it imports host/providers, which is not written",
     ),
   );
   h.clearSent();
@@ -342,7 +362,7 @@ Deno.test("a held module is logged once at type 3 and cleared when it is writabl
   assertEquals(logsOf(h, 3), []);
   setDisk(h, "users.eff", USERS_BROKEN);
   h.deliver(save(MAIN));
-  assertEquals(logsOf(h, 3).length, 2);
+  assertEquals(logsOf(h, 3).length, 3);
 });
 
 Deno.test("writeOnSave false creates no disk program, writes nothing, and logs nothing", () => {

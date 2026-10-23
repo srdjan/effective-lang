@@ -558,9 +558,10 @@ Deno.test("gap A: a save with an error in users.eff on disk does not write main.
   onDisk(h, "users.eff", USERS_BROKEN);
   h.deliver(didOpen(MAIN, 1, MAIN_TEXT), save(MAIN));
   assert(!h.files.has(MAIN_TS) && !h.files.has(`${ROOT}/users.ts`));
+  // The companion module of the host interface imports users, and main imports the companion.
   assert(
     typeLogs(h, 3).includes(
-      "main is not written: it imports users, which is not written",
+      "main is not written: it imports host/providers, which is not written",
     ),
   );
   assertEquals(typeLogs(h, 1), []);

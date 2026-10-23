@@ -32,3 +32,21 @@ Deno.test("removeStaleOutputs removes the .ts file when its map is missing", () 
   assertEquals(result.notes, []);
   assertEquals(m.files.size, 0);
 });
+
+Deno.test("removeStaleOutputs removes the companion module of a left interface, and keeps a hand-written one", () => {
+  const header =
+    "// Generated from gone.effi by the Effective compiler. Do not edit.";
+  const m = memoryIo({
+    [`${ROOT}/gone.effi.ts`]: `${header}\n\nexport {};\n`,
+    [`${ROOT}/gone.effi.ts.map`]: "{}",
+    [`${ROOT}/kept.effi.ts`]: "export const mine = 1;\n",
+    [`${ROOT}/kept.effi.ts.map`]: "{}",
+  });
+  const result = removeStaleOutputs(m.io.fs, ROOT, ["gone", "kept"]);
+  assertEquals(result.removed, ["gone.effi.ts.map", "gone.effi.ts"]);
+  assertEquals(result.notes, []);
+  assertEquals([...m.files.keys()].sort(), [
+    `${ROOT}/kept.effi.ts`,
+    `${ROOT}/kept.effi.ts.map`,
+  ]);
+});

@@ -21,10 +21,14 @@ import {
   checkProject,
 } from "../src/core/check_project.ts";
 import { emitProject, type EmittedModule } from "../src/core/emit/emit.ts";
-import { lowerProject } from "../src/core/lower.ts";
+import {
+  type LowerError,
+  lowerModule,
+  lowerProject,
+} from "../src/core/lower.ts";
 import type { Project } from "../src/core/project.ts";
 import type { ModeMap } from "../src/core/check.ts";
-import type { Execution, ValueId } from "../src/core/ir.ts";
+import type { Execution, ModuleIR, Result, ValueId } from "../src/core/ir.ts";
 import {
   childrenOf,
   hasProblem,
@@ -519,6 +523,17 @@ export function emitFiles(
   return emitFilesWithProject(files, entries).emitted;
 }
 
+/** What `lowerProject` gives, and the lowered `.effi` modules, which have companion modules. */
+export function lowerWithInterfaces(
+  project: CheckedProject,
+): ReadonlyMap<string, Result<ModuleIR, LowerError>> {
+  const lowered = new Map(lowerProject(project));
+  for (const [name, info] of project.analysis.project.modules) {
+    if (info.mode === "effi") lowered.set(name, lowerModule(project, name));
+  }
+  return lowered;
+}
+
 /** Like `emitFiles`, and also returns the project, for the import spans and the source texts. */
 export function emitFilesWithProject(
   files: Record<string, string>,
@@ -535,7 +550,7 @@ export function emitFilesWithProject(
       `diagnostics: ${project.diagnostics.map((d) => d.code).join(", ")}`,
     );
   }
-  const emitted = emitProject(lowerProject(project), {
+  const emitted = emitProject(lowerWithInterfaces(project), {
     config: project.analysis.project.config,
   });
   const result = new Map<string, EmittedModule>();
@@ -546,10 +561,36 @@ export function emitFilesWithProject(
   return { project: project.analysis.project, emitted: result };
 }
 
-/** The five examples, emitted in memory. */
+/** The five examples and the companion module of the host interface, emitted in memory. */
 export function emitExamples(): ReadonlyMap<string, EmittedModule> {
   return emitFiles(exampleFiles(), EXAMPLE_ENTRIES);
 }
+
+/** A host interface with each kind of companion declaration, and a source module that imports it. */
+export const COMPANION_FILES: Record<string, string> = {
+  "effective.json":
+    '{ "host": { "store": { "interface": "./host.effi", "module": "./host.ts" } } }',
+  "domain.eff": "export type Id = string\nexport data Item = { id: Id }\n",
+  "host.effi": [
+    'import { Item, Id } from "./domain.eff"',
+    "",
+    "export opaque type Conn",
+    "export type Link = Conn",
+    "export type Handle = Id",
+    "type Label = Id",
+    "error Boom = { message: Label }",
+    "data Token = { id: Label, handle: Handle }",
+    "export service Store {",
+    "  open(): Conn",
+    "  fetch(c: Conn, id: Id): Item fails Boom",
+    "  token(): Token",
+    "}",
+    "export provider StoreLive provides Store fails Boom",
+    "",
+  ].join("\n"),
+  "main.eff":
+    'import { StoreLive } from "host:store"\nexport type Main = string\n',
+};
 
 /** The files of a fixture project under `fixtures/`: root-relative path to text. */
 export function projectFiles(dir: string): Record<string, string> {

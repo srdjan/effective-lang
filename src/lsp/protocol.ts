@@ -78,7 +78,7 @@ export const SymbolKind = {
 export interface InitializationOptions {
   /** Milliseconds to wait before a flush. 0 flushes after each batch. */
   readonly debounceMs: number;
-  /** Write `<module>.ts` and its map on save. */
+  /** Write each generated file and its map on save. */
   readonly writeOnSave: boolean;
 }
 

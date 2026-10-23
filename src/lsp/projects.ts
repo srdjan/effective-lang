@@ -88,7 +88,7 @@ export class ProjectState {
   diskProgram: Program | undefined;
   /** The texts that the last round gave to `diskProgram`, whether or not that update succeeded. */
   diskInputs: ReadonlyMap<string, string> = new Map();
-  /** The `.eff` module names of the last successful round, plus names whose removal failed. */
+  /** The module names of the last successful round, plus names whose removal failed. */
   diskModules: readonly string[] = [];
   /** The reason last logged for each held module, so that a repeat stays silent. */
   readonly heldReasons = new Map<string, string>();
@@ -242,7 +242,7 @@ function heldReason(
     }
   }
   const blocker = revision.imports(name).find((target) =>
-    revision.moduleInfo(target)?.mode === "eff" && !writable.has(target)
+    !writable.has(target)
   );
   if (blocker !== undefined) {
     return `${name} is not written: it imports ${blocker}, which is not written`;
@@ -458,7 +458,7 @@ export class ProjectSet {
     const revision = updated.value;
     const owns = (name: string): boolean => this.#owns(project, name);
 
-    const names = revision.effModuleNames();
+    const names = revision.moduleNames();
     const round = runSaveRound({
       fs,
       root: project.root,

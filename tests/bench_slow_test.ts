@@ -20,8 +20,8 @@ Deno.test("M5 times a cold deno check of the emitted examples", async () => {
   const target = result.value.targets[0];
   assert(target !== undefined);
   assertEquals(target.name, "examples");
-  // The five examples and users-live.ts.
-  assertEquals(target.files, 6);
+  // The five examples, the companion module of the host interface, and users-live.ts.
+  assertEquals(target.files, 7);
   assertEquals(target.samples.length, 2);
   assertEquals(target.pairs.length, 1);
   assert(target.samples.every((ms) => ms > 0));

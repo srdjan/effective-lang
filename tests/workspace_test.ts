@@ -1,7 +1,8 @@
 import { assertEquals } from "@std/assert";
 import type { ReadError, Result } from "../src/core/source.ts";
 import type { CliFs, DirectoryEntry, FileFailure } from "../src/host/io.ts";
-import { readWorkspace } from "../src/host/workspace.ts";
+import { readTargetInputs, readWorkspace } from "../src/host/workspace.ts";
+import { memoryIo } from "./cli_helpers.ts";
 
 /**
  * A file system with directory links. `files` maps real file paths to texts.
@@ -121,4 +122,16 @@ Deno.test("readWorkspace skips a directory that cannot be resolved", () => {
   );
   if (!read.ok) throw new Error(read.error);
   assertEquals([...read.value.values()].sort(), ["a", "{}"]);
+});
+
+Deno.test("readTargetInputs leaves out the generated modules of .eff and .effi files", () => {
+  const header = (source: string) =>
+    `// Generated from ${source} by the Effective compiler. Do not edit.\n`;
+  const m = memoryIo({
+    "/p/a.ts": `${header("a.eff")}export {};\n`,
+    "/p/h.effi.ts": `${header("h.effi")}export {};\n`,
+    "/p/host.ts": "export const host = 1;\n",
+  });
+  const result = readTargetInputs(m.io.fs, "/p");
+  assertEquals(result.ok && [...result.value.keys()], ["host.ts"]);
 });

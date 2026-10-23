@@ -19,7 +19,7 @@ import {
 import { runTsc } from "./tsc.ts";
 
 export interface BuildOptions {
-  /** Write `<module>.ts` and `<module>.ts.map` for each module without an error whose imported modules are also written. */
+  /** Write the generated file and its map for each module without an error whose imported modules are also written. */
   readonly write: boolean;
   /** Run the IR validator and report its diagnostics. */
   readonly validate: boolean;
@@ -65,7 +65,7 @@ export async function buildRevision(
   const lines: string[] = [];
   let removals: readonly ModuleRemoval[] = [];
 
-  const names = revision.effModuleNames();
+  const names = revision.moduleNames();
   const wanted = options.write || options.validate;
 
   // Validation reads the lowered IR of each module that lowered.

@@ -450,7 +450,7 @@ interface Side {
 
 function emitAll(revision: Revision): Result<string, M2Error> {
   const parts: string[] = [];
-  for (const name of revision.effModuleNames()) {
+  for (const name of revision.moduleNames()) {
     const emitted = revision.emitted(name);
     if (emitted === undefined) continue;
     if (!emitted.ok) {
