@@ -1,6 +1,8 @@
 # Nominal keyword plan
 
-Date: 2026-10-23. Base: `317d018` on local `main`. Status: complete on 2026-10-23. The user approved the plan. Section 8 records the validation findings. Compiler commits: d59b5bf (NM9), 9da2ebd and bd52a86 (NM10), 95c72b7 and 5cc0e63 (NM11), 76dc088 (NM12), 2db2c5a (NM13). Website commits: 4fdb6a2 and d97dacb (NM14).
+Date: 2026-10-23. Base: `317d018` on local `main`. Status: complete on 2026-10-23. The user approved the plan. Section 8 records the validation findings.
+
+Compiler commits: d59b5bf (NM9), 9da2ebd and bd52a86 (NM10), 95c72b7 and 5cc0e63 (NM11), 76dc088 (NM12), 2db2c5a (NM13). Website commits: 4fdb6a2 and d97dacb (NM14).
 
 This plan uses the ID prefix NM. NM1 to NM4 are the user's decisions. NM5 to NM8 are design rules that follow from them, and the user approves them with the plan. NM9 and later are work items.
 
