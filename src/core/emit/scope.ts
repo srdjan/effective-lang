@@ -466,20 +466,24 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
     }
   }
 
-  /** An opaque type of a companion module lives in the host module: import it from there. */
-  private importOwnOpaque(name: string): void {
+  /**
+   * An opaque type of an interface module lives in its host module, not in the
+   * companion module: import it from there.
+   */
+  private importOpaque(module: string, exported: string, local: string): void {
     for (const host of this.config.host.values()) {
-      if (normalizeRelative(host.interfacePath) !== this.source) continue;
+      const iface = normalizeRelative(host.interfacePath);
+      if (iface === undefined || moduleNameOf(iface) !== module) continue;
       const target = normalizeRelative(host.modulePath);
       if (target === undefined) break;
       const specifier = relativeSpecifier(this.path, target);
       const names = this.hostDeclarations.get(specifier) ??
         new Map<string, ImportedName>();
-      names.set(name, { local: name, typeOnly: true });
+      names.set(exported, { local, typeOnly: true });
       this.hostDeclarations.set(specifier, names);
       return;
     }
-    throw unsupported(`the interface ${this.source} has no host module`);
+    throw unsupported(`the interface ${module} has no host module`);
   }
 
   // -------------------------------------------------------------- allocation
@@ -684,7 +688,7 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
     const local = this.localDecls.get(id);
     if (local !== undefined) {
       if (local.kind === "type" && local.opaque === true) {
-        this.importOwnOpaque(local.name);
+        this.importOpaque(this.module, local.name, local.name);
       }
       return local.name;
     }
@@ -699,7 +703,12 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
     const exported = nameOfId(id);
     const name = this.fresh(exported);
     this.allocated.set(id, name);
-    this.addImport(moduleOfId(id), exported, name, this.isTypeOnly(id));
+    const foreign = this.typeLevelDeclaration(id);
+    if (foreign?.kind === "type" && foreign.opaque === true) {
+      this.importOpaque(moduleOfId(id), exported, name);
+    } else {
+      this.addImport(moduleOfId(id), exported, name, this.isTypeOnly(id));
+    }
     return name;
   }
 

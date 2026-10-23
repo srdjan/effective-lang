@@ -991,6 +991,22 @@ Deno.test("source code imports a host interface data type, error, and service fr
   assertEquals(text.includes('"./h.ts"'), false);
 });
 
+Deno.test("an opaque type that a module names without importing it comes from the host module", () => {
+  const text = emitFiles({
+    "effective.json":
+      '{ "host": { "db": { "interface": "./host.effi", "module": "./adapter.ts" } } }',
+    "host.effi":
+      "export opaque type Conn\nexport service Db { open(): Conn }\nexport provider DbLive provides Db\n",
+    "lib.eff":
+      'import { Conn, Db } from "host:db"\nexport const openIt = (): Conn uses Db.open => Db.open()\n',
+    "main.eff":
+      'import { openIt } from "./lib.eff"\nconst twice = () => {\n  const c = openIt()\n  c\n}\n',
+  }, ["main.eff"]).get("main")?.text ?? "";
+  assertStringIncludes(text, "const c: Conn = yield* openIt();");
+  assertStringIncludes(text, 'import { type Conn } from "./adapter.ts";');
+  assertEquals(text.includes("host.effi.ts"), false);
+});
+
 Deno.test("a provider with data results is wrapped, with a check for each data method", () => {
   const { text, start, end } = hostChecksMain();
   // The helper and the check constants come once, before the assertion.
