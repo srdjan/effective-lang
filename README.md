@@ -100,7 +100,7 @@ layout, the error fixture convention, and the format and lint scope.
 
 All parts of the Phase A plan, the language server plan, and the playground plan
 exist. The three application gates pass with existing language forms. A fourth
-application, order-lifecycle, is a witness for nominal data types and is not a
+application, order-lifecycle, is a witness for nominal types and is not a
 gate. [docs/status.md](docs/status.md) gives the project status, the application
 stopping rule, the open items, and the deferred gaps.
 

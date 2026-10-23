@@ -57,16 +57,16 @@ A quiet value is pure and has no failure and no requirement. When the left value
 
 ## Nominal types
 
-### Data type
+### Nominal type
 
-The nominal record type that a `data` declaration declares, such as `data User = { id: UserId, name: Name }`.
+The type that a `nominal` declaration declares, such as `nominal UserId = string` or `nominal User = { id: UserId, name: Name }`. A `type` declaration is structural: types with equal structure are interchangeable.
 
-A data type has its own identity and carries a runtime `_tag`. A structural record does not fit it, and it does not fit a structural record. A program builds a value with `User(record)` and gets the base record back with `unbrand`, which drops the tag. A `Brand<T>` cannot take a record base, so a nominal record is always a data type.
-_Avoid: record brand, nominal record type_
+A nominal type has its own identity. A program builds a value with the constructor, as in `UserId(s)` or `User(record)`. A nominal value fits its base type, and a base value does not fit the nominal type. A body that is a record after aliases unfold gives a nominal record with a runtime `_tag`. Any other body lowers to an Effect brand, which the compiler emits and the source does not name.
+_Avoid: data type, brand type, record brand_
 
 ### Nominal domain
 
-The pattern domain of a `match` subject whose members are all data types or errors, after aliases are unfolded.
+The pattern domain of a `match` subject whose members are all nominal records or errors, after aliases are unfolded.
 
 Arms name the members, as in `Circle(c)`, and coverage needs one arm for each member or `_`. A record pattern does not apply to a nominal domain. A subject that mixes nominal and structural members has no domain, and the checker reports it.
 
@@ -74,7 +74,7 @@ Arms name the members, as in `Circle(c)`, and coverage needs one arm for each me
 
 The generated TypeScript module of a host interface file: `host.effi` gives `host.effi.ts`.
 
-It holds the types, errors, data types, and services of the interface, so the compiler owns each tag string. Source modules and the host module import those values from it. The host module supplies only the opaque types and the providers.
+It holds the types, nominal types, errors, and services of the interface, so the compiler owns each tag string. Source modules and the host module import those values from it. The host module supplies only the opaque types and the providers.
 _Avoid: interface module, host types module_
 
 ## Verification
