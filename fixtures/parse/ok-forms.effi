@@ -4,7 +4,7 @@ import { UserMissing } from "../users.eff"
 
 type Config = { url: string }
 error Boom = { message: string }
-data Row = { id: int, label?: string }
+nominal Row = { id: int, label?: string }
 
 service Clock {
   now(): int

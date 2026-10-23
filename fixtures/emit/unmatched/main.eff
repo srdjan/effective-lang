@@ -4,8 +4,8 @@ type Text = string
 type Status = "pending" | "paid"
 type Figure = { kind: "circle", radius: Text } | { kind: "square", side: Text }
 
-export data Circle = { radius: Text }
-export data Square = { side: Text }
+export nominal Circle = { radius: Text }
+export nominal Square = { side: Text }
 export type Shape = Circle | Square
 
 export service Names { label(): Text }

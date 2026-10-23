@@ -1,5 +1,5 @@
-type Count = Brand<int>
-type Price = Brand<number>
+nominal Count = int
+nominal Price = number
 
 service Counter {
   read(): Count

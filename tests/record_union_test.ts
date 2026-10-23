@@ -60,8 +60,8 @@ const read = (x: T): Int => match x { { kind: "a", ...a } => a.value, _ => 0 }
 Deno.test("record matching retains erased brands and unknown discriminators", () => {
   for (const tag of ["Tag", "Nested", "Alias", "unknown"]) {
     const prelude = `
-type Tag = Brand<string>
-type Nested = Brand<Tag>
+nominal Tag = string
+nominal Nested = Tag
 type Alias = Tag | "other"
 type T = { kind: "a", value: Int } | { kind: ${tag}, value: Text }
 `;
@@ -80,7 +80,7 @@ type T = { kind: "a", value: Int } | { kind: ${tag}, value: Text }
 for (const tag of ["Text", "Tag", "unknown"]) {
   Deno.test(`the validator independently rejects an undersized ${tag} record binding`, () => {
     const text = `
-type Tag = Brand<string>
+nominal Tag = string
 type T = { kind: "a", value: Int } | { kind: ${tag}, value: Text }
 const read = (x: T): Int | Text => match x { { kind: "a", ...a } => a.value, _ => 0 }
 `;

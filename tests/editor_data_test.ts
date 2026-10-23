@@ -10,8 +10,8 @@ import { applySourceEdits, renameAt } from "../src/core/editor_rename.ts";
 import { semanticClassifications } from "../src/core/editor_tokens.ts";
 
 const TEXT = `type Text = string
-export data Circle = { radius: Text }
-export data Square = { side: Text }
+export nominal Circle = { radius: Text }
+export nominal Square = { side: Text }
 export error Broken = { reason: Text }
 export type Shape = Circle | Square
 export const make = (): Shape => Circle({ radius: "r" })
@@ -52,7 +52,7 @@ const ANNOTATION = offsetOf("c: Circle");
 Deno.test("semantic tokens give a data type the class kind and the word data the keyword kind", () => {
   const tokens = semanticClassifications(revision, "m.eff", TEXT);
   const at = (start: number) => tokens.find((t) => t.span.start === start);
-  assertEquals(at(offsetOf("data Circle"))?.type, "keyword");
+  assertEquals(at(offsetOf("nominal Circle"))?.type, "keyword");
   assertEquals(at(DECLARATION)?.type, "class");
   assertEquals(at(DECLARATION)?.modifiers, ["declaration", "readonly"]);
   assertEquals(at(CALL)?.type, "class");
@@ -64,11 +64,11 @@ Deno.test("semantic tokens give a data type the class kind and the word data the
 });
 
 Deno.test("semantic tokens mark a data declaration in broken text through the lexical fallback", () => {
-  const text = "export data Fresh = { n: int }\nconst z = (\n";
+  const text = "export nominal Fresh = { n: int }\nconst z = (\n";
   const tokens = semanticClassifications(revision, "m.eff", text);
   const at = (word: string) =>
     tokens.find((t) => t.span.start === text.indexOf(word));
-  assertEquals(at("data")?.type, "keyword");
+  assertEquals(at("nominal")?.type, "keyword");
   assertEquals(at("Fresh")?.type, "class");
   assertEquals(at("Fresh")?.modifiers, ["declaration", "readonly"]);
 });

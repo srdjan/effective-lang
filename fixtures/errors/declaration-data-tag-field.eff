@@ -1,4 +1,0 @@
-// error: declaration/009
-data Broken = { _tag: string, name: string }
-
-type Fine = { _tag: string }

@@ -2,11 +2,11 @@ type Text = string
 
 type Record = { kind: "c", radius: Text }
 
-type Id = Brand<Text>
+nominal Id = Text
 
-data Circle = { radius: Text }
+nominal Circle = { radius: Text }
 
-data Square = { side: Text }
+nominal Square = { side: Text }
 
 type Shape = Circle | Square
 

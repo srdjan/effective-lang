@@ -4,7 +4,7 @@ import { Users } from "host:providers"
 
 /* A block comment
    over two lines. */
-type Id = Brand<string>
+nominal Id = string
 type Status = "pending" | "paid"
 type Count = 1 | 2
 type Maybe = Option<Id>
@@ -22,9 +22,9 @@ error NotFound = { id: Id }
 error Empty = {}
 export error Exported2 = { reason: string, }
 
-data Account = { id: Id, nick?: string }
-data Marker = {}
-export data Exported3 = { reason: string, }
+nominal Account = { id: Id, nick?: string }
+nominal Marker = {}
+export nominal Exported3 = { reason: string, }
 const data = 1
 
 service Store {

@@ -3216,9 +3216,9 @@ Deno.test("a data value with a missing optional prototype-named field nests in a
       `${dir}/main.eff`,
       [
         "type Text = string",
-        "export data Tok = { label: Text, toString?: Text }",
+        "export nominal Tok = { label: Text, toString?: Text }",
         "export type Toks = Tok[]",
-        "export data Box = { tok: Tok, all: Toks, maybe: Option<Tok> }",
+        "export nominal Box = { tok: Tok, all: Toks, maybe: Option<Tok> }",
         "export const tok = (l: Text): Tok => Tok({ label: l })",
         'export const box = (): Box => Box({ tok: tok("a"), all: [tok("b")], maybe: Some(tok("c")) })',
         "",
@@ -3350,7 +3350,7 @@ Deno.test("a pure codec over a data type decodes into data and encodes back", as
       `${dir}/main.eff`,
       [
         "type Text = string",
-        "export data Name = { text: Text }",
+        "export nominal Name = { text: Text }",
         "export const names: Codec<Name, Text> = codec((text: Text): Name => Name({ text }), (name: Name): Text => name.text)",
         "export const parse = (input: unknown): Option<Name> => decode(names, input)",
         "export const print = (name: Name): Option<Text> => encode(names, name)",
@@ -5120,7 +5120,7 @@ Deno.test("a host check accepts a data value with a missing optional prototype-n
         '{ "host": { "h": { "interface": "./h.effi", "module": "./h.ts" } } }',
       "h.effi": [
         "export type Text = string",
-        "export data Tok = { label: Text, toString?: Text }",
+        "export nominal Tok = { label: Text, toString?: Text }",
         "export service Auth { token(): Tok }",
         "export provider AuthLive provides Auth",
         "",

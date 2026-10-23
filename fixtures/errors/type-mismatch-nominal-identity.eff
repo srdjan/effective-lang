@@ -1,8 +1,8 @@
-type UserId = Brand<string>
+nominal UserId = string
 
-data User = { id: UserId, name: string, nick?: string }
+nominal User = { id: UserId, name: string, nick?: string }
 
-data Twin = { id: UserId, name: string, nick?: string }
+nominal Twin = { id: UserId, name: string, nick?: string }
 
 type Dog = { id: UserId, name: string, nick?: string }
 

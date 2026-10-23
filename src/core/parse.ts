@@ -72,7 +72,7 @@ const DECL_WORDS: ReadonlySet<string> = new Set([
   "type",
   "opaque",
   "error",
-  "data",
+  "nominal",
   "service",
   "provider",
 ]);
@@ -743,8 +743,11 @@ class Parser {
       } else if (word === "opaque") {
         kind = SyntaxKind.TypeDecl;
         this.parseOpaqueTypeBody();
-      } else if (word === "error" || word === "data") {
-        kind = word === "error" ? SyntaxKind.ErrorDecl : SyntaxKind.DataDecl;
+      } else if (word === "nominal") {
+        kind = SyntaxKind.DataDecl;
+        this.parseTypeBody();
+      } else if (word === "error") {
+        kind = SyntaxKind.ErrorDecl;
         this.parseErrorBody();
       } else if (word === "service") {
         kind = SyntaxKind.ServiceDecl;
@@ -785,7 +788,7 @@ class Parser {
   }
 
   private parseTypeBody(): void {
-    this.tok(); // type
+    this.tok(); // type or nominal
     this.parseName("binding");
     if (this.kind() === TokenKind.Eq) {
       this.tok();

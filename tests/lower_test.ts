@@ -159,7 +159,7 @@ Deno.test("a host interface lowers its declarations, exports each one, and valid
     "host.effi": `export opaque type Conn
 export type Text = string
 error Boom = { message: Text }
-export data Token = { id: Text }
+export nominal Token = { id: Text }
 export service Clock { now(): Text fails Boom }
 export provider ClockLive provides Clock fails Boom
 `,
@@ -523,7 +523,7 @@ type Int = int
 // ------------------------------------------------------------------ every node kind
 
 const WIDE = `
-type Id = Brand<string>
+nominal Id = string
 type Shape = { kind: "circle", r: number } | { kind: "square", side: number }
 type Cfg = { name: string, note?: string }
 error Boom = { code: int }

@@ -781,13 +781,13 @@ class BodyChecker
         "type-mismatch/010",
         `\`${
           shortName(id)
-        }\` is a type alias, not a brand; only a brand can be used as a constructor`,
+        }\` is a type alias, not a nominal type; only a nominal type can be used as a constructor`,
         node,
       );
       return this.finish(node, this.table.error, combine(infos));
     }
     this.fact(node, { kind: "brand-construction", brand: id });
-    return this.constructFrom(node, id, base, "brand", args);
+    return this.constructFrom(node, id, base, "nominal type", args);
   }
 
   private dataConstruction(
@@ -797,15 +797,15 @@ class BodyChecker
     args: readonly Arg[],
   ): NodeInfo {
     this.fact(node, { kind: "data-construction", data: id });
-    return this.constructFrom(node, id, record, "data type", args);
+    return this.constructFrom(node, id, record, "nominal type", args);
   }
 
-  /** The single argument of a brand or data constructor must fit the base type. */
+  /** The single argument of a nominal constructor must fit the base type. */
   private constructFrom(
     node: NodeId,
     id: TypeId,
     base: TypeRef,
-    noun: "brand" | "data type",
+    noun: "nominal type",
     args: readonly Arg[],
   ): NodeInfo {
     if (args.length !== 1) {
@@ -1286,7 +1286,7 @@ class BodyChecker
     return this.finish(node, read.type, baseInfo);
   }
 
-  /** True for a data type or an error whose body did not parse. */
+  /** True for a nominal type or an error whose body did not parse. */
   private hasErrorRecord(ref: TypeRef): boolean {
     const node = this.table.node(this.table.unfold(ref));
     if (node.kind !== "named") return false;
@@ -1296,7 +1296,7 @@ class BodyChecker
     return record !== undefined && this.isError(record);
   }
 
-  /** The record fields of a type that is a record, a named error, or a data type. */
+  /** The record fields of a type that is a record, a named error, or a nominal record. */
   private recordFields(ref: TypeRef):
     | readonly {
       readonly name: string;
@@ -1315,7 +1315,7 @@ class BodyChecker
           : this.table.node(record);
         return recordNode?.kind === "record" ? recordNode.fields : undefined;
       }
-      // A data type has the fields of its base record.
+      // A nominal record has the fields of its base record.
       const base = this.table.dataRecordOf(node.id);
       if (base !== undefined) return this.recordFields(base);
     }
@@ -2032,7 +2032,7 @@ class BodyChecker
         "pattern/004",
         `a match cannot take a value of type ${
           this.show(subject.type)
-        }; version 0 matches options, errors, data types, tagged records, literals, and primitives`,
+        }; version 0 matches options, errors, nominal records, tagged records, literals, and primitives`,
         subjectNode,
       );
     } else if (domain.kind === "mixed") {

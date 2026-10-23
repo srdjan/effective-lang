@@ -36,7 +36,7 @@ interface HighlightRange {
 const DECLARATION_WORDS: ReadonlySet<string> = new Set([
   "type",
   "error",
-  "data",
+  "nominal",
   "service",
   "provider",
 ]);

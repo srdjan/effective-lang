@@ -1,0 +1,13 @@
+type Counter = { count: Ref<int> }
+
+// error: declaration/015
+nominal Direct = Ref<int>
+
+// error: declaration/015
+nominal Wrapped = Option<Ref<int>>
+
+// error: declaration/015
+nominal ViaAlias = Counter
+
+// error: declaration/015
+nominal Callback = (n: int) => int

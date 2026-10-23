@@ -88,7 +88,7 @@ const ALIAS_LINES: readonly string[] = [
 
 const ALIASES = ALIAS_LINES.join("\n");
 
-const BASE = `export type Id = Brand<string>
+const BASE = `export nominal Id = string
 export type Status = "open" | "done"
 export type Item = {
   id: Id,
@@ -310,9 +310,9 @@ const TEMPLATES: readonly Template[] = [
   note: Option<string>
 }`,
   ],
-  // A brand type and an error type.
+  // A nominal type and an error type.
   ({ n }) => [
-    `export type Tag${n} = Brand<string>`,
+    `export nominal Tag${n} = string`,
     `export error Fail${n} = { message: string, code: int }`,
   ],
   // A function type alias and a function that returns a closure.

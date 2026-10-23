@@ -453,8 +453,8 @@ type Pair = { left: Id, right: string }
 
 Deno.test("brands are nominal in the table", () => {
   const project = checkText(`
-type A = Brand<string>
-type B = Brand<string>
+nominal A = string
+nominal B = string
 `);
   const table = project.table;
   const a = table.named("type:m#A");

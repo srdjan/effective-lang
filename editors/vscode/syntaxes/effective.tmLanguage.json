@@ -67,7 +67,7 @@
         },
         {
           "name": "storage.type.declaration.effective",
-          "match": "\\bdata\\b(?=\\s+[A-Za-z_$][A-Za-z0-9_$]*\\s*=)"
+          "match": "\\bnominal\\b(?=\\s+[A-Za-z_$][A-Za-z0-9_$]*\\s*=)"
         },
         {
           "name": "keyword.other.clause.effective",

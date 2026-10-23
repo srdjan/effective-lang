@@ -1,19 +1,19 @@
-type UserId = Brand<string>
+nominal UserId = string
 type Text = string
 
-export data User = { id: UserId, name: Text, nick?: Text }
+export nominal User = { id: UserId, name: Text, nick?: Text }
 
-data Twin = { id: UserId, name: Text, nick?: Text }
+nominal Twin = { id: UserId, name: Text, nick?: Text }
 
-export data Marker = {}
+export nominal Marker = {}
 
 export error Rejected = { user: User, reason: Text }
 
-data Pin = { id: UserId }
+nominal Pin = { id: UserId }
 
-export data Circle = { radius: Text }
+export nominal Circle = { radius: Text }
 
-export data Square = { side: Text }
+export nominal Square = { side: Text }
 
 export type Shape = Circle | Square
 

@@ -105,7 +105,7 @@ const USERS = "users.eff";
 
 Deno.test("incremental alias and brand edits equal fresh checks across dependents and removal", () => {
   const alias = "export type N = int\nexport const n: N = 1\n";
-  const brand = "export type N = Brand<int>\nexport const n: N = 1\n";
+  const brand = "export nominal N = int\nexport const n: N = 1\n";
   const files = {
     "effective.json": "{}",
     "a.eff": alias,

@@ -96,19 +96,19 @@ const ROWS: readonly SiteRow[] = [
   {
     builtin: "brand constructor",
     change: "give the brand a second argument",
-    valid: 'type UserId = Brand<string>\nconst f = () => UserId("a")\n',
-    invalid: 'type UserId = Brand<string>\nconst f = () => UserId("a", "b")\n',
+    valid: 'nominal UserId = string\nconst f = () => UserId("a")\n',
+    invalid: 'nominal UserId = string\nconst f = () => UserId("a", "b")\n',
     code: "type-mismatch/004",
-    fragment: "the brand `UserId` takes one argument, but 2 are given",
+    fragment: "the nominal type `UserId` takes one argument, but 2 are given",
   },
   {
     builtin: "unbrand",
     change: "unbrand an opaque host handle instead of a brand",
     host: true,
     valid:
-      'import { Handle, Text } from "host:files"\ntype UserId = Brand<string>\nconst f = (u: UserId): Text => unbrand(u)\n',
+      'import { Handle, Text } from "host:files"\nnominal UserId = string\nconst f = (u: UserId): Text => unbrand(u)\n',
     invalid:
-      'import { Handle, Text } from "host:files"\ntype UserId = Brand<string>\nconst f = (u: Handle): Text => unbrand(u)\n',
+      'import { Handle, Text } from "host:files"\nnominal UserId = string\nconst f = (u: Handle): Text => unbrand(u)\n',
     code: "type-mismatch/010",
     fragment: "an opaque type cannot be unbranded in source",
   },

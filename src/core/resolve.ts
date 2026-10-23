@@ -161,7 +161,6 @@ const BUILTIN_TYPES = [
   "never",
   "unknown",
   "Option",
-  "Brand",
   "Ref",
   "RetrySchedule",
   "ScheduleInput",
@@ -784,7 +783,7 @@ class Resolver {
 
   /**
    * A constructor name in a pattern: `Some`, `None`, an error, or a type. The
-   * checker tells a data type from an alias or a brand.
+   * checker tells a nominal type from an alias.
    */
   private ctorRef(nameNode: NodeId): void {
     const name = nameTextOf(this.tree, nameNode);

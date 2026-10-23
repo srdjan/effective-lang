@@ -13,4 +13,4 @@ type C = int<string>
 type D = Count<int>
 
 // error: type-mismatch/001
-type E = Brand<string, int>
+nominal E = Option<string, int>

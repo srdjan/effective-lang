@@ -1,6 +1,6 @@
 type Text = string
 
-data Circle = { radius: Text }
+nominal Circle = { radius: Text }
 
 error Broken = { reason: Text }
 

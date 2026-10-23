@@ -746,8 +746,8 @@ Deno.test("a match over data and error types tests the tag of each arm and throw
 Deno.test("a match whose last arm is _ keeps the else branch and needs no helper", () => {
   const text = oneModule(`
 type Text = string
-export data Circle = { radius: Text }
-export data Square = { side: Text }
+export nominal Circle = { radius: Text }
+export nominal Square = { side: Text }
 export type Shape = Circle | Square
 export const radius = (shape: Shape): Text =>
   match shape {
@@ -762,8 +762,8 @@ export const radius = (shape: Shape): Text =>
 Deno.test("the helper name of a failed match is a fresh name", () => {
   const text = oneModule(`
 type Text = string
-export data Circle = { radius: Text }
-export data Square = { side: Text }
+export nominal Circle = { radius: Text }
+export nominal Square = { side: Text }
 export type Shape = Circle | Square
 export const $unmatched = (shape: Shape): Text =>
   match shape {
@@ -793,7 +793,7 @@ Deno.test("a literal result in a generated function is as const", () => {
 Deno.test("a data type with field names from Object.prototype keeps them valid", () => {
   const output = oneModule(`
 type Text = string
-export data Odd = { constructor: Text, __proto__: Text, toString?: Text }
+export nominal Odd = { constructor: Text, __proto__: Text, toString?: Text }
 export const make = (): Odd => Odd({ constructor: "c", __proto__: "p" })
 export const ts = (o: Odd): Option<Text> => o.toString
 `);

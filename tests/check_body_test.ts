@@ -79,7 +79,7 @@ function shortIds(ids: readonly string[]): string[] {
 Deno.test("mapGroups checks primitive key classes and direct terminal group uses", () => {
   const project = checkText(`
 type Int = int
-type Key = Brand<string>
+nominal Key = string
 type Alias = Key
 type Choice = "a" | "b"
 type Bool = boolean
@@ -135,8 +135,8 @@ Deno.test("mapGroups rejects structural, mixed, general number, and impure keys"
   ) {
     const project = checkText(`type Int = int
 type Num = number
-type A = Brand<string>
-type B = Brand<string>
+nominal A = string
+nominal B = string
 error Stop = {}
 service Read { key(n: Int): Int }
 const bad = (source: Stream<Int>) => mapGroups(source, ${key}, (key, group) => key, { bufferSize: 1 })`);
@@ -2478,8 +2478,8 @@ type Bool = boolean
 
 Deno.test("two values of one numeric brand compare, add, and subtract", () => {
   const source = `
-type Count = Brand<int>
-type Price = Brand<number>
+nominal Count = int
+nominal Price = number
 const sum = (a: Count, b: Count): Count => a + b
 const diff = (a: Count, b: Count): Count => a - b
 const below = (a: Count, b: Count): Bool => a < b
@@ -2504,9 +2504,9 @@ type Bool = boolean
 
 Deno.test("a brand operator rejects multiplication, division, a plain number, another brand, and a string brand", () => {
   const project = checkText(`
-type Count = Brand<int>
-type Price = Brand<number>
-type Name = Brand<string>
+nominal Count = int
+nominal Price = number
+nominal Name = string
 const times = (a: Count, b: Count): Count => a * b
 const divide = (a: Count, b: Count): Count => a / b
 const plain = (a: Count): Count => a + 1
@@ -2532,8 +2532,8 @@ type Bool = boolean
 
 Deno.test("equality takes compatible primitives, literal unions, and matching brands, and rejects records", () => {
   const project = checkText(`
-type Id = Brand<string>
-type Other = Brand<string>
+nominal Id = string
+nominal Other = string
 type Point = { x: int }
 type Status = "a" | "b"
 const a = (x: Int, y: Num): Bool => x === y
@@ -2641,7 +2641,7 @@ type Text = string
 
 Deno.test("brand construction and unbrand follow the nominal rules", () => {
   const project = checkText(`
-type Id = Brand<string>
+nominal Id = string
 type Name = string
 const a = (s: Text): Id => Id(s)
 const b = (i: Id): Text => unbrand(i)
@@ -3376,7 +3376,7 @@ type Int = int
 
 Deno.test("a service stage with extra arguments and a brand stage are performs and constructions", () => {
   const project = checkText(`
-type Id = Brand<string>
+nominal Id = string
 service S { put(a: Int, b: Int): void }
 const f = (n: Int): void uses S.put => n |> S.put(2)
 const g = (s: Text): Id => s |> Id
@@ -3417,8 +3417,8 @@ Deno.test("a chain of 5000 aliases gives declaration/012 and no exception", () =
 // ------------------------------------------------------------------ nominal records
 
 const NOMINAL_RECORDS = `
-type UserId = Brand<string>
-data User = { id: UserId, name: string, active: boolean, nickname?: string }
+nominal UserId = string
+nominal User = { id: UserId, name: string, active: boolean, nickname?: string }
 type Dog = { id: UserId, name: string, active: boolean, nickname?: string }
 const nameOf = (user: User): Text => user.name
 const nick = (user: User): Text =>
@@ -3464,11 +3464,11 @@ const owned = (user: User): User => ({ ...user, owner: "x" })
 // ------------------------------------------------------------------ data types
 
 const DATA_TYPES = `
-type UserId = Brand<string>
+nominal UserId = string
 type Text = string
-data User = { id: UserId, name: Text, nick?: Text }
-data Twin = { id: UserId, name: Text, nick?: Text }
-data Marker = {}
+nominal User = { id: UserId, name: Text, nick?: Text }
+nominal Twin = { id: UserId, name: Text, nick?: Text }
+nominal Marker = {}
 type Dog = { id: UserId, name: Text, nick?: Text }
 const user = (): User => User({ id: UserId("u"), name: "Ann" })
 `;
@@ -3523,25 +3523,25 @@ const right = (u: User): Twin => Twin(unbrand(u))
   assertEquals(project.diagnostics[0].message.includes("Twin"), true);
 });
 
-Deno.test("a brand base cannot be a record, a data type, or a union with one", () => {
+Deno.test("a nominal body cannot hold a nominal record or a union with a record", () => {
   const project = checkText(`
 type Text = string
 type Plain = { id: Text }
-data Row = { id: Text }
-type FromRecord = Brand<{ id: Text }>
-type FromAlias = Brand<Plain>
-type FromData = Brand<Row>
-type FromUnion = Brand<Row | Text>
-type FromAliasLater = Brand<Later>
+nominal Row = { id: Text }
+nominal FromRecord = { id: Text }
+nominal FromAlias = Plain
+nominal FromData = Row
+nominal FromUnion = Row | Text
+nominal FromAliasLater = Later
 type Later = Plain | Text
-type FromString = Brand<Text>
-type FromArray = Brand<Plain[]>
-type FromLiterals = Brand<"a" | "b">
-type FromOption = Brand<Option<Plain>>
-type FromBrand = Brand<FromString>
+nominal FromString = Text
+nominal FromArray = Plain[]
+nominal FromLiterals = "a" | "b"
+nominal FromOption = Option<Plain>
+nominal FromBrand = FromString
 `);
-  assertEquals(codes(project), Array(5).fill("declaration/014"));
-  assert(project.diagnostics[0].message.includes("`data`"));
+  assertEquals(codes(project), Array(3).fill("declaration/014"));
+  assert(project.diagnostics[0].message.includes("declare each record alone"));
 });
 
 Deno.test("a data constructor takes one argument", () => {
@@ -3553,7 +3553,7 @@ const wrong = (): Marker => Marker()
 
 Deno.test("a data field named _tag is rejected, as it is in an error", () => {
   const project = checkText(`
-data Tagged = { _tag: string }
+nominal Tagged = { _tag: string }
 error Failed = { _tag: string }
 `);
   assertEquals(codes(project), ["declaration/009", "declaration/009"]);
@@ -3577,11 +3577,11 @@ const wrong = (u: User): Text => u.owner
 const RECURSIVE_DATA = `
 type Text = string
 type Count = int
-data Tree = { label: Text, children: Tree[] }
-data Forest = { first: Option<Node> }
-data Node = { rest: Forest }
-data Cons = { head: Count, tail: List }
-data Nil = {}
+nominal Tree = { label: Text, children: Tree[] }
+nominal Forest = { first: Option<Node> }
+nominal Node = { rest: Forest }
+nominal Cons = { head: Count, tail: List }
+nominal Nil = {}
 type List = Cons | Nil
 `;
 
@@ -3605,11 +3605,11 @@ const forestSchema: Schema<Forest> = schema()
 Deno.test("a cycle with no base case keeps the recursion rejection", () => {
   for (
     const text of [
-      "data Loop = { next: Loop }",
-      "data A = { b: B }\ndata B = { a: A }",
-      "data Left = { next: Left | Right }\ndata Right = { next: Left }",
-      "type First = Second\ntype Second = First | Anchor\ndata Anchor = { next: Option<Second> }",
-      "data Wraps = { cause: Option<Failure> }\nerror Failure = { inner: Option<Wraps> }",
+      "nominal Loop = { next: Loop }",
+      "nominal A = { b: B }\nnominal B = { a: A }",
+      "nominal Left = { next: Left | Right }\nnominal Right = { next: Left }",
+      "type First = Second\ntype Second = First | Anchor\nnominal Anchor = { next: Option<Second> }",
+      "nominal Wraps = { cause: Option<Failure> }\nerror Failure = { inner: Option<Wraps> }",
     ]
   ) {
     assertEquals(codes(checkText(text)), ["declaration/007"], text);
@@ -3626,13 +3626,13 @@ type Pong = Ping
 
 const NAME_MATCH = `
 type Text = string
-data Circle = { radius: Text }
-data Square = { side: Text }
-data Dot = {}
+nominal Circle = { radius: Text }
+nominal Square = { side: Text }
+nominal Dot = {}
 error Broken = { reason: Text }
 type Shape = Circle | Square
 type Record = { kind: "c", radius: Text }
-type Id = Brand<Text>
+nominal Id = Text
 `;
 
 Deno.test("a match over data and error types binds each member type and covers by name", () => {
@@ -3690,7 +3690,7 @@ const afterWildcard = (shape: Shape): Text =>
   assert(project.diagnostics[0].message.includes("Square(_)"));
 });
 
-Deno.test("a match over names rejects a record pattern, a mixed subject, an alias, and a brand", () => {
+Deno.test("a match over names rejects a record pattern, a mixed subject, an alias, and a nominal type over a primitive", () => {
   const project = checkText(`${NAME_MATCH}
 const byRecord = (shape: Shape): Text =>
   match shape {
@@ -3722,8 +3722,8 @@ const byBrand = (shape: Shape): Text =>
   assertEquals(
     project.diagnostics.map((d) => d.message.replace(/`/g, "")).slice(2),
     [
-      "Record is a type alias, not a data type; a constructor pattern names a data type or an error",
-      "Id is a brand, not a data type; a constructor pattern names a data type or an error",
+      "Record is a type alias, not a nominal type; a constructor pattern names a nominal type or an error",
+      "Id is a nominal type with a non-record body; a constructor pattern names a nominal record or an error",
     ],
   );
 });
@@ -3747,11 +3747,11 @@ const guarded = (): Text fails Broken =>
   assertEquals(codes(project), ["unknown-name/004"]);
 });
 
-Deno.test("a data or error body that did not parse causes no cascade", () => {
+Deno.test("a nominal or error body that did not parse causes no cascade", () => {
   const project = checkText(`
 type Name = string
 type Fields = { name: Name }
-data Account = Fields
+nominal Account = ,
 error Boom = Fields
 export const a = (account: Account): Fields => unbrand(account)
 export const b = (account: Account): Name => account.name
@@ -3766,10 +3766,10 @@ Deno.test("a data or error field cannot hold a function type at any depth", () =
   const project = checkText(`
 type Count = int
 type Step = (n: Count) => Count
-data Direct = { run: Step }
+nominal Direct = { run: Step }
 error Failed = { run: Step }
-data Nested = { a: Option<Step>, b: Step[], c: [Count, Step], d: { e: Step } }
-data Aliased = { steps: Later }
+nominal Nested = { a: Option<Step>, b: Step[], c: [Count, Step], d: { e: Step } }
+nominal Aliased = { steps: Later }
 type Later = Step[]
 `);
   assertEquals(codes(project), Array(7).fill("declaration/015"));
@@ -3778,8 +3778,8 @@ type Later = Step[]
 Deno.test("a data or error field that names another data type with a function field is not reported twice", () => {
   const project = checkText(`
 type Count = int
-data Inner = { run: (n: Count) => Count }
-data Outer = { inner: Inner }
+nominal Inner = { run: (n: Count) => Count }
+nominal Outer = { inner: Inner }
 error Wrap = { inner: Inner }
 `);
   assertEquals(codes(project), ["declaration/015"]);
@@ -3791,7 +3791,7 @@ Deno.test("a function type stays legal in a record and in a brand-free alias", (
 type Count = int
 type Step = (n: Count) => Count
 type Plain = { run: Step }
-data Fine = { count: Count }
+nominal Fine = { count: Count }
 `);
   assertEquals(messages(project), []);
 });
@@ -3812,7 +3812,7 @@ Deno.test("a data type is legal in a host interface file", () => {
       host: { rows: { interface: "./rows.effi", module: "./rows.ts" } },
     }),
     "rows.effi": `
-export data Row = { id: string, total: int }
+export nominal Row = { id: string, total: int }
 export service Rows { next(): Row }
 `,
     "main.eff": `

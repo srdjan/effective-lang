@@ -21,7 +21,7 @@ function emitted(source: string): string {
 }
 
 Deno.test("an identity Schema over a brand or an error wraps the derived Schema in toType", () => {
-  const output = emitted(`type UserId = Brand<string>
+  const output = emitted(`nominal UserId = string
 error Stop = { reason: string }
 const userId: Schema<UserId> = schema()
 const stop: Schema<Stop> = schema()
@@ -31,7 +31,7 @@ const stop: Schema<Stop> = schema()
 });
 
 Deno.test("a recursive alias constant keeps its natural Schema and names its encoded mirror type", () => {
-  const output = emitted(`type UserId = Brand<string>
+  const output = emitted(`nominal UserId = string
 error Stop = { reason: string }
 type Node = { id: UserId, error: Stop, kids: Node[] }
 const node: Schema<Node> = schema()

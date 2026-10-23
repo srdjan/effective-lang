@@ -61,9 +61,9 @@ function sources(width: number): Record<string, string> {
       `type Box = { ${field}?: string }\nexport const read = (box: Box): Option<Text> => box.${field}`,
     nested:
       `type Box = { nested: { ${field}: string } }\nexport const read = (box: Box): Text => box.nested.${field}`,
-    brand: `type ${
+    brand: `nominal ${
       identifier("Brand", width)
-    } = Brand<string>\nexport const read = (text: Text): ${
+    } = string\nexport const read = (text: Text): ${
       identifier("Brand", width)
     } => ${identifier("Brand", width)}(text)`,
     schemamake: `export const read = (${

@@ -155,7 +155,7 @@ export const DIAGNOSTIC_CODES = {
   "type-mismatch/010": {
     category: "type-mismatch",
     description:
-      "A prelude function or constructor gets an argument that it does not accept: fail, unbrand, retry, provide, a brand constructor, or a collection builtin.",
+      "A prelude function or constructor gets an argument that it does not accept: fail, unbrand, retry, provide, a nominal constructor, or a collection builtin.",
   },
   "type-mismatch/011": {
     category: "type-mismatch",
@@ -259,17 +259,12 @@ export const DIAGNOSTIC_CODES = {
   "declaration/007": {
     category: "declaration",
     description:
-      "A type definition refers to itself, directly or through other aliases, brands, or errors.",
-  },
-  "declaration/008": {
-    category: "declaration",
-    description:
-      "Brand<T> appears somewhere other than as the whole body of a type declaration.",
+      "A type definition refers to itself, directly or through other aliases, nominal types, or errors.",
   },
   "declaration/009": {
     category: "declaration",
     description:
-      "A data or error declaration has a field named _tag, which generated tags reserve.",
+      "A nominal or error declaration has a field named _tag, which generated tags reserve. A nominal type over a record alias has the field through the alias.",
   },
   "declaration/010": {
     category: "declaration",
@@ -288,22 +283,22 @@ export const DIAGNOSTIC_CODES = {
   "declaration/013": {
     category: "declaration",
     description:
-      "A primitive type (string, int, number, boolean, or a literal type) appears outside the body of a type, data, or error declaration.",
+      "A primitive type (string, int, number, boolean, or a literal type) appears outside the body of a type, nominal, or error declaration.",
   },
   "declaration/014": {
     category: "declaration",
     description:
-      "The base of a Brand type is a record, a data type, or a union with such a member. Declare a nominal record with data.",
+      "A nominal body is a nominal record, or a union that has a record or a nominal record as a member. Declare each record alone.",
   },
   "declaration/015": {
     category: "declaration",
     description:
-      "A data or error declaration has a field whose type contains a function or deferred type (Effect, Fiber, Stream, Sink, Schedule, RetrySchedule, Ref, Codec, Schema, provider, or scope), directly or through an alias. The emitter has no schema for such a type.",
+      "A nominal or error declaration has a field, or a nominal declaration has a body, whose type contains a function or deferred type (Effect, Fiber, Stream, Sink, Schedule, RetrySchedule, Ref, Codec, Schema, provider, or scope), directly or through an alias. The emitter has no schema for such a type.",
   },
   "declaration/016": {
     category: "declaration",
     description:
-      "A data or error field, or a brand base, contains an opaque type, directly or through an alias. An opaque type has no schema, so the emitter cannot build one for the declaration.",
+      "A nominal or error field, or the body of a nominal type, contains an opaque type, directly or through an alias. An opaque type has no schema, so the emitter cannot build one for the declaration.",
   },
   "module/001": {
     category: "module",

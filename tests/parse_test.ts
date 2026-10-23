@@ -273,7 +273,7 @@ Deno.test("type forms", () => {
     "string",
     "Id",
     "Option<int>",
-    "Brand<string>",
+    "Ref<string>",
     "Option<Option<int>>",
     "int[]",
     "int[][]",
@@ -507,5 +507,35 @@ Deno.test("too deep a nesting does not hide the later declarations", () => {
   assertEquals(
     result.diagnostics.map((d) => [d.code, d.span.start]),
     [["syntax/009", 266], ["syntax/008", text.indexOf("const y = )") + 10]],
+  );
+});
+
+Deno.test("nominal declares a type of any body and stays a legal name elsewhere", () => {
+  const tree = parseClean(
+    "nominal Id = string\nexport nominal Row = { id: Id }\nnominal Pair = [int, int]\nconst nominal = 1\nconst f = (nominal: int): int => nominal\n",
+  );
+  assertEquals(
+    declSummaries(tree).map((d) => [d.kind, d.name]),
+    [
+      ["DataDecl", "Id"],
+      ["DataDecl", "Row"],
+      ["DataDecl", "Pair"],
+      ["ConstDecl", "nominal"],
+      ["ConstDecl", "f"],
+    ],
+  );
+});
+
+Deno.test("data is an ordinary name and no declaration word", () => {
+  const tree = parseClean(
+    "const data = 1\nconst f = (data: int): int => data\n",
+  );
+  assertEquals(declSummaries(tree).map((d) => d.kind), [
+    "ConstDecl",
+    "ConstDecl",
+  ]);
+  assertEquals(
+    parseChecked("data Row = { id: int }\n").diagnostics.length > 0,
+    true,
   );
 });

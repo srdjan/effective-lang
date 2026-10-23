@@ -140,17 +140,17 @@ Deno.test("the grammar names the scope and every lexer keyword", () => {
   }
 });
 
-Deno.test("the grammar highlights data only as a declaration word", () => {
+Deno.test("the grammar highlights nominal only as a declaration word", () => {
   const matchers = collectMatches(
     readJson("syntaxes/effective.tmLanguage.json"),
   )
     .map((match) => new RegExp(match));
   const found = (text: string): string | undefined =>
-    matchers.map((m) => m.exec(text)?.[0]).find((hit) => hit === "data");
-  assertEquals(found("data User = { id: string }"), "data");
-  assertEquals(found("export data User = {}"), "data");
-  assertEquals(found("const data = 1"), undefined);
-  assertEquals(found("const f = (data: Int): Int => data"), undefined);
+    matchers.map((m) => m.exec(text)?.[0]).find((hit) => hit === "nominal");
+  assertEquals(found("nominal User = { id: string }"), "nominal");
+  assertEquals(found("export nominal User = {}"), "nominal");
+  assertEquals(found("const nominal = 1"), undefined);
+  assertEquals(found("const f = (nominal: Int): Int => nominal"), undefined);
 });
 
 Deno.test("the builtin-types rule matches every builtin type name exactly", () => {

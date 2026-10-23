@@ -204,7 +204,7 @@ Deno.test("a diagnostic inside a companion declaration maps to its .effi span", 
   assertEquals(mapped.span.source, "host.effi");
   assertEquals(
     spanText(COMPANION_FILES["host.effi"], mapped.span),
-    "data Token = { id: Label, handle: Handle }",
+    "nominal Token = { id: Label, handle: Handle }",
   );
 });
 

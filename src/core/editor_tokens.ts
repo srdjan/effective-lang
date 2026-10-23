@@ -29,7 +29,7 @@ export interface SemanticClassification {
 const contextualKeywords = new Set([
   "type",
   "error",
-  "data",
+  "nominal",
   "service",
   "provider",
   "opaque",

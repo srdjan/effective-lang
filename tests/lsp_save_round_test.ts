@@ -121,7 +121,7 @@ Deno.test("a save of an .effi file writes its companion module", () => {
   const companion = `${ROOT}/host/providers.effi.ts`;
   assertStringIncludes(h.files.get(companion) ?? "", "export {};");
   const effi = "host/providers.effi";
-  setDisk(h, effi, `${F[effi]}export data Extra = { n: int }\n`);
+  setDisk(h, effi, `${F[effi]}export nominal Extra = { n: int }\n`);
   h.deliver(save(exampleUri(effi)));
   assertStringIncludes(h.files.get(companion) ?? "", "export const Extra =");
   assert(h.files.has(`${companion}.map`));

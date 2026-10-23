@@ -1,6 +1,6 @@
-type UserId = Brand<string>
+nominal UserId = string
 
-export data User = {
+export nominal User = {
   id: UserId,
   name: string,
   active: boolean,

@@ -555,7 +555,7 @@ export function emitExamples(): ReadonlyMap<string, EmittedModule> {
 export const COMPANION_FILES: Record<string, string> = {
   "effective.json":
     '{ "host": { "store": { "interface": "./host.effi", "module": "./host.ts" } } }',
-  "domain.eff": "export type Id = string\nexport data Item = { id: Id }\n",
+  "domain.eff": "export type Id = string\nexport nominal Item = { id: Id }\n",
   "host.effi": [
     'import { Item, Id } from "./domain.eff"',
     "",
@@ -564,7 +564,7 @@ export const COMPANION_FILES: Record<string, string> = {
     "export type Handle = Id",
     "type Label = Id",
     "error Boom = { message: Label }",
-    "data Token = { id: Label, handle: Handle }",
+    "nominal Token = { id: Label, handle: Handle }",
     "export service Store {",
     "  open(): Conn",
     "  fetch(c: Conn, id: Id): Item fails Boom",

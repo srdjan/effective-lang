@@ -313,9 +313,7 @@ type BuiltinTypeRow =
       args: readonly Lowered[],
       nodes: readonly NodeId[],
     ) => Lowered;
-  }
-  /** `Brand<T>` is allowed only as the whole body of a type declaration. */
-  | { readonly kind: "brand" };
+  };
 
 /** The row of a primitive type name that takes no type arguments. */
 function primitiveRow(
@@ -469,14 +467,6 @@ export class TypeLowerer {
         }
         return row.build(this, args.map((arg) => this.lower(arg)), args);
       }
-      case "brand":
-        for (const arg of args) this.lower(arg);
-        this.report(
-          "declaration/008",
-          "`Brand<T>` is allowed only as the whole body of a type declaration",
-          this.span(node),
-        );
-        return this.errorLowered();
       default: {
         const unreachable: never = row;
         return unreachable;
@@ -600,19 +590,7 @@ export class TypeLowerer {
         };
       },
     },
-    Brand: { kind: "brand" },
   };
-
-  /** Lowers the argument of `Brand<T>` for a type declaration. Reports a wrong argument count. */
-  brandBase(node: NodeId): Lowered {
-    const argsNode = this.kidsOfKind(node, SyntaxKind.TypeArgs)[0];
-    const args = argsNode === undefined ? [] : this.kids(argsNode);
-    if (args.length !== 1) {
-      this.arity("Brand", 1, args, node);
-      return this.errorLowered();
-    }
-    return this.lower(args[0]);
-  }
 
   private noArguments(
     name: string,
@@ -646,7 +624,7 @@ export class TypeLowerer {
 
   /**
    * The fields of a record type in source order. Reports duplicate names, void
-   * fields, and, for a data or error declaration, a field named `_tag`.
+   * fields, and, for a nominal or error declaration, a field named `_tag`.
    */
   fields(node: NodeId, errorDeclaration: boolean): LoweredField[] {
     const result: LoweredField[] = [];
@@ -1246,6 +1224,17 @@ type TypeNodeInfo =
     | { readonly kind: "error"; readonly id: ErrorId }
   );
 
+/** A nominal declaration that waits for the record classification of `classifyNominal`. */
+type PendingNominal = {
+  readonly pending: true;
+  readonly entry: DeclEntry;
+  readonly id: TypeId;
+  readonly index: number;
+  readonly lowered: Lowered;
+  readonly literal: LoweredField[] | undefined;
+  readonly span: Span;
+};
+
 /** The most levels that a type declaration may have, counting its aliases. */
 const MAX_TYPE_DEPTH = 128;
 
@@ -1256,10 +1245,14 @@ class ModuleChecker {
   private readonly table: TypeTable;
   private readonly types: TypeDecl[] = [];
   private readonly errors: ErrorDecl[] = [];
-  /** The fields of every data and error declaration, for the deferred-type rule. */
-  private readonly nominalFields: LoweredField[] = [];
-  /** The base of every `Brand<T>` declaration, for rule 12. */
-  private readonly brandBases: {
+  /** The fields and record bodies of nominal and error declarations, for the deferred-type rule. */
+  private readonly nominalFields: {
+    readonly subject: string;
+    readonly ref: TypeRef;
+    readonly span: Span;
+  }[] = [];
+  /** The body of every nominal declaration that is not a record, for rule 12. */
+  private readonly nominalBodies: {
     readonly id: TypeId;
     readonly span: Span;
   }[] = [];
@@ -1292,16 +1285,20 @@ class ModuleChecker {
 
   run(): ModuleDeclarations {
     const entries = this.entries();
-    const infos: TypeNodeInfo[] = [];
+    const slots: (TypeNodeInfo | PendingNominal)[] = [];
     for (const entry of entries) {
-      if (entry.kind === "type") infos.push(this.checkType(entry));
-      else if (entry.kind === "data") infos.push(this.checkData(entry));
-      else if (entry.kind === "error") infos.push(this.checkError(entry));
+      if (entry.kind === "type") slots.push(this.checkType(entry));
+      else if (entry.kind === "data") slots.push(this.checkNominal(entry));
+      else if (entry.kind === "error") slots.push(this.checkError(entry));
     }
+    // A body is a record after aliases unfold, so the table must hold every definition first.
+    const infos = slots.map((slot) =>
+      "pending" in slot ? this.classifyNominal(slot) : slot
+    );
     const guarded = this.checkCycles(infos);
     this.checkDepths(infos, guarded);
     this.checkDeferredFields();
-    this.checkBrandBases();
+    this.checkNominalBodies();
     this.checkPrimitivePositions();
     for (const entry of entries) {
       if (entry.kind === "service") this.checkService(entry);
@@ -1334,7 +1331,7 @@ class ModuleChecker {
   }
 
   /**
-   * Rule R1: a primitive type node can occur only inside a type, data, or error declaration.
+   * Rule R1: a primitive type node can occur only inside a type, nominal, or error declaration.
    * The walk skips those declarations and the regions that the parser already reported.
    * A broken declaration is checked, because its annotations parsed.
    */
@@ -1351,7 +1348,7 @@ class ModuleChecker {
           "declaration/013",
           `the primitive type \`${
             nodeText(tree, node)
-          }\` can occur only inside a type, data, or error declaration`,
+          }\` can occur only inside a type, nominal, or error declaration`,
           nodeSpan(tree, node),
         );
       }
@@ -1376,7 +1373,6 @@ class ModuleChecker {
       case "never":
       case "unknown":
       case "Option":
-      case "Brand":
       case "Ref":
       case "RetrySchedule":
       case "ScheduleInput":
@@ -1417,19 +1413,6 @@ class ModuleChecker {
         base: { kind: "primitive", name: "unknown" },
       };
       kind = "brand";
-    } else if (body !== undefined && this.isBrand(body)) {
-      const base = this.lowerer.brandBase(body);
-      const argsNode = this.lowerer.kidsOfKind(body, SyntaxKind.TypeArgs)[0];
-      const arg = argsNode === undefined
-        ? undefined
-        : this.lowerer.kids(argsNode)[0];
-      this.table.defineBrand(id, base.ref);
-      this.brandBases.push({
-        id,
-        span: nodeSpan(this.tree, arg ?? body),
-      });
-      definition = { kind: "nominal", base: base.ir };
-      kind = "brand";
     } else {
       const lowered = body === undefined
         ? this.lowerer.errorLowered()
@@ -1460,48 +1443,104 @@ class ModuleChecker {
     };
   }
 
-  /** True when the node is `Brand<...>` or `Brand`. */
-  private isBrand(node: NodeId): boolean {
-    if (kindOf(this.tree, node) !== SyntaxKind.NamedType) return false;
-    const nameNode = this.lowerer.kidsOfKind(node, SyntaxKind.Name)[0];
-    if (nameNode === undefined) return false;
-    const target = this.env.targets.get(nameNode);
-    return target?.kind === "builtin-type" && target.name === "Brand";
-  }
-
-  private checkData(entry: DeclEntry): TypeNodeInfo {
+  /**
+   * Lowers the body of a nominal declaration. The table gets a provisional
+   * definition, and `classifyNominal` decides later whether the body is a record.
+   */
+  private checkNominal(entry: DeclEntry): PendingNominal {
     const id = this.id("type", entry.name);
-    const record =
-      this.lowerer.kidsOfKind(entry.node, SyntaxKind.RecordType)[0];
-    const fields = record === undefined
-      ? []
-      : this.lowerer.fields(record, true);
-    this.nominalFields.push(...fields);
+    const body = this.bodyOf(entry);
+    // A literal record keeps its source field order and reports a `_tag` field at its name.
+    const literal = body !== undefined &&
+        kindOf(this.tree, body) === SyntaxKind.RecordType
+      ? this.lowerer.fields(body, true)
+      : undefined;
     // A body that did not parse gets the error type, so its uses report nothing more.
-    this.table.defineData(
-      id,
-      record === undefined
-        ? this.table.error
-        : this.lowerer.recordOf(fields).ref,
-    );
+    const lowered = body === undefined
+      ? this.lowerer.errorLowered()
+      : literal !== undefined
+      ? this.lowerer.recordOf(literal)
+      : this.lowerer.lower(body);
+    this.table.defineBrand(id, lowered.ref);
     this.types.push({
       kind: "type",
       id,
       name: entry.name,
-      definition: {
-        kind: "nominal",
-        base: { kind: "record", fields: fields.map(toIrField) },
-      },
+      definition: { kind: "nominal", base: lowered.ir },
       span: entry.span,
     });
+    return {
+      pending: true,
+      entry,
+      id,
+      index: this.types.length - 1,
+      lowered,
+      literal,
+      span: nodeSpan(this.tree, body ?? entry.node),
+    };
+  }
+
+  /**
+   * A nominal body that is a record after aliases unfold is a tagged record at
+   * run time. The IR base of such a body is the unfolded
+   * record, so the validator and the emitter need no alias walk.
+   */
+  private classifyNominal(pending: PendingNominal): TypeNodeInfo {
+    const { entry, id, lowered, literal, span } = pending;
+    const unfolded = this.table.unfold(lowered.ref);
+    const node = this.table.node(unfolded);
+    let base = lowered.ir;
+    let kind: "brand" | "data" = "brand";
+    if (node.kind === "error") {
+      // A body that did not parse or resolve acts as a record, so its uses report nothing more.
+      kind = "data";
+      this.table.defineData(id, unfolded);
+    } else if (node.kind === "record") {
+      kind = "data";
+      const hasTag = node.fields.some((f) => f.name === "_tag");
+      if (hasTag) {
+        this.lowerer.report(
+          "declaration/009",
+          "the field name `_tag` is reserved for generated tags",
+          span,
+        );
+      }
+      const fields = node.fields.filter((f) => f.name !== "_tag");
+      const record = hasTag ? this.table.record(fields) : unfolded;
+      this.table.defineData(id, record);
+      base = literal !== undefined && !hasTag
+        ? lowered.ir
+        : this.table.toIr(record);
+      if (literal !== undefined) {
+        for (const field of literal) {
+          this.nominalFields.push({
+            subject: `the field \`${field.name}\``,
+            ref: field.type.ref,
+            span: field.typeSpan,
+          });
+        }
+      } else {
+        this.nominalFields.push({
+          subject: `the body of \`${entry.name}\``,
+          ref: record,
+          span,
+        });
+      }
+    } else {
+      this.nominalBodies.push({ id, span });
+    }
+    this.types[pending.index] = {
+      ...this.types[pending.index],
+      definition: { kind: "nominal", base },
+    };
     const refs = new Set<string>();
-    for (const field of fields) referencedIds(field.type.ir, refs);
+    referencedIds(base, refs);
     return {
       id,
       name: entry.name,
       nameSpan: entry.nameSpan,
       start: entry.span.start,
-      kind: "data",
+      kind,
       refs,
     };
   }
@@ -1513,7 +1552,13 @@ class ModuleChecker {
     const fields = record === undefined
       ? []
       : this.lowerer.fields(record, true);
-    this.nominalFields.push(...fields);
+    for (const field of fields) {
+      this.nominalFields.push({
+        subject: `the field \`${field.name}\``,
+        ref: field.type.ref,
+        span: field.typeSpan,
+      });
+    }
     this.table.defineError(
       id,
       record === undefined
@@ -1614,7 +1659,7 @@ class ModuleChecker {
   }
 
   /**
-   * Rule 11: a cycle that has a data type, and only data types and aliases, is
+   * Rule 11: a cycle that has a record nominal type, and only such types and aliases, is
    * legal when no cycle is made of aliases alone and every cycle passes through
    * an `Option`, an array, an optional field, or a union that has a member
    * outside the group.
@@ -1692,59 +1737,64 @@ class ModuleChecker {
   }
 
   /**
-   * A data or error field cannot hold a function, deferred, or opaque type, at
+   * A nominal or error field cannot hold a function, deferred, or opaque type, at
    * any depth, after aliases unfold. The emitter has no schema for one. The
    * check runs after every alias is defined, so a field may name a later alias.
    */
   private checkDeferredFields(): void {
     for (const field of this.nominalFields) {
-      if (containsDeferredType(this.table, field.type.ref)) {
+      if (containsDeferredType(this.table, field.ref)) {
         this.lowerer.report(
           "declaration/015",
-          `the field \`${field.name}\` has a function or deferred type, which a data or error declaration cannot hold`,
-          field.typeSpan,
+          `${field.subject} has a function or deferred type, which a nominal type or error declaration cannot hold`,
+          field.span,
         );
-      } else if (containsOpaqueType(this.table, field.type.ref)) {
+      } else if (containsOpaqueType(this.table, field.ref)) {
         this.lowerer.report(
           "declaration/016",
-          `the field \`${field.name}\` has an opaque type, which has no schema`,
-          field.typeSpan,
+          `${field.subject} has an opaque type, which has no schema`,
+          field.span,
         );
       }
     }
   }
 
   /**
-   * Rule 12: the base of a brand cannot be a record or a data type, or a union
-   * with such a member, after aliases unfold. A nominal record is a data type.
-   * The brand becomes the error type so that its uses report nothing more.
+   * Rule 12: the body of a nominal type that is not a record cannot be a record
+   * or a nominal record, or a union with such a member, after aliases unfold.
+   * The type becomes the error type so that its uses report nothing more. Any
+   * other body gets the deferred-type and opaque-type rules of the fields.
    */
-  private checkBrandBases(): void {
-    for (const brand of this.brandBases) {
-      const base = this.table.brandBaseOf(brand.id);
+  private checkNominalBodies(): void {
+    for (const nominal of this.nominalBodies) {
+      const base = this.table.brandBaseOf(nominal.id);
       if (base === undefined) continue;
-      const nominal = flattenMembers(this.table, base).some((member) => {
+      const hasRecord = flattenMembers(this.table, base).some((member) => {
         const node = this.table.node(member);
         return node.kind === "record" ||
           (node.kind === "named" && !isErrorId(node.id) &&
             this.table.dataRecordOf(node.id) !== undefined);
       });
-      if (!nominal) {
-        if (containsOpaqueType(this.table, base)) {
-          this.lowerer.report(
-            "declaration/016",
-            "a brand base cannot hold an opaque type, which has no schema",
-            brand.span,
-          );
-        }
-        continue;
+      if (hasRecord) {
+        this.lowerer.report(
+          "declaration/014",
+          "a nominal body cannot hold a nominal record or a union with a record; declare each record alone",
+          nominal.span,
+        );
+        this.table.defineBrand(nominal.id, this.table.error);
+      } else if (containsDeferredType(this.table, base)) {
+        this.lowerer.report(
+          "declaration/015",
+          "the body has a function or deferred type, which a nominal type cannot hold",
+          nominal.span,
+        );
+      } else if (containsOpaqueType(this.table, base)) {
+        this.lowerer.report(
+          "declaration/016",
+          "the body has an opaque type, which has no schema",
+          nominal.span,
+        );
       }
-      this.lowerer.report(
-        "declaration/014",
-        "a brand base cannot be a record or a data type; declare a nominal record with `data`",
-        brand.span,
-      );
-      this.table.defineBrand(brand.id, this.table.error);
     }
   }
 

@@ -2340,8 +2340,8 @@ Deno.test("types: the result type of an operator is recomputed", () => {
 
 Deno.test("types: two values of one numeric brand compare, add, and subtract", () => {
   const lowered = lowerText(`
-type Count = Brand<int>
-type Price = Brand<number>
+nominal Count = int
+nominal Price = number
 const sum = (a: Count, b: Count): Count => a + b
 const diff = (a: Price, b: Price): Price => a - b
 const below = (a: Count, b: Count): Bool => a < b
@@ -2955,8 +2955,8 @@ Deno.test("compatibility: the lift applies only at the top of a value position",
 
 Deno.test("a field read and a record update through a data type validate", () => {
   const lowered = lowerText(`
-type UserId = Brand<string>
-data User = { id: UserId, name: string, active: boolean, nickname?: string }
+nominal UserId = string
+nominal User = { id: UserId, name: string, active: boolean, nickname?: string }
 const nameOf = (user: User): Text => user.name
 const nick = (user: User): Text =>
   match user.nickname {
@@ -2975,10 +2975,10 @@ type Text = string
 });
 
 const DATA_SOURCE = `
-type UserId = Brand<string>
+nominal UserId = string
 type Text = string
-data User = { id: UserId, name: Text, nick?: Text }
-data Twin = { id: UserId, name: Text }
+nominal User = { id: UserId, name: Text, nick?: Text }
+nominal Twin = { id: UserId, name: Text }
 error Failed = { reason: Text }
 type Dog = { id: UserId, name: Text, nick?: Text }
 const userSchema: Schema<User> = schema()
@@ -3083,10 +3083,10 @@ Deno.test("data: a data type validates and each forged rule is rejected", () => 
 
 const NAME_MATCH_SOURCE = `
 type Text = string
-data Circle = { radius: Text }
-data Square = { side: Text }
+nominal Circle = { radius: Text }
+nominal Square = { side: Text }
 error Broken = { reason: Text }
-type Id = Brand<Text>
+nominal Id = Text
 const area = (shape: Circle | Square): Text =>
   match shape {
     Circle(c) => c.radius,
@@ -3165,7 +3165,7 @@ Deno.test("data: a data or error field cannot hold a function or deferred type",
   const lowered = lowerText(`
 type Count = int
 type Step = (n: Count) => Count
-data Box = { count: Count }
+nominal Box = { count: Count }
 error Failed = { count: Count }
 `);
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
@@ -3216,9 +3216,9 @@ Deno.test("data: a brand base cannot be a record, a data type, or a union with o
   const lowered = lowerText(`
 type Text = string
 type Plain = { id: Text }
-data Row = { id: Text }
-type Id = Brand<Text>
-type Ids = Brand<Text[]>
+nominal Row = { id: Text }
+nominal Id = Text
+nominal Ids = Text[]
 `);
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
   const forge = (base: Type): string[] => {
@@ -3247,11 +3247,11 @@ Deno.test("data: recursive data types validate and an unguarded cycle is rejecte
   const lowered = lowerText(`
 type Text = string
 type Count = int
-data Tree = { label: Text, children: Tree[] }
-data Forest = { first: Option<Node> }
-data Node = { rest: Forest }
-data Cons = { head: Count, tail: List }
-data Nil = {}
+nominal Tree = { label: Text, children: Tree[] }
+nominal Forest = { first: Option<Node> }
+nominal Node = { rest: Forest }
+nominal Cons = { head: Count, tail: List }
+nominal Nil = {}
 type List = Cons | Nil
 `);
   assertEquals(codesOf(lowered.ir, lowered.sources), []);

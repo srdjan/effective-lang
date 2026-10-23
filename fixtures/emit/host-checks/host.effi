@@ -4,6 +4,6 @@ export provider RowsLive provides Rows | Pings fails Boom uses Clock.now
 
 // The companion module host.effi.ts holds the schema of this data type, so the
 // result of a provider of Auth is checked at the host boundary.
-export data Token = { id: Text }
+export nominal Token = { id: Text }
 export service Auth { token(): Token }
 export provider AuthLive provides Auth

@@ -1,6 +1,6 @@
 export type Int = int
 export type Text = string
-export type Key = Brand<string>
+export nominal Key = string
 export type Batch = { key: Int, items: Int[] }
 export type First = { key: Int, first: Option<Int> }
 export error SourceStop = {}

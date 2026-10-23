@@ -263,13 +263,17 @@ export function pattern(
           c.report(
             "pattern/004",
             target.kind === "type"
-              ? `\`${shortName(target.id)}\` is ${
-                c.table.isOpaque(target.id)
-                  ? "an opaque type"
-                  : c.table.brandBaseOf(target.id) !== undefined
-                  ? "a brand"
-                  : "a type alias"
-              }, not a data type; a constructor pattern names a data type or an error`
+              ? c.table.isOpaque(target.id)
+                ? `\`${
+                  shortName(target.id)
+                }\` is an opaque type, not a nominal type; a constructor pattern names a nominal type or an error`
+                : c.table.brandBaseOf(target.id) !== undefined
+                ? `\`${
+                  shortName(target.id)
+                }\` is a nominal type with a non-record body; a constructor pattern names a nominal record or an error`
+                : `\`${
+                  shortName(target.id)
+                }\` is a type alias, not a nominal type; a constructor pattern names a nominal type or an error`
               : `\`${targetText(target)}\` cannot be a constructor pattern`,
             node,
           );

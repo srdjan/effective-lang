@@ -3,12 +3,12 @@ import { Conn, Text, Plain } from "host:x"
 type Conns = Conn[]
 
 // error: declaration/016
-data Direct = { conn: Conn }
+nominal Direct = { conn: Conn }
 
 // error: declaration/016
 error Failed = { conn: Conn }
 
-data Wrapped = {
+nominal Wrapped = {
   // error: declaration/016
   maybe: Option<Conn>,
   // error: declaration/016
@@ -20,7 +20,7 @@ data Wrapped = {
 }
 
 // error: declaration/016
-data ThroughAlias = { conns: Conns }
+nominal ThroughAlias = { conns: Conns }
 
 // The alias that the field names comes later in the file.
 // error: declaration/016
@@ -29,8 +29,8 @@ error Late = { later: LaterConns }
 type LaterConns = Conn[]
 
 // error: declaration/016
-type Handle = Brand<Conn>
+nominal Handle = Conn
 
-data Fine = { label: Text, plain: Plain, direct: Direct, raw: unknown }
+nominal Fine = { label: Text, plain: Plain, direct: Direct, raw: unknown }
 
 export const main = (c: Conn): Conn => c
