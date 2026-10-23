@@ -118,7 +118,7 @@ code cannot call its constructor. A brand in an `.effi` file has the same limit.
 The website and the canonical specification describe data types from draft 0.59.
 
 Data values from unsound host code fail loudly at run time
-([plan](plans/2026-10-23-host-boundary-checks.md)). A `match` whose last arm is
+([plan](archive/plans/2026-10-23-host-boundary-checks.md)). A `match` whose last arm is
 not `_` tests that arm and throws for a value outside its type. A host provider
 whose methods return data values is wrapped, and each such result or stream
 element goes through `Schema.is`. The language rules list the positions that

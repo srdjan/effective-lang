@@ -343,7 +343,7 @@ checks provider imports against the registry:
 `const UsersLive$host: Layer.Layer<Users> = UsersLive`. When a provided service
 method returns a data value, the constant wraps the host Layer with run-time
 checks of those results, and keeps the same declared type
-([host boundary checks](plans/2026-10-23-host-boundary-checks.md)). Host interfaces may also
+([host boundary checks](archive/plans/2026-10-23-host-boundary-checks.md)). Host interfaces may also
 export opaque types and service tags; their TypeScript host module supplies the
 corresponding type and value exports.
 

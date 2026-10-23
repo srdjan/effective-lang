@@ -1,6 +1,6 @@
 # Plan: runtime checks of data values at the host boundary
 
-Status: validated, 2026-10-23. Fable reported 3 major and 11 minor findings. Opus accepted all 14. Section 6 maps each finding to its resolution.
+Status: done, 2026-10-23. HB3 to HB7 landed in commits 94c64bd (HB3), 29fc514 (HB4), 8436f78 (HB5), and the commit that archives this plan (HB7). HB6 landed as b71ce2a and 85f42d8 in the sibling repository `../effective/`. The companion module of HB7 has its own plan. Fable reported 3 major and 11 minor findings on the draft. Opus accepted all 14. Section 6 maps each finding to its resolution.
 
 This plan uses the ID prefix HB. HB1 and HB2 are the user's decisions. HB3 and later are work items.
 
