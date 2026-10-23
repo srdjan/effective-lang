@@ -693,6 +693,20 @@ Deno.test("a match over data and error types tests the tag of each arm but the l
   assertStringIncludes(text, '$t0._tag === "data-types#Marker"');
 });
 
+Deno.test("a literal result in a generated function is as const", () => {
+  const emitted = emitFiles(projectFiles("emit/forms"), ["literal-results.eff"])
+    .get("literal-results");
+  assert(emitted !== undefined, "module literal-results was not emitted");
+  const text = emitted.text;
+  assertStringIncludes(text, '((x) => "a" as const)($t0)');
+  assertStringIncludes(text, "((x) => 1 as const)($t0)");
+  assertStringIncludes(text, "((x) => true as const)($t0)");
+  assertStringIncludes(text, 'Effect.succeed("a" as const)');
+  assertStringIncludes(text, 'return "a" as const;');
+  // A literal compared with a value has no literal slot.
+  assertStringIncludes(text, 'k === "a"');
+});
+
 Deno.test("a data type with field names from Object.prototype keeps them valid", () => {
   const output = oneModule(`
 type Text = string

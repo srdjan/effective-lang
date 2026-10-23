@@ -668,7 +668,12 @@ export class ExprEmitter implements ExprCore {
       case "null":
         return emitted("null");
       case "literal":
-        return emitted(this.literal(e.value));
+        // TypeScript widens a literal that a generated function returns, such
+        // as a match arm or an `Effect.gen` body, unless it is `as const`.
+        return expected !== undefined && e.value !== null &&
+            this.admitsLiteral(expected)
+          ? emitted([this.literal(e.value), " as const"], PREC.relational)
+          : emitted(this.literal(e.value));
       case "reference":
         return emitted(this.reference(e.target));
       case "record": {
@@ -862,6 +867,14 @@ export class ExprEmitter implements ExprCore {
       case "scope":
         return this.scope.scopeRuntime()[callee.operation];
     }
+  }
+
+  /** True when `type` is a literal type or a union with a literal member. */
+  private admitsLiteral(type: Type): boolean {
+    const resolved = this.scope.resolve(type);
+    return resolved.kind === "literal" ||
+      (resolved.kind === "union" &&
+        resolved.members.some((m) => this.admitsLiteral(m)));
   }
 
   private literal(value: string | number | boolean | null): Doc {

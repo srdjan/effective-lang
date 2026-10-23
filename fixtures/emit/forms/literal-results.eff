@@ -1,0 +1,60 @@
+// A literal result keeps its literal type in each generated function:
+// a match arm with a binding, a block, an Option handler, and an Effect.gen body.
+type Kind = "a" | "b"
+type Num = 1 | 2
+type Flag = true
+type Text = string
+type Count = int
+data A = { n: Count }
+data B = {}
+type AB = A | B
+error Bad = { reason: Text }
+export const byName = (v: AB): Kind =>
+  match v {
+    A(x) => "a",
+    B(y) => "b"
+  }
+export const byNameNum = (v: AB): Num =>
+  match v {
+    A(x) => 1,
+    B(y) => 2
+  }
+export const byNameFlag = (v: AB): Flag =>
+  match v {
+    A(x) => true,
+    B(y) => true
+  }
+export const byLiteral = (k: Kind): Kind =>
+  match k {
+    "a" => "b",
+    _ => "a"
+  }
+export const byOption = (o: Option<Count>): Kind =>
+  match o {
+    Some(n) => "a",
+    None => "b"
+  }
+export const byNameBlock = (v: AB): Kind =>
+  match v {
+    A(x) => {
+      const m = x.n
+      "a"
+    },
+    B(y) => "b"
+  }
+export const blockIf = (k: Kind): Kind =>
+  if (k === "a") {
+    const m = 1
+    "b"
+  } else { "a" }
+export const byNameEffect = (v: AB): Kind fails Bad =>
+  match v {
+    A(x) => "a",
+    B(y) => fail(Bad({ reason: "b" }))
+  }
+export const effectIf = (k: Kind): Kind fails Bad =>
+  if (k === "a") { "b" } else { fail(Bad({ reason: "b" })) }
+export const effectBlock = (k: Kind): Kind fails Bad => {
+  const r = byNameEffect(B({}))
+  "a"
+}

@@ -39,6 +39,7 @@ A `match` whose arms return string literals, with a literal-union result type, c
 
 - Find the root cause in the match emission (`selectorMatch` and the arm functions in `src/core/emit/expr.ts`), and fix it once in the shared code, for example with the checked arm type as the expected type of the arm body or as the result annotation of the arm function. Check the same path for the error and tagged-record arms, and for numeric and boolean literal results.
 - Tests: an emit test and a slow `deno check` case for a literal-union result from a name match, a literal match, and an option match.
+- Result: the defect was wider. A literal also widens in a block wrapper, in `Effect.succeed`, and in an `Effect.gen` return, for string, number, and boolean literals. The emitter now writes `as const` on a literal whose slot type is a literal type or a union with a literal member. The fixture is `fixtures/emit/forms/literal-results.eff`. One golden line changes in `fixtures/golden/pay.ts`.
 
 ### EX4. The application fixture (one commit in this repository)
 

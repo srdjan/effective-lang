@@ -64,7 +64,10 @@ const chargeOrder = (order: Order): Effect.Effect<
     return order;
   });
 
-const markPaid = (order: Order): Order => ({ ...order, status: "paid" });
+const markPaid = (order: Order): Order => ({
+  ...order,
+  status: "paid" as const,
+});
 
 const saveOrder = (order: Order): Effect.Effect<Order, never, Orders> =>
   Effect.gen(function* () {
