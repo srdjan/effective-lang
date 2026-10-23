@@ -1445,6 +1445,11 @@ export class ExprEmitter implements ExprCore {
           `${selector}._tag`,
           JSON.stringify(errorTag(pattern.error)),
         );
+      case "data":
+        return armEquality(
+          `${selector}._tag`,
+          JSON.stringify(tokenOfId(pattern.data)),
+        );
       case "tag": {
         const left = `${selector}.${pattern.field}`;
         const right = JSON.stringify(pattern.value);

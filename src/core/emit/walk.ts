@@ -16,6 +16,7 @@ export function patternBinding(pattern: Pattern): Parameter | null {
   switch (pattern.kind) {
     case "some":
     case "error":
+    case "data":
       return pattern.binding;
     case "tag":
       return pattern.binding;

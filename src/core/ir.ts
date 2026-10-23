@@ -97,6 +97,7 @@ export type Pattern =
   | { readonly kind: "none"; readonly span: Span }
   | { readonly kind: "some"; readonly binding: Parameter; readonly span: Span }
   | { readonly kind: "error"; readonly error: ErrorId; readonly binding: Parameter; readonly span: Span }
+  | { readonly kind: "data"; readonly data: TypeId; readonly binding: Parameter; readonly span: Span }
   | { readonly kind: "tag"; readonly field: string; readonly value: string; readonly binding: Parameter | null; readonly span: Span };
 
 export interface Arm {

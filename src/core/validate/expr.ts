@@ -1441,13 +1441,21 @@ export class BodyValidator implements ValidatorCore {
           bind(p.binding, unfolded.element);
         }
         return added;
-      case "error": {
+      case "error":
+      case "data": {
+        // A name pattern needs a subject of data and error types only, and the name must be one of them.
+        const id = p.kind === "error" ? p.error : p.data;
         const ms = members(env, subject);
         const ok = ms.length > 0 &&
-          ms.every((m) => m.kind === "named" && env.errors.has(m.id)) &&
-          ms.some((m) => m.kind === "named" && m.id === p.error);
-        if (!ok) foreign(`the error ${p.error}`);
-        bind(p.binding, ok ? { kind: "named", id: p.error } : undefined);
+          ms.every((m) =>
+            m.kind === "named" && (env.errors.has(m.id) || env.data.has(m.id))
+          ) &&
+          ms.some((m) => m.kind === "named" && m.id === id) &&
+          (p.kind === "error" ? env.errors.has(id) : env.data.has(id));
+        if (!ok) {
+          foreign(`the ${p.kind === "error" ? "error" : "data type"} ${id}`);
+        }
+        bind(p.binding, ok ? { kind: "named", id } : undefined);
         return added;
       }
       case "tag": {

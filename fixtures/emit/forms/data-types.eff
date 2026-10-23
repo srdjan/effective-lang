@@ -11,6 +11,12 @@ export error Rejected = { user: User, reason: Text }
 
 data Pin = { id: UserId }
 
+export data Circle = { radius: Text }
+
+export data Square = { side: Text }
+
+export type Shape = Circle | Square
+
 const userSchema: Schema<User> = schema()
 
 export const make = (): User =>
@@ -44,3 +50,31 @@ export const decodeUser = (input: unknown): User fails SchemaError =>
 
 export const encodeUser = (user: User): User fails SchemaError =>
   schemaEncode(userSchema, user)
+
+export const circle = (): Shape => Circle({ radius: "r" })
+
+export const square = (): Shape => Square({ side: "s" })
+
+export const describe = (shape: Shape): Text =>
+  match shape {
+    Circle(c) => c.radius,
+    Square(q) => q.side
+  }
+
+export const circular = (shape: Shape): Text =>
+  match shape {
+    Circle(c) => c.radius,
+    _ => "other"
+  }
+
+export const outcome = (value: Circle | Rejected): Text =>
+  match value {
+    Circle(c) => c.radius,
+    Rejected(r) => r.reason
+  }
+
+export const kind = (value: Marker | Circle): Text =>
+  match value {
+    Marker(m) => "marker",
+    Circle(c) => c.radius
+  }

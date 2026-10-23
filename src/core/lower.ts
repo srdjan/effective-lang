@@ -1371,6 +1371,13 @@ class BodyLowerer {
           binding: this.bindingOf(pattern.binding, names[1]),
           span,
         };
+      case "data":
+        return {
+          kind: "data",
+          data: pattern.data,
+          binding: this.bindingOf(pattern.binding, names[1]),
+          span,
+        };
       case "tag": {
         const spread = this.kidsOfKind(node, SyntaxKind.SpreadPattern)[0];
         const spreadName = spread === undefined

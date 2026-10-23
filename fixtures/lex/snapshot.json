@@ -52,8 +52,8 @@
       "f6c105e227115704"
     ],
     "fixtures/emit/forms/data-types.eff": [
-      "157b3cfc7f365d4a",
-      "1a0e351be2a1af25"
+      "b98ed1d4ecd34ed6",
+      "03862fbabe7b6620"
     ],
     "fixtures/emit/forms/forms.eff": [
       "c95b3acb15c99c11",
@@ -331,6 +331,18 @@
       "e92f8bd4a49cc426",
       "d23339426c1bc140"
     ],
+    "fixtures/errors/pattern-nominal-coverage.eff": [
+      "60092c82274c6c28",
+      "fa31959e15fbdea4"
+    ],
+    "fixtures/errors/pattern-nominal-foreign.eff": [
+      "d48c12201f752f2e",
+      "61dfb4b89ef49ed6"
+    ],
+    "fixtures/errors/pattern-nominal-subject.eff": [
+      "668a624aa7d5cbec",
+      "64e5d2d9a3d3d7eb"
+    ],
     "fixtures/errors/pattern-not-exhaustive.eff": [
       "b7f6bb2a0927f3e8",
       "12acbc8523d4465b"
@@ -462,6 +474,10 @@
     "fixtures/errors/type-mismatch-void-aggregate.eff": [
       "a0d5e7f09de65f2a",
       "096daf43ba8bc9cd"
+    ],
+    "fixtures/errors/unknown-name-catch-data.eff": [
+      "8b0120270bdc98d9",
+      "1c0fbdc50f799603"
     ],
     "fixtures/errors/unknown-name-import-export/lib.eff": [
       "674030dc40fcfad6",

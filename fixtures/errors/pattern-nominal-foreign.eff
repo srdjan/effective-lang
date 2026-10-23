@@ -1,0 +1,17 @@
+type Text = string
+
+data Circle = { radius: Text }
+
+data Square = { side: Text }
+
+error Broken = { reason: Text }
+
+type Shape = Circle | Square
+
+const foreign = (shape: Shape): Text =>
+  match shape {
+    Circle(c) => c.radius,
+    // error: pattern/003
+    Broken(b) => b.reason,
+    _ => "other"
+  }

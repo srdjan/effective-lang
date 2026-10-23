@@ -96,6 +96,11 @@ export type PatternFact =
     readonly binding: LocalId | undefined;
   }
   | {
+    readonly kind: "data";
+    readonly data: TypeId;
+    readonly binding: LocalId | undefined;
+  }
+  | {
     readonly kind: "tag";
     readonly field: string;
     readonly value: string;

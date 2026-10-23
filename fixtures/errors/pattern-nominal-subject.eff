@@ -1,0 +1,50 @@
+type Text = string
+
+type Record = { kind: "c", radius: Text }
+
+type Id = Brand<Text>
+
+data Circle = { radius: Text }
+
+data Square = { side: Text }
+
+type Shape = Circle | Square
+
+type Mixed = Circle | Record
+
+type Alias = Record
+
+const byRecord = (shape: Shape): Text =>
+  match shape {
+    // error: pattern/004
+    { kind: "c", ...rest } => "record",
+    _ => "other"
+  }
+
+const mixed = (value: Mixed): Text =>
+  // error: pattern/004
+  match value {
+    Circle(c) => c.radius,
+    _ => "other"
+  }
+
+const byAlias = (shape: Shape): Text =>
+  match shape {
+    // error: pattern/004
+    Alias(a) => "alias",
+    _ => "other"
+  }
+
+const byBrand = (shape: Shape): Text =>
+  match shape {
+    // error: pattern/004
+    Id(i) => "brand",
+    _ => "other"
+  }
+
+const bare = (shape: Shape): Text =>
+  match shape {
+    // error: pattern/004
+    Circle => "bare",
+    _ => "other"
+  }

@@ -3,7 +3,7 @@
 // match must cover. The functions here are pure. The body checker walks the
 // arms and reports the diagnostics.
 
-import type { ErrorId } from "./ir.ts";
+import type { DeclarationId } from "./ir.ts";
 import type { TypeRef, TypeTable } from "./types.ts";
 import { isErrorId } from "./ids.ts";
 
@@ -18,8 +18,10 @@ interface TaggedMember {
 export type Domain =
   /** `Option<T>`: arms `Some(x)` and `None`. */
   | { readonly kind: "option"; readonly element: TypeRef }
-  /** One or more named errors: arms `E(x)`. */
-  | { readonly kind: "errors"; readonly ids: readonly ErrorId[] }
+  /** One or more named errors or data types, and nothing else: arms `Name(x)`. */
+  | { readonly kind: "nominal"; readonly ids: readonly DeclarationId[] }
+  /** Named errors or data types together with other members. No arm applies. */
+  | { readonly kind: "mixed" }
   /** Records with literal discriminator fields: arms `{ kind: "lit", ...name }`. */
   | { readonly kind: "tagged"; readonly members: readonly TaggedMember[] }
   /** A closed set of literal values, including `boolean`. */
@@ -94,15 +96,17 @@ export function domainOf(table: TypeTable, subject: TypeRef): Domain {
     return { kind: "option", element: nodes[0].element };
   }
 
-  if (
-    nodes.length > 0 &&
-    nodes.every((n) => n.kind === "named" && isErrorId(n.id))
-  ) {
-    const ids: ErrorId[] = [];
-    for (const n of nodes) {
-      if (n.kind === "named" && isErrorId(n.id)) ids.push(n.id);
-    }
-    return { kind: "errors", ids: [...new Set(ids)].sort() };
+  const nominal: DeclarationId[] = [];
+  for (const n of nodes) {
+    if (
+      n.kind === "named" &&
+      (isErrorId(n.id) || table.dataRecordOf(n.id) !== undefined)
+    ) nominal.push(n.id);
+  }
+  if (nominal.length > 0) {
+    return nominal.length === nodes.length
+      ? { kind: "nominal", ids: [...new Set(nominal)].sort() }
+      : { kind: "mixed" };
   }
 
   const literals = literalValuesOf(table, subject);

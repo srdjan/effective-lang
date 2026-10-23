@@ -3560,6 +3560,129 @@ data Loop = { next: Option<Loop> }
   assertEquals(codes(project), ["declaration/007"]);
 });
 
+const NAME_MATCH = `
+type Text = string
+data Circle = { radius: Text }
+data Square = { side: Text }
+data Dot = {}
+error Broken = { reason: Text }
+type Shape = Circle | Square
+type Record = { kind: "c", radius: Text }
+type Id = Brand<Text>
+`;
+
+Deno.test("a match over data and error types binds each member type and covers by name", () => {
+  const project = checkText(`${NAME_MATCH}
+const area = (shape: Shape): Text =>
+  match shape {
+    Circle(c) => c.radius,
+    Square(q) => q.side
+  }
+const lax = (shape: Shape): Text =>
+  match shape {
+    Circle(c) => c.radius,
+    _ => "other"
+  }
+const either = (value: Circle | Broken | Dot): Text =>
+  match value {
+    Circle(c) => c.radius,
+    Broken(b) => b.reason,
+    Dot(d) => "dot"
+  }
+`);
+  assertEquals(messages(project), []);
+  const facts = [...fn(project, "m", "area").table.facts.values()].filter((
+    f,
+  ) => f.kind === "pattern");
+  assertEquals(
+    facts.map((f) => f.kind === "pattern" ? f.pattern.kind : ""),
+    ["data", "data"],
+  );
+});
+
+Deno.test("a match over names reports a missing arm and an unreachable arm", () => {
+  const project = checkText(`${NAME_MATCH}
+const missing = (shape: Shape): Text =>
+  match shape {
+    Circle(c) => c.radius
+  }
+const twice = (shape: Shape): Text =>
+  match shape {
+    Circle(c) => c.radius,
+    Circle(d) => d.radius,
+    Square(q) => q.side
+  }
+const afterWildcard = (shape: Shape): Text =>
+  match shape {
+    _ => "any",
+    Square(q) => q.side
+  }
+`);
+  assertEquals(codes(project), [
+    "pattern/001",
+    "pattern/002",
+    "pattern/002",
+  ]);
+  assert(project.diagnostics[0].message.includes("Square(_)"));
+});
+
+Deno.test("a match over names rejects a record pattern, a mixed subject, an alias, and a brand", () => {
+  const project = checkText(`${NAME_MATCH}
+const byRecord = (shape: Shape): Text =>
+  match shape {
+    { kind: "c", ...rest } => "r",
+    _ => "other"
+  }
+const mixed = (value: Circle | Record): Text =>
+  match value {
+    Circle(c) => c.radius,
+    _ => "other"
+  }
+const byAlias = (shape: Shape): Text =>
+  match shape {
+    Record(r) => "a",
+    _ => "other"
+  }
+const byBrand = (shape: Shape): Text =>
+  match shape {
+    Id(i) => "b",
+    _ => "other"
+  }
+`);
+  assertEquals(codes(project), [
+    "pattern/004",
+    "pattern/004",
+    "pattern/004",
+    "pattern/004",
+  ]);
+  assertEquals(
+    project.diagnostics.map((d) => d.message.replace(/`/g, "")).slice(2),
+    [
+      "Record is a type alias, not a data type; a constructor pattern names a data type or an error",
+      "Id is a brand, not a data type; a constructor pattern names a data type or an error",
+    ],
+  );
+});
+
+Deno.test("a name that is not a member of the subject does not belong to it", () => {
+  const project = checkText(`${NAME_MATCH}
+const foreign = (shape: Shape): Text =>
+  match shape {
+    Broken(b) => b.reason,
+    _ => "other"
+  }
+`);
+  assertEquals(codes(project), ["pattern/003"]);
+});
+
+Deno.test("a catch handler still names an error, not a data type", () => {
+  const project = checkText(`${NAME_MATCH}
+const guarded = (): Text fails Broken =>
+  try { fail(Broken({ reason: "no" })) } catch { Circle(c) => c.radius }
+`);
+  assertEquals(codes(project), ["unknown-name/004"]);
+});
+
 Deno.test("data stays legal as a variable and a function name", () => {
   const project = checkText(`
 type Int = int

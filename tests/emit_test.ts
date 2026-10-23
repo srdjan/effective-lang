@@ -675,6 +675,22 @@ Deno.test("a data type emits a TaggedStruct, a make call, and an unbrand copy wi
   assertStringIncludes(text, 'key !== "_tag"');
 });
 
+Deno.test("a match over data and error types tests the tag of each arm but the last", () => {
+  const emitted = emitFiles(projectFiles("emit/forms"), ["data-types.eff"]).get(
+    "data-types",
+  );
+  assert(emitted !== undefined, "module data-types was not emitted");
+  const text = emitted.text;
+  // The arms of `describe` over `Circle | Square`: a test for the first, none for the last.
+  assertStringIncludes(text, '$t0._tag === "data-types#Circle"');
+  assertEquals(text.split('$t0._tag === "data-types#Square"').length - 1, 0);
+  // A `_` arm is the else branch.
+  assertStringIncludes(text, ': "other")(shape)');
+  // An error and a data type share one chain, and an empty variant has a tag test.
+  assertStringIncludes(text, "((r) => r.reason)($t0)");
+  assertStringIncludes(text, '$t0._tag === "data-types#Marker"');
+});
+
 Deno.test("a data type with field names from Object.prototype keeps them valid", () => {
   const output = oneModule(`
 type Text = string

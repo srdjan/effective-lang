@@ -3199,6 +3199,33 @@ console.log(JSON.stringify({
     });
   });
 });
+Deno.test("a match over data and error types selects the arm by tag", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/forms/", FIXTURES), dir);
+    build(dir, ["data-types.eff"]);
+    const result = await runScript(
+      dir,
+      `
+import * as M from "./data-types.ts";
+const user = M.make();
+console.log(JSON.stringify({
+  circle: M.describe(M.circle()),
+  square: M.describe(M.square()),
+  lax: [M.circular(M.circle()), M.circular(M.square())],
+  outcome: [M.outcome(M.Circle.make({ radius: "r" })), M.outcome(M.reject(user))],
+  kind: [M.kind(M.mark()), M.kind(M.Circle.make({ radius: "r" }))],
+}));
+`,
+    );
+    assertEquals(result, {
+      circle: "r",
+      square: "s",
+      lax: ["r", "other"],
+      outcome: ["r", "no"],
+      kind: ["marker", "r"],
+    });
+  });
+});
 Deno.test("a pure codec over a data type decodes into data and encodes back", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

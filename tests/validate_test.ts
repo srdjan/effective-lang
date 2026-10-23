@@ -3073,6 +3073,83 @@ Deno.test("data: a data type validates and each forged rule is rejected", () => 
   );
 });
 
+const NAME_MATCH_SOURCE = `
+type Text = string
+data Circle = { radius: Text }
+data Square = { side: Text }
+error Broken = { reason: Text }
+type Id = Brand<Text>
+const area = (shape: Circle | Square): Text =>
+  match shape {
+    Circle(c) => c.radius,
+    Square(q) => q.side
+  }
+const outcome = (value: Circle | Broken): Text =>
+  match value {
+    Circle(c) => c.radius,
+    Broken(b) => b.reason
+  }
+`;
+
+Deno.test("data: a name pattern needs a subject of data and error types and a member name", () => {
+  const lowered = lowerText(NAME_MATCH_SOURCE);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const forge = (
+    name: string,
+    change: (pattern: unknown) => void,
+  ): string[] => {
+    const ir = copy(lowered.ir);
+    const declared = ir.declarations.find((d) => d.name === name);
+    assert(declared?.kind === "function" && declared.body.kind === "match");
+    change(declared.body.arms[0].pattern);
+    return codesOf(ir, lowered.sources);
+  };
+  // The first arm of `area` is a data pattern. Its name must be a member of the subject.
+  assertEquals(
+    forge("area", (p) => Object.assign(p as object, { data: "type:m#Id" })),
+    ["validation/002"],
+  );
+  assertEquals(
+    forge(
+      "area",
+      (p) => Object.assign(p as object, { data: "type:m#Missing" }),
+    ),
+    ["validation/002"],
+  );
+  // A data pattern cannot take an error name, and an error pattern cannot take a data name.
+  assertEquals(
+    forge(
+      "area",
+      (p) =>
+        Object.assign(p as object, { kind: "error", error: "error:m#Broken" }),
+    ),
+    ["validation/002"],
+  );
+  assertEquals(
+    forge(
+      "outcome",
+      (p) =>
+        Object.assign(p as object, { kind: "data", data: "type:m#Circle" }),
+    ),
+    [],
+  );
+  // A subject with a structural member rejects a name pattern.
+  const ir = copy(lowered.ir);
+  const area = ir.declarations.find((d) => d.name === "area");
+  assert(area?.kind === "function");
+  const widened = {
+    kind: "union",
+    members: [
+      { kind: "named", id: "type:m#Circle" },
+      { kind: "named", id: "type:m#Square" },
+      { kind: "record", fields: [] },
+    ],
+  };
+  Object.assign(area.parameters[0], { type: widened });
+  Object.assign(area.type.parameters, [widened]);
+  assert(codesOf(ir, lowered.sources).includes("validation/002"));
+});
+
 Deno.test("a guarded recursive alias with literal alias tags validates and its aliases are rechecked", () => {
   const lowered = lowerText(`
 type T = { tag: A, next: T } | { tag: B }

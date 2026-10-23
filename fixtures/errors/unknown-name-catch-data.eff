@@ -1,0 +1,13 @@
+type Text = string
+
+data Circle = { radius: Text }
+
+error Broken = { reason: Text }
+
+const guarded = (): Text fails Broken =>
+  try {
+    fail(Broken({ reason: "no" }))
+  } catch {
+    // error: unknown-name/004
+    Circle(c) => c.radius
+  }

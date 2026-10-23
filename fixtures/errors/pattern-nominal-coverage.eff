@@ -1,0 +1,36 @@
+type Text = string
+
+data Circle = { radius: Text }
+
+data Square = { side: Text }
+
+error Broken = { reason: Text }
+
+type Shape = Circle | Square
+
+const area = (shape: Shape): Text =>
+  // error: pattern/001
+  match shape {
+    Circle(c) => c.radius
+  }
+
+const withError = (value: Circle | Broken): Text =>
+  // error: pattern/001
+  match value {
+    Broken(b) => b.reason
+  }
+
+const unreachable = (shape: Shape): Text =>
+  match shape {
+    Circle(c) => c.radius,
+    // error: pattern/002
+    Circle(d) => d.radius,
+    Square(s) => s.side
+  }
+
+const afterWildcard = (shape: Shape): Text =>
+  match shape {
+    _ => "any",
+    // error: pattern/002
+    Square(s) => s.side
+  }

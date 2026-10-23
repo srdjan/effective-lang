@@ -782,12 +782,20 @@ class Resolver {
     }
   }
 
-  /** A constructor name in a pattern: `Some`, `None`, or an error. */
+  /**
+   * A constructor name in a pattern: `Some`, `None`, an error, or a type. The
+   * checker tells a data type from an alias or a brand.
+   */
   private ctorRef(nameNode: NodeId): void {
     const name = nameTextOf(this.tree, nameNode);
     if (name === undefined) return;
     if (name === "Some" || name === "None") {
       this.set(nameNode, { kind: "builtin", name });
+      return;
+    }
+    const target = this.namespace.get(name)?.target;
+    if (target?.kind === "type") {
+      this.set(nameNode, target);
       return;
     }
     this.errorRef(nameNode);

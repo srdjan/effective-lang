@@ -2022,7 +2022,15 @@ class BodyChecker
         "pattern/004",
         `a match cannot take a value of type ${
           this.show(subject.type)
-        }; version 0 matches options, errors, tagged records, literals, and primitives`,
+        }; version 0 matches options, errors, data types, tagged records, literals, and primitives`,
+        subjectNode,
+      );
+    } else if (domain.kind === "mixed") {
+      this.report(
+        "pattern/004",
+        `a match cannot take a value of type ${
+          this.show(subject.type)
+        }, which mixes data or error types with other types; a match over names needs data or error types only`,
         subjectNode,
       );
     }
