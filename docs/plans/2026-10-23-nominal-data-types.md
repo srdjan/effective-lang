@@ -1,17 +1,19 @@
 # Plan: nominal data types (`data` declarations)
 
-Status: validated, 2026-10-23. Fable reported 5 major and 8 minor findings. Opus accepted 12. Finding 1 needs the user's decision NT13. Section 8 maps each finding to its resolution.
+Status: validated, 2026-10-23. Fable reported 5 major and 8 minor findings. Opus accepted 12. The user decided finding 1 with NT13 (a). Section 8 maps each finding to its resolution.
 
-This plan uses the ID prefix NT. NT1 to NT4 are the user's decisions. NT5 and later are work items.
+This plan uses the ID prefix NT. NT1 to NT4 and NT13 are the user's decisions. NT5 to NT12 are work items.
 
 ## 1. Decisions
 
-The user accepted these decisions on 2026-10-23. They replace the R2 form `type User = Brand<{ ... }>` from 2026-10-17 ([R2 plan](../archive/plans/2026-10-17-r2-nominal-records.md)). They also remove the two R2 exclusions: no `match` on a record brand, and no record brand as a `withResource` operation record.
+The user accepted these decisions on 2026-10-23. They replace the R2 form `type User = Brand<{ ... }>` from 2026-10-17 ([R2 plan](../archive/plans/2026-10-17-r2-nominal-records.md)). They also remove the R2 exclusion of a `match` on a record brand. The R2 exclusion of a record brand as a `withResource` operation record stays, by NT13.
 
 - NT1 (declaration form). A new contextual declaration word `data` declares a nominal record: `data User = { id: UserId, name: Name }`. It has the same form as `error NotFound = { id: Id }`. `type` always declares an alias. `Brand<T>` stays only for a base that is not a record.
 - NT2 (runtime identity). Each `data` value carries a runtime `_tag` field, as an error value does. A `match` selects by name, as in `Circle(c) => ...`. Its coverage check works by name.
 - NT3 (encoded form). The encoded form includes `_tag`. External JSON without a tag decodes into a structural `type`, and then the program calls the constructor.
 - NT4 (unions). A union of `data` types is an open union alias, `type Shape = Circle | Square`, like `fails NotFound | Other`.
+
+- NT13 (function fields). A `data` or `error` body cannot contain a function type. `withResource` keeps structural operation records. The user chose this on 2026-10-23, after the plan validation (section 8, finding 1).
 
 The user also said that the best design has priority over the size of the change.
 
@@ -28,7 +30,7 @@ These rules define the target behavior. Section 6 lists the diagnostics.
 7. Match. A `match` on a subject whose members, after aliases are unfolded, are all `data` or `error` types uses name patterns `Name(binding)` and `_`. This generalizes the current `errors` domain to a nominal domain. Coverage needs one arm for each member, or `_`. The binding has the member type, for example `Circle`. Record patterns such as `{ kind: "c" }` do not apply to a nominal domain, and they give `pattern/004`. A subject that mixes nominal and structural members gives `pattern/004`.
 8. `catch` handlers. These stay errors only. `catch { User(u) => ... }` keeps its current diagnostic, which says that the name is a type, not an error.
 9. Data-only. A `data` type is data-only when every field type is data-only, like an error. So `data` values can occur in Codecs, Schemas, `mapGroups` results, and `withResource` operation results.
-10. `withResource`. This rule depends on decision NT13 (section 8, finding 1). With NT13 (a), a `data` or `error` body cannot contain a function type, and `withResource` keeps structural operation records. With NT13 (b), the acquisition result can be a `data` type whose base is a nonempty record of required operations.
+10. Function types. A `data` or `error` body cannot contain a function type, at any depth, after aliases are unfolded. A violation gives `declaration/015`. So `withResource` keeps structural operation records, and its R2 exclusion stays (NT13).
 11. Recursion. A `data` type can refer to itself, and two or more `data` types can refer to each other. An alias can be part of such a cycle, for example `data Cons = { head: Item, tail: List }`, `data Nil = {}`, `type List = Cons | Nil`. Every cycle must contain at least one `data` type. Every cycle must also pass through an `Option`, an array, or a union that has a member outside the cycle. A cycle through required fields only, such as `data Loop = { next: Loop }`, gives `declaration/007`. A cycle of aliases only, and any cycle through an error, keep their current rules.
 12. `Brand<T>`. The base must not be a record, a `data` type, or a union with such a member, after aliases are unfolded. A violation gives the new `declaration/014`, whose message tells the author to use `data`. Brands over primitives, literals, arrays, tuples, and options stay as they are. G2 (a field read on a brand of a union) therefore cannot occur.
 13. Unions. `type Shape = Circle | Square` is an ordinary alias of a union. Union assignability is unchanged. A value of type `Circle` fits `Shape`.
@@ -69,7 +71,7 @@ Each commit must pass `deno task check`. Do the items in this order, because eac
 - Parser (`src/core/parse.ts`): add `data` to `DECL_WORDS`. Dispatch it to a `DataDecl` node that reuses `parseErrorBody`. Add `SyntaxKind.DataDecl` (`src/core/syntax.ts`).
 - Index (`src/core/index.ts`): add `DeclKind` `"data"`, the `DECL_KINDS` row, and `splitDecl` handling, like `error`.
 - Resolver (`src/core/resolve.ts`): bind `data` in `bindingFor`, `targetText`, `describeKind`, and `resolveDecl`, using the `type:` prefix and the `type` target kind. In callee position, a `data` target routes like a brand target.
-- Checker (`src/core/check.ts`): add `checkData` beside `checkError`. It lowers the fields with the `_tag` reservation (`declaration/009`), calls `table.defineData`, and pushes a `TypeDecl` with the `data` definition. Map the `data` kind to `type` in `TypeNodeInfo` (`check.ts:1159`) and in the export ids (`check.ts:1217-1221`). `checkPrimitivePositions` (`check.ts:1246-1250`) must skip `DataDecl` as it skips `TypeDecl` and `ErrorDecl`. Change the `declaration/013` message to "a type, data, or error declaration". Apply the NT13 rule for function types in a `data` or `error` body (section 8, finding 1).
+- Checker (`src/core/check.ts`): add `checkData` beside `checkError`. It lowers the fields with the `_tag` reservation (`declaration/009`), calls `table.defineData`, and pushes a `TypeDecl` with the `data` definition. Map the `data` kind to `type` in `TypeNodeInfo` (`check.ts:1159`) and in the export ids (`check.ts:1217-1221`). `checkPrimitivePositions` (`check.ts:1246-1250`) must skip `DataDecl` as it skips `TypeDecl` and `ErrorDecl`. Change the `declaration/013` message to "a type, data, or error declaration".
 - Type table (`src/core/types.ts`): add `defineData`, `dataRecordOf`, `isDefined`, the `load` case, `show`, and `dataOnly` (it follows the fields, like an error). Assignability needs no change, because `named` is already nominal.
 - Expressions (`src/core/check_expr.ts`): the callee route `case "type"` (`check_expr.ts:586`) tests `dataRecordOf` before `brandBaseOf`, and routes a `data` type to a `dataConstruction` check. That check has the same argument rule as `brandConstruction`, records a new fact `data-construction` (`src/core/tables.ts`), and gives `named(id)`. `recordFields`, `readField`, and `recordUpdate` accept `data`. `unbrandCall` accepts `data` and gives the base record type. `comparisonClass` gives no class for `data`.
 - Lowering (`src/core/lower.ts`): `data-construction` lowers to the IR `data` node. Extend `targetId` and `lowerDeclarations`.
@@ -87,10 +89,11 @@ Each commit must pass `deno task check`. Do the items in this order, because eac
 - Emitter: `armTest` emits `sel._tag === "<token>"` for a `data` pattern, and `patternBinding` binds it.
 - Tests: error fixtures for missing coverage (`pattern/001`), an unreachable arm (`pattern/002`), a record pattern on a nominal domain, and a mixed subject (`pattern/004`). The emit form covers a match over `type Shape = Circle | Square`, a `_` arm, a subject that mixes a `data` type and an error, and an empty-body variant. Run `deno task lex:update`.
 
-### NT7. `withResource` with a `data` operation record (one commit)
+### NT7. No function types in `data` and `error` bodies (one commit)
 
-- `operationRecord` (`src/core/check_builtins/scope.ts`) and `checkOperationRecord` (`src/core/validate/families/scope.ts`) accept a `data` type and read its base record. Check that the emitted use and release calls work on a value that carries `_tag`.
-- Tests: one checker test, one validator test, and one case in the emit form.
+- Checker (`src/core/check.ts`): `checkData` and `checkError` report `declaration/015` for a function type in a field, at any depth, after aliases are unfolded. Register the code in `src/core/diagnostics.ts`. Today such an error checks clean and then crashes `build` (section 4, item 7).
+- Validator: `checkTypeDecl` and `checkErrorDecl` (`src/core/validate/world.ts`) mirror the rule.
+- Tests: error fixtures for a function field in `data`, in `error`, and through an alias. Run `deno task lex:update`.
 
 ### NT8. Recursive `data` types (one commit)
 
@@ -130,7 +133,7 @@ Each commit must pass `deno task check`. Do the items in this order, because eac
 ## 6. Diagnostics
 
 - New: `declaration/014`, "a brand base cannot be a record; declare a nominal record with `data`".
-- New with NT13 (a): `declaration/015`, "a function type cannot occur in a data or error declaration".
+- New: `declaration/015`, "a function type cannot occur in a data or error declaration".
 - Reused: `declaration/009` (the `_tag` field in `data`), `declaration/007` (an unguarded recursive `data` cycle), `type-mismatch/003` (nominal mismatch), `type-mismatch/007` (equality), `pattern/001`, `pattern/002`, and `pattern/004`.
 - NT6 adds a message for a constructor pattern whose name is a `data` type outside a nominal domain. It reuses `pattern/004` with a precise message.
 
@@ -146,7 +149,7 @@ Each commit must pass `deno task check`. Do the items in this order, because eac
 
 Fable validated the draft on 2026-10-23 and reported 13 findings. Probes are in `/tmp/nt-validate/`.
 
-1. Major: a `withResource` operation record has function fields, and the emitter has no schema for a function type. A `data` type with a function field cannot be a `TaggedStruct`, and today an error or record brand with a function field crashes `build` (section 4, item 7). Open: decision NT13. (a) A `data` or `error` body cannot contain a function type, with a new `declaration/015`, and `withResource` keeps structural records (recommended). (b) A second emitted form without a schema for a `data` type with function fields, which `dataOnly`, Codec, and Schema reject. NT7 depends on the answer.
+1. Major: a `withResource` operation record has function fields, and the emitter has no schema for a function type. A `data` type with a function field cannot be a `TaggedStruct`, and today an error or record brand with a function field crashes `build` (section 4, item 7). The user chose NT13 (a) on 2026-10-23: a `data` or `error` body cannot contain a function type (`declaration/015`), and `withResource` keeps structural records. NT7 now implements that rule. The rejected option (b) was a second emitted form without a schema.
 2. Major: an alias inside a recursive group fails today's alias rule and `deno check`. Accepted. Rule 11 and the recursive emitted form in section 3 now cover aliases in a group, and NT8 passes the set of group ids.
 3. Major: an item that adds a fixture fails the lex snapshot test. Accepted. Every such item runs `deno task lex:update`.
 4. Major: `checkPrimitivePositions` would reject primitives in a `data` body. Accepted in NT5, with the `declaration/013` message and `docs/api.md:182`.
