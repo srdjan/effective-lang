@@ -9,6 +9,7 @@ data A = { n: Count }
 data B = {}
 type AB = A | B
 error Bad = { reason: Text }
+type Shape = { kind: Kind }
 export const byName = (v: AB): Kind =>
   match v {
     A(x) => "a",
@@ -58,3 +59,9 @@ export const effectBlock = (k: Kind): Kind fails Bad => {
   const r = byNameEffect(B({}))
   "a"
 }
+// A record field needs `as const` too: Effect.succeed infers the record type.
+export const recordEffect = (v: AB): Shape fails Bad =>
+  match v {
+    A(x) => ({ kind: "a" }),
+    B(y) => fail(Bad({ reason: "b" }))
+  }

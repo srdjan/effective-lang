@@ -703,6 +703,7 @@ Deno.test("a literal result in a generated function is as const", () => {
   assertStringIncludes(text, "((x) => true as const)($t0)");
   assertStringIncludes(text, 'Effect.succeed("a" as const)');
   assertStringIncludes(text, 'return "a" as const;');
+  assertStringIncludes(text, 'Effect.succeed({ kind: "a" as const })');
   // A literal compared with a value has no literal slot.
   assertStringIncludes(text, 'k === "a"');
 });
