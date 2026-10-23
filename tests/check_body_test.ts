@@ -3747,6 +3747,21 @@ const guarded = (): Text fails Broken =>
   assertEquals(codes(project), ["unknown-name/004"]);
 });
 
+Deno.test("a data or error body that did not parse causes no cascade", () => {
+  const project = checkText(`
+type Name = string
+type Fields = { name: Name }
+data Account = Fields
+error Boom = Fields
+export const a = (account: Account): Fields => unbrand(account)
+export const b = (account: Account): Name => account.name
+export const c = (name: Name): Account => Account({ name })
+export const d = (name: Name): Name fails Boom => fail(Boom({ name }))
+export const e = (): Name fails Boom => try { d("x") } catch { Boom(x) => x.name }
+`);
+  assertEquals(codes(project), ["syntax/008", "syntax/008"]);
+});
+
 Deno.test("a data or error field cannot hold a function type at any depth", () => {
   const project = checkText(`
 type Count = int

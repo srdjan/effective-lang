@@ -1286,6 +1286,16 @@ class BodyChecker
     return this.finish(node, read.type, baseInfo);
   }
 
+  /** True for a data type or an error whose body did not parse. */
+  private hasErrorRecord(ref: TypeRef): boolean {
+    const node = this.table.node(this.table.unfold(ref));
+    if (node.kind !== "named") return false;
+    const record = isErrorId(node.id)
+      ? this.table.errorRecordOf(node.id)
+      : this.table.dataRecordOf(node.id);
+    return record !== undefined && this.isError(record);
+  }
+
   /** The record fields of a type that is a record, a named error, or a data type. */
   private recordFields(ref: TypeRef):
     | readonly {
@@ -1326,6 +1336,7 @@ class BodyChecker
       const fields = this.recordFields(member);
       const field = fields?.find((f) => f.name === name);
       if (field === undefined) {
+        if (this.hasErrorRecord(member)) return failed;
         this.report(
           "type-mismatch/006",
           fields === undefined

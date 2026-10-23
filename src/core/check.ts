@@ -1477,7 +1477,13 @@ class ModuleChecker {
       ? []
       : this.lowerer.fields(record, true);
     this.nominalFields.push(...fields);
-    this.table.defineData(id, this.lowerer.recordOf(fields).ref);
+    // A body that did not parse gets the error type, so its uses report nothing more.
+    this.table.defineData(
+      id,
+      record === undefined
+        ? this.table.error
+        : this.lowerer.recordOf(fields).ref,
+    );
     this.types.push({
       kind: "type",
       id,
@@ -1505,7 +1511,12 @@ class ModuleChecker {
       ? []
       : this.lowerer.fields(record, true);
     this.nominalFields.push(...fields);
-    this.table.defineError(id, this.lowerer.recordOf(fields).ref);
+    this.table.defineError(
+      id,
+      record === undefined
+        ? this.table.error
+        : this.lowerer.recordOf(fields).ref,
+    );
     this.errors.push({
       kind: "error",
       id,
