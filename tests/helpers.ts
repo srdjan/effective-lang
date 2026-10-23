@@ -21,14 +21,10 @@ import {
   checkProject,
 } from "../src/core/check_project.ts";
 import { emitProject, type EmittedModule } from "../src/core/emit/emit.ts";
-import {
-  type LowerError,
-  lowerModule,
-  lowerProject,
-} from "../src/core/lower.ts";
+import { lowerProject } from "../src/core/lower.ts";
 import type { Project } from "../src/core/project.ts";
 import type { ModeMap } from "../src/core/check.ts";
-import type { Execution, ModuleIR, Result, ValueId } from "../src/core/ir.ts";
+import type { Execution, ValueId } from "../src/core/ir.ts";
 import {
   childrenOf,
   hasProblem,
@@ -523,17 +519,6 @@ export function emitFiles(
   return emitFilesWithProject(files, entries).emitted;
 }
 
-/** What `lowerProject` gives, and the lowered `.effi` modules, which have companion modules. */
-export function lowerWithInterfaces(
-  project: CheckedProject,
-): ReadonlyMap<string, Result<ModuleIR, LowerError>> {
-  const lowered = new Map(lowerProject(project));
-  for (const [name, info] of project.analysis.project.modules) {
-    if (info.mode === "effi") lowered.set(name, lowerModule(project, name));
-  }
-  return lowered;
-}
-
 /** Like `emitFiles`, and also returns the project, for the import spans and the source texts. */
 export function emitFilesWithProject(
   files: Record<string, string>,
@@ -550,7 +535,7 @@ export function emitFilesWithProject(
       `diagnostics: ${project.diagnostics.map((d) => d.code).join(", ")}`,
     );
   }
-  const emitted = emitProject(lowerWithInterfaces(project), {
+  const emitted = emitProject(lowerProject(project), {
     config: project.analysis.project.config,
   });
   const result = new Map<string, EmittedModule>();

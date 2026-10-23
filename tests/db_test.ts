@@ -12,7 +12,8 @@ import {
 import { buildSpanTable, hostImportSpans } from "../src/core/emit/spans.ts";
 import { serializeModule } from "../src/core/serialize.ts";
 import { memoryHost } from "../src/core/source.ts";
-import { exampleFiles, lowerWithInterfaces } from "./helpers.ts";
+import { lowerProject } from "../src/core/lower.ts";
+import { exampleFiles } from "./helpers.ts";
 
 type Files = Record<string, string>;
 
@@ -21,7 +22,7 @@ function fromScratch(files: Files): unknown {
   const entries = Object.keys(files).filter((p) => p.endsWith(".eff")).sort();
   const checked = checkProject(memoryHost(files), "", entries);
   if (!checked.ok) return { config: checked.error };
-  const lowered = lowerWithInterfaces(checked.value);
+  const lowered = lowerProject(checked.value);
   const emitted = emitProject(lowered, {
     config: checked.value.analysis.project.config,
   });

@@ -1653,6 +1653,7 @@ Deno.test("the five examples validate with zero diagnostics", () => {
   const report = validateProject(checked.value.analysis.project, lowered);
   assertEquals([...report.keys()].sort(), [
     "collections",
+    "host/providers",
     "log",
     "main",
     "pay",
@@ -2122,7 +2123,7 @@ Deno.test("a provider with acquisition failures validates with zero diagnostics"
     "m.eff":
       'import { Db, Down } from "./db.eff"\nimport { DbLive } from "host:providers"\nexport const g = (): Int fails Down => provide(DbLive, () => Db.q())\nexport const h = (): Int fails Down => DbLive |> provide(() => Db.q())\ntype Int = int\n',
   }, ["db.eff", "m.eff"]);
-  assertEquals(lowered.modules.size, 2);
+  assertEquals(lowered.modules.size, 3);
   for (const [name, ir] of lowered.modules) {
     assertEquals(
       validateModule(ir, lowered.sources).map((d) => `${d.code} ${d.message}`),

@@ -1707,15 +1707,14 @@ export function lowerModule(
 }
 
 /**
- * Lowers every `.eff` module of the project, in topological order. A `.effi`
- * module has no entry. A module with an error value has no IR.
+ * Lowers every `.eff` and `.effi` module of the project, in topological order.
+ * A module with an error value has no IR.
  */
 export function lowerProject(
   checked: CheckedProject,
 ): ReadonlyMap<string, Result<ModuleIR, LowerError>> {
   const results = new Map<string, Result<ModuleIR, LowerError>>();
   for (const name of checked.modules.keys()) {
-    if (checked.analysis.project.modules.get(name)?.mode === "effi") continue;
     results.set(name, lowerModule(checked, name));
   }
   return results;

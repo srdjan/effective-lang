@@ -2,10 +2,10 @@ import { assert, assertEquals } from "@std/assert";
 import {
   checkProject,
   emitProject,
+  lowerProject,
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
-import { lowerWithInterfaces } from "./helpers.ts";
 import { deno, withTemporaryDirectory } from "./process_helpers.ts";
 
 Deno.test("service workflow passes real loopback HTTP and file-backed SQLite acceptance", async () => {
@@ -24,7 +24,7 @@ Deno.test("service workflow passes real loopback HTTP and file-backed SQLite acc
   const project = checkProject(memoryHost(files), "", ["workflow.eff"]);
   assert(project.ok, JSON.stringify(project));
   assertEquals(project.value.diagnostics, []);
-  const lowered = lowerWithInterfaces(project.value);
+  const lowered = lowerProject(project.value);
   for (const result of lowered.values()) {
     assert(result.ok, JSON.stringify(result));
   }

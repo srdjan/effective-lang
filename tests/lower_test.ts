@@ -127,6 +127,7 @@ Deno.test("the five examples lower, serialize, and keep sorted unique sets", () 
   const results = lowerProject(examples());
   assertEquals([...results.keys()].sort(), [
     "collections",
+    "host/providers",
     "log",
     "main",
     "pay",
@@ -139,7 +140,8 @@ Deno.test("the five examples lower, serialize, and keep sorted unique sets", () 
     assertSetsSorted(JSON.parse(text.value));
     assert(text.value.endsWith("}\n"));
     assertEquals(result.value.module, name);
-    assertEquals(result.value.sources, [`${name}.eff`]);
+    const extension = name === "host/providers" ? "effi" : "eff";
+    assertEquals(result.value.sources, [`${name}.${extension}`]);
   }
 });
 

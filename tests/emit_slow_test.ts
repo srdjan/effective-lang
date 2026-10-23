@@ -26,7 +26,6 @@ import {
   FIXTURES,
   hostBoundaryManifest,
   listFixtures,
-  lowerWithInterfaces,
 } from "./helpers.ts";
 import { deno, runScript, withTemporaryDirectory } from "./process_helpers.ts";
 
@@ -84,7 +83,7 @@ function buildProject(root: string, entries: readonly string[]): Built {
   const checked = checkProject(fileHost, root, entries);
   assert(checked.ok, JSON.stringify(checked));
   assertEquals(checked.value.diagnostics.map((d) => d.code), []);
-  const emitted = emitProject(lowerWithInterfaces(checked.value), {
+  const emitted = emitProject(lowerProject(checked.value), {
     config: checked.value.analysis.project.config,
   });
   const paths: string[] = [];

@@ -270,8 +270,8 @@ module, a diagnostic, a missing imported interface, a form without IR, and an
 internal fault. A `.effi` module lowers to its type, error, and service
 declarations, and its IR exports each of them. Its providers are not lowered.
 
-`lowerProject(checked)` does this for every `.eff` module. A `.effi` module has
-no entry.
+`lowerProject(checked)` does this for every `.eff` and `.effi` module. Pass the
+result to `emitProject` to get each generated module and each companion module.
 
 The IR holds the declarations in source order, the sorted export identities, and
 one `Import` for each import declaration. The `module` of an `Import` is the
@@ -341,7 +341,8 @@ value. Expected failures are error values with the tag `unsupported` or
 An import of another module becomes a relative `.ts` specifier. An import of an
 `.effi` declaration becomes a relative path to its companion module, such as
 `host.effi.ts`. An opaque type and a provider come from the host module of
-`effective.json`. The emitter checks provider imports against the registry:
+`effective.json`. A module that names an opaque type of a `.effi` file without a
+host module in `effective.json` gives an `unsupported` error value. The emitter checks provider imports against the registry:
 `const UsersLive$host: Layer.Layer<Users> = UsersLive`. When a provided service
 method returns a data value, the constant wraps the host Layer with run-time
 checks ([host boundary checks](archive/plans/2026-10-23-host-boundary-checks.md)).
