@@ -1,4 +1,9 @@
-import { fieldKey, sensitiveField } from "./fields.ts";
+import {
+  fieldAdapter,
+  fieldKey,
+  needsFieldAdapter,
+  sensitiveField,
+} from "./fields.ts";
 // Declarations and their order (plan section 6.5), and the export rule (I8).
 
 import type {
@@ -752,6 +757,8 @@ export class DeclarationEmitter {
         `schema: ${schema}.Top & { readonly Type: T },`,
         hard,
         "label: string,",
+        hard,
+        "adapt: (value: unknown) => unknown = (value) => value,",
       ]),
       hard,
       ") => ",
@@ -761,8 +768,9 @@ export class DeclarationEmitter {
         [
           "return (value: T): T => ",
           braces([
-            "if (is(value)) return value;",
-            "const exit = decode(value);",
+            "const fields = adapt(value);",
+            "if (is(fields)) return value;",
+            "const exit = decode(fields);",
             `const failure = ${exit}.isFailure(exit) ? ${cause}.squash(exit.cause) : undefined;`,
             [
               "const issue = failure instanceof Error",
@@ -908,7 +916,14 @@ export class DeclarationEmitter {
                 bracketed(
                   "(",
                   ")",
-                  [schemaDoc(this.scope, checked.type), JSON.stringify(label)],
+                  [
+                    schemaDoc(this.scope, checked.type),
+                    JSON.stringify(label),
+                    // A missing optional field named as on `Object.prototype` needs a copy without a prototype.
+                    ...(needsFieldAdapter(this.scope, checked.type)
+                      ? [fieldAdapter(this.scope, checked.type, "decoded")]
+                      : []),
+                  ],
                   false,
                 ),
               ],

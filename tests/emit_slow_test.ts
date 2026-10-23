@@ -3210,6 +3210,41 @@ console.log(JSON.stringify({
     });
   });
 });
+Deno.test("a data value with a missing optional prototype-named field nests in another data value", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Text = string",
+        "export data Tok = { label: Text, toString?: Text }",
+        "export type Toks = Tok[]",
+        "export data Box = { tok: Tok, all: Toks, maybe: Option<Tok> }",
+        "export const tok = (l: Text): Tok => Tok({ label: l })",
+        'export const box = (): Box => Box({ tok: tok("a"), all: [tok("b")], maybe: Some(tok("c")) })',
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    const result = await runScript(
+      dir,
+      `
+import { box } from "./main.ts";
+console.log(JSON.stringify(box()));
+`,
+    );
+    assertEquals(result, {
+      _tag: "main#Box",
+      tok: { _tag: "main#Tok", label: "a" },
+      all: [{ _tag: "main#Tok", label: "b" }],
+      maybe: {
+        _id: "Option",
+        _tag: "Some",
+        value: { _tag: "main#Tok", label: "c" },
+      },
+    });
+  });
+});
 Deno.test("a match over data and error types selects the arm by tag", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/forms/", FIXTURES), dir);
@@ -5078,6 +5113,50 @@ function buildHostChecks(dir: string): Built {
   copyDirectory(new URL("emit/host-checks/", FIXTURES), dir);
   return buildProject(dir, HOST_CHECKS_ENTRIES);
 }
+
+Deno.test("a host check accepts a data value with a missing optional prototype-named field", async () => {
+  await withTemporary(async (dir) => {
+    const files: Record<string, string> = {
+      "effective.json":
+        '{ "host": { "h": { "interface": "./h.effi", "module": "./h.ts" } } }',
+      "h.effi": [
+        "export type Text = string",
+        "export data Tok = { label: Text, toString?: Text }",
+        "export service Auth { token(): Tok }",
+        "export provider AuthLive provides Auth",
+        "",
+      ].join("\n"),
+      "main.eff": [
+        'import { Tok, Auth, AuthLive } from "host:h"',
+        "export const token = (): Tok => provide(AuthLive, () => Auth.token())",
+        "",
+      ].join("\n"),
+      "h.ts": [
+        'import { Effect, Layer } from "effect";',
+        'import { Auth, Tok } from "./h.effi.ts";',
+        "// `make` reads the missing `toString` through the prototype chain.",
+        'const input = Object.assign(Object.create(null), { label: "a" });',
+        "export const AuthLive = Layer.succeed(Auth)({",
+        "  token: () => Effect.succeed(Tok.make(input)),",
+        "});",
+        "",
+      ].join("\n"),
+    };
+    for (const [path, text] of Object.entries(files)) {
+      Deno.writeTextFileSync(`${dir}/${path}`, text);
+    }
+    build(dir, ["main.eff"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect } from "effect";
+import { token } from "./main.ts";
+console.log(JSON.stringify(await Effect.runPromise(token())));
+`,
+    );
+    assertEquals(result, { _tag: "h#Tok", label: "a" });
+  });
+});
 
 Deno.test("a wrapped host provider passes correct values, keeps stream chunks, and leaves other methods alone", async () => {
   await withTemporary(async (dir) => {

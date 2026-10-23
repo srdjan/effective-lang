@@ -714,12 +714,28 @@ export class ExprEmitter implements ExprCore {
         );
       }
       case "brand":
-      case "data":
         return emitted(member(
-          this.scope.nameOf(e.kind === "brand" ? e.brand : e.data),
+          this.scope.nameOf(e.brand),
           "make",
           callArguments([kid(e.value)]),
         ));
+      case "data": {
+        const declaration = this.scope.typeLevelDeclaration(e.data);
+        const fields = declaration?.kind === "type" &&
+            declaration.definition.kind === "data"
+          ? declaration.definition.fields
+          : [];
+        // `make` reads a missing optional field through the prototype chain,
+        // so a nested data value with such a field needs a copy without one.
+        const value = fields.some((f) => needsFieldAdapter(this.scope, f.type))
+          ? this.adaptedInput(kid(e.value), { kind: "record", fields }, "make")
+          : kid(e.value);
+        return emitted(member(
+          this.scope.nameOf(e.data),
+          "make",
+          callArguments([value]),
+        ));
+      }
       case "unbrand":
         return this.unbrand(e, kid);
       case "some": {
