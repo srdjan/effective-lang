@@ -31,7 +31,6 @@ function describeLowerError(error: LowerError): string {
     case "diagnostics":
       return `${error.module} has ${error.count} diagnostics`;
     case "unknown-module":
-    case "host-interface":
       return `${error.module}: ${error.tag}`;
     case "no-interface":
       return `${error.module} imports ${error.imported}, which has no interface`;

@@ -265,12 +265,13 @@ cascades from a half-parsed body.
 
 `lowerModule(checked, module)` returns the typed IR of one module, as a
 `Result`. The `checked` value comes from `checkProject`. The function returns an
-error value that names the module in six cases. The cases are an unknown module,
-a `.effi` file, and a diagnostic. A missing imported interface, a form without
-IR, and an internal fault are the other three.
+error value that names the module in five cases. The cases are an unknown
+module, a diagnostic, a missing imported interface, a form without IR, and an
+internal fault. A `.effi` module lowers to its type, error, and service
+declarations, and its IR exports each of them. Its providers are not lowered.
 
 `lowerProject(checked)` does this for every `.eff` module. A `.effi` module has
-no entry, because it emits nothing.
+no entry.
 
 The IR holds the declarations in source order, the sorted export identities, and
 one `Import` for each import declaration. The `module` of an `Import` is the

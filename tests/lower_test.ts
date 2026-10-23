@@ -143,13 +143,48 @@ Deno.test("the five examples lower, serialize, and keep sorted unique sets", () 
   }
 });
 
-Deno.test("a host interface module is not lowered", () => {
-  const checked = examples();
-  assertEquals(failure(checked, "host/providers").tag, "host-interface");
-  assertEquals(failure(checked, "nowhere"), {
+Deno.test("a module outside the project is not lowered", () => {
+  assertEquals(failure(examples(), "nowhere"), {
     tag: "unknown-module",
     module: "nowhere",
   });
+});
+
+Deno.test("a host interface lowers its declarations, exports each one, and validates", () => {
+  const files = {
+    "effective.json":
+      '{ "host": { "x": { "interface": "./host.effi", "module": "./adapter.ts" } } }',
+    "host.effi": `export opaque type Conn
+export type Text = string
+error Boom = { message: Text }
+export data Token = { id: Text }
+export service Clock { now(): Text fails Boom }
+export provider ClockLive provides Clock fails Boom
+`,
+    "main.eff": `import { Token, Clock, ClockLive } from "host:x"
+export const id = (t: Token): Token => t
+`,
+  };
+  const result = checkProject(memoryHost(files), "", ["main.eff"]);
+  assert(result.ok, JSON.stringify(result));
+  assertEquals(result.value.diagnostics.map((d) => d.code), []);
+  const ir = lowered(result.value, "host");
+  assertEquals(ir.sources, ["host.effi"]);
+  assertEquals(
+    ir.declarations.map((d) => `${d.kind} ${d.name}`),
+    ["type Conn", "type Text", "error Boom", "type Token", "service Clock"],
+  );
+  assertEquals(ir.exports, [
+    "error:host#Boom",
+    "service:host#Clock",
+    "type:host#Conn",
+    "type:host#Text",
+    "type:host#Token",
+  ]);
+  assertEquals(
+    validateModule(ir, new Map([["host.effi", files["host.effi"]]])),
+    [],
+  );
 });
 
 Deno.test("declarations keep source order and exports are sorted ids", () => {

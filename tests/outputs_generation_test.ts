@@ -137,7 +137,6 @@ Deno.test("writeGenerated reports every non-diagnostic lowering failure", () => 
     string,
   ][] = [
     [{ tag: "unknown-module", module: "m" }, "m: unknown-module"],
-    [{ tag: "host-interface", module: "m" }, "m: host-interface"],
     [
       { tag: "no-interface", module: "m", imported: "dep" },
       "m imports dep, which has no interface",

@@ -5,9 +5,9 @@
 // left value moved into a fresh binding takes its set from `stageSets`.
 //
 // The IR exists only for a module whose diagnostics are empty. A module in a
-// `.effi` file emits nothing. Expected failures are error values. A violated
-// internal invariant throws inside the lowering and the entry point turns it into
-// an `internal` error value.
+// `.effi` file lowers to its declarations, without its providers. Expected
+// failures are error values. A violated internal invariant throws inside the
+// lowering and the entry point turns it into an `internal` error value.
 
 import {
   arrowBody,
@@ -70,6 +70,7 @@ import {
 } from "./tables.ts";
 import {
   canonicalJson,
+  sortedUnique,
   type TypeNode,
   type TypeRef,
   type TypeTable,
@@ -83,8 +84,6 @@ type FunctionNode = Extract<TypeNode, { readonly kind: "function" }>;
 export type LowerError =
   /** The module name is not part of the checked project. */
   | { readonly tag: "unknown-module"; readonly module: string }
-  /** A `.effi` module emits nothing. */
-  | { readonly tag: "host-interface"; readonly module: string }
   /** The module has diagnostics, so it has no IR. */
   | {
     readonly tag: "diagnostics";
@@ -1627,8 +1626,8 @@ function lowerConstant(
 }
 
 /**
- * Lowers one checked module to typed IR. The module must be an `.eff` module
- * without diagnostics. The diagnostics of the module are the declaration and body
+ * Lowers one checked module to typed IR. The module must have no diagnostics.
+ * A `.effi` module lowers to its type, error, and service declarations. The diagnostics of the module are the declaration and body
  * diagnostics plus every project diagnostic whose span names the module's file.
  */
 export function lowerModule(
@@ -1643,9 +1642,6 @@ export function lowerModule(
     resolution === undefined
   ) {
     return { ok: false, error: { tag: "unknown-module", module } };
-  }
-  if (info.mode === "effi") {
-    return { ok: false, error: { tag: "host-interface", module } };
   }
   const count =
     checked.diagnostics.filter((d) => d.span.source === checkedModule.path)
@@ -1685,7 +1681,11 @@ export function lowerModule(
           ? imports.value
           : [...imports.value, prelude],
         declarations,
-        exports: checkedModule.declarations.exports,
+        // The companion module of a `.effi` file exports every declaration,
+        // because the host module needs each one. Providers are not lowered.
+        exports: info.mode === "effi"
+          ? sortedUnique(declarations.map((d) => d.id))
+          : checkedModule.declarations.exports,
       },
     };
   } catch (e) {
