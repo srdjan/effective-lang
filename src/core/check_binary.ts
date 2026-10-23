@@ -89,18 +89,33 @@ function baseClass(table: TypeTable, cls: string): string | undefined {
   return base === undefined ? undefined : comparisonClass(table, base);
 }
 
-/** Two classes are compatible when equal, or when one is a brand over the other. */
-function compatibleClasses(table: TypeTable, l: string, r: string): boolean {
-  return l === r || baseClass(table, l) === r || baseClass(table, r) === l;
+/** The class and the classes of its bases, as far as widening reaches. */
+function classChain(table: TypeTable, cls: string): readonly string[] {
+  const chain = [cls];
+  for (let next = baseClass(table, cls); next !== undefined;) {
+    if (chain.includes(next)) break;
+    chain.push(next);
+    next = baseClass(table, next);
+  }
+  return chain;
 }
 
-/** True when the class is `number`, or a brand over a `number` class. */
+/** Two classes are compatible when one widens to the other. */
+function compatibleClasses(
+  table: TypeTable,
+  l: string,
+  r: string,
+): boolean {
+  return classChain(table, l).includes(r) || classChain(table, r).includes(l);
+}
+
+/** True when the class widens to `number`. */
 function isNumericClass(table: TypeTable, cls: string): boolean {
-  return cls === "number" || baseClass(table, cls) === "number";
+  return classChain(table, cls).includes("number");
 }
 
 function isStringClass(table: TypeTable, cls: string): boolean {
-  return cls === "string" || baseClass(table, cls) === "string";
+  return classChain(table, cls).includes("string");
 }
 
 /** The result type of a binary operator, and whether the operands do not fit it. */

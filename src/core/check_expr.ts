@@ -1999,7 +1999,7 @@ class BodyChecker
         "pattern/004",
         `a match cannot take a value of type ${
           this.show(subject.type)
-        }, which mixes data or error types with other types; a match over names needs data or error types only`,
+        }, which mixes nominal records or errors with other types; a match over names needs nominal records or errors only`,
         subjectNode,
       );
     }

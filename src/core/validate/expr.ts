@@ -1382,7 +1382,9 @@ export class BodyValidator implements ValidatorCore {
           ms.some((m) => m.kind === "named" && m.id === id) &&
           (p.kind === "error" ? env.errors.has(id) : env.data.has(id));
         if (!ok) {
-          foreign(`the ${p.kind === "error" ? "error" : "data type"} ${id}`);
+          foreign(
+            `the ${p.kind === "error" ? "error" : "nominal record"} ${id}`,
+          );
         }
         bind(p.binding, ok ? { kind: "named", id } : undefined);
         return added;

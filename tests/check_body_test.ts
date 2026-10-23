@@ -2585,6 +2585,18 @@ const idNumber = (id: UserId): Bool => id === 1
   );
 });
 
+Deno.test("operator classes follow widening through a nominal type over a nominal type", () => {
+  const project = checkText(`${NOMINAL_OPERANDS}
+nominal Tip = Cents
+const same = (a: Tip, b: Tip): Bool => a < b
+const literal = (a: Tip): Bool => a > 0
+const base = (a: Tip, b: Cents): Bool => a <= b
+const sum = (a: Tip, b: Int): Int => a + b
+const other = (a: Tip, b: Meters): Bool => a < b
+`);
+  assertEquals(codes(project), ["type-mismatch/007"]);
+});
+
 Deno.test("equality takes compatible primitives, literal unions, and matching brands, and rejects records", () => {
   const project = checkText(`
 nominal Id = string

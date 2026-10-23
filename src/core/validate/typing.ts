@@ -511,22 +511,33 @@ function baseClass(env: TypeEnv, cls: string): string | undefined {
   return base === undefined ? undefined : comparisonClass(env, base);
 }
 
-/** Two classes are compatible when equal, or when one is a brand over the other. */
+/** The class and the classes of its bases, as far as widening reaches. */
+function classChain(env: TypeEnv, cls: string): readonly string[] {
+  const chain = [cls];
+  for (let next = baseClass(env, cls); next !== undefined;) {
+    if (chain.includes(next)) break;
+    chain.push(next);
+    next = baseClass(env, next);
+  }
+  return chain;
+}
+
+/** Two classes are compatible when one widens to the other. */
 export function compatibleClasses(
   env: TypeEnv,
   l: string,
   r: string,
 ): boolean {
-  return l === r || baseClass(env, l) === r || baseClass(env, r) === l;
+  return classChain(env, l).includes(r) || classChain(env, r).includes(l);
 }
 
-/** True when the class is `number`, or a brand over a `number` class. */
+/** True when the class widens to `number`. */
 export function isNumericClass(env: TypeEnv, cls: string): boolean {
-  return cls === "number" || baseClass(env, cls) === "number";
+  return classChain(env, cls).includes("number");
 }
 
 export function isStringClass(env: TypeEnv, cls: string): boolean {
-  return cls === "string" || baseClass(env, cls) === "string";
+  return classChain(env, cls).includes("string");
 }
 
 /** The members of an identity set, or `never` for the empty set. */

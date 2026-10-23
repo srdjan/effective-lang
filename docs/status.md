@@ -123,9 +123,8 @@ a body or field gives `declaration/015` or `declaration/016`.
 A `match` selects nominal records and errors by name. A nominal record can be
 recursive when every cycle has a base case. The IR has the version 3, with one
 definition kind and one construction node `nominal`. The editor, the TextMate
-grammar, and the playground highlighter know the word `nominal`. Item NM14 of the
-plan moves the website and the canonical specification to draft 0.60. Until
-then they describe `data` and `Brand` from draft 0.59.
+grammar, and the playground highlighter know the word `nominal`. The website and
+the canonical specification describe nominal types from draft 0.60.
 
 Each `.effi` file has a generated companion module, such as `host.effi.ts`
 ([plan](archive/plans/2026-10-23-host-interface-companion.md)). It holds the

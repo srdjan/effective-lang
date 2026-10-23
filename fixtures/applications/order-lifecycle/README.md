@@ -1,15 +1,15 @@
 # Order lifecycle application
 
-This application is a witness for nominal data types. It is not one of the three
+This application is a witness for nominal types. It is not one of the three
 gate applications that the stopping rule in
 [docs/status.md](../../../docs/status.md) names. It models an order and its
-pricing with `data` declarations.
+pricing with `nominal` declarations.
 
-`contracts.eff` declares the four order states as `data` types: `Pending`,
+`contracts.eff` declares the four order states as nominal records: `Pending`,
 `Paid`, `Shipped`, and `Cancelled`. It also declares the error
 `InvalidTransition` and a recursive pricing rule tree: `Fixed`, `Times`,
-`Capped`, and `Sum`. `orders.eff` imports these declarations, so data types
-cross a module boundary.
+`Capped`, and `Sum`. `orders.eff` imports these declarations, so nominal
+records cross a module boundary.
 
 Each state has a runtime `_tag` that includes the module name, for example
 `"contracts#Pending"`. A function that accepts one state, such as

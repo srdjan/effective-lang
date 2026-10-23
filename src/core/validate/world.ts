@@ -386,7 +386,7 @@ function checkDeferredFields(
       ctx.report.add(
         AREA.types,
         `${path}[${i}].type`,
-        `the field ${f.name} has a function or deferred type, which a data or error declaration cannot hold`,
+        `the field ${f.name} has a function or deferred type, which a nominal or error declaration cannot hold`,
         span,
       );
     }
@@ -543,7 +543,7 @@ function checkTypeDecl(ctx: Ctx, d: TypeDecl, path: string): void {
     ctx.report.add(
       AREA.types,
       `${path}.definition.base`,
-      "a brand base cannot be a record or a data type; declare a nominal record with data",
+      "a nominal body cannot hold a nominal record or a union with a record; declare each record alone",
       d.span,
     );
   }
