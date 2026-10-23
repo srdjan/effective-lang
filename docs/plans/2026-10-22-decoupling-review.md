@@ -707,9 +707,9 @@ Measurements for this section (M, HEAD `5c0176c`, unless marked I):
 
 - `emit/expr.ts` has 2898 lines. It is the largest file in `src/`. `structural` has 544 lines and 44 `case` labels. `schemaExpr` has 375 lines, and `leaf` has 229 lines.
 - The checker and the validator have one file for each builtin family (`check_builtins/`, `validate/families/`). The emitter has none. So a new builtin in a family edits a family file in two stages and `emit/expr.ts` in the third.
-- The family code in `emit/expr.ts` uses these `ExprEmitter` members: `pure`, `fit`, `callback`, `effectCallback`, `arrow`, `genCall`, `adaptedInput`, `suspended`, `closure`, `objectLiteral`, and `functionTypeOf`. It uses these `Scope` members: `effect`, `resolve`, `temp`, `fresh`, `nameOf`, `typeLevelDeclaration`, and `serviceParameter`. It also calls the module functions `emitted`, `at`, `free`, `callArguments`, `concurrencyArguments`, and the constant `PREC`.
+- The family code in `emit/expr.ts` uses these `ExprEmitter` members: `pure`, `fit`, `callback`, `effectCallback`, `arrow`, `genCall`, `adaptedInput`, `suspended`, `closure`, `objectLiteral`, and `functionTypeOf`. It uses these `Scope` members: `effect`, `resolve`, `temp`, `fresh`, `nameOf`, and `typeLevelDeclaration`. It also calls the module functions `emitted`, `at`, `free`, `callArguments`, `concurrencyArguments`, and `isEffectfulCallback` (only `schemaExpr`), and the constant `PREC`.
 - Only `emit/emit.ts` reads the import ledger of `Scope`: `moduleImports`, `effectImports`, `hostImports`, `usesIntFunction`, `usesIntSchema`, and `usesScopeRuntime`. Only `emit/decls.ts` calls `resetTemporaries`.
-- `emit/expr.ts` has 12 sites that call `this.scope.resolve`, test the `kind` of the result, and throw `internal(...)`.
+- `emit/expr.ts` has 12 sites that call `this.scope.resolve`, test the `kind` of the result, and throw `internal(...)`. They are at lines 887, 1077, 1086, 1103, 1123, 1194, 1208, 1254, 1275, 1425, 1448, and 1956. The two tests in `sourceLayer` (1784-1788, 1795-1800) resolve behind a guard, so they are not in this set.
 - No test checks the imports of `src/core/emit/`. The emitter imports `ir.ts`, `ids.ts`, `project.ts`, `source.ts`, `util.ts`, `diagnostics.ts` (`tsc.ts`), and `lower.ts` (type only, `emit.ts`).
 - The behavior capture records each `emitModule` result. So the capture compares the emitted text of every test input, and it is the main oracle for this phase.
 
@@ -751,8 +751,6 @@ export interface Temporaries { fresh(base: string): string; temp(): string }
 export interface TypeLookup {
   resolve(type: Type): Type;
   typeLevelDeclaration(id: DeclarationId): ...;
-  isTypeOnly(id: DeclarationId): boolean;
-  containsFunction(type: Type): boolean;
 }
 /** What `emit.ts` reads after all printing. */
 export interface ImportLedger {
@@ -767,19 +765,19 @@ export type ExprScope = EmitNames & Temporaries & TypeLookup & Pick<Scope, ...>;
 export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger { ... }
 ```
 
-`ExprScope` adds only the remaining `Scope` members that `emit/expr.ts`, `emit/types.ts`, or `emit/fields.ts` read, for example `locals`, `fieldAdapters`, and `fieldHelpers`. The implementer finds that list with the compiler. It must not contain an `ImportLedger` member or `resetTemporaries`. If `expr.ts`, `types.ts`, or `fields.ts` needs one of them, stop and report it.
+`ExprScope` adds only the remaining `Scope` members that `emit/expr.ts`, `emit/types.ts`, or `emit/fields.ts` read, for example `locals`, `hostBinding`, `fieldAdapters`, and `fieldHelpers`. `isTypeOnly` and `containsFunction` stay out of the roles, because only `decls.ts` and `Scope` read them. Export `HostBinding` and `ScopeRuntimeNames` only if the check needs it. The implementer finds that list with the compiler. It must not contain an `ImportLedger` member or `resetTemporaries`. If `expr.ts`, `types.ts`, or `fields.ts` needs one of them, stop and report it.
 
 Change the parameter types:
 
 - `ExprEmitter` takes `ExprScope` in its constructor.
-- Each exported function in `emit/types.ts` and `emit/fields.ts` takes the narrowest of `EmitNames`, `EmitNames & TypeLookup`, or `ExprScope` that compiles.
+- Each exported function in `emit/types.ts` and `emit/fields.ts` takes the narrowest of `EmitNames`, `TypeLookup`, `EmitNames & TypeLookup`, or `ExprScope` that compiles. The plan check measured: each function in `types.ts` takes `EmitNames`, and `needsFieldAdapter` takes `TypeLookup`. Every current caller passes a `Scope`.
 - `emit/emit.ts`, `emit/decls.ts`, and `src/core/editor.ts` keep `Scope`.
 
 No runtime code changes. Parity: `deno task check`. A capture is not needed, because the unit changes types only.
 
 ### IC8a (shared printing values, family context, and the first three families)
 
-New file `emit/emitted.ts`. Move these from `emit/expr.ts` without a change: `PREC`, `Emitted`, the types that `Emitted` names (`Chain`, `ChainHead`, `ChainTail`, `Run`, `CondChain`, and their own member types), `emitted`, `flush`, `at`, `free`, `callArguments`, `concurrencyText`, `concurrencyArguments`, `Mode`, and `Kid`. Export each one. Move a further function only when a family needs it, and list it in the report. `decls.ts` imports `at` from `emitted.ts`. The other functions of the conditional-chain and binary-run printers stay in `expr.ts`.
+New file `emit/emitted.ts`. Move these from `emit/expr.ts` without a change: `PREC`, `Emitted`, the types that `Emitted` names (`Chain`, `ChainHead`, `ChainTail`, `Run`, `CondChain`, and their own member types), `emitted`, `flush`, `at`, `free`, `callArguments`, `concurrencyText`, `concurrencyArguments`, `Mode`, and `Kid`. Export each one. Move a further function only when a family needs it, and list it in the report. `isEffectfulCallback` (`expr.ts:533-535`) moves into `families/schema.ts` in IC8d, because only `schemaExpr` uses it. `decls.ts` imports `at` from `emitted.ts`. The other functions of the conditional-chain and binary-run printers stay in `expr.ts`.
 
 New file `emit/families/context.ts` with the context of the family code:
 
@@ -813,9 +811,13 @@ export type StreamLeafKind = "fold-stream" | "fold-effect-stream";
 export function streamLeaf(c: ExprCore, e: ExprOf<StreamLeafKind>, children: readonly Emitted[]): Emitted;
 ```
 
-A family function takes only the parameters that its bodies use, for example `mode` for `defer`. In `structural` and `leaf`, the family cases fall through to one call, for example `case "unfold": case "map-effect": ... return streamStructural(this, e, kid);`. The compiler checks both directions. A kind in the family union without a case in `structural` reaches the `operandCall` default, which does not compile, because the kind has no row in `OPERAND_CALLS`. A case in `structural` without the kind in the union makes the call fail to compile. Use the existing `ExprOf` from `emit/shape.ts`. If `ExprOf` of a union does not narrow in a family switch, stop and report it with the compiler error.
+A family function takes only the parameters that its bodies use, for example `mode` for `defer`.
 
-The moved bodies change only so: `this.scope` becomes `c.scope`, `this.<core member>` becomes `c.<core member>`, and `this.<moved member>(` becomes `<moved member>(c, `. Comments move with their code.
+Exception to the `never` default: `ir.ts:186` declares `schedule-max`, `schedule-min`, and `schedule-concat` as one IR member, and `schedule-concat` prints through `OPERAND_CALLS`. So the default arm of `scheduleStructural` is `const rest: "schedule-concat" = e.kind; throw internal(...)`, with a comment that gives this reason. Every other family keeps `const unreachable: never = e`.
+
+`leaf` computes `const effect = this.scope.effect("Effect")` (`expr.ts:2592`) before its switch, and the leaf cases read that local. So each leaf family function starts with `const effect = c.scope.effect("Effect");` when its bodies read `effect`. The second call returns the memo, so the text does not change. Line 2592 of `leaf` stays. Do not move any other `effect`, `temp`, or `fresh` call out of its case, because the allocated names depend on the call order (for example `unfold` and `schedule-from-step`). In `structural` and `leaf`, the family cases fall through to one call, for example `case "unfold": case "map-effect": ... return streamStructural(this, e, kid);`. The compiler checks both directions. A kind in the family union without a case in `structural` reaches the `operandCall` default, which does not compile, because the kind has no row in `OPERAND_CALLS`. A case in `structural` without the kind in the union makes the call fail to compile. Use the existing `ExprOf` from `emit/shape.ts`. If `ExprOf` of a union does not narrow in a family switch, stop and report it with the compiler error.
+
+The moved bodies change only so: `this.scope` becomes `c.scope`, `this.<core member>` becomes `c.<core member>`, and `this.<moved member>(` becomes `<moved member>(c, `. The comparison script treats the `const effect` prologue of a leaf family and the schedule default arm as known additions. Comments move with their code.
 
 No file in `emit/families/` may import `emit/expr.ts`, because that makes an import cycle. Add a test to `tests/emit_shape_test.ts` or a new `tests/emit_families_test.ts`, in the form of the validator independence test (`tests/validate_test.ts:1605`). It asserts two rules. First, each import of a file in `src/core/emit/families/` resolves to `src/core/ir.ts`, `src/core/ids.ts`, or a file in `src/core/emit/` other than `expr.ts`. Second, it checks at least one file. The implementer confirms that the test rejects a planted `import "../expr.ts"` and reports it.
 
@@ -840,7 +842,7 @@ Before the move, the implementer confirms each family with the `validate/familie
 
 ### IC8d (schema)
 
-- `schema`: the structural kind `schema` (`schemaExpr` and its helpers) and the leaf kinds `schema-make`, `schema-decode`, and `schema-encode`.
+- `schema`: the structural kind `schema` (`schemaExpr` and its helpers, including `isEffectfulCallback`) and the leaf kinds `schema-make`, `schema-decode`, and `schema-encode`.
 
 Section 9 of the rederive review lists `schemaExpr` as already tight. So `schemaExpr` moves token for token, with only the receiver changes above. Its logic and its switch do not change.
 
@@ -853,7 +855,7 @@ Add to `emit/scope.ts`:
 export function resolvedAs<K extends Type["kind"]>(scope: TypeLookup, type: Type, kind: K, message: string): Extract<Type, { kind: K }>;
 ```
 
-Use it at the 12 sites. Each site keeps its message text. A site that tests two or three operands calls `resolvedAs` once for each operand, with the same message, in the order of the current test. A site that tests a value that is not the result of `resolve` stays as it is, for example the closure test of `with-resource` and `closureType`. Do not convert the throws to `Result` (section 9). Parity: `deno task check` and a capture.
+Use it at the 12 sites. Each call stays at the position of the `resolve` call that it replaces. Each site keeps its message text. A site that tests two or three operands calls `resolvedAs` once for each operand, with the same message, in the order of the current test. A site that tests a value that is not the result of `resolve` stays as it is, for example the closure test of `with-resource` and `closureType`. Do not convert the throws to `Result` (section 9). Parity: `deno task check` and a capture.
 
 ### Docs
 
@@ -868,5 +870,15 @@ For each IC8 commit, the implementer:
 3. confirms that `fixtures/golden/` and `fixtures/emit/forms/` did not change (`git status --short fixtures`).
 
 The coordinator runs two captures, one at a time: the base against the IC8d commit, and the IC8d commit against the IC4 commit. After IC4, the coordinator measures `src/core` with `scripts/measure.ts` against the base and records the result in a Phase 5 results section.
+
+### Plan check
+
+A Fable agent checked this section against HEAD `3ef0ab6`. It rated IC8c and IC4 sound, and IC2, IC8a, IC8b, and IC8d sound with changes. Its probes confirmed the two-direction compile check of the family dispatch. The coordinator verified findings 1, 3, and 4 in the code and accepted each finding. The text above includes them:
+
+- IC8b: the shared `schedule-max | schedule-min | schedule-concat` IR member breaks a `never` default, so the schedule family has its own default arm.
+- IC8d: `isEffectfulCallback` moves with `schemaExpr`.
+- IC8a and IC8b: the leaf families repeat the `effect` local as a prologue.
+- IC2: `hostBinding` is in `ExprScope`, and `TypeLookup` omits `isTypeOnly` and `containsFunction`. `serviceParameter` is used only by the core `perform` case.
+- IC4: each call stays at the position of its `resolve` call.
 
 What not to touch in Phase 5: `ir.ts`, the `OPERAND_CALLS` and `LEAF_CALLS` rows, `emit/doc.ts`, the conditional-chain and binary-run printers, `catchEffect`, `perform`, the `call` case, and the order of `case` labels in `structural` and `leaf` outside the family cases.
