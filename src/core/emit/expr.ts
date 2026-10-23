@@ -47,9 +47,13 @@ import {
   through,
 } from "./doc.ts";
 import { codecStructural } from "./families/codec.ts";
+import { collectionsLeaf } from "./families/collections.ts";
 import type { ExprCore } from "./families/context.ts";
+import { effectLeaf, effectStructural } from "./families/effect.ts";
 import { fiberLeaf } from "./families/fiber.ts";
 import { layerLeaf, layerStructural } from "./families/layer.ts";
+import { scheduleStructural } from "./families/schedule.ts";
+import { scopeLeaf } from "./families/scope.ts";
 import {
   at,
   callArguments,
@@ -57,7 +61,6 @@ import {
   type ChainHead,
   type ChainTail,
   concurrencyArguments,
-  concurrencyText,
   type CondChain,
   type Emitted,
   emitted,
@@ -770,14 +773,9 @@ export class ExprEmitter implements ExprCore {
       }
       case "closure":
         return this.closure(e, true);
-      case "defer": {
-        const effect = this.scope.effect("Effect");
-        const from = this.functionTypeOf(e.job.type);
-        const job = from !== undefined && from.execution === "pure"
-          ? this.fit(e.job, { ...from, execution: "effect" }, mode)
-          : kid(e.job);
-        return emitted([`${effect}.suspend`, callArguments([job])]);
-      }
+      case "defer":
+      case "retry-schedule":
+        return effectStructural(this, e, kid, mode);
       case "unfold": {
         const stream = this.scope.effect("Stream");
         const effect = this.scope.effect("Effect");
@@ -989,93 +987,11 @@ export class ExprEmitter implements ExprCore {
         ]);
       }
       case "schedule-spaced":
-        return emitted([
-          `${this.scope.effect("Schedule")}.spaced`,
-          callArguments([emitted([
-            `${this.scope.effect("Duration")}.millis`,
-            callArguments([kid(e.delayMillis)]),
-          ])]),
-        ]);
-      case "schedule-map": {
-        const schedule = this.scope.effect("Schedule");
-        const duration = this.scope.effect("Duration");
-        const meta = this.scope.temp();
-        const callback = this.effectCallback(e.transform);
-        const enriched = emitted(
-          `{ ...${meta}, durationMillis: ${duration}.toMillis(${meta}.duration) }`,
-        );
-        return emitted([
-          `${schedule}.map`,
-          callArguments([
-            kid(e.schedule),
-            emitted(this.arrow(
-              `(${meta})`,
-              emitted([
-                at(callback, PREC.member),
-                callArguments([enriched]),
-              ]),
-            )),
-          ]),
-        ]);
-      }
+      case "schedule-map":
       case "schedule-max":
-      case "schedule-min": {
-        const schedule = this.scope.effect("Schedule");
-        const effect = this.scope.effect("Effect");
-        const duration = this.scope.effect("Duration");
-        const meta = this.scope.temp();
-        const operation = e.kind === "schedule-max" ? "max" : "min";
-        return emitted([
-          `${schedule}.map(${schedule}.${operation}([`,
-          at(kid(e.left), PREC.yield),
-          ", ",
-          at(kid(e.right), PREC.yield),
-          `]), (${meta}) => ${effect}.succeed(${duration}.toMillis(${meta}.output)))`,
-        ]);
-      }
-      case "schedule-from-step": {
-        const policy = this.scope.resolve(e.type);
-        if (policy.kind !== "schedule") {
-          throw internal("scheduleFromStep has wrong type");
-        }
-        const schedule = this.scope.effect("Schedule");
-        const effect = this.scope.effect("Effect");
-        const cause = this.scope.effect("Cause");
-        const duration = this.scope.effect("Duration");
-        const state = this.scope.temp();
-        const decide = this.scope.temp();
-        const meta = this.scope.temp();
-        const decision = this.scope.temp();
-        const initialCallback = this.effectCallback(e.initial);
-        const decideCallback = this.effectCallback(e.decide);
-        const decideType = this.scope.resolve(e.decide.type);
-        if (decideType.kind !== "function") {
-          throw internal("schedule decision is not a function");
-        }
-        return emitted([
-          `${schedule}.fromStepWithMetadata(${effect}.suspend(() => ${effect}.map(`,
-          at(initialCallback, PREC.member),
-          "(), (",
-          state,
-          ") => { const ",
-          decide,
-          ": ",
-          typeDoc(this.scope, { ...decideType, execution: "effect" }),
-          " = ",
-          decideCallback.doc,
-          "; return (",
-          meta,
-          `: ${schedule}.InputMetadata<`,
-          typeDoc(this.scope, policy.input),
-          ">) => ",
-          `${effect}.flatMap(${decide}(${state}, ${meta}), (${decision}) => { `,
-          `if (${decision}.kind === "Done") return ${cause}.done(${decision}.output); `,
-          `${state} = ${decision}.state; `,
-          `return ${effect}.succeed([${decision}.output, ${duration}.millis(${decision}.delayMillis)] as [`,
-          typeDoc(this.scope, policy.output),
-          `, ${duration}.Duration]); }); })))`,
-        ]);
-      }
+      case "schedule-min":
+      case "schedule-from-step":
+        return scheduleStructural(this, e, kid);
       case "buffer-stream": {
         const stream = this.scope.effect("Stream");
         return emitted([
@@ -1088,32 +1004,6 @@ export class ExprEmitter implements ExprCore {
       }
       case "layer":
         return layerStructural(this, e);
-      case "retry-schedule": {
-        const schedule = this.scope.effect("Schedule");
-        const effect = this.scope.effect("Effect");
-        const option = this.scope.effect("Option");
-        const cause = this.scope.effect("Cause");
-        const duration = this.scope.effect("Duration");
-        const type = this.scope.resolve(e.type);
-        if (type.kind !== "retry-schedule") {
-          throw internal("retry schedule has wrong type");
-        }
-        const error = typeDoc(this.scope, type.error);
-        const step = this.pure(e.step);
-        const metadata = this.scope.temp();
-        const decision = this.scope.temp();
-        return emitted([
-          `${schedule}.fromStepWithMetadata<`,
-          error,
-          `, number, never, never, never, never>(${effect}.succeed((${metadata}: ${schedule}.InputMetadata<`,
-          error,
-          `>) => { const ${decision} = `,
-          at(step, PREC.member),
-          `(${metadata}.input, ${metadata}.attempt); if (${option}.isNone(${decision})) return ${cause}.done(${metadata}.attempt); `,
-          `if (${decision}.value < 0) throw new RangeError("negative retry delay"); `,
-          `return ${effect}.succeed([${metadata}.attempt, ${duration}.millis(${decision}.value)] as [number, ${duration}.Duration]); }))`,
-        ]);
-      }
       case "codec":
       case "decode":
       case "encode":
@@ -2385,54 +2275,17 @@ export class ExprEmitter implements ExprCore {
           ")",
         ]);
       }
+      case "retry":
+      case "retry-with-schedule":
       case "run":
-        return children[0];
+        return effectLeaf(this, e, children);
       case "partition-all":
-        return emitted([
-          `${effect}.partition`,
-          callArguments([
-            children[0],
-            emitted("(job) => job"),
-            ...concurrencyArguments(e.concurrency),
-          ]),
-        ]);
       case "validate-all":
-        return emitted([
-          `${effect}.mapError`,
-          callArguments([
-            emitted([
-              `${effect}.validate`,
-              callArguments([
-                children[0],
-                emitted("(job) => job"),
-                ...concurrencyArguments(e.concurrency),
-              ]),
-            ]),
-            children[1],
-          ]),
-        ]);
       case "all-results":
-        return emitted([
-          `${effect}.all`,
-          callArguments([
-            children[0],
-            emitted(
-              `{ mode: "result"${
-                e.concurrency === undefined
-                  ? ""
-                  : `, concurrency: ${concurrencyText(e.concurrency)}`
-              } }`,
-            ),
-          ]),
-        ]);
+        return collectionsLeaf(this, e, children);
       case "fork-scoped":
-        return emitted([
-          `${effect}.as`,
-          callArguments([
-            emitted([`${effect}.forkScoped`, callArguments([children[0]])]),
-            emitted("undefined"),
-          ]),
-        ]);
+      case "with-resource":
+        return scopeLeaf(this, e, children);
       case "fold-stream": {
         const stream = this.scope.effect("Stream");
         return emitted([
@@ -2459,37 +2312,6 @@ export class ExprEmitter implements ExprCore {
           ]),
         ]);
       }
-      case "with-resource": {
-        if (
-          e.acquire.kind !== "closure" || e.use.kind !== "closure" ||
-          e.release.kind !== "closure"
-        ) {
-          throw internal("with-resource requires three closures");
-        }
-        const acquire = this.closure(e.acquire, false, true);
-        const use = this.closure(e.use, false, true);
-        const release = this.closure(e.release, false, true);
-        return emitted([
-          `${effect}.acquireUseRelease`,
-          callArguments([
-            emitted([`${effect}.suspend`, callArguments([acquire])]),
-            use,
-            release,
-          ]),
-        ]);
-      }
-      case "retry": {
-        const job = this.suspended(e.job);
-        const options = emitted(`{ times: ${e.times} }`, PREC.member, {
-          huggable: true,
-        });
-        return emitted([`${effect}.retry`, callArguments([job, options])]);
-      }
-      case "retry-with-schedule":
-        return emitted([
-          `${effect}.retry`,
-          callArguments([this.suspended(e.job), this.pure(e.options)]),
-        ]);
       case "with-fiber":
       case "join-fiber":
       case "interrupt-fiber":
