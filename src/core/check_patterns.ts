@@ -237,18 +237,10 @@ export function pattern(
         );
         bindLocal(c, bindingNode, c.table.error);
         patternFact(c, node, { kind: "invalid" });
-      } else if (target?.kind === "error") {
-        let type = c.table.error;
-        if (domain.kind === "nominal" && domain.ids.includes(target.id)) {
-          type = c.table.named(target.id);
-          reach(c, node, state, `N:${target.id}`);
-        } else if (!silent) {
-          foreign(c, node, `\`${shortName(target.id)}\``, domain);
-        }
-        const binding = bindLocal(c, bindingNode, type);
-        patternFact(c, node, { kind: "error", error: target.id, binding });
       } else if (
-        target?.kind === "type" && c.table.dataRecordOf(target.id) !== undefined
+        target?.kind === "error" ||
+        (target?.kind === "type" &&
+          c.table.dataRecordOf(target.id) !== undefined)
       ) {
         let type = c.table.error;
         if (domain.kind === "nominal" && domain.ids.includes(target.id)) {
@@ -258,7 +250,13 @@ export function pattern(
           foreign(c, node, `\`${shortName(target.id)}\``, domain);
         }
         const binding = bindLocal(c, bindingNode, type);
-        patternFact(c, node, { kind: "data", data: target.id, binding });
+        patternFact(
+          c,
+          node,
+          target.kind === "error"
+            ? { kind: "error", error: target.id, binding }
+            : { kind: "data", data: target.id, binding },
+        );
       } else {
         // The resolver already reported a missing or wrong-kind name.
         if (target !== undefined && target.kind !== "unresolved") {
@@ -266,7 +264,9 @@ export function pattern(
             "pattern/004",
             target.kind === "type"
               ? `\`${shortName(target.id)}\` is ${
-                c.table.brandBaseOf(target.id) !== undefined
+                c.table.isOpaque(target.id)
+                  ? "an opaque type"
+                  : c.table.brandBaseOf(target.id) !== undefined
                   ? "a brand"
                   : "a type alias"
               }, not a data type; a constructor pattern names a data type or an error`
