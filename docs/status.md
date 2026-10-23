@@ -106,7 +106,7 @@ record these boundaries with compiled checks.
 ### Nominal types
 
 The `nominal` declaration is in place as of 2026-10-23
-([plan](plans/2026-10-23-nominal-keyword.md)). It replaces the `data` declaration
+([plan](archive/plans/2026-10-23-nominal-keyword.md)). It replaces the `data` declaration
 ([earlier plan](archive/plans/2026-10-23-nominal-data-types.md)) and `Brand<T>`.
 The form is `nominal Name = <type>`, and `type` stays the structural form. A body
 that is a record after aliases unfold gives a nominal record with a runtime
