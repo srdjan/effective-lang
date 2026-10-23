@@ -3,7 +3,7 @@ title: Emitted fields must preserve own-property presence
 date: 2026-10-21
 module: src/core/emit/fields.ts
 problem_type: logic_error
-tags: [emitter, schemas, records, optional-fields, errors, data-types]
+tags: [emitter, schemas, records, optional-fields, errors, nominal-types]
 ---
 
 # Emitted fields must preserve own-property presence
@@ -37,24 +37,30 @@ roundtrips, frozen inputs, ignored getters, directional effects, cross-module
 nominal errors and helper-name collisions. Ordinary emitted examples retain their
 existing output. The checker and independent validator do not change.
 
-## Data value copies (added 2026-10-23)
+## Nominal record copies (added 2026-10-23, updated for the nominal declaration)
 
-`unbrand` of a data value prints `$untagged<T>(value)`
-(`src/core/emit/fields.ts:161-172`, `src/core/emit/expr.ts:825`). The helper
+Construction of a nominal record prints `$untagged<T>(value)` for each argument
+whose IR node is not a `record` literal (`src/core/emit/fields.ts:161-172`,
+`src/core/emit/expr.ts:729`). Before the `nominal` declaration, `unbrand`
+printed this copy. Now a nominal value fits its base type with no call, so a
+widened value can reach another constructor with its old `_tag`. The helper
 copies the own fields, except `_tag`, into an object with no prototype. Both
 parts are necessary.
 
 The copy leaves out `_tag`, because `Schema.TaggedStruct(...).make` rejects an
-input that still has the tag of another data type. So `Twin(unbrand(user))`
-fails with "Schema validation failed" when the copy keeps `_tag`.
+input that still has the tag of another nominal record. So `Twin(user)` fails
+with "Schema validation failed" when the copy keeps `_tag`. Only the top level
+needs the copy. Measured on Effect 4.0.5: a nested `Struct` field drops a
+foreign `_tag`. `Schema.is` of a structural schema accepts the value, and its
+encode and decode drop the tag.
 
 The copy has no prototype, because `make` reads an optional field through the
-prototype chain. A probe on Effect 4.0.5 showed this. A data type with the
+prototype chain. A probe on Effect 4.0.5 showed this. A nominal record with the
 optional field `toString?: Text` fails `make` for the plain object
 `{ label: "a" }`, because the object inherits the function `toString` from
 `Object.prototype`. The same input with a null prototype passes. So a shorter
-copy such as `({ _tag, ...rest }) => rest` brings the failure back for any data
-type with an optional field whose name is on `Object.prototype`.
+copy such as `({ _tag, ...rest }) => rest` brings the failure back for any
+nominal record with an optional field whose name is on `Object.prototype`.
 
 During the work, the implementer first gave the cause as an own `constructor`
 field. That explanation was wrong: a probe with an own `constructor` field and
