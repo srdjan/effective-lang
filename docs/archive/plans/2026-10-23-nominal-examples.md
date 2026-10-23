@@ -1,6 +1,6 @@
 # Plan: examples with nominal data types
 
-Status: validated, 2026-10-23. Fable reported 2 major and 10 minor findings. Opus accepted all 12. Section 5 maps each finding to its resolution.
+Status: done, 2026-10-23. EX3 to EX6 landed in commits dd4966b (EX3), fde39f8 (EX4), and the commit that archives this plan (EX6). EX5 landed as ac83206 in the sibling repository `../effective/`. Fable validated the draft and reported 2 major and 10 minor findings. Opus accepted all 12. Section 5 maps each finding to its resolution.
 
 This plan uses the ID prefix EX. EX1 and EX2 are the user's decisions. EX3 and later are work items.
 
@@ -11,11 +11,11 @@ On 2026-10-23 the user asked for a few examples with nominal types, in this repo
 - EX1 (a). The compiled example is a new application fixture, `fixtures/applications/order-lifecycle/`. `tests/application_slow_test.ts` checks, lowers, validates, emits, type-checks, tests, and runs it, as it does for the three other applications.
 - EX2 (a). The website gets a new mini-book chapter, "Nominal data", with three checked figures. The full application goes to `effective-examples/order-lifecycle/` and is linked from the chapter and from the specification.
 
-The existing examples in `fixtures/examples/` stay structural, because their host code builds those records as plain objects (NT9 in [the nominal data types plan](../archive/plans/2026-10-23-nominal-data-types.md)).
+The existing examples in `fixtures/examples/` stay structural, because their host code builds those records as plain objects (NT9 in [the nominal data types plan](2026-10-23-nominal-data-types.md)).
 
 ## 2. The application (Opus calls)
 
-The application models an order and its pricing. It uses only the forms of the [language rules](../language-rules.md). Fable built a sketch of it in `/tmp/ex-validate/app/`: it passes `build --tsc --validate` and runs, with the changes that section 5 lists.
+The application models an order and its pricing. It uses only the forms of the [language rules](../../language-rules.md). Fable built a sketch of it in `/tmp/ex-validate/app/`: it passes `build --tsc --validate` and runs, with the changes that section 5 lists.
 
 - Modules. `contracts.eff` holds the declarations. `orders.eff` holds the functions and imports the declarations, so data types cross a module boundary.
 - Identity. `type OrderId = Brand<string>` and `type Cents = Brand<int>`. The numeric brand operators `+` and `<` apply to `Cents`.

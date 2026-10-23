@@ -46,5 +46,5 @@ They also price the sample rule from source and one rule that TypeScript builds
 with `make`. They decode valid and invalid input, check that the encoded form
 keeps `_tag`, and check the rejected decode of a wrong `_tag`.
 
-See [the plan](../../../docs/plans/2026-10-23-nominal-examples.md) for the
+See [the plan](../../../docs/archive/plans/2026-10-23-nominal-examples.md) for the
 design.
