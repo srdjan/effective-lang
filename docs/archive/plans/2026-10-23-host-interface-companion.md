@@ -1,8 +1,8 @@
 # Plan: a generated companion module for each host interface
 
-Status: validated, 2026-10-23. Fable reported 4 major and 9 minor findings. Opus accepted all 13. Section 6 maps each finding to its resolution. On 2026-10-23 the user accepted CM1 to CM5 as recommended ("yes, accept").
+Status: done, 2026-10-23. CM6 to CM12 landed in commits d7f0691 (CM6), decf945 (CM7), c2428bd (CM8), c877fc3 (CM9), e6ec178 (CM10), and the commit that archives this plan (CM12). CM11 landed as fc5acd9 in the sibling repository `../effective/`. The user accepted CM1 to CM5 as recommended. Fable reported 4 major and 9 minor findings on the draft. Opus accepted all 13. Section 6 maps each finding to its resolution.
 
-This plan uses the ID prefix CM. CM1 to CM5 are decisions for the user. CM6 and later are work items. The plan is the follow-up that HB2 (a) asked for in [the host boundary plan](../archive/plans/2026-10-23-host-boundary-checks.md).
+This plan uses the ID prefix CM. CM1 to CM5 are decisions for the user. CM6 and later are work items. The plan is the follow-up that HB2 (a) asked for in [the host boundary plan](2026-10-23-host-boundary-checks.md).
 
 ## 1. Decisions
 

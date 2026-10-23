@@ -352,7 +352,7 @@ The emitter also emits a companion module for each `.effi` file, such as
 interface, all exported, with the tags of the interface module. The TypeScript
 host module imports these from the companion module. It supplies only the
 opaque types and the providers
-([companion module](plans/2026-10-23-host-interface-companion.md)).
+([companion module](archive/plans/2026-10-23-host-interface-companion.md)).
 
 The emitter adds `export` to each declaration that the source exports and to
 each declaration that an exported interface reaches. It never renames a source
