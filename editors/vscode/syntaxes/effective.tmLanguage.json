@@ -71,7 +71,7 @@
         },
         {
           "name": "keyword.other.clause.effective",
-          "match": "\\b(?:fails|uses|provides|from)\\b"
+          "match": "\\b(?:fails|uses|provides|from|pure)\\b"
         }
       ]
     },

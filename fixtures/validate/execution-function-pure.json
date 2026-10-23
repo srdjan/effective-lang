@@ -5,178 +5,138 @@
         "kind": "alias",
         "type": {
           "kind": "primitive",
-          "name": "string"
+          "name": "int"
         }
       },
-      "id": "type:log#Message",
+      "id": "type:empty-effect#Int",
       "kind": "type",
-      "name": "Message",
+      "name": "Int",
       "span": {
-        "end": 21,
-        "source": "log.eff",
+        "end": 14,
+        "source": "empty-effect.eff",
         "start": 0
       }
     },
     {
-      "fields": [
-        {
-          "name": "message",
-          "optional": false,
-          "type": {
-            "kind": "primitive",
-            "name": "string"
-          }
-        }
-      ],
-      "id": "error:log#ConsoleUnavailable",
-      "kind": "error",
-      "name": "ConsoleUnavailable",
-      "span": {
-        "end": 69,
-        "source": "log.eff",
-        "start": 23
-      }
-    },
-    {
-      "id": "service:log#Console",
-      "kind": "service",
-      "methods": [
-        {
-          "id": "cap:log#Console.print",
-          "name": "print",
-          "span": {
-            "end": 145,
-            "source": "log.eff",
-            "start": 91
-          },
-          "type": {
-            "effects": {
-              "failures": [
-                "error:log#ConsoleUnavailable"
-              ],
-              "requirements": []
-            },
-            "execution": "effect",
-            "kind": "function",
-            "parameters": [
-              {
-                "id": "type:log#Message",
-                "kind": "named"
-              }
-            ],
-            "result": {
-              "kind": "primitive",
-              "name": "unit"
-            }
-          }
-        }
-      ],
-      "name": "Console",
-      "span": {
-        "end": 147,
-        "source": "log.eff",
-        "start": 71
-      }
-    },
-    {
       "body": {
-        "arguments": [
-          {
+        "effects": {
+          "failures": [],
+          "requirements": []
+        },
+        "execution": "effect",
+        "kind": "run",
+        "span": {
+          "end": 66,
+          "source": "empty-effect.eff",
+          "start": 47
+        },
+        "type": {
+          "kind": "primitive",
+          "name": "int"
+        },
+        "value": {
+          "effects": {
+            "failures": [],
+            "requirements": []
+          },
+          "execution": "pure",
+          "job": {
+            "body": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "literal",
+              "span": {
+                "end": 64,
+                "source": "empty-effect.eff",
+                "start": 63
+              },
+              "type": {
+                "kind": "primitive",
+                "name": "int"
+              },
+              "value": 1
+            },
             "effects": {
               "failures": [],
               "requirements": []
             },
             "execution": "pure",
-            "kind": "reference",
+            "kind": "closure",
+            "parameters": [],
             "span": {
-              "end": 265,
-              "source": "log.eff",
-              "start": 258
+              "end": 64,
+              "source": "empty-effect.eff",
+              "start": 57
             },
-            "target": "local:log#log/message",
             "type": {
-              "id": "type:log#Message",
-              "kind": "named"
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "function",
+              "parameters": [],
+              "result": {
+                "kind": "primitive",
+                "name": "int"
+              }
+            }
+          },
+          "kind": "defer",
+          "span": {
+            "end": 65,
+            "source": "empty-effect.eff",
+            "start": 51
+          },
+          "type": {
+            "effects": {
+              "failures": [],
+              "requirements": []
+            },
+            "kind": "effect",
+            "result": {
+              "kind": "primitive",
+              "name": "int"
             }
           }
-        ],
-        "capability": "cap:log#Console.print",
-        "effects": {
-          "failures": [
-            "error:log#ConsoleUnavailable"
-          ],
-          "requirements": [
-            "cap:log#Console.print"
-          ]
-        },
-        "execution": "effect",
-        "kind": "perform",
-        "span": {
-          "end": 266,
-          "source": "log.eff",
-          "start": 244
-        },
-        "type": {
-          "kind": "primitive",
-          "name": "unit"
         }
       },
       "contract": "explicit",
-      "id": "value:log#log",
+      "id": "value:empty-effect#empty",
       "kind": "function",
-      "name": "log",
-      "parameters": [
-        {
-          "id": "local:log#log/message",
-          "name": "message",
-          "span": {
-            "end": 185,
-            "source": "log.eff",
-            "start": 169
-          },
-          "type": {
-            "id": "type:log#Message",
-            "kind": "named"
-          }
-        }
-      ],
+      "name": "empty",
+      "parameters": [],
       "span": {
-        "end": 266,
-        "source": "log.eff",
-        "start": 149
+        "end": 66,
+        "source": "empty-effect.eff",
+        "start": 15
       },
       "type": {
         "effects": {
-          "failures": [
-            "error:log#ConsoleUnavailable"
-          ],
-          "requirements": [
-            "cap:log#Console.print"
-          ]
+          "failures": [],
+          "requirements": []
         },
         "execution": "pure",
         "kind": "function",
-        "parameters": [
-          {
-            "id": "type:log#Message",
-            "kind": "named"
-          }
-        ],
+        "parameters": [],
         "result": {
-          "kind": "primitive",
-          "name": "unit"
+          "id": "type:empty-effect#Int",
+          "kind": "named"
         }
       }
     }
   ],
   "exports": [
-    "value:log#log"
+    "value:empty-effect#empty"
   ],
   "format": "light-functional-ir",
   "imports": [],
-  "module": "log",
+  "module": "empty-effect",
   "sources": [
-    "log.eff"
+    "empty-effect.eff"
   ],
   "version": 3
 }

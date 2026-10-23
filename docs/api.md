@@ -180,6 +180,12 @@ gives an error value, not an exception. The function follows imports from the
 entry files. Relative imports must end in `.eff`. The import `host:key` selects
 a host interface file from `effective.json`.
 
+An optional `imports` array restricts direct imports. Each rule contains `from` and `allow` patterns.
+Patterns match normalized module names without `.eff` or `.effi`. A `*` matches one path segment; `**` matches zero or more.
+The first matching `from` rule controls the module. An unmatched module remains unrestricted.
+Host targets use exact `host:` specifiers or `host:*`. A forbidden edge reports `module/005` on the import specifier.
+Configuration and import edits update these diagnostics through the existing `Program` and language server paths.
+
 The result holds the project, one resolution table for each module, and the
 sorted diagnostics. The project holds the parse trees, the module graph, and the
 topological order. A resolution table maps a syntax node id to its target. The

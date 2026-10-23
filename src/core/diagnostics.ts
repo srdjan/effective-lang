@@ -206,6 +206,10 @@ export const DIAGNOSTIC_CODES = {
     description:
       "The execution modes of a recursive group did not settle within the round cap.",
   },
+  "execution-mode/005": {
+    category: "execution-mode",
+    description: "A pure function type declares a failure or requirement row.",
+  },
   "pattern/001": {
     category: "pattern",
     description:
@@ -318,6 +322,11 @@ export const DIAGNOSTIC_CODES = {
     category: "module",
     description:
       "Module constants depend on each other in a cycle, directly or through functions, so the module cannot initialize.",
+  },
+  "module/005": {
+    category: "module",
+    description:
+      "A direct import is not allowed by the first matching project import rule.",
   },
   "host-boundary/001": {
     category: "host-boundary",

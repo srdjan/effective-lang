@@ -1016,6 +1016,20 @@ class Parser {
           this.starts[this.pos],
           this.ends[this.pos],
         );
+        if (name === "pure") {
+          let open = this.pos + 1;
+          while (this.kinds[open] === TokenKind.Newline) open++;
+          if (
+            this.kinds[open] === TokenKind.LParen &&
+            this.parenFollowedBy(open, false)
+          ) {
+            this.begin();
+            this.tok();
+            this.skipNl();
+            this.parseFunctionType();
+            return;
+          }
+        }
         const word = TYPE_WORDS.get(name);
         if (word !== undefined && this.kinds[this.pos + 1] === TokenKind.Lt) {
           this.begin();
@@ -1065,17 +1079,7 @@ class Parser {
       case TokenKind.LParen:
         if (this.parenFollowedBy(this.pos, false)) {
           this.begin();
-          this.parseParamList();
-          if (this.la() === TokenKind.Arrow) {
-            this.skipNl();
-            this.tok();
-          } else {
-            this.missing("`=>`");
-          }
-          this.skipNl();
-          this.parseType();
-          this.parseEffects();
-          this.end(SyntaxKind.FunctionType);
+          this.parseFunctionType();
         } else {
           this.begin();
           const group = this.open("free");
@@ -1087,6 +1091,21 @@ class Parser {
       default:
         this.missing("a type");
     }
+  }
+
+  /** Parses a function type after an optional contextual `pure` token. */
+  private parseFunctionType(): void {
+    this.parseParamList();
+    if (this.la() === TokenKind.Arrow) {
+      this.skipNl();
+      this.tok();
+    } else {
+      this.missing("`=>`");
+    }
+    this.skipNl();
+    this.parseType();
+    this.parseEffects();
+    this.end(SyntaxKind.FunctionType);
   }
 
   private parseSlot(kind: TypeSlotKind): void {

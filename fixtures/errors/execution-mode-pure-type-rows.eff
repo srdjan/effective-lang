@@ -1,0 +1,5 @@
+type Int = int
+error Stop = {}
+
+// error: execution-mode/005
+type Bad = pure () => Int fails Stop

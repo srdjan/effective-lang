@@ -207,7 +207,7 @@ export const closed = (): Int => provide(supplied, () => Clock.now())
   assertEquals(closed.type.effects, { failures: [], requirements: [] });
 });
 
-Deno.test("function parameters cannot declare a pure callback contract", () => {
+Deno.test("unmarked function parameters retain effect execution", () => {
   assertEquals(
     codes({
       ...CONFIG,

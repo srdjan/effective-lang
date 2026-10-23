@@ -137,14 +137,22 @@ interface Bases {
 function lowerBases(): Bases {
   const checked = checkProject(diskHost(), "examples", EXAMPLE_ENTRIES);
   if (!checked.ok) throw new Error(JSON.stringify(checked.error));
+  const emptyEffect = checkProject(diskHost(), "ir", ["empty-effect.eff"]);
+  if (!emptyEffect.ok) throw new Error(JSON.stringify(emptyEffect.error));
   const modules = new Map<string, unknown>();
-  for (const [name, result] of lowerProject(checked.value)) {
-    if (!result.ok) throw new Error(`${name}: ${JSON.stringify(result.error)}`);
-    modules.set(name, clone(result.value));
+  for (const project of [checked.value, emptyEffect.value]) {
+    for (const [name, result] of lowerProject(project)) {
+      if (!result.ok) {
+        throw new Error(`${name}: ${JSON.stringify(result.error)}`);
+      }
+      modules.set(name, clone(result.value));
+    }
   }
   const texts = new Map<string, string>();
-  for (const info of checked.value.analysis.project.modules.values()) {
-    texts.set(info.path, info.tree.text);
+  for (const project of [checked.value, emptyEffect.value]) {
+    for (const info of project.analysis.project.modules.values()) {
+      texts.set(info.path, info.tree.text);
+    }
   }
   return { modules, texts };
 }
@@ -163,6 +171,7 @@ interface Mutation {
 }
 
 const LOG = ["log.eff"];
+const EMPTY_EFFECT = ["empty-effect.eff"];
 const MAIN = ["main.eff", "users.eff"];
 
 const MUTATIONS: readonly Mutation[] = [
@@ -283,11 +292,11 @@ const MUTATIONS: readonly Mutation[] = [
   {
     name: "execution-function-pure",
     area: "execution",
-    base: "log",
-    mutation: "The function log has declared sets but a pure execution.",
-    sources: LOG,
+    base: "empty-effect",
+    mutation: "The empty-row effect function type is recorded as pure.",
+    sources: EMPTY_EFFECT,
     apply(ir) {
-      const path = `declarations[${declIndex(ir, "log")}].type`;
+      const path = `declarations[${declIndex(ir, "empty")}].type`;
       setAt(ir, `${path}.execution`, "pure");
       return `${path}.execution`;
     },
@@ -445,6 +454,7 @@ export interface Built {
 
 /** The sources of a fixture: identifier to the fixture path of its text. */
 const SOURCE_PATHS: Readonly<Record<string, string>> = {
+  "empty-effect.eff": "ir/empty-effect.eff",
   "log.eff": "examples/log.eff",
   "main.eff": "examples/main.eff",
   "users.eff": "examples/users.eff",

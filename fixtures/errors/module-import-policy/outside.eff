@@ -1,0 +1,2 @@
+type Int = int
+export const value: Int = 1

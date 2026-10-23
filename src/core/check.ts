@@ -146,6 +146,8 @@ export interface FunctionSignature extends SignatureBase {
   readonly failures: readonly ErrorId[];
   /** Sorted and unique. A whole service is expanded to all its methods. */
   readonly requirements: readonly CapabilityId[];
+  /** Present when a binding type requires pure execution. */
+  readonly expectedExecution?: "pure";
 }
 
 export interface ConstantSignature extends SignatureBase {
@@ -727,8 +729,13 @@ export class TypeLowerer {
     }
   }
 
-  /** A function type in type syntax. Its execution defaults to `effect`. */
+  /** A function type in type syntax. An unmarked type defaults to `effect`. */
   private functionType(node: NodeId): Lowered {
+    const first = childrenOf(this.tree, node)[0];
+    const execution =
+      first !== undefined && nodeText(this.tree, first) === "pure"
+        ? "pure"
+        : "effect";
     const kids = this.kids(node);
     const paramList = kids.find((k) =>
       kindOf(this.tree, k) === SyntaxKind.ParamList
@@ -750,8 +757,18 @@ export class TypeLowerer {
     const requirements = this.requirements(
       kids.find((k) => kindOf(this.tree, k) === SyntaxKind.UsesClause),
     );
+    if (
+      execution === "pure" &&
+      (failures.length > 0 || requirements.length > 0)
+    ) {
+      this.report(
+        "execution-mode/005",
+        "a pure function type cannot declare failures or requirements",
+        this.span(node),
+      );
+    }
     return this.functionOf(
-      "effect",
+      execution,
       parameters.map((p) => p.type),
       result,
       failures,
@@ -2082,6 +2099,9 @@ class ModuleChecker {
       result: explicit ? result : undefined,
       failures: explicit ? failures : [],
       requirements: explicit ? requirements : [],
+      ...(bindingFn?.type.execution === "pure"
+        ? { expectedExecution: "pure" as const }
+        : {}),
     };
   }
 

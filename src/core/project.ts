@@ -70,9 +70,18 @@ interface HostModuleConfig {
   readonly modulePath: string;
 }
 
+interface ImportRuleConfig {
+  /** Glob over root-relative module names, without `.eff` or `.effi`. */
+  readonly from: string;
+  /** Module-name globs or `host:` specifier patterns. */
+  readonly allow: readonly string[];
+}
+
 export interface ProjectConfig {
   /** Host modules by registry key. The import `host:providers` selects the key `providers`. */
   readonly host: ReadonlyMap<string, HostModuleConfig>;
+  /** The first matching rule controls a module. No rules leave imports unrestricted. */
+  readonly imports?: readonly ImportRuleConfig[];
 }
 
 export type ConfigError =
@@ -115,8 +124,78 @@ function keySpan(text: string, name: string, from: number): Span {
     : { source: CONFIG_FILE, start: at, end: at + quoted.length };
 }
 
-const TOP_KEYS: ReadonlySet<string> = new Set(["host"]);
+const TOP_KEYS: ReadonlySet<string> = new Set(["host", "imports"]);
 const HOST_KEYS: ReadonlySet<string> = new Set(["interface", "module"]);
+const IMPORT_RULE_KEYS: ReadonlySet<string> = new Set(["from", "allow"]);
+
+function validModulePattern(pattern: string): boolean {
+  if (pattern === "" || pattern.startsWith("/") || pattern.includes("\\")) {
+    return false;
+  }
+  const parts = pattern.split("/");
+  if (
+    parts.some((part) =>
+      part === "" || part === "." || part === ".." ||
+      (part.includes("*") && part !== "*" && part !== "**") ||
+      (part !== "*" && part !== "**" && !/^[A-Za-z0-9_.-]+$/.test(part))
+    )
+  ) {
+    return false;
+  }
+  const last = parts[parts.length - 1];
+  return !last.endsWith(".eff") && !last.endsWith(".effi");
+}
+
+function validTargetPattern(pattern: string): boolean {
+  if (!pattern.startsWith("host:")) return validModulePattern(pattern);
+  const key = pattern.slice(5);
+  return key !== "" && (key === "*" || !key.includes("*"));
+}
+
+function modulePatternMatches(pattern: string, module: string): boolean {
+  const patterns = pattern.split("/");
+  const parts = module.split("/");
+  const memo = new Map<string, boolean>();
+  const matches = (patternIndex: number, partIndex: number): boolean => {
+    const key = `${patternIndex}:${partIndex}`;
+    const known = memo.get(key);
+    if (known !== undefined) return known;
+    let result: boolean;
+    if (patternIndex === patterns.length) {
+      result = partIndex === parts.length;
+    } else if (patterns[patternIndex] === "**") {
+      result = matches(patternIndex + 1, partIndex) ||
+        (partIndex < parts.length && matches(patternIndex, partIndex + 1));
+    } else {
+      result = partIndex < parts.length &&
+        (patterns[patternIndex] === "*" ||
+          patterns[patternIndex] === parts[partIndex]) &&
+        matches(patternIndex + 1, partIndex + 1);
+    }
+    memo.set(key, result);
+    return result;
+  };
+  return matches(0, 0);
+}
+
+function targetPatternMatches(pattern: string, target: string): boolean {
+  if (target.startsWith("host:")) {
+    return pattern === "host:*" || pattern === target;
+  }
+  return !pattern.startsWith("host:") && modulePatternMatches(pattern, target);
+}
+
+function importAllowed(
+  config: ProjectConfig,
+  source: string,
+  target: string,
+): boolean {
+  const rule = config.imports?.find((candidate) =>
+    modulePatternMatches(candidate.from, source)
+  );
+  return rule === undefined ||
+    rule.allow.some((pattern) => targetPatternMatches(pattern, target));
+}
 
 interface ConfigResult {
   readonly config: ProjectConfig;
@@ -154,6 +233,59 @@ export function parseConfig(
         keySpan(text, key, 0),
       ));
     }
+  }
+  const importsData = data["imports"];
+  let imports: readonly ImportRuleConfig[] | undefined;
+  if (importsData !== undefined) {
+    if (!Array.isArray(importsData)) {
+      return invalid("`imports` must be an array");
+    }
+    const rules: ImportRuleConfig[] = [];
+    let ruleStart = keySpan(text, "imports", 0).start;
+    for (let i = 0; i < importsData.length; i++) {
+      const entry = importsData[i];
+      if (!isRecord(entry)) {
+        return invalid(`imports entry ${i + 1} must be an object`);
+      }
+      const from = entry["from"];
+      const allow = entry["allow"];
+      if (typeof from !== "string") {
+        return invalid(`imports entry ${i + 1} needs a string \`from\``);
+      }
+      if (!validModulePattern(from)) {
+        return invalid(
+          `imports entry ${i + 1} has an invalid \`from\` pattern \`${from}\``,
+        );
+      }
+      if (
+        !Array.isArray(allow) ||
+        !allow.every((value) => typeof value === "string")
+      ) {
+        return invalid(`imports entry ${i + 1} needs a string array \`allow\``);
+      }
+      for (const pattern of allow) {
+        if (!validTargetPattern(pattern)) {
+          return invalid(
+            `imports entry ${
+              i + 1
+            } has an invalid \`allow\` pattern \`${pattern}\``,
+          );
+        }
+      }
+      const entryStart = keySpan(text, "from", ruleStart).start;
+      for (const field of Object.keys(entry)) {
+        if (!IMPORT_RULE_KEYS.has(field)) {
+          diagnostics.push(makeDiagnostic(
+            "module/001",
+            `unknown key \`${field}\` in imports entry ${i + 1}`,
+            keySpan(text, field, entryStart),
+          ));
+        }
+      }
+      ruleStart = entryStart + 1;
+      rules.push({ from, allow });
+    }
+    imports = rules;
   }
   const hostData = data["host"];
   const host = new Map<string, HostModuleConfig>();
@@ -205,7 +337,10 @@ export function parseConfig(
       host.set(key, { interfacePath, modulePath });
     }
   }
-  return { ok: true, value: { config: { host }, diagnostics } };
+  const config: ProjectConfig = imports === undefined
+    ? { host }
+    : { host, imports };
+  return { ok: true, value: { config, diagnostics } };
 }
 
 /** Reads and parses `effective.json` in the project root. */
@@ -378,6 +513,16 @@ class Loader {
     }
   }
 
+  private reportForbidden(importer: string, target: string, span: Span): void {
+    const source = moduleNameOf(importer);
+    if (importAllowed(this.config, source, target)) return;
+    this.diagnostics.push(makeDiagnostic(
+      "module/005",
+      `module \`${source}\` cannot import \`${target}\` under the project import rules`,
+      span,
+    ));
+  }
+
   addEntry(raw: string): void {
     const path = normalizeRelative(raw);
     if (path === undefined) {
@@ -432,6 +577,7 @@ class Loader {
         this.reportFailure(registered.interfacePath, failure, span);
         return { ...unlinked, isHost: true };
       }
+      this.reportForbidden(importer, specifier, span);
       return {
         entry,
         target: moduleNameOf(registered.interfacePath),
@@ -460,6 +606,7 @@ class Loader {
       return unlinked;
     }
     const name = moduleNameOf(resolved);
+    this.reportForbidden(importer, name, span);
     return { entry, target: name, label: name, isHost: false };
   }
 

@@ -2053,6 +2053,16 @@ export function checkFunctionBody(
     requirements: explicit ? signature.requirements : [],
   };
   const run = checker.checkBody(bodyNode, contract, undefined);
+  if (
+    signature.expectedExecution === "pure" && run.mode !== "pure" &&
+    bodyNode !== undefined
+  ) {
+    checker.report(
+      "type-mismatch/003",
+      "the function body has effect execution, but a pure function is expected",
+      bodyNode,
+    );
+  }
   for (const parameter of signature.parameters) {
     if (parameter.borrow) {
       checkBorrowedParameter(checker, bodyNode, parameter, run.result);

@@ -1,0 +1,2 @@
+// error: module/005
+import { value } from "../outside.eff"

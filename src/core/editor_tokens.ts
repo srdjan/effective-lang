@@ -37,6 +37,7 @@ const contextualKeywords = new Set([
   "uses",
   "provides",
   "borrow",
+  "pure",
 ]);
 
 function resolvedKind(

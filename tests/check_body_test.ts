@@ -2015,7 +2015,7 @@ Deno.test("a pipeline stage records the closed builtin specialization", () => {
   assert(filter.kind === "builtin");
   assertEquals(
     project.table.show(filter.specialized),
-    "(User[], (User) => boolean) => User[]",
+    "pure (User[], pure (User) => boolean) => User[]",
   );
   assertEquals(filter.ir.execution, "pure");
   assertEquals(filter.ir.parameters.length, 2);
@@ -2024,7 +2024,7 @@ Deno.test("a pipeline stage records the closed builtin specialization", () => {
   assert(map.kind === "builtin");
   assertEquals(
     project.table.show(map.specialized),
-    "(User[], (User) => string) => string[]",
+    "pure (User[], pure (User) => string) => string[]",
   );
   const fold = factsOf(project, "collections", "total").find((f) =>
     f.kind === "builtin"
@@ -2032,7 +2032,7 @@ Deno.test("a pipeline stage records the closed builtin specialization", () => {
   assert(fold !== undefined && fold.kind === "builtin");
   assertEquals(
     project.table.show(fold.specialized),
-    "(Amount[], Amount, (Amount, Amount) => Amount) => Amount",
+    "pure (Amount[], Amount, pure (Amount, Amount) => Amount) => Amount",
   );
 });
 

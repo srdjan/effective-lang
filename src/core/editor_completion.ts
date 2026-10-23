@@ -224,6 +224,7 @@ export function completionsAt(
         ...EFFECT_ERROR_IDS.keys(),
       ]
     ) if (!values.has(name)) values.set(name, make(name, "type"));
+    values.set("pure", make("pure", "type"));
   } else if (context === "fails") {
     for (const name of EFFECT_ERROR_IDS.keys()) {
       values.set(name, make(name, "class"));

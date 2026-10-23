@@ -1,0 +1,2 @@
+type Int = int
+export const empty = (): Int => run(defer(() => 1))

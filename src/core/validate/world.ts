@@ -281,8 +281,23 @@ export function checkTypeIds(
       case "stream":
       case "schedule":
       case "sink":
+        effects(`${at}.effects`, t.effects);
+        return;
       case "function":
         effects(`${at}.effects`, t.effects);
+        if (
+          t.execution === "pure" &&
+          (t.effects.failures.length > 0 ||
+            t.effects.requirements.length > 0)
+        ) {
+          report.add(
+            AREA.types,
+            at,
+            "a pure function type must have empty failure and requirement rows",
+            span,
+          );
+          ok = false;
+        }
         return;
       case "provider":
         t.provides.forEach((id, i) => {

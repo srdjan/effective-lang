@@ -263,6 +263,7 @@ Deno.test("checkTypeIds orders a kind's own check against its children", () => {
       `validation/001 ${ROOT}.parameters[0]: ${missing}`,
       `validation/001 ${ROOT}.result: ${missing}`,
       `validation/001 ${ROOT}.effects.failures[0]: the failure error:m#Gone is not a declared error`,
+      `validation/002 ${ROOT}: a pure function type must have empty failure and requirement rows`,
     ],
   );
   // A retry schedule reports its child first, then the nominal error rule.

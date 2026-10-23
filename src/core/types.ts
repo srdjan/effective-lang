@@ -1502,7 +1502,10 @@ export class TypeTable {
         const uses = node.requirements.length === 0
           ? ""
           : ` uses ${node.requirements.map(idName).join(" | ")}`;
-        return `(${parameters}) => ${this.show(node.result)}${fails}${uses}`;
+        const execution = node.execution === "pure" ? "pure " : "";
+        return `${execution}(${parameters}) => ${
+          this.show(node.result)
+        }${fails}${uses}`;
       }
       case "provider":
         return `provider provides ${node.provides.map(idName).join(" | ")}`;

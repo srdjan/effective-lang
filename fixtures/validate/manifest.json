@@ -94,10 +94,10 @@
       "area": "execution",
       "code": "validation/004",
       "file": "execution-function-pure.json",
-      "mutation": "The function log has declared sets but a pure execution.",
-      "path": "declarations[3].type.execution",
+      "mutation": "The empty-row effect function type is recorded as pure.",
+      "path": "declarations[1].type.execution",
       "sources": {
-        "log.eff": "examples/log.eff"
+        "empty-effect.eff": "ir/empty-effect.eff"
       }
     },
     {
