@@ -104,12 +104,20 @@
       "c7905a710a5e1b4b"
     ],
     "fixtures/emit/host-checks/host.effi": [
-      "9b7d65f9d89992c3",
-      "626df46ad700459c"
+      "4b4a5f704b4fa15e",
+      "a450f2bfa4a13759"
     ],
     "fixtures/emit/host-checks/main.eff": [
       "3e3afdecf19ac4d2",
       "08525f150fe07ddf"
+    ],
+    "fixtures/emit/host-companion/h.effi": [
+      "bd1179d6890967ac",
+      "983a9547d700a61d"
+    ],
+    "fixtures/emit/host-companion/main.eff": [
+      "b8aef8514f430047",
+      "b883e86e369ca6bc"
     ],
     "fixtures/emit/schedules/composition.eff": [
       "b012eb53381c3d61",

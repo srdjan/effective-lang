@@ -978,6 +978,19 @@ function hostChecksMain(): { text: string; start: number; end: number } {
   return { text: emitted.text, start, end };
 }
 
+Deno.test("source code imports a host interface data type, error, and service from the companion module", () => {
+  const emitted = emitFiles(projectFiles("emit/host-companion"), ["main.eff"]);
+  const text = emitted.get("main")?.text ?? "";
+  assertStringIncludes(
+    text,
+    'import { Boom, Clock, Count, Text, Tok } from "./h.effi.ts";',
+  );
+  assertStringIncludes(text, 'import { ClockLive } from "./adapter.ts";');
+  assertStringIncludes(text, "Tok.make({ id })");
+  assertStringIncludes(text, 'new Boom({ message: "x" })');
+  assertEquals(text.includes('"./h.ts"'), false);
+});
+
 Deno.test("a provider with data results is wrapped, with a check for each data method", () => {
   const { text, start, end } = hostChecksMain();
   // The helper and the check constants come once, before the assertion.
@@ -989,9 +1002,10 @@ Deno.test("a provider with data results is wrapped, with a check for each data m
       'const RowsLive$list = $hostCheck(Schema.Array(Entry), "Rows.list");',
       'const RowsLive$watch = $hostCheck(Entry, "Rows.watch");',
       "Schema.Struct({ count: Count, first: Row }),",
+      'const AuthLive$token = $hostCheck(Token, "Auth.token");',
     ]
   ) assertStringIncludes(text, line);
-  assertEquals(text.split("= $hostCheck(").length - 1, 5);
+  assertEquals(text.split("= $hostCheck(").length - 1, 6);
   assert(
     indexOfOrFail(text, "const $hostCheck = ") <
       indexOfOrFail(text, "const RowsLive$get = "),
@@ -1023,13 +1037,18 @@ Deno.test("a provider with data results is wrapped, with a check for each data m
   assertStringIncludes(text, "host value of ${label} does not match its type");
 });
 
-Deno.test("a provider whose data type comes from its host interface keeps the plain assertion", () => {
+Deno.test("a provider whose data type comes from its host interface is checked against the companion module", () => {
   const { text } = hostChecksMain();
   assertStringIncludes(
     text,
-    "const AuthLive$host: Layer.Layer<Auth> = AuthLive;",
+    "const AuthLive$host: Layer.Layer<Auth> = Layer.effect(Auth)(",
   );
-  assertEquals(text.includes("AuthLive$token"), false);
+  assertStringIncludes(
+    text,
+    "token: () => Effect.map($s.token(), AuthLive$token),",
+  );
+  assertStringIncludes(text, 'import { Auth, Token } from "./host.effi.ts";');
+  assertStringIncludes(text, 'import { AuthLive, RowsLive } from "./host.ts";');
 });
 
 Deno.test("a provider without data results keeps the plain assertion and emits no helper", () => {

@@ -1,0 +1,9 @@
+import { Boom, Tok, Text, Count, Clock, ClockLive } from "host:h"
+
+export const make = (id: Text): Tok => Tok({ id: id })
+
+export const label = (e: Boom): Text => e.message
+
+export const boom = (): Count fails Boom => fail(Boom({ message: "x" }))
+
+export const read = (): Count fails Boom => provide(ClockLive, () => Clock.now())

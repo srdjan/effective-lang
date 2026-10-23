@@ -1,12 +1,6 @@
-import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
+import { Effect, Layer, Option, Stream } from "effect";
 import { Boom, Clock, Gap, Pings, Row, Rows } from "./contracts.ts";
-
-export const Token = Schema.TaggedStruct("host#Token", { id: Schema.String });
-export type Token = typeof Token.Type;
-export class Auth extends Context.Service<
-  Auth,
-  { readonly token: () => Effect.Effect<Token> }
->()("host#Auth") {}
+import { Auth, Token } from "./host.effi.ts";
 
 export const AuthLive = Layer.succeed(Auth)({
   token: () => Effect.succeed(Token.make({ id: "t" })),

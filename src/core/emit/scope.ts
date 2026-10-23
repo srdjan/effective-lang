@@ -24,6 +24,7 @@ import {
 } from "../ids.ts";
 import {
   generatedPathOf,
+  moduleNameOf,
   normalizeRelative,
   type ProjectConfig,
 } from "../project.ts";
@@ -441,18 +442,26 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
           hostName: this.fresh(`${binding.name}$host`),
           specifier,
         });
-      } else if (
-        binding.target.startsWith("type:") ||
-        binding.target.startsWith("service:")
-      ) {
+      } else {
         this.bound.set(binding.target, binding.name);
-        const names = this.hostDeclarations.get(specifier) ??
-          new Map<string, ImportedName>();
-        names.set(nameOfId(binding.target), {
-          local: binding.name,
-          typeOnly: binding.target.startsWith("type:"),
-        });
-        this.hostDeclarations.set(specifier, names);
+        const declaration = this.typeLevelDeclaration(binding.target);
+        if (declaration?.kind === "type" && declaration.opaque === true) {
+          const names = this.hostDeclarations.get(specifier) ??
+            new Map<string, ImportedName>();
+          names.set(nameOfId(binding.target), {
+            local: binding.name,
+            typeOnly: true,
+          });
+          this.hostDeclarations.set(specifier, names);
+        } else {
+          // The companion module of the interface owns every other declaration.
+          this.addImport(
+            moduleOfId(binding.target),
+            nameOfId(binding.target),
+            binding.name,
+            this.isTypeOnly(binding.target),
+          );
+        }
       }
     }
   }
@@ -712,12 +721,28 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
     names.set(exported, { local, typeOnly });
   }
 
+  /** The companion module path of each host interface module, by module name. */
+  private companionPaths(): Map<string, string> {
+    const paths = new Map<string, string>();
+    for (const host of this.config.host.values()) {
+      const path = normalizeRelative(host.interfacePath);
+      if (path !== undefined) {
+        paths.set(moduleNameOf(path), generatedPathOf(path));
+      }
+    }
+    return paths;
+  }
+
   /** Imports of other generated modules, sorted by specifier. */
   moduleImports(): ImportGroup[] {
     const groups: ImportGroup[] = [];
+    const companions = this.companionPaths();
     for (const [module, names] of this.foreignImports) {
       groups.push({
-        specifier: relativeSpecifier(this.path, `${module}.ts`),
+        specifier: relativeSpecifier(
+          this.path,
+          companions.get(module) ?? `${module}.ts`,
+        ),
         names: [...names].map(([exported, imported]) => ({
           exported,
           local: imported.local,

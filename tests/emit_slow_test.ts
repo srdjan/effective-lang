@@ -26,6 +26,7 @@ import {
   FIXTURES,
   hostBoundaryManifest,
   listFixtures,
+  lowerWithInterfaces,
 } from "./helpers.ts";
 import { deno, runScript, withTemporaryDirectory } from "./process_helpers.ts";
 
@@ -83,7 +84,7 @@ function buildProject(root: string, entries: readonly string[]): Built {
   const checked = checkProject(fileHost, root, entries);
   assert(checked.ok, JSON.stringify(checked));
   assertEquals(checked.value.diagnostics.map((d) => d.code), []);
-  const emitted = emitProject(lowerProject(checked.value), {
+  const emitted = emitProject(lowerWithInterfaces(checked.value), {
     config: checked.value.analysis.project.config,
   });
   const paths: string[] = [];
@@ -192,7 +193,14 @@ Deno.test("the emitted examples and users-live.ts pass deno check under strict s
     const generated = buildExamples(dir);
     assertEquals(
       [...generated].sort(),
-      ["collections.ts", "log.ts", "main.ts", "pay.ts", "users.ts"],
+      [
+        "collections.ts",
+        "host/providers.effi.ts",
+        "log.ts",
+        "main.ts",
+        "pay.ts",
+        "users.ts",
+      ],
     );
     await check(dir, [...generated, "users-live.ts"]);
   });
@@ -5074,7 +5082,11 @@ function buildHostChecks(dir: string): Built {
 Deno.test("a wrapped host provider passes correct values, keeps stream chunks, and leaves other methods alone", async () => {
   await withTemporary(async (dir) => {
     const built = buildHostChecks(dir);
-    assertEquals([...built.paths].sort(), ["contracts.ts", "main.ts"]);
+    assertEquals([...built.paths].sort(), [
+      "contracts.ts",
+      "host.effi.ts",
+      "main.ts",
+    ]);
     await check(dir, ["main.ts", "contracts.ts", "host.ts"]);
     const main = built.emitted.get("main")?.text ?? "";
     assert(main.includes("Layer.mergeAll("), main);
@@ -5139,7 +5151,7 @@ console.log(JSON.stringify({
   summary: await defect(M.summary()),
   total: await value(M.total()),
   ping: await value(M.ping()),
-  token: await Effect.runPromise(M.token()),
+  token: await defect(M.token()),
 }));
 `,
     );
@@ -5162,10 +5174,16 @@ console.log(JSON.stringify({
     message("list", "at [1]");
     message("watch", "");
     message("summary", 'at ["first"]');
-    // A method without a data result and a provider of a host interface type pass the value through.
+    // A method without a data result passes the value through.
     assertEquals(found.total, 1.5);
     assertEquals(found.ping, "pong");
-    assertEquals(found.token, { _tag: "host#Nope", id: "t" });
+    // A data type of the host interface has a schema in the companion module, so its result is checked too.
+    const token = found.token;
+    assert(typeof token === "string", JSON.stringify(token));
+    assert(
+      token.startsWith("host value of Auth.token does not match its type: "),
+      token,
+    );
   });
 });
 
@@ -5175,8 +5193,8 @@ Deno.test("the emitted host check modules are a fixed point of deno fmt", async 
     const run = await deno(dir, ["fmt", "--check", ...built.paths]);
     assertEquals(run.code, 0, `deno fmt --check failed:\n${run.stderr}`);
     assert(
-      run.stderr.includes("Checked 2 files"),
-      `deno fmt did not check both files:\n${run.stderr}`,
+      run.stderr.includes("Checked 3 files"),
+      `deno fmt did not check all three files:\n${run.stderr}`,
     );
   });
 });
@@ -5187,11 +5205,9 @@ Deno.test("a host module with its own service class and a missing method gives o
     Deno.writeTextFileSync(
       `${dir}/host.ts`,
       [
-        'import { Context, Effect, Layer, Schema } from "effect";',
+        'import { Context, Effect, Layer } from "effect";',
         'import { Pings, Row } from "./contracts.ts";',
-        'export const Token = Schema.TaggedStruct("host#Token", { id: Schema.String });',
-        "export type Token = typeof Token.Type;",
-        'export class Auth extends Context.Service<Auth, { readonly token: () => Effect.Effect<Token> }>()("host#Auth") {}',
+        'import { Auth, Token } from "./host.effi.ts";',
         'export const AuthLive = Layer.succeed(Auth)({ token: () => Effect.succeed(Token.make({ id: "t" })) });',
         'class OwnRows extends Context.Service<OwnRows, { readonly get: (key: string) => Effect.Effect<Row> }>()("contracts#Rows") {}',
         "export const RowsLive = Layer.merge(",

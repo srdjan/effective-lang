@@ -1,16 +1,14 @@
-import { Cause, Context, Effect, Layer, Schema } from "effect";
+import { Cause, Effect, Layer, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import type * as SqlConnection from "effect/sql/SqlConnection";
 import * as Statement from "effect/sql/Statement";
 import * as Reactivity from "effect/reactivity/Reactivity";
 import { type Order, Store, StoreFailure } from "./contracts.ts";
+import { Runtime } from "./host.effi.ts";
 
 export interface Backend {
   readonly acquire: SqlConnection.Acquirer;
 }
-export class Runtime extends Context.Service<Runtime, {
-  readonly database: () => Effect.Effect<Backend, StoreFailure>;
-}>()("service-workflow#Runtime") {}
 
 // Map each typed reason without discarding a simultaneous cleanup defect.
 const translate = <A, E, R>(

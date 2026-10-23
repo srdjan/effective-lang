@@ -2,7 +2,7 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { Effect, Layer, Schema, Stream } from "effect";
 import type * as SqlConnection from "effect/sql/SqlConnection";
 import { ConnectionError, SqlError, UnknownError } from "effect/sql/SqlError";
-import { Runtime } from "./adapter.ts";
+import { Runtime } from "./host.effi.ts";
 import { Catalog, CatalogFailure } from "./contracts.ts";
 
 export interface IntegrationOptions {

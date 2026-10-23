@@ -8,6 +8,7 @@ fixtures/**/*.ts.map
 !fixtures/emit/sinks/host.ts
 !fixtures/emit/host-checks/host.ts
 !fixtures/emit/host-checks/host-wrong.ts
+!fixtures/emit/host-companion/adapter.ts
 !fixtures/host-boundary/**
 editors/vscode/node_modules/
 playground/dist/

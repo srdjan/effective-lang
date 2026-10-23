@@ -7,10 +7,10 @@ import { assert, assertEquals } from "@std/assert";
 import {
   checkProject,
   emitProject,
-  lowerProject,
   memoryHost,
   validateProject,
 } from "../src/core/mod.ts";
+import { lowerWithInterfaces } from "./helpers.ts";
 
 /** The fields of the JSON that `main.ts` prints. Each application prints its own subset. */
 interface Report {
@@ -121,7 +121,7 @@ for (const app of APPLICATIONS) {
     const project = checkProject(memoryHost(files), "", [app.entry]);
     assert(project.ok, JSON.stringify(project));
     assertEquals(project.value.diagnostics, []);
-    const lowered = lowerProject(project.value);
+    const lowered = lowerWithInterfaces(project.value);
     for (const result of lowered.values()) {
       assert(result.ok, JSON.stringify(result));
     }

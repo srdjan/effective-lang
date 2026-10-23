@@ -1,0 +1,6 @@
+export type Count = int
+export type Text = string
+export error Boom = { message: Text }
+export data Tok = { id: Text }
+export service Clock { now(): Count fails Boom }
+export provider ClockLive provides Clock

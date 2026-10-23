@@ -5,7 +5,8 @@ import {
   ConstraintError,
   SqlError,
 } from "effect/sql/SqlError";
-import { type Backend, Runtime } from "./adapter.ts";
+import type { Backend } from "./adapter.ts";
+import { Runtime } from "./host.effi.ts";
 import {
   Catalog,
   CatalogFailure,

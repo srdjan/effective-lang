@@ -6,7 +6,12 @@ import { assert, assertEquals } from "@std/assert";
 import { decodeMappings } from "../src/core/emit/sourcemap.ts";
 import { tscConfig } from "../src/cli/tsc.ts";
 import { COMPANION_FILES, copyDirectory, FIXTURES } from "./helpers.ts";
-import { deno, type Run, withTemporaryDirectory } from "./process_helpers.ts";
+import {
+  deno,
+  type Run,
+  runScript,
+  withTemporaryDirectory,
+} from "./process_helpers.ts";
 
 const REPOSITORY = new URL("../", import.meta.url).pathname;
 
@@ -177,6 +182,35 @@ Deno.test("build --tsc checks the companion module of a host interface, and deno
     assertEquals(map.sources, ["host.effi"]);
     const fmt = await deno(dir, ["fmt", "--check", "host.effi.ts"]);
     assertEquals(fmt.code, 0, `deno fmt --check failed:\n${fmt.stderr}`);
+  });
+});
+
+Deno.test("source code constructs a host interface data type and error from its companion module, and runs", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/host-companion/", FIXTURES), dir);
+    const built = await effective(["build", dir, "--tsc"]);
+    assertEquals(built.code, 0, `${built.stdout}${built.stderr}`);
+    Deno.writeTextFileSync(`${dir}/deno.json`, tscConfig());
+    const result = await runScript(
+      dir,
+      `
+import { Effect } from "effect";
+import { boom, label, make, read } from "./main.ts";
+const error = await Effect.runPromise(Effect.flip(boom()));
+console.log(JSON.stringify({
+  made: make("a"),
+  read: await Effect.runPromise(read()),
+  tag: error._tag,
+  label: label(error),
+}));
+`,
+    );
+    assertEquals(result, {
+      made: { _tag: "h#Tok", id: "a" },
+      read: 7,
+      tag: "h#Boom",
+      label: "x",
+    });
   });
 });
 

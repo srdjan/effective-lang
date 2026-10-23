@@ -17,7 +17,6 @@ import type {
 } from "../ir.ts";
 import { SCOPE_CAPABILITY } from "../ir.ts";
 import { stronglyConnectedComponents } from "../modes.ts";
-import { moduleNameOf, normalizeRelative } from "../project.ts";
 import {
   assignment,
   braces,
@@ -40,7 +39,6 @@ import { ExprEmitter } from "./expr.ts";
 import {
   internal,
   isDeferredType,
-  moduleOfId,
   nameOfId,
   type Scope,
   serviceOfCapability,
@@ -792,32 +790,21 @@ export class DeclarationEmitter {
     ];
   }
 
-  /** The names of the declarations that the `.effi` files of the host registry declare. */
-  private hostInterfaceModules(): Set<string> {
-    const modules = new Set<string>();
-    for (const host of this.scope.config.host.values()) {
-      const path = normalizeRelative(host.interfacePath);
-      if (path !== undefined) modules.add(moduleNameOf(path));
-    }
-    return modules;
-  }
-
   /**
    * How a result type can be checked at the host boundary: `data` when it
    * has a schema value in this module and contains a data type, `plain` when
    * it has a schema and no data type, `none` when it has no schema value (a
-   * function, a deferred, opaque, or host interface type).
+   * function, a deferred, or opaque type).
    */
   private checkKind(
     type: Type,
-    hostModules: ReadonlySet<string>,
     seen: Set<DeclarationId>,
   ): "data" | "plain" | "none" {
     if (isDeferredType(type)) return "none";
     const all = (types: readonly Type[]) => {
       let kind: "data" | "plain" | "none" = "plain";
       for (const t of types) {
-        const found = this.checkKind(t, hostModules, seen);
+        const found = this.checkKind(t, seen);
         if (found === "none") return "none";
         if (found === "data") kind = "data";
       }
@@ -834,7 +821,6 @@ export class DeclarationEmitter {
         if (declaration === undefined || declaration.kind === "service") {
           return "none";
         }
-        if (hostModules.has(moduleOfId(type.id))) return "none";
         if (declaration.kind === "error") return "plain";
         if (declaration.opaque === true) return "none";
         switch (declaration.definition.kind) {
@@ -843,11 +829,7 @@ export class DeclarationEmitter {
           case "brand":
             return "plain";
           case "alias":
-            return this.checkKind(
-              declaration.definition.type,
-              hostModules,
-              seen,
-            );
+            return this.checkKind(declaration.definition.type, seen);
         }
         break;
       }
@@ -867,12 +849,11 @@ export class DeclarationEmitter {
   /** The type that a provided method checks: its result, or the element of a result stream. */
   private checkedType(
     result: Type,
-    hostModules: ReadonlySet<string>,
   ): { readonly type: Type; readonly stream: boolean } | undefined {
     const resolved = this.scope.resolve(result);
     const stream = resolved.kind === "stream";
     const type = resolved.kind === "stream" ? resolved.element : result;
-    return this.checkKind(type, hostModules, new Set()) === "data"
+    return this.checkKind(type, new Set()) === "data"
       ? { type, stream }
       : undefined;
   }
@@ -887,7 +868,6 @@ export class DeclarationEmitter {
     host: { readonly local: string },
     provider: Extract<Type, { readonly kind: "provider" }>,
   ): { readonly checks: Doc[]; readonly value: Doc } | undefined {
-    const hostModules = this.hostInterfaceModules();
     const services = servicesOf(provider.provides).map((id) => {
       const declaration = this.scope.typeLevelDeclaration(id);
       if (declaration?.kind !== "service") {
@@ -898,7 +878,7 @@ export class DeclarationEmitter {
     const planned = services.map((service) =>
       service.methods.map((method) => ({
         method,
-        checked: this.checkedType(method.type.result, hostModules),
+        checked: this.checkedType(method.type.result),
       }))
     );
     if (!planned.some((methods) => methods.some((m) => m.checked))) {
