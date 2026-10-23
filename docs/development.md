@@ -36,7 +36,7 @@ The core reads files only through `SourceHost`. It calls no Deno API. Tests may 
 
 | Directory         | Content                                                                                                                                                                                        |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/core/`       | The core library. It is synchronous and does no I/O. `Program` memoizes its queries. The `validate/` subdirectory holds the independent IR validator, and `emit/` holds the Effect-TS emitter. |
+| `src/core/`       | The core library. It is synchronous and does no I/O. `Program` memoizes its queries. The `validate/` subdirectory holds the independent IR validator, and `emit/` holds the Effect-TS emitter. `emit/families/` holds one file for each builtin family of the emitter. |
 | `src/cli/`        | The command-line tool. Deno APIs stay here, in `src/host/`, `src/lsp/main.ts`, `bench/`, `playground/build.ts`, `playground/serve.ts`, `scripts/`, and `tests/`.                               |
 | `src/host/`       | The host adapters that the command-line tool and the language server share.                                                                                                                    |
 | `src/lsp/`        | The language server.                                                                                                                                                                           |

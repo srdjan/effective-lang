@@ -1,4 +1,4 @@
-// Emission of the Effect builtins: defer, retry, retrySchedule, retryWithSchedule, and run.
+// Emission of the Effect builtins: defer, the retry forms, and run.
 
 import {
   at,

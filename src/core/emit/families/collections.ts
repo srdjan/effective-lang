@@ -1,4 +1,4 @@
-// Emission of the collection builtins: partitionAll, validateAll, and allResults.
+// Emission of the collection builtins: partitionAll, validateAll, allResults.
 
 import {
   callArguments,
