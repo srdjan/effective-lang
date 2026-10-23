@@ -20,6 +20,7 @@ import {
   exportedIds,
   orderConstants,
   orderTypeLevel,
+  recursiveGroups,
 } from "./decls.ts";
 import { EmitFailure, type ImportGroup, Scope } from "./scope.ts";
 import { scopeRuntimeDeclaration } from "./explicit_scope.ts";
@@ -110,7 +111,11 @@ function blankSeparated(sections: readonly (readonly Doc[])[]): Doc {
 function build(ir: ModuleIR, context: EmitContext): EmittedModule {
   const scope = new Scope(ir, context.config);
   const exported = exportedIds(ir);
-  const emitter = new DeclarationEmitter(scope, exported);
+  const emitter = new DeclarationEmitter(
+    scope,
+    exported,
+    recursiveGroups(ir),
+  );
 
   const typeLevel = orderTypeLevel(ir);
   const functions = ir.declarations.filter((d) => d.kind === "function");

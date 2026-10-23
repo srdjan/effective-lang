@@ -734,6 +734,144 @@ function guardedRecord(
   return walk(type, false) && sawSelf;
 }
 
+/**
+ * The member sets of the legal recursive groups of a module (rule 11): each
+ * group is a cycle of declared data types and aliases, with a data type in it.
+ * No cycle may be made of aliases alone, and every cycle must pass through an
+ * `Option`, an array, an optional field, or a union that has a member outside
+ * the group.
+ */
+function guardedDataGroups(
+  world: World,
+  ids: readonly string[],
+): Map<string, number> {
+  const { env } = world;
+  const own = new Set(ids);
+  const edgesOf = (id: string, within: ReadonlySet<string>) => {
+    const found = new Map<string, boolean>();
+    const mentions = (type: Type, depth: number): boolean =>
+      type.kind === "named" ? within.has(type.id) : depth <= MAX_DEPTH &&
+        typeChildren(type).some((c) => mentions(c.type, depth + 1));
+    const reach = (target: string, guarded: boolean): void => {
+      if (within.has(target)) {
+        found.set(target, (found.get(target) ?? false) || !guarded);
+      }
+    };
+    const visit = (type: Type, guarded: boolean, depth: number): void => {
+      if (depth > MAX_DEPTH) return;
+      if (type.kind === "named") return reach(type.id, guarded);
+      if (type.kind === "option" || type.kind === "array") {
+        return visit(type.element, true, depth + 1);
+      }
+      if (type.kind === "union") {
+        const outside = type.members.some((m) => !mentions(m, depth + 1));
+        for (const m of type.members) visit(m, guarded || outside, depth + 1);
+        return;
+      }
+      if (type.kind === "record") {
+        for (const f of type.fields) {
+          visit(f.type, guarded || f.optional, depth + 1);
+        }
+        return;
+      }
+      for (const c of typeChildren(type)) visit(c.type, guarded, depth + 1);
+    };
+    const data = env.data.get(id);
+    const alias = env.aliases.get(id);
+    const roots: readonly Type[] = data !== undefined
+      ? [data]
+      : alias !== undefined
+      ? [alias]
+      : [];
+    for (const root of roots) visit(root, false, 0);
+    return found;
+  };
+  // Tarjan's components of the reference graph of the module.
+  const graph = new Map<string, string[]>();
+  for (const id of ids) {
+    const targets: string[] = [];
+    const roots: Type[] = [];
+    const alias = env.aliases.get(id);
+    const brand = env.brands.get(id);
+    if (alias !== undefined) roots.push(alias);
+    if (brand !== undefined) roots.push(brand);
+    for (const f of env.data.get(id)?.fields ?? env.errors.get(id) ?? []) {
+      roots.push(f.type);
+    }
+    const walk = (type: Type, depth: number): void => {
+      if (depth > MAX_DEPTH) return;
+      if (type.kind === "named") {
+        if (own.has(type.id)) targets.push(type.id);
+        return;
+      }
+      for (const c of typeChildren(type)) walk(c.type, depth + 1);
+    };
+    for (const root of roots) walk(root, 0);
+    graph.set(id, targets);
+  }
+  const number = new Map<string, number>();
+  const low = new Map<string, number>();
+  const stack: string[] = [];
+  const onStack = new Set<string>();
+  const groups = new Map<string, number>();
+  let counter = 0;
+  let groupCount = 0;
+  const strong = (id: string): void => {
+    number.set(id, counter);
+    low.set(id, counter++);
+    stack.push(id);
+    onStack.add(id);
+    for (const next of graph.get(id) ?? []) {
+      if (!number.has(next)) {
+        strong(next);
+        low.set(id, Math.min(low.get(id) ?? 0, low.get(next) ?? 0));
+      } else if (onStack.has(next)) {
+        low.set(id, Math.min(low.get(id) ?? 0, number.get(next) ?? 0));
+      }
+    }
+    if (low.get(id) !== number.get(id)) return;
+    const members: string[] = [];
+    for (let m = stack.pop(); m !== undefined; m = stack.pop()) {
+      onStack.delete(m);
+      members.push(m);
+      if (m === id) break;
+    }
+    const cycle = members.length > 1 || (graph.get(id) ?? []).includes(id);
+    if (!cycle || !members.some((m) => env.data.has(m))) return;
+    if (!members.every((m) => env.data.has(m) || env.aliases.has(m))) return;
+    const within = new Set(members);
+    const edges = new Map(members.map((m) => [m, edgesOf(m, within)]));
+    const cyclic = (
+      keep: (from: string, to: string, bare: boolean) => boolean,
+    ) => {
+      // A cycle exists when some member reaches itself through the kept edges.
+      const reaches = (
+        from: string,
+        target: string,
+        seen: Set<string>,
+      ): boolean => {
+        for (const [to, bare] of edges.get(from) ?? []) {
+          if (!keep(from, to, bare)) continue;
+          if (to === target) return true;
+          if (!seen.has(to)) {
+            seen.add(to);
+            if (reaches(to, target, seen)) return true;
+          }
+        }
+        return false;
+      };
+      return members.some((m) => reaches(m, m, new Set()));
+    };
+    const aliasOnly = (from: string, to: string) =>
+      !env.data.has(from) && !env.data.has(to);
+    if (cyclic(aliasOnly) || cyclic((_f, _t, bare) => bare)) return;
+    groupCount += 1;
+    for (const m of members) groups.set(m, groupCount);
+  };
+  for (const id of ids) if (!number.has(id)) strong(id);
+  return groups;
+}
+
 /** Reports cycles other than a single array-guarded data record. */
 export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
   const { world } = ctx;
@@ -765,6 +903,7 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
       dataOnly(world.env, d.definition.type, "schema")
     ) guarded.add(d.id);
   });
+  const legal = guardedDataGroups(world, [...index.keys()]);
   const reported = new Set<string>();
   const decls = ir.declarations;
   const reaches = (type: Type, from: string, depth: number): void => {
@@ -778,6 +917,8 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
     }
     if (type.kind === "named") {
       if (type.id === from && guarded.has(from)) return;
+      const group = legal.get(from);
+      if (group !== undefined && legal.get(type.id) === group) return;
       visit(type.id);
       return;
     }

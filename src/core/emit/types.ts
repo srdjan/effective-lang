@@ -334,13 +334,13 @@ function schemaOfLiterals(
 
 /**
  * The TypeScript type that a type has after `schemaDoc` encodes it: a brand
- * becomes its base, an error becomes its Schema encoding, and the recursive
- * name becomes the generated mirror type. The type has no function in it.
+ * becomes its base, an error becomes its Schema encoding, and each name of the
+ * recursive group becomes its generated mirror type. The type has no function in it.
  */
 export function encodedTypeDoc(
   scope: EmitNames,
   type: Type,
-  recursiveId?: string,
+  recursive?: ReadonlySet<string>,
 ): Doc {
   if (isDeferredType(type)) {
     throw unsupported("a deferred or function type has no schema");
@@ -350,7 +350,7 @@ export function encodedTypeDoc(
     case "literal":
       return typeDoc(scope, type);
     case "named":
-      return type.id === recursiveId ? scope.encodedMirrorName(type.id) : [
+      return recursive?.has(type.id) ? scope.encodedMirrorName(type.id) : [
         `${scope.effect("Schema")}.Codec.Encoded<typeof `,
         scope.nameOf(type.id),
         ">",
@@ -358,7 +358,7 @@ export function encodedTypeDoc(
     case "array":
       return [
         "ReadonlyArray<",
-        encodedTypeDoc(scope, type.element, recursiveId),
+        encodedTypeDoc(scope, type.element, recursive),
         ">",
       ];
     case "tuple":
@@ -366,14 +366,14 @@ export function encodedTypeDoc(
         "readonly [",
         join(
           ", ",
-          type.elements.map((t) => encodedTypeDoc(scope, t, recursiveId)),
+          type.elements.map((t) => encodedTypeDoc(scope, t, recursive)),
         ),
         "]",
       ];
     case "option":
       return [
         `${scope.effect("Option")}.Option<`,
-        encodedTypeDoc(scope, type.element, recursiveId),
+        encodedTypeDoc(scope, type.element, recursive),
         ">",
       ];
     case "record": {
@@ -383,7 +383,7 @@ export function encodedTypeDoc(
         f.name,
         f.optional ? "?" : "",
         ": ",
-        encodedTypeDoc(scope, f.type, recursiveId),
+        encodedTypeDoc(scope, f.type, recursive),
       ]);
       return group([
         "{",
@@ -395,7 +395,7 @@ export function encodedTypeDoc(
     }
     case "union":
       return unionDoc(
-        type.members.map((m) => encodedTypeDoc(scope, m, recursiveId)),
+        type.members.map((m) => encodedTypeDoc(scope, m, recursive)),
       );
   }
 }
@@ -404,7 +404,7 @@ export function encodedTypeDoc(
 export function schemaDoc(
   scope: EmitNames,
   type: Type,
-  recursiveId?: string,
+  recursive?: ReadonlySet<string>,
 ): Doc {
   const schema = scope.effect("Schema");
   if (isDeferredType(type)) {
@@ -432,7 +432,7 @@ export function schemaDoc(
     case "literal":
       return schemaOfLiterals(scope, [type.value]);
     case "named":
-      return type.id === recursiveId
+      return recursive?.has(type.id)
         ? [
           `${schema}.suspend((): ${schema}.Codec<`,
           scope.nameOf(type.id),
@@ -446,7 +446,7 @@ export function schemaDoc(
     case "array":
       return callWith(
         `${schema}.Array`,
-        schemaDoc(scope, type.element, recursiveId),
+        schemaDoc(scope, type.element, recursive),
       );
     case "tuple":
       return [
@@ -454,20 +454,19 @@ export function schemaDoc(
         bracketed(
           "[",
           "]",
-          type.elements.map((t) => schemaDoc(scope, t, recursiveId)),
+          type.elements.map((t) => schemaDoc(scope, t, recursive)),
           false,
         ),
         ")",
       ];
     case "option":
-      return [
-        `${schema}.Option(`,
-        schemaDoc(scope, type.element, recursiveId),
-        ")",
-      ];
+      return callWith(
+        `${schema}.Option`,
+        schemaDoc(scope, type.element, recursive),
+      );
     case "record": {
       const fields = type.fields.map((f) => {
-        const inner = schemaDoc(scope, f.type, recursiveId);
+        const inner = schemaDoc(scope, f.type, recursive);
         return property(
           fieldKey(f.name),
           f.optional
@@ -489,7 +488,7 @@ export function schemaDoc(
         bracketed(
           "[",
           "]",
-          type.members.map((m) => schemaDoc(scope, m, recursiveId)),
+          type.members.map((m) => schemaDoc(scope, m, recursive)),
           false,
         ),
         ")",

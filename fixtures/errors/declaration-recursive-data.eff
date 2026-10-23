@@ -1,6 +1,43 @@
+// A cycle that passes through an array, an Option, or a union with an outside member is legal.
+data Tree = { children: Tree[] }
+
+data Opt = { next: Option<Opt> }
+
+data Forest = { first: Option<Node> }
+
+data Node = { rest: Forest }
+
+data Cons = { tail: List }
+
+data Nil = {}
+
+type List = Cons | Nil
+
+// A cycle of required fields only has no base case.
 // error: declaration/007
 data Loop = { next: Loop }
 
-data Fine = { items: Other[] }
+// error: declaration/007
+data Ping = { pong: Pong }
 
-data Other = { value: int }
+data Pong = { ping: Ping }
+
+// A union with no member outside the cycle has no base case.
+// error: declaration/007
+data Left = { next: Left | Right }
+
+data Right = { next: Left }
+
+// A cycle of aliases alone stays rejected, even beside a data type.
+// error: declaration/007
+type First = Second
+
+type Second = First | Anchor
+
+data Anchor = { next: Option<Second> }
+
+// A cycle through an error keeps the old rule.
+// error: declaration/007
+data Wraps = { cause: Option<Failure> }
+
+error Failure = { inner: Option<Wraps> }

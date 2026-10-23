@@ -1065,6 +1065,81 @@ function toIrField(field: LoweredField): Field {
 
 // ------------------------------------------------------------------ type graph walk
 
+/**
+ * Rule 11 for one group of data types and aliases that refer to each other.
+ * `roots[n]` lists the IR types of member `n`: the record of a data type, or
+ * the target of an alias. The group is guarded when no cycle is made of aliases
+ * alone, and no cycle is made of references that avoid an `Option`, an array,
+ * an optional field, and a union with a member outside the group.
+ */
+function recursionIsGuarded(
+  members: readonly { readonly id: string; readonly data: boolean }[],
+  roots: readonly (readonly Type[])[],
+): boolean {
+  const index = new Map(members.map((m, n) => [m.id, n]));
+  const inGroup = (type: Type): boolean => {
+    const ids = new Set<string>();
+    referencedIds(type, ids);
+    return [...ids].some((id) => index.has(id));
+  };
+  // The edges of a member, and whether a path with no guard reaches the target.
+  const edges = roots.map((types) => {
+    const found = new Map<number, boolean>();
+    const reach = (id: string, guarded: boolean): void => {
+      const target = index.get(id);
+      if (target !== undefined) {
+        found.set(target, (found.get(target) ?? false) || !guarded);
+      }
+    };
+    const visit = (type: Type, guarded: boolean): void => {
+      switch (type.kind) {
+        case "named":
+          reach(type.id, guarded);
+          return;
+        case "option":
+        case "array":
+          visit(type.element, true);
+          return;
+        case "union": {
+          const outside = type.members.some((m) => !inGroup(m));
+          for (const member of type.members) visit(member, guarded || outside);
+          return;
+        }
+        case "record":
+          // A value can leave out an optional field, so the field ends the recursion.
+          for (const field of type.fields) {
+            visit(field.type, guarded || field.optional);
+          }
+          return;
+        case "tuple":
+          for (const element of type.elements) visit(element, guarded);
+          return;
+        default: {
+          const ids = new Set<string>();
+          referencedIds(type, ids);
+          for (const id of ids) reach(id, guarded);
+        }
+      }
+    };
+    for (const type of types) visit(type, false);
+    return found;
+  });
+  const cyclic = (
+    keep: (from: number, to: number, bare: boolean) => boolean,
+  ) => {
+    const graph = edges.map((targets, from) =>
+      [...targets].filter(([to, bare]) => keep(from, to, bare)).map(([to]) =>
+        to
+      )
+    );
+    return stronglyConnectedComponents(members.length, graph).some((c) =>
+      c.length > 1 || graph[c[0]].includes(c[0])
+    );
+  };
+  return !cyclic((from, to) => !members[from].data && !members[to].data) &&
+    !cyclic((_from, _to, bare) => bare);
+}
+
 /** Adds the type and error identities that an IR type mentions, and the services of its capabilities. */
 export function referencedIds(type: Type, ids: Set<string>): void {
   switch (type.kind) {
@@ -1466,6 +1541,7 @@ class ModuleChecker {
     for (const component of components) {
       component.sort((a, b) => a.start - b.start);
       const first = component[0];
+      if (this.guardedDataGroup(component)) continue;
       if (component.length === 1 && first.kind === "alias") {
         const declaration = this.types.find((d) => d.id === first.id);
         const aliased = this.table.aliasOf(first.id);
@@ -1505,6 +1581,32 @@ class ModuleChecker {
       }
     }
     return guardedAliases;
+  }
+
+  /**
+   * Rule 11: a cycle that has a data type, and only data types and aliases, is
+   * legal when no cycle is made of aliases alone and every cycle passes through
+   * an `Option`, an array, an optional field, or a union that has a member
+   * outside the group.
+   */
+  private guardedDataGroup(component: readonly TypeNodeInfo[]): boolean {
+    if (!component.some((m) => m.kind === "data")) return false;
+    if (component.some((m) => m.kind !== "data" && m.kind !== "alias")) {
+      return false;
+    }
+    const roots = component.map((m): Type[] => {
+      const declaration = this.types.find((d) => d.id === m.id);
+      const definition = declaration?.definition;
+      // The record keeps the optional flag of each field.
+      if (definition?.kind === "data") {
+        return [{ kind: "record", fields: definition.fields }];
+      }
+      return definition?.kind === "alias" ? [definition.type] : [];
+    });
+    return recursionIsGuarded(
+      component.map((m) => ({ id: m.id, data: m.kind === "data" })),
+      roots,
+    );
   }
 
   /**

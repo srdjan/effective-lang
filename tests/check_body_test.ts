@@ -3553,9 +3553,52 @@ const wrong = (u: User): Text => u.owner
   assertEquals(codes(project), ["type-mismatch/006"]);
 });
 
-Deno.test("a data type that refers to itself keeps the recursion rejection", () => {
-  const project = checkText(`
-data Loop = { next: Option<Loop> }
+const RECURSIVE_DATA = `
+type Text = string
+type Count = int
+data Tree = { label: Text, children: Tree[] }
+data Forest = { first: Option<Node> }
+data Node = { rest: Forest }
+data Cons = { head: Count, tail: List }
+data Nil = {}
+type List = Cons | Nil
+`;
+
+Deno.test("recursive data types are legal when every cycle has a base case", () => {
+  const project = checkText(`${RECURSIVE_DATA}
+const length = (list: List): Count =>
+  match list {
+    Cons(c) => 1 + length(c.tail),
+    Nil(n) => 0
+  }
+const first = (tree: Tree): Tree[] => tree.children
+const renamed = (tree: Tree): Tree => ({ ...tree, label: "x" })
+const plain = (tree: Tree): { label: Text, children: Tree[] } => unbrand(tree)
+const treeSchema: Schema<Tree> = schema()
+const listSchema: Schema<List> = schema()
+const forestSchema: Schema<Forest> = schema()
+`);
+  assertEquals(messages(project), []);
+});
+
+Deno.test("a cycle with no base case keeps the recursion rejection", () => {
+  for (
+    const text of [
+      "data Loop = { next: Loop }",
+      "data A = { b: B }\ndata B = { a: A }",
+      "data Left = { next: Left | Right }\ndata Right = { next: Left }",
+      "type First = Second\ntype Second = First | Anchor\ndata Anchor = { next: Option<Second> }",
+      "data Wraps = { cause: Option<Failure> }\nerror Failure = { inner: Option<Wraps> }",
+    ]
+  ) {
+    assertEquals(codes(checkText(text)), ["declaration/007"], text);
+  }
+});
+
+Deno.test("a cycle of aliases alone stays rejected beside legal data cycles", () => {
+  const project = checkText(`${RECURSIVE_DATA}
+type Ping = Option<Pong>
+type Pong = Ping
 `);
   assertEquals(codes(project), ["declaration/007"]);
 });

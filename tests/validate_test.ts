@@ -3200,6 +3200,60 @@ error Failed = { count: Count }
   }
 });
 
+Deno.test("data: recursive data types validate and an unguarded cycle is rejected", () => {
+  const lowered = lowerText(`
+type Text = string
+type Count = int
+data Tree = { label: Text, children: Tree[] }
+data Forest = { first: Option<Node> }
+data Node = { rest: Forest }
+data Cons = { head: Count, tail: List }
+data Nil = {}
+type List = Cons | Nil
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const forge = (name: string, field: number, type: Type): string[] => {
+    const ir = copy(lowered.ir);
+    const declared = ir.declarations.find((d) => d.name === name);
+    assert(declared?.kind === "type" && declared.definition.kind === "data");
+    Object.assign(declared.definition.fields[field], { type });
+    return codesOf(ir, lowered.sources);
+  };
+  const named = (id: `type:${string}`): Type => ({ kind: "named", id });
+  // Each field loses its guard: the cycle has no base case.
+  assertEquals(forge("Tree", 1, named("type:m#Tree")), ["validation/002"]);
+  assertEquals(forge("Forest", 0, named("type:m#Node")), ["validation/002"]);
+  assertEquals(forge("Cons", 1, named("type:m#Cons")), ["validation/002"]);
+  // A union whose members all stay in the group has no base case either.
+  assertEquals(
+    forge("Tree", 1, {
+      kind: "union",
+      members: [
+        named("type:m#Tree"),
+        {
+          kind: "record",
+          fields: [{ name: "t", type: named("type:m#Tree"), optional: false }],
+        },
+      ],
+    }),
+    ["validation/002"],
+  );
+  // The alias loses its member outside the group.
+  const ir = copy(lowered.ir);
+  const list = ir.declarations.find((d) => d.name === "List");
+  assert(list?.kind === "type" && list.definition.kind === "alias");
+  Object.assign(list.definition, { type: named("type:m#Cons") });
+  assertEquals(codesOf(ir, lowered.sources), ["validation/002"]);
+  // An alias cycle with no data type in it is rejected.
+  const aliases = copy(lowered.ir);
+  const tree = aliases.declarations.find((d) => d.name === "List");
+  assert(tree?.kind === "type" && tree.definition.kind === "alias");
+  Object.assign(tree.definition, {
+    type: { kind: "option", element: named("type:m#List") },
+  });
+  assertEquals(codesOf(aliases, lowered.sources), ["validation/002"]);
+});
+
 Deno.test("a guarded recursive alias with literal alias tags validates and its aliases are rechecked", () => {
   const lowered = lowerText(`
 type T = { tag: A, next: T } | { tag: B }

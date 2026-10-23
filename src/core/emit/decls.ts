@@ -16,6 +16,7 @@ import type {
   ValueId,
 } from "../ir.ts";
 import { SCOPE_CAPABILITY } from "../ir.ts";
+import { stronglyConnectedComponents } from "../modes.ts";
 import {
   assignment,
   braces,
@@ -195,6 +196,39 @@ export function exportedIds(ir: ModuleIR): Set<DeclarationId> {
   return seen;
 }
 
+// ------------------------------------------------------------------ recursion
+
+/**
+ * The recursive groups that contain a data type, keyed by each member. A group
+ * is a strongly connected component of the type-level references. Every member
+ * of a group is emitted in the explicit form, and every reference between the
+ * members is suspended, so the order of the members does not matter.
+ */
+export function recursiveGroups(
+  ir: ModuleIR,
+): ReadonlyMap<DeclarationId, ReadonlySet<DeclarationId>> {
+  const group = ir.declarations.filter(isTypeLevel);
+  const index = new Map<DeclarationId, number>(group.map((d, n) => [d.id, n]));
+  const edges = group.map((d) =>
+    [...interfaceReferences(d)].flatMap((id) => {
+      const target = index.get(id);
+      return target === undefined ? [] : [target];
+    })
+  );
+  const groups = new Map<DeclarationId, ReadonlySet<DeclarationId>>();
+  for (const members of stronglyConnectedComponents(group.length, edges)) {
+    const declarations = members.map((n) => group[n]);
+    const cycle = members.length > 1 || edges[members[0]].includes(members[0]);
+    const hasData = declarations.some((d) =>
+      d.kind === "type" && d.definition.kind === "data"
+    );
+    if (!cycle || !hasData) continue;
+    const ids = new Set(declarations.map((d) => d.id));
+    for (const id of ids) groups.set(id, ids);
+  }
+  return groups;
+}
+
 // ------------------------------------------------------------------ order
 
 type TypeLevel = TypeDecl | ErrorDecl | ServiceDecl;
@@ -312,6 +346,10 @@ export class DeclarationEmitter {
   constructor(
     readonly scope: Scope,
     readonly exported: ReadonlySet<DeclarationId>,
+    private readonly groups: ReadonlyMap<
+      DeclarationId,
+      ReadonlySet<DeclarationId>
+    > = new Map(),
   ) {
     this.expr = new ExprEmitter(scope);
   }
@@ -338,12 +376,18 @@ export class DeclarationEmitter {
 
   private typeDeclaration(d: TypeDecl): Doc {
     const keyword = this.exportKeyword(d.id);
+    const grouped = this.groups.get(d.id);
+    if (d.definition.kind === "data" && grouped !== undefined) {
+      return this.recursiveData(d, d.definition.fields, grouped);
+    }
     if (
       d.definition.kind === "alias" &&
-      (d.definition.type.kind === "record" ||
-        d.definition.type.kind === "union") &&
-      this.containsNamed(d.definition.type, d.id)
+      (grouped !== undefined ||
+        ((d.definition.type.kind === "record" ||
+          d.definition.type.kind === "union") &&
+          this.containsNamed(d.definition.type, d.id)))
     ) {
+      const recursive = grouped ?? new Set([d.id]);
       const schema = this.scope.effect("Schema");
       const mirror = this.scope.encodedMirrorName(d.id);
       return [
@@ -358,14 +402,14 @@ export class DeclarationEmitter {
         "type ",
         mirror,
         " = ",
-        encodedTypeDoc(this.scope, d.definition.type, d.id),
+        encodedTypeDoc(this.scope, d.definition.type, recursive),
         ";",
         hard,
         keyword,
         "const ",
         d.name,
         `: ${schema}.Codec<${d.name}, ${mirror}> = `,
-        schemaDoc(this.scope, d.definition.type, d.id),
+        schemaDoc(this.scope, d.definition.type, recursive),
         ";",
       ];
     }
@@ -429,11 +473,62 @@ export class DeclarationEmitter {
     }
   }
 
+  /**
+   * A data type in a recursive group: an interface for the type, an interface
+   * for the encoded form, and the `TaggedStruct`, whose references to the group
+   * are suspended.
+   */
+  private recursiveData(
+    d: TypeDecl,
+    fields: readonly Field[],
+    recursive: ReadonlySet<DeclarationId>,
+  ): Doc {
+    const keyword = this.exportKeyword(d.id);
+    const schema = this.scope.effect("Schema");
+    const tag = ["readonly _tag: ", JSON.stringify(tokenOfId(d.id)), ";"];
+    const members = (print: (type: Type) => Doc): Doc[] =>
+      fields.map((f) => [
+        "readonly ",
+        f.name,
+        f.optional ? "?" : "",
+        ": ",
+        print(f.type),
+        ";",
+      ]);
+    const mirror = this.scope.encodedMirrorName(d.id);
+    return [
+      keyword,
+      "interface ",
+      d.name,
+      " ",
+      braces([tag, ...members((t) => typeDoc(this.scope, t))]),
+      hard,
+      keyword,
+      "interface ",
+      mirror,
+      " ",
+      braces([
+        tag,
+        ...members((t) => encodedTypeDoc(this.scope, t, recursive)),
+      ]),
+      hard,
+      assignment(
+        [keyword, "const ", d.name],
+        [`${schema}.TaggedStruct`, this.tagArguments(d.id, fields, recursive)],
+      ),
+      ";",
+    ];
+  }
+
   /** The `(tag, { fields })` arguments of `TaggedError` and `TaggedStruct`. */
-  private tagArguments(id: DeclarationId, declared: readonly Field[]): Doc {
+  private tagArguments(
+    id: DeclarationId,
+    declared: readonly Field[],
+    recursive?: ReadonlySet<DeclarationId>,
+  ): Doc {
     const schema = this.scope.effect("Schema");
     const fields = declared.map((f) => {
-      const inner = schemaDoc(this.scope, f.type);
+      const inner = schemaDoc(this.scope, f.type, recursive);
       return property(
         fieldKey(f.name),
         f.optional ? member(schema, "optionalKey", callWith("", inner)) : inner,

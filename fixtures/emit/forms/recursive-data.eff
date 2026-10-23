@@ -1,0 +1,37 @@
+type Text = string
+type Count = int
+
+export data Tree = { label: Text, children: Tree[] }
+
+export data Forest = { first: Option<Node> }
+
+export data Node = { rest: Forest }
+
+export data Cons = { head: Count, tail: List }
+
+export data Nil = {}
+
+export type List = Cons | Nil
+
+export data Chain = { value: Count, next?: Chain }
+
+export const leaf = (label: Text): Tree =>
+  Tree({ label, children: [] })
+
+export const nested = (): Tree =>
+  Tree({ label: "root", children: [leaf("a"), leaf("b")] })
+
+export const forest = (): Forest =>
+  Forest({ first: Some(Node({ rest: Forest({ first: None }) })) })
+
+export const two = (): List =>
+  Cons({ head: 1, tail: Cons({ head: 2, tail: Nil({}) }) })
+
+export const chain = (): Chain =>
+  Chain({ value: 1, next: Chain({ value: 2 }) })
+
+export const length = (list: List): Count =>
+  match list {
+    Cons(c) => 1 + length(c.tail),
+    Nil(n) => 0
+  }

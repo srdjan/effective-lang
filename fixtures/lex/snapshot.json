@@ -75,6 +75,10 @@
       "db2e31ae730ad0e8",
       "93420e4722a498b1"
     ],
+    "fixtures/emit/forms/recursive-data.eff": [
+      "744ad1a92f71d0b3",
+      "20fa69e5b8a7c423"
+    ],
     "fixtures/emit/groups/contracts.eff": [
       "661cc4910184b86b",
       "9eb6459cddcd3152"
@@ -264,8 +268,8 @@
       "fe7d90a3d1f05661"
     ],
     "fixtures/errors/declaration-recursive-data.eff": [
-      "612a053b9c26456d",
-      "f73cf68a95336480"
+      "40df9b61408b4857",
+      "4d2eb51ad7761dd8"
     ],
     "fixtures/errors/declaration-recursive-type.eff": [
       "231e61d68cfdfb7c",

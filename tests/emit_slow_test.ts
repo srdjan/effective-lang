@@ -131,6 +131,7 @@ function buildForms(dir: string): string[] {
     "conditional-chains.eff",
     "nominal-records.eff",
     "data-types.eff",
+    "recursive-data.eff",
     "optional-fields.eff",
     "brand-operators.eff",
     "inline-records.eff",
@@ -3226,6 +3227,78 @@ console.log(JSON.stringify({
     });
   });
 });
+Deno.test("recursive data types build, encode, decode, and match", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/forms/", FIXTURES), dir);
+    build(dir, ["recursive-data.eff"]);
+    const result = await runScript(
+      dir,
+      `
+import { Schema } from "effect";
+import * as M from "./recursive-data.ts";
+const tree = M.nested();
+const list = M.two();
+const forest = M.forest();
+const roundTrip = <A, I>(schema: Schema.Codec<A, I>, value: A): A =>
+  Schema.decodeUnknownSync(schema)(Schema.encodeSync(schema)(value));
+const back = roundTrip(M.List, list);
+console.log(JSON.stringify({
+  tree: Schema.encodeSync(M.Tree)(tree),
+  treeBack: roundTrip(M.Tree, tree),
+  list: Schema.encodeSync(M.List)(list),
+  listBack: back,
+  length: [M.length(list), M.length(back), M.length(M.Nil.make({}))],
+  forest: Schema.encodeSync(M.Forest)(forest),
+  forestBack: roundTrip(M.Forest, forest)._tag,
+  badTag: Schema.decodeUnknownExit(M.List)({ _tag: "recursive-data#Other" })._tag,
+}));
+`,
+    );
+    const nil = { _tag: "recursive-data#Nil" };
+    const list = {
+      _tag: "recursive-data#Cons",
+      head: 1,
+      tail: {
+        _tag: "recursive-data#Cons",
+        head: 2,
+        tail: nil,
+      },
+    };
+    const leaf = (label: string) => ({
+      _tag: "recursive-data#Tree",
+      label,
+      children: [],
+    });
+    const tree = {
+      _tag: "recursive-data#Tree",
+      label: "root",
+      children: [leaf("a"), leaf("b")],
+    };
+    assertEquals(result, {
+      tree,
+      treeBack: tree,
+      list,
+      listBack: list,
+      length: [2, 2, 0],
+      forest: {
+        _tag: "recursive-data#Forest",
+        first: {
+          _id: "Option",
+          _tag: "Some",
+          value: {
+            _tag: "recursive-data#Node",
+            rest: {
+              _tag: "recursive-data#Forest",
+              first: { _id: "Option", _tag: "None" },
+            },
+          },
+        },
+      },
+      forestBack: "recursive-data#Forest",
+      badTag: "Failure",
+    });
+  });
+});
 Deno.test("a pure codec over a data type decodes into data and encodes back", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
@@ -3750,13 +3823,14 @@ Deno.test("the emitted forms are a fixed point of deno fmt", async () => {
         "names.ts",
         "nominal-records.ts",
         "optional-fields.ts",
+        "recursive-data.ts",
       ],
     );
     const run = await deno(dir, ["fmt", "--check", ...generated]);
     assertEquals(run.code, 0, `deno fmt --check failed:\n${run.stderr}`);
     assert(
-      run.stderr.includes("Checked 10 files"),
-      `deno fmt did not check the ten files:\n${run.stderr}`,
+      run.stderr.includes("Checked 11 files"),
+      `deno fmt did not check the eleven files:\n${run.stderr}`,
     );
   });
 });
