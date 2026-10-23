@@ -179,7 +179,7 @@ The result holds the declarations, the signatures, and the sorted declaration di
 
 A function with a nonempty `fails` or `uses` set always has effect mode. A function with empty sets needs an entry in the mode map, because its body decides the mode. The body checker supplies the map. Without an entry, `buildInterface` gives an error value. The declaration diagnostics do not depend on the map.
 
-Rule R1: a primitive type can occur only inside a type or error declaration. Each `string`, `int`, `number`, `boolean`, or literal type node elsewhere gives `declaration/013`, in `.eff` and `.effi` files.
+Rule R1: a primitive type can occur only inside a type, data, or error declaration. Each `string`, `int`, `number`, `boolean`, or literal type node elsewhere gives `declaration/013`, in `.eff` and `.effi` files.
 
 A module interface holds `exports`, `values`, `types`, `errors`, and `services`. It also holds each declaration that an export reaches, private or from another module. Part A3b builds interfaces with `buildInterface` after it knows the modes. The hash covers the content without source spans.
 
@@ -191,9 +191,9 @@ For each module, the result holds `declarations`, `functions`, `constants`, `mod
 
 Each function and constant has a body table. The table maps a syntax node id to `{ type, failures, requirements, mode }`. The failure and requirement sets are sorted. The table maps each local identity to its type.
 
-The table also maps a node id to a fact that lowering needs. A call node has a fact such as `call`, `perform`, `error-construction`, `brand-construction`, `unbrand`, `some`, `fail`, `retry`, `provide`, or `builtin`. The type `NodeFact` in `src/core/tables.ts` lists every kind. A `builtin` fact carries the closed function type of a collection operation. A bracket literal has a fact that selects array or tuple IR. A field read, an arrow, a block binding, a pattern, and a catch handler have facts too.
+The table also maps a node id to a fact that lowering needs. A call node has a fact such as `call`, `perform`, `error-construction`, `brand-construction`, `data-construction`, `unbrand`, `some`, `fail`, `retry`, `provide`, or `builtin`. The type `NodeFact` in `src/core/tables.ts` lists every kind. A `builtin` fact carries the closed function type of a collection operation. A bracket literal has a fact that selects array or tuple IR. A field read, an arrow, a block binding, a pattern, and a catch handler have facts too.
 
-A field read and a record update see through a brand of a record type, and an update keeps the brand.
+A field read and a record update see through a data type, and an update keeps the data type. A data type declares a nominal record with `data`. A brand cannot have a record base (`declaration/014`). A data constructor pattern has a `data` pattern fact, and a match over data and error types uses a nominal domain.
 
 A module constant needs a pure initializer with empty sets. The `initialization` value lists the constants in a safe order. It also lists the dependencies of each constant and every dependency cycle.
 

@@ -36,7 +36,7 @@ Decided by the user on 2026-10-16 and 2026-10-17. Each entry took the recommende
 | D23 Long selector tests (2026-10-17) | The printer breaks a long selector test after `===`, as `deno fmt` does. In a later arm, it joins the earlier links on the first line when `deno fmt` does. |
 | D24 CI (2026-10-17, revised the same day) | The project has no hosted CI. In this document, CI is the gate `deno task check`, which runs before each commit (D5). |
 | D25 Book targets (2026-10-17) | The five examples are the golden outputs. The eight book targets are not, because they use short tags (D7) and source order (section 5.4). |
-| D26 Names for primitives (2026-10-17) | (a) R1: a primitive type outside a type or error body is rejected. Any type declaration, alias or brand, gives the name. See `docs/archive/raw-types-and-nominal-records.md`. |
+| D26 Names for primitives (2026-10-17) | (a) R1: a primitive type outside a type, data, or error body is rejected. Any type declaration, alias or brand, gives the name. See `docs/archive/raw-types-and-nominal-records.md`. |
 | D27 R1 positions (2026-10-17) | (a) Every position outside type and error bodies, local annotations included. |
 | D28 R1 in host files (2026-10-17) | (a) `.effi` files follow the same rule. |
 | D29 R1 rollout (2026-10-17) | (a) Always on. One plan migrates the examples, fixtures, tests, bench generator, and golden files. |
@@ -513,7 +513,7 @@ each stage.
 | Index | Syntax tree | Declarations by name, export flags, header and body spans, header and body hashes | File |
 | Link | Indexes, host registry | Module graph, topological order, cycle diagnostics | Program |
 | Resolve | Module graph, imports | Name to `DeclarationId`; local scopes | Module |
-| Type lowering | Type syntax | Interned structural types; nominal brands and errors by identity | Declaration |
+| Type lowering | Type syntax | Interned structural types; nominal brands, data types, and errors by identity | Declaration |
 | Signature | Header, named declarations, mode | `FunctionType` with contract and execution | Declaration |
 | Check body | Body syntax, signatures, prelude | Side tables: type, effects, mode, resolved target per node; diagnostics | Declaration |
 | Mode groups | Call edges, body modes | Fixed-point modes per component | Component |
@@ -540,8 +540,8 @@ as trivia so that the tree round-trips to source. The tree has two extra node
 kinds: `error` for an unparsable region and `missing` for an expected token.
 
 Types: an intern table. Equal structural types share one integer id, so type
-equality is integer equality and type sets sort numerically. Brands and errors
-are nominal by `DeclarationId`. Serialization expands ids back to the
+equality is integer equality and type sets sort numerically. Brands, data types, and
+errors are nominal by `DeclarationId`. Serialization expands ids back to the
 `typed-ir.ts` `Type` tree.
 
 Effect sets: sorted arrays of `ErrorId` and `CapabilityId` strings. Union,
@@ -621,6 +621,44 @@ Declarations check independently. One broken declaration never stops the
 others. Hover on a broken declaration shows the error type as "unknown (error)"
 rather than nothing.
 
+### 6.5 Nominal types and data declarations
+
+Update, 2026-10-23. The type table has three nominal kinds. A brand is erased
+at run time, and its value is the base value. An error carries a `_tag` and is
+a class. A data type carries a `_tag` and is a plain object. A brand base
+cannot be a record (`declaration/014`), so a nominal record is always a data
+type.
+
+A `data` declaration has the form `data Name = { fields }`. It has the id
+`type:<module>#<Name>`, the same prefix as an alias or a brand. The type table
+tells the three apart: `dataRecordOf(id)` gives the base record of a data
+type, and `brandBaseOf(id)` gives the base of a brand. The IR has a
+declaration with the definition kind `data`, an expression node `data` for a
+construction, and a pattern kind `data` for a match arm. The checker fact for a
+construction is `data-construction`.
+
+The emitter prints `Schema.TaggedStruct("<module>#<Name>", { fields })` and
+`typeof Name.Type`. An optional field uses `Schema.optionalKey`. Construction
+prints `Name.make(value)`. The tag of a data type has the form of the tag of an
+error, `<module>#<Name>`.
+
+`unbrand` of a data value prints `$untagged<T>(value)`. The helper copies the
+own fields, except `_tag`, into an object with no prototype. The copy lets
+another data type take the fields through `make`. `Schema.make` rejects a value
+that has the `_tag` of another data type.
+
+A recursive group of data types and aliases prints in an explicit form. Each
+data type gives `interface T`, `interface TEncoded`, and a `TaggedStruct` whose
+references to the group are `Schema.suspend((): Schema.Codec<T, TEncoded> => T)`.
+Each alias gives `type L`, `type LEncoded`, and an annotated `const`. The
+explicit types avoid the TypeScript errors TS7022 and TS2456 that
+`typeof L.Type` causes inside a cycle. The group is a strongly connected
+component of the type-level references.
+
+A match over data types and errors tests `_tag` against the tag of each arm. It
+does not test the last arm. A host value with a wrong tag therefore takes the
+last arm.
+
 ## 7. Host language for the transpiler
 
 | Criterion | TypeScript on Deno | Zig | Rust |
@@ -652,7 +690,7 @@ shows a need. That escape hatch is a design property, not a plan.
 
 | Risk | Effect | Mitigation |
 | --- | --- | --- |
-| Effect 4 API drift (`Context.Service`, `Schema.TaggedError`, `Schema.brand`) | Generated code stops type-checking | Pin `effect@4.0.5`; golden outputs under `tsc` in CI; a version matrix later |
+| Effect 4 API drift (`Context.Service`, `Schema.TaggedError`, `Schema.TaggedStruct`, `Schema.brand`) | Generated code stops type-checking | Pin `effect@4.0.5`; golden outputs under `tsc` in CI; a version matrix later |
 | Identity encoding in tags and keys (Q2) | Renaming a file renames every persisted `_tag`; readability of `catchTag("...")` | Decide the encoding before the emitter exists (D7) |
 | Mode flip invalidation (I1) | A body edit rechecks importers | Early cutoff on interface value; measure the flip rate (M3); D8 |
 | Synchronous core blocks the LSP loop | Stale hover during a long check | M1 measures the stall against D9; a per-declaration loop or a worker only if M1 misses the budget (LSP plan section 3) |
@@ -768,6 +806,7 @@ the LSP. Recommended.
 (c) Option (a) by default with a `--specifier-extension js` switch.
 
 **D7. Identity encoding in tags, keys, and brand tokens (Q2).**
+Update, 2026-10-23: the tag of a data type uses the same `module#Name` form.
 (a) Short names as in the book targets.
 (b) Module-qualified strings such as `users#UserMissing`, module path relative
 to a configured root. Recommended, because the spec requires distinct

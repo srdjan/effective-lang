@@ -37,7 +37,7 @@ The tables below are a record of gaps, not an implementation queue.
 | General Stream and Sink APIs | Other operators, arbitrary source Sink constructors, chunk-cost throttling and unrestricted nested group streams need additional source and lifetime rules. | Leftovers, transduction, aggregation and callback-owned keyed groups are implemented. Selected external interruption has a source composition. See the [investigation](archive/plans/2026-10-18-general-stream-schedule-design.md). |
 | General Schedule APIs | Opaque Schedule consumers for retry and repetition, composition with incomparable input types, other combinators and cron policies remain uncovered. | RetrySchedule and a concrete source repetition policy meet the worker gate. General schedules support aggregation and selected comparable-input composition. See the [worker limits](archive/plans/2026-10-19-scheduled-worker-application.md#disposition-and-limits). |
 | Time control | A general source clock and time-control API remains a candidate without a demonstrated application blocker. | Primitive clock services and native virtual-time checks cover the selected applications. See the [accepted rule](plans/2026-10-19-application-acceptance-rule.md#feature-selection). |
-| Schema and recursion | Recursive Option data, mutual recursion, arbitrary self-bearing transformations and general Schema AST construction remain unsupported. | Guarded recursion preserves separate decoded, encoded and make-input types through selected adapters. See the [recursive field contract](archive/plans/2026-10-19-schema-recursive-adapters-contract.md). |
+| Schema and recursion | Recursive Option data in an alias, mutual recursion of aliases, arbitrary self-bearing transformations and general Schema AST construction remain unsupported. Data types support guarded and mutual recursion (see [nominal data types](#nominal-data-types)). | Guarded recursion preserves separate decoded, encoded and make-input types through selected adapters. See the [recursive field contract](archive/plans/2026-10-19-schema-recursive-adapters-contract.md). |
 | General language extensions | User-defined generics, effect-row polymorphism, source purity assertions, macros and early returns remain deferred language extensions. | Builtin generic types and concrete source compositions cover the accepted applications. The [specification](../../effective/public/effective-spec.html#examples) retains the broader language boundary. |
 
 Reopen an item only for a demonstrated application blocker or an explicit
@@ -77,6 +77,12 @@ external integration coverage.
 The [service workflow](archive/plans/2026-10-19-service-workflow-application.md#disposition-and-limits)
 and [stream processor](archive/plans/2026-10-19-stream-processor-application.md#disposition-and-limits)
 record these boundaries with compiled checks.
+
+### Nominal data types
+
+The `data` declaration is complete as of 2026-10-23 ([plan](archive/plans/2026-10-23-nominal-data-types.md)). It declares a nominal record with a runtime `_tag`. It replaces `Brand<{...}>`, which now gives `declaration/014`. A `match` selects data types and errors by name. A data or error field cannot hold a function or deferred type (`declaration/015`). A data type can be recursive when every cycle has a base case. The editor, the TextMate grammar and the playground highlighter know the word `data`.
+
+A data type that a `.effi` file declares is imported as a type only, so `.eff` code cannot call its constructor. A brand in an `.effi` file has the same limit. The website and the canonical specification still describe record brands. That update is a separate change in the sibling repository.
 
 ### Separate release acceptance
 

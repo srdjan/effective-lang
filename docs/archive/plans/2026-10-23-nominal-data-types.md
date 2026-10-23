@@ -1,12 +1,12 @@
 # Plan: nominal data types (`data` declarations)
 
-Status: validated, 2026-10-23. Fable reported 5 major and 8 minor findings. Opus accepted 12. The user decided finding 1 with NT13 (a). Section 8 maps each finding to its resolution.
+Status: done in this repository, 2026-10-23. NT5 to NT11 landed in commits 2a57d9c (NT5), 2404446 (NT6), 2285033 (NT7), 6b21dc2 (NT8), ac90799 (NT9), 8ab15c0 (NT10), and the NT11 documentation commit. NT12 (the spec site in the sibling repository `../effective/public/`) is a separate commit there and stays open. Fable validated the draft and reported 5 major and 8 minor findings. Opus accepted 12. The user decided finding 1 with NT13 (a). Section 8 maps each finding to its resolution.
 
 This plan uses the ID prefix NT. NT1 to NT4 and NT13 are the user's decisions. NT5 to NT12 are work items.
 
 ## 1. Decisions
 
-The user accepted these decisions on 2026-10-23. They replace the R2 form `type User = Brand<{ ... }>` from 2026-10-17 ([R2 plan](../archive/plans/2026-10-17-r2-nominal-records.md)). They also remove the R2 exclusion of a `match` on a record brand. The R2 exclusion of a record brand as a `withResource` operation record stays, by NT13.
+The user accepted these decisions on 2026-10-23. They replace the R2 form `type User = Brand<{ ... }>` from 2026-10-17 ([R2 plan](2026-10-17-r2-nominal-records.md)). They also remove the R2 exclusion of a `match` on a record brand. The R2 exclusion of a record brand as a `withResource` operation record stays, by NT13.
 
 - NT1 (declaration form). A new contextual declaration word `data` declares a nominal record: `data User = { id: UserId, name: Name }`. It has the same form as `error NotFound = { id: Id }`. `type` always declares an alias. `Brand<T>` stays only for a base that is not a record.
 - NT2 (runtime identity). Each `data` value carries a runtime `_tag` field, as an error value does. A `match` selects by name, as in `Circle(c) => ...`. Its coverage check works by name.

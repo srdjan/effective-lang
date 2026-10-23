@@ -55,6 +55,21 @@ The effect set that one pipeline stage adds by itself, without the effects of it
 
 A quiet value is pure and has no failure and no requirement. When the left value is not quiet, the checker checks the stage with a quiet value of the same type in its place. Lowering moves the left value into its own binding and copies the stage set onto the stage call. Lowering never derives a stage set, so each stage rule has one owner. So a stage handler must not read the effect sets or the mode of its left value.
 
+## Nominal types
+
+### Data type
+
+The nominal record type that a `data` declaration declares, such as `data User = { id: UserId, name: Name }`.
+
+A data type has its own identity and carries a runtime `_tag`. A structural record does not fit it, and it does not fit a structural record. A program builds a value with `User(record)` and gets the base record back with `unbrand`, which drops the tag. A `Brand<T>` cannot take a record base, so a nominal record is always a data type.
+_Avoid: record brand, nominal record type_
+
+### Nominal domain
+
+The pattern domain of a `match` subject whose members are all data types or errors, after aliases are unfolded.
+
+Arms name the members, as in `Circle(c)`, and coverage needs one arm for each member or `_`. A record pattern does not apply to a nominal domain. A subject that mixes nominal and structural members has no domain, and the checker reports it.
+
 ## Verification
 
 ### Behavior capture
