@@ -1375,14 +1375,19 @@ export class ExprEmitter implements ExprCore {
     };
     // The chain is `test ? arm : test ? arm : last`. `deno fmt` prints the
     // nested conditionals of the else branch at the indentation of the first.
-    let last: Doc | undefined;
+    // A last arm other than `_` has a test too, and the else branch throws, so
+    // a value outside the type (from unsound host code) takes no arm.
+    const final = arms.length - 1;
+    if (final < 0) throw internal("a match has no arm");
+    // The last arm builds its body before its test, as the other arms do not.
+    const finalDoc = armDoc(arms[final]);
+    const finalWildcard = arms[final].pattern.kind === "wildcard";
+    let last: Doc = finalWildcard
+      ? finalDoc
+      : [this.scope.unmatched(), "(", selector, ")"];
     let pairs: { readonly test: ArmTest; readonly arm: Doc }[] = [];
-    for (let i = arms.length - 1; i >= 0; i--) {
+    for (let i = finalWildcard ? final - 1 : final; i >= 0; i--) {
       const arm = arms[i];
-      if (last === undefined) {
-        last = armDoc(arm);
-        continue;
-      }
       const test = this.armTest(arm.pattern, selector, subjectType);
       if (test === undefined) {
         // A wildcard before the last arm makes the later arms unreachable.
@@ -1390,9 +1395,8 @@ export class ExprEmitter implements ExprCore {
         pairs = [];
         continue;
       }
-      pairs.unshift({ test, arm: armDoc(arm) });
+      pairs.unshift({ test, arm: i === final ? finalDoc : armDoc(arm) });
     }
-    if (last === undefined) throw internal("a match has no arm");
     const chain: Doc = pairs.length === 0 ? last : conditionalChain(
       pairs[0].test.first ?? pairs[0].test.doc,
       pairs.slice(1).map((pair) => pair.test),

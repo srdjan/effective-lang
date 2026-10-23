@@ -262,6 +262,7 @@ export interface EmitNames {
   encodedMirrorName(id: DeclarationId): string;
   intSchemaName(): string;
   intFunction(): string;
+  unmatched(): string;
   scopeRuntime(): ScopeRuntimeNames;
   serviceParameter(): string;
   fieldHelper(key: string): string;
@@ -286,6 +287,7 @@ export interface ImportLedger {
   effectImports(): { readonly exported: string; readonly local: string }[];
   hostImports(): ImportGroup[];
   usesIntFunction(): boolean;
+  usesUnmatched(): boolean;
   usesIntSchema(): boolean;
   usesScopeRuntime(): boolean;
 }
@@ -347,6 +349,7 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
   }
 
   private intHelper: string | undefined;
+  private unmatchedHelper: string | undefined;
   private intSchema: string | undefined;
   private serviceName: string | undefined;
   private scopeRuntimeNames: ScopeRuntimeNames | undefined;
@@ -497,6 +500,12 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
     return this.intHelper;
   }
 
+  /** The helper `$unmatched` that a match calls for a value outside its type. */
+  unmatched(): string {
+    this.unmatchedHelper ??= this.fresh("$unmatched");
+    return this.unmatchedHelper;
+  }
+
   /** The `int` schema `$Int`. */
   intSchemaName(): string {
     this.intSchema ??= this.fresh("$Int");
@@ -511,6 +520,10 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
 
   usesIntFunction(): boolean {
     return this.intHelper !== undefined;
+  }
+
+  usesUnmatched(): boolean {
+    return this.unmatchedHelper !== undefined;
   }
 
   usesIntSchema(): boolean {

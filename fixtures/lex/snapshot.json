@@ -219,6 +219,10 @@
       "d4ee5a019bfbf8a7",
       "7c0eaac2f5c33f4c"
     ],
+    "fixtures/emit/unmatched/main.eff": [
+      "2c607fe0a4e76956",
+      "ea170c988ef0e3e6"
+    ],
     "fixtures/errors/declaration-brand-position.eff": [
       "5a6e77269c59ebd0",
       "3ab1e87e456bfed8"

@@ -677,20 +677,57 @@ Deno.test("a data type emits a TaggedStruct, a make call, and an unbrand copy wi
   assertStringIncludes(text, 'key !== "_tag"');
 });
 
-Deno.test("a match over data and error types tests the tag of each arm but the last", () => {
+Deno.test("a match over data and error types tests the tag of each arm and throws after the last", () => {
   const emitted = emitFiles(projectFiles("emit/forms"), ["data-types.eff"]).get(
     "data-types",
   );
   assert(emitted !== undefined, "module data-types was not emitted");
   const text = emitted.text;
-  // The arms of `describe` over `Circle | Square`: a test for the first, none for the last.
+  // The arms of `describe` over `Circle | Square`: each has a test, and the else branch throws.
   assertStringIncludes(text, '$t0._tag === "data-types#Circle"');
-  assertEquals(text.split('$t0._tag === "data-types#Square"').length - 1, 0);
-  // A `_` arm is the else branch.
-  assertStringIncludes(text, ': "other")(shape)');
+  assertStringIncludes(text, '$t0._tag === "data-types#Square"');
+  assertStringIncludes(text, ": $unmatched($t0))(shape)");
+  // The helper is emitted once, before the declarations.
+  assertEquals(text.split("const $unmatched = ").length - 1, 1);
+  assertStringIncludes(
+    text,
+    'const $unmatched = (_value: unknown): never => {\n  throw new TypeError("a match received a value outside its type");\n};',
+  );
   // An error and a data type share one chain, and an empty variant has a tag test.
   assertStringIncludes(text, "((r) => r.reason)($t0)");
   assertStringIncludes(text, '$t0._tag === "data-types#Marker"');
+});
+
+Deno.test("a match whose last arm is _ keeps the else branch and needs no helper", () => {
+  const text = oneModule(`
+type Text = string
+export data Circle = { radius: Text }
+export data Square = { side: Text }
+export type Shape = Circle | Square
+export const radius = (shape: Shape): Text =>
+  match shape {
+    Circle(c) => c.radius,
+    _ => "other"
+  }
+`);
+  assertStringIncludes(text, ': "other")(shape)');
+  assertEquals(text.includes("$unmatched"), false);
+});
+
+Deno.test("the helper name of a failed match is a fresh name", () => {
+  const text = oneModule(`
+type Text = string
+export data Circle = { radius: Text }
+export data Square = { side: Text }
+export type Shape = Circle | Square
+export const $unmatched = (shape: Shape): Text =>
+  match shape {
+    Circle(c) => c.radius,
+    Square(q) => q.side
+  }
+`);
+  assertStringIncludes(text, "const $unmatched$1 = ");
+  assertStringIncludes(text, ": $unmatched$1($t0))(shape)");
 });
 
 Deno.test("a literal result in a generated function is as const", () => {

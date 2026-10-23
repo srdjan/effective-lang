@@ -696,6 +696,18 @@ export class DeclarationEmitter {
     ];
   }
 
+  /** `const $unmatched = ...` */
+  unmatchedDeclaration(): Doc {
+    const name = this.scope.unmatched();
+    return [
+      `const ${name} = (_value: unknown): never => `,
+      braces([
+        'throw new TypeError("a match received a value outside its type");',
+      ]),
+      ";",
+    ];
+  }
+
   /** `const $Int = Schema.Finite.check(...)`, the `Int` schema of the book. */
   intSchemaDeclaration(): Doc {
     const name = this.scope.intSchemaName();

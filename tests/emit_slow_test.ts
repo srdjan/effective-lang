@@ -4955,3 +4955,87 @@ console.log(JSON.stringify({
     });
   });
 });
+
+Deno.test("a match throws for a value outside its type: pure, effect, and stream callback", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/unmatched/", FIXTURES), dir);
+    build(dir, ["main.eff"]);
+    await check(dir, ["main.ts"]);
+    const result = await runScript(
+      dir,
+      `
+import { Cause, Effect, Exit, Layer, Stream } from "effect";
+import * as M from "./main.ts";
+
+const circle = M.Circle.make({ radius: "r" });
+const square = M.Square.make({ side: "s" });
+const outside = {
+  shape: { _tag: "main#Other" },
+  status: "refunded",
+  figure: { kind: "triangle" },
+};
+const thrown = (run: () => unknown): string => {
+  try {
+    run();
+    return "no throw";
+  } catch (e) {
+    return e instanceof TypeError ? e.message : String(e);
+  }
+};
+const NamesLive = Layer.succeed(M.Names)({ label: () => Effect.succeed("n") });
+const dies = (exit: Exit.Exit<unknown, unknown>): string =>
+  Exit.isFailure(exit) && Cause.hasDies(exit.cause) && !Cause.hasFails(exit.cause)
+    ? (Cause.squash(exit.cause) as Error).message
+    : "no defect";
+const effectExit = (job: Effect.Effect<unknown, never, M.Names>) =>
+  Effect.runPromiseExit(job.pipe(Effect.provide(NamesLive)));
+const streamExit = <A>(stream: Stream.Stream<A>) =>
+  Effect.runPromiseExit(Stream.runCollect(stream));
+
+console.log(JSON.stringify({
+  pure: [
+    thrown(() => M.shapePure(outside.shape as never)),
+    thrown(() => M.statusPure(outside.status as never)),
+    thrown(() => M.figurePure(outside.figure as never)),
+  ],
+  effect: [
+    dies(await effectExit(M.shapeEffect(outside.shape as never))),
+    dies(await effectExit(M.statusEffect(outside.status as never))),
+    dies(await effectExit(M.figureEffect(outside.figure as never))),
+  ],
+  stream: [
+    dies(await streamExit(M.shapeStream(Stream.make(outside.shape as never)))),
+    dies(await streamExit(M.statusStream(Stream.make(outside.status as never)))),
+    dies(await streamExit(M.figureStream(Stream.make(outside.figure as never)))),
+  ],
+  valid: {
+    pure: [
+      M.shapePure(circle), M.shapePure(square),
+      M.statusPure("pending"), M.statusPure("paid"),
+      M.figurePure({ kind: "circle", radius: "r" }),
+      M.figurePure({ kind: "square", side: "s" }),
+    ],
+    effect: await Effect.runPromise(
+      Effect.all([M.shapeEffect(circle), M.shapeEffect(square), M.statusEffect("pending")])
+        .pipe(Effect.provide(NamesLive)),
+    ),
+    stream: Array.from(await Effect.runPromise(Stream.runCollect(M.shapeStream(Stream.make(circle, square))))),
+  },
+  wild: [M.shapeWild(circle), M.shapeWild(outside.shape as never)],
+}));
+`,
+    );
+    const m = "a match received a value outside its type";
+    assertEquals(result, {
+      pure: [m, m, m],
+      effect: [m, m, m],
+      stream: [m, m, m],
+      valid: {
+        pure: ["r", "s", "p", "q", "r", "s"],
+        effect: ["n", "s", "n"],
+        stream: ["r", "s"],
+      },
+      wild: ["r", "other"],
+    });
+  });
+});

@@ -130,6 +130,7 @@ function build(ir: ModuleIR, context: EmitContext): EmittedModule {
   const helpers: Doc[][] = [];
   if (scope.usesIntSchema()) helpers.push([emitter.intSchemaDeclaration()]);
   if (scope.usesIntFunction()) helpers.push([emitter.intFunctionDeclaration()]);
+  if (scope.usesUnmatched()) helpers.push([emitter.unmatchedDeclaration()]);
   const hostAssertions = emitter.hostAssertions();
   if (scope.usesScopeRuntime()) helpers.push([scopeRuntimeDeclaration(scope)]);
 

@@ -1,0 +1,66 @@
+// A match whose last arm is not `_` throws for a value outside its type. The
+// slow test calls each function with such a value through a cast.
+type Text = string
+type Status = "pending" | "paid"
+type Figure = { kind: "circle", radius: Text } | { kind: "square", side: Text }
+
+export data Circle = { radius: Text }
+export data Square = { side: Text }
+export type Shape = Circle | Square
+
+export service Names { label(): Text }
+
+export const shapePure = (s: Shape): Text =>
+  match s {
+    Circle(c) => c.radius,
+    Square(q) => q.side
+  }
+
+export const statusPure = (s: Status): Text =>
+  match s { "pending" => "p", "paid" => "q" }
+
+export const figurePure = (f: Figure): Text =>
+  match f {
+    { kind: "circle", ...c } => c.radius,
+    { kind: "square", ...q } => q.side
+  }
+
+export const shapeEffect = (s: Shape): Text uses Names.label =>
+  match s {
+    Circle(c) => Names.label(),
+    Square(q) => q.side
+  }
+
+export const statusEffect = (s: Status): Text uses Names.label =>
+  match s { "pending" => Names.label(), "paid" => "q" }
+
+export const figureEffect = (f: Figure): Text uses Names.label =>
+  match f {
+    { kind: "circle", ...c } => Names.label(),
+    { kind: "square", ...q } => q.side
+  }
+
+export const shapeStream = (source: Stream<Shape>): Stream<Text> =>
+  mapEffect(source, (s) =>
+    match s {
+      Circle(c) => c.radius,
+      Square(q) => q.side
+    }
+  )
+
+export const statusStream = (source: Stream<Status>): Stream<Text> =>
+  mapEffect(source, (s) => match s { "pending" => "p", "paid" => "q" })
+
+export const figureStream = (source: Stream<Figure>): Stream<Text> =>
+  mapEffect(source, (f) =>
+    match f {
+      { kind: "circle", ...c } => c.radius,
+      { kind: "square", ...q } => q.side
+    }
+  )
+
+export const shapeWild = (s: Shape): Text =>
+  match s {
+    Circle(c) => c.radius,
+    _ => "other"
+  }
