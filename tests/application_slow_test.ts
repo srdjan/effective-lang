@@ -34,14 +34,51 @@ interface Application {
   readonly directory: string;
   /** The source files of the project, including `effective.json`. */
   readonly sources: readonly string[];
-  readonly entry: string;
+  readonly entry: string | readonly string[];
   readonly prefix: string;
   /** The host files that the test copies next to the emitted modules. */
   readonly hostFiles: readonly string[];
+  readonly runtimeTests?: readonly string[];
   readonly verify: (report: Report) => void;
 }
 
 const APPLICATIONS: readonly Application[] = [
+  {
+    name:
+      "portable publisher passes emitted publication, grant, and lifetime checks",
+    directory: "portable-publisher",
+    sources: [
+      "effective.json",
+      "domain.eff",
+      "platform.eff",
+      "ports.eff",
+      "feature.eff",
+      "storage.eff",
+      "publisher.eff",
+      "grants.eff",
+    ],
+    entry: ["publisher.eff", "grants.eff"],
+    prefix: "effective-application-publisher-",
+    hostFiles: [
+      "backend.ts",
+      "memory.ts",
+      "codecs.ts",
+      "runner.ts",
+      "main.ts",
+      "runtime_test.ts",
+      "lifecycle_test.ts",
+    ],
+    runtimeTests: ["runtime_test.ts", "lifecycle_test.ts"],
+    verify: (report) => {
+      assertEquals(report.receipt, {
+        id: "welcome",
+        revision: 1,
+        outcome: "published",
+      });
+      assertEquals(report.committed?.length, 1);
+      assertEquals(report.active, 0);
+    },
+  },
   {
     name:
       "scheduled worker application passes strict emitted execution and cancellation gates",
@@ -118,7 +155,11 @@ for (const app of APPLICATIONS) {
         name,
       ) => [name, Deno.readTextFileSync(new URL(name, base))]),
     );
-    const project = checkProject(memoryHost(files), "", [app.entry]);
+    const project = checkProject(
+      memoryHost(files),
+      "",
+      typeof app.entry === "string" ? [app.entry] : app.entry,
+    );
     assert(project.ok, JSON.stringify(project));
     assertEquals(project.value.diagnostics, []);
     const lowered = lowerProject(project.value);
@@ -154,11 +195,12 @@ for (const app of APPLICATIONS) {
           Deno.readTextFileSync(new URL(name, base)),
         );
       }
+      const runtimeTests = app.runtimeTests ?? ["runtime_test.ts"];
       for (
-        const args of [["check", "--no-lock", "main.ts", "runtime_test.ts"], [
+        const args of [["check", "--no-lock", "main.ts", ...runtimeTests], [
           "test",
           "--no-lock",
-          "runtime_test.ts",
+          ...runtimeTests,
         ], ["run", "--no-lock", "main.ts"]]
       ) {
         const result = await new Deno.Command(Deno.execPath(), {

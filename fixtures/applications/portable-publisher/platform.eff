@@ -1,0 +1,32 @@
+export type Text = string
+export type Bool = boolean
+export type Int = int
+export type LexicalOps = {
+  isBlank: (value: Text) => Bool,
+  isWellFormed: (value: Text) => Bool
+}
+export type TimeOps = { nowMillis: () => Int }
+
+export nominal Key = string
+export nominal Payload = string
+export nominal Version = string
+
+export type Entry = { payload: Payload, version: Version }
+// Reads detach snapshots; conflicts write nothing; uncertain writes may have committed.
+export type KeyValue = {
+  get: (key: Key) => Option<Entry> fails InvalidKey | PlatformUnavailable,
+  set: (key: Key, payload: Payload, expected: Option<Version>) => Version
+    fails InvalidKey | InvalidPayload | PlatformUnavailable | CompareConflict | WriteUncertain
+}
+
+export error InvalidKey = { key: Text }
+export error InvalidPayload = {}
+export error PlatformUnavailable = { cause: unknown }
+export error CompareConflict = {}
+export error WriteUncertain = { cause: unknown }
+
+export service Platform { acquire(): KeyValue fails PlatformUnavailable }
+export service TextRules {
+  acquire(): LexicalOps
+}
+export service Time { acquire(): TimeOps }

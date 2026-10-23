@@ -1,0 +1,67 @@
+import { Text, ArticleId, Revision, Draft, Published, InvalidDraft, ExhaustedDraft, ReadyDraft, InvalidArticle, RevisionExhausted, articleId, assessDraft, planPublication } from "./domain.eff"
+import { SnapshotToken, Corrupt, StorageUnavailable, StorageUncertain, ArticleConflict, ArticleStore, Clock, Lexical } from "./ports.eff"
+
+export type PublishOutcome = "published" | "already-published" | "settled"
+export type PublishReceipt = { id: ArticleId, revision: Revision, outcome: PublishOutcome }
+export error MissingArticle = { id: ArticleId }
+export error PublishConflict = { id: ArticleId }
+
+const receipt = (article: Published, outcome: PublishOutcome): PublishReceipt => ({ id: article.id, revision: article.revision, outcome })
+
+const settleConflict = (id: ArticleId): PublishReceipt
+  fails Corrupt | StorageUnavailable | PublishConflict uses ArticleStore.load =>
+  match ArticleStore.load(id) {
+    Some(observed) => match observed.article {
+      Published(article) => receipt(article, "settled"),
+      Draft(article) => fail(PublishConflict({ id }))
+    },
+    None => fail(PublishConflict({ id }))
+  }
+
+const publishReady = (ready: ReadyDraft, token: SnapshotToken): PublishReceipt
+  fails Corrupt | StorageUnavailable | StorageUncertain | PublishConflict
+  uses Clock.now | ArticleStore.load | ArticleStore.publish => {
+    const plan = planPublication(ready, Clock.now())
+    try {
+      ArticleStore.publish(plan, token)
+      receipt(plan.next, "published")
+    } catch {
+      ArticleConflict(error) => settleConflict(ready.id)
+    }
+  }
+
+const publishDraft = (draft: Draft, token: SnapshotToken): PublishReceipt
+  fails InvalidArticle | RevisionExhausted | Corrupt | StorageUnavailable | StorageUncertain | PublishConflict
+  uses Lexical.isBlank | Clock.now | ArticleStore.load | ArticleStore.publish =>
+  match assessDraft(draft, Lexical.isBlank(draft.title), Lexical.isBlank(draft.body)) {
+    InvalidDraft(invalid) => fail(InvalidArticle({ field: invalid.field, reason: invalid.reason })),
+    ExhaustedDraft(exhausted) => fail(RevisionExhausted({ id: exhausted.id })),
+    ReadyDraft(ready) => publishReady(ready, token)
+  }
+
+const checkedId = (raw: Text): ArticleId fails InvalidArticle uses Lexical.isBlank | Lexical.isWellFormed =>
+  match articleId(raw, Lexical.isBlank(raw), Lexical.isWellFormed(raw)) {
+    Some(id) => id,
+    None => fail(InvalidArticle({ field: "id", reason: "must be nonblank, well-formed Unicode" }))
+  }
+
+const publishWithStore = (id: ArticleId): PublishReceipt
+  fails MissingArticle | InvalidArticle | RevisionExhausted | Corrupt | StorageUnavailable | StorageUncertain | PublishConflict
+  uses Lexical.isBlank | Clock.now | ArticleStore.load | ArticleStore.publish =>
+  match ArticleStore.load(id) {
+    Some(observed) => match observed.article {
+      Published(article) => receipt(article, "already-published"),
+      Draft(article) => publishDraft(article, observed.token)
+    },
+    None => fail(MissingArticle({ id }))
+  }
+
+export const publishArticleFeature = (rawId: Text): PublishReceipt
+  fails MissingArticle | InvalidArticle | RevisionExhausted | Corrupt | StorageUnavailable | StorageUncertain | PublishConflict
+  uses Lexical.isBlank | Lexical.isWellFormed | Clock.now | ArticleStore.load | ArticleStore.publish =>
+  publishWithStore(checkedId(rawId))
+
+export const publishAllFeature = (rawIds: Text[]): PublishReceipt[]
+  fails MissingArticle | InvalidArticle | RevisionExhausted | Corrupt | StorageUnavailable | StorageUncertain | PublishConflict
+  uses Lexical.isBlank | Lexical.isWellFormed | Clock.now | ArticleStore.load | ArticleStore.publish =>
+  traverse(rawIds, (rawId) => publishWithStore(checkedId(rawId)), { concurrency: 1 })

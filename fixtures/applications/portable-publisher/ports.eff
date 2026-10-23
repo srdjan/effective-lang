@@ -1,0 +1,21 @@
+import { Text, Bool, ArticleId, Instant, Article, PublishPlan } from "./domain.eff"
+
+export nominal SnapshotToken = string
+export type ObservedArticle = { article: Article, token: SnapshotToken }
+
+export error Corrupt = { key: Text, reason: Text }
+export error StorageUnavailable = { cause: unknown }
+export error StorageUncertain = { cause: unknown }
+export error ArticleConflict = { id: ArticleId }
+
+export service ArticleStore {
+  load(id: ArticleId): Option<ObservedArticle> fails Corrupt | StorageUnavailable
+  publish(plan: PublishPlan, token: SnapshotToken): void
+    fails Corrupt | StorageUnavailable | StorageUncertain | ArticleConflict
+}
+
+export service Clock { now(): Instant }
+export service Lexical {
+  isBlank(value: Text): Bool
+  isWellFormed(value: Text): Bool
+}

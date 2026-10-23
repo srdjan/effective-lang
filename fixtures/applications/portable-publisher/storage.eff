@@ -1,0 +1,134 @@
+import { Key, Payload, Version, KeyValue, LexicalOps, InvalidKey, InvalidPayload, PlatformUnavailable, CompareConflict, WriteUncertain, Platform, TextRules, Text } from "./platform.eff"
+import { ArticleId, Revision, NonBlankText, Instant, Draft, Published, Article, PublishPlan } from "./domain.eff"
+import { SnapshotToken, ObservedArticle, Corrupt, StorageUnavailable, StorageUncertain, ArticleConflict, ArticleStore } from "./ports.eff"
+
+export type StoredArticle = {
+  kind: "draft" | "published",
+  id: Text,
+  revision: int,
+  title: Text,
+  body: Text,
+  publishedAt?: int
+}
+export type ArticleCodec = {
+  encode: (article: StoredArticle) => Payload,
+  decode: (payload: Payload) => Option<StoredArticle>
+}
+
+export service ArticleJson {
+  acquire(): ArticleCodec
+}
+
+export const storedArticleSchema: Schema<StoredArticle> = schema()
+
+const keyOf = (id: ArticleId): Key => Key("articles/" + id)
+
+const unavailable = (cause: unknown): StorageUnavailable => StorageUnavailable({ cause })
+
+const readEntry = (store: KeyValue, id: ArticleId): Option<{ key: Key, entry: { payload: Payload, version: Version } }>
+  fails Corrupt | StorageUnavailable => {
+    const key = keyOf(id)
+    try {
+      match store.get(key) {
+        Some(entry) => Some({ key, entry }),
+        None => None
+      }
+    } catch {
+      InvalidKey(error) => fail(Corrupt({ key, reason: "invalid storage key" })),
+      PlatformUnavailable(error) => fail(unavailable(error.cause))
+    }
+  }
+
+const decodeStored = (serializer: ArticleCodec, key: Key, payload: Payload): StoredArticle fails Corrupt =>
+  match serializer.decode(payload) {
+    Some(article) => article,
+    None => fail(Corrupt({ key, reason: "invalid article payload" }))
+  }
+
+const toArticle = (lexical: LexicalOps, key: Key, expectedId: ArticleId, stored: StoredArticle): Article
+  fails Corrupt => {
+    if (lexical.isBlank(stored.id)) {
+      fail(Corrupt({ key, reason: "blank article id" }))
+    } else if (stored.id !== expectedId) {
+      fail(Corrupt({ key, reason: "article identity mismatch" }))
+    } else if (stored.revision < 0) {
+      fail(Corrupt({ key, reason: "negative article revision" }))
+    } else {
+      match stored.kind {
+        "draft" => match stored.publishedAt {
+          Some(_instant) => fail(Corrupt({ key, reason: "draft has publication time" })),
+          None => Draft({
+            id: ArticleId(stored.id),
+            revision: Revision(stored.revision),
+            title: stored.title,
+            body: stored.body
+          })
+        },
+        "published" => match stored.publishedAt {
+          Some(publishedAt) =>
+            if (lexical.isBlank(stored.title)) {
+              fail(Corrupt({ key, reason: "blank published title" }))
+            } else if (lexical.isBlank(stored.body)) {
+              fail(Corrupt({ key, reason: "blank published body" }))
+            } else if (publishedAt < 0) {
+              fail(Corrupt({ key, reason: "negative publication time" }))
+            } else {
+              Published({
+                id: ArticleId(stored.id),
+                revision: Revision(stored.revision),
+                title: NonBlankText(stored.title),
+                body: NonBlankText(stored.body),
+                publishedAt: Instant(publishedAt)
+              })
+            },
+          None => fail(Corrupt({ key, reason: "missing publication time" }))
+        }
+      }
+    }
+  }
+
+const load = (store: KeyValue, serializer: ArticleCodec, lexical: LexicalOps, id: ArticleId): Option<ObservedArticle>
+  fails Corrupt | StorageUnavailable =>
+  if (lexical.isBlank(id)) {
+    fail(Corrupt({ key: keyOf(id), reason: "blank article id" }))
+  } else { match readEntry(store, id) {
+    Some(found) => {
+      const stored = decodeStored(serializer, found.key, found.entry.payload)
+      Some({ article: toArticle(lexical, found.key, id, stored), token: SnapshotToken(found.entry.version) })
+    },
+    None => None
+  } }
+
+const storedPublished = (article: Published): StoredArticle => ({
+  kind: "published",
+  id: article.id,
+  revision: article.revision,
+  title: article.title,
+  body: article.body,
+  publishedAt: article.publishedAt
+})
+
+const write = (store: KeyValue, serializer: ArticleCodec, plan: PublishPlan, token: SnapshotToken): void
+  fails Corrupt | StorageUnavailable | StorageUncertain | ArticleConflict => {
+    const key = keyOf(plan.next.id)
+    const payload = serializer.encode(storedPublished(plan.next))
+    try {
+      const _version = store.set(key, payload, Some(Version(token)))
+    } catch {
+      InvalidKey(error) => fail(Corrupt({ key, reason: "invalid storage key" })),
+      InvalidPayload(error) => fail(Corrupt({ key, reason: "invalid storage payload" })),
+      PlatformUnavailable(error) => fail(unavailable(error.cause)),
+      CompareConflict(error) => fail(ArticleConflict({ id: plan.next.id })),
+      WriteUncertain(error) => fail(StorageUncertain({ cause: error.cause }))
+    }
+  }
+
+export const articleStoreLive: Layer<ArticleStore, PlatformUnavailable, Platform.acquire | ArticleJson.acquire | TextRules.acquire> = layer(ArticleStore, () => {
+  const store = Platform.acquire()
+  const serializer = ArticleJson.acquire()
+  const lexical = TextRules.acquire()
+  ({
+    load: (id: ArticleId) => load(store, serializer, lexical, id),
+    publish: (plan: PublishPlan, token: SnapshotToken) => write(store, serializer, plan, token)
+  })
+})

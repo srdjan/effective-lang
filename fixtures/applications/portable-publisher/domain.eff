@@ -1,0 +1,74 @@
+export type Text = string
+export type Bool = boolean
+export nominal ArticleId = string
+export nominal Revision = int
+export nominal NonBlankText = string
+export nominal Instant = int
+
+export nominal Draft = {
+  id: ArticleId,
+  revision: Revision,
+  title: Text,
+  body: Text
+}
+
+export nominal Published = {
+  id: ArticleId,
+  revision: Revision,
+  title: NonBlankText,
+  body: NonBlankText,
+  publishedAt: Instant
+}
+
+export type Article = Draft | Published
+export nominal ReadyDraft = {
+  id: ArticleId,
+  revision: Revision,
+  title: NonBlankText,
+  body: NonBlankText
+}
+export nominal InvalidDraft = {
+  field: "revision" | "title" | "body",
+  reason: Text
+}
+export nominal ExhaustedDraft = { id: ArticleId }
+export type DraftAssessment = InvalidDraft | ExhaustedDraft | ReadyDraft
+export nominal PublishPlan = { expectedRevision: Revision, next: Published }
+
+export error InvalidArticle = {
+  field: "id" | "revision" | "title" | "body",
+  reason: Text
+}
+export error RevisionExhausted = { id: ArticleId }
+
+export const articleId = (raw: Text, blank: Bool, wellFormed: Bool): Option<ArticleId> =>
+  if (blank || wellFormed === false) { None } else { Some(ArticleId(raw)) }
+
+export const assessDraft = (draft: Draft, titleBlank: Bool, bodyBlank: Bool): DraftAssessment =>
+  if (draft.revision < 0) {
+    InvalidDraft({ field: "revision", reason: "must be nonnegative" })
+  } else if (draft.revision >= 9007199254740991) {
+    ExhaustedDraft({ id: draft.id })
+  } else if (titleBlank) {
+    InvalidDraft({ field: "title", reason: "must not be blank" })
+  } else if (bodyBlank) {
+    InvalidDraft({ field: "body", reason: "must not be blank" })
+  } else {
+    ReadyDraft({
+      id: draft.id,
+      revision: draft.revision,
+      title: NonBlankText(draft.title),
+      body: NonBlankText(draft.body)
+    })
+  }
+
+export const planPublication = (ready: ReadyDraft, now: Instant): PublishPlan => {
+  const next = Published({
+      id: ready.id,
+      revision: Revision(ready.revision + 1),
+      title: ready.title,
+      body: ready.body,
+      publishedAt: now
+    })
+  PublishPlan({ expectedRevision: ready.revision, next })
+}

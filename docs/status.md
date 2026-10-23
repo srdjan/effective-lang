@@ -2,7 +2,7 @@
 
 This file is the one place for the current project status. It holds the
 application stopping rule, the application dispositions (three gate applications
-and one witness for nominal types), the remaining and deferred gaps, and
+and witnesses for nominal types and portability), the remaining and deferred gaps, and
 the open items. Other documents link here and do not restate these facts.
 
 ## Stopping rule
@@ -17,8 +17,10 @@ drivers and the runtime entry point. The order lifecycle application is a
 witness for nominal types. It is not one of the three gate applications.
 
 All three application gates pass with existing language forms. The order
-lifecycle witness also passes. The stopping rule is satisfied, so automatic API
-parity additions stop. Select a new language feature only for a demonstrated
+lifecycle witness also passes. The portable publisher is an additional
+exploratory witness, not a gate application.
+
+The stopping rule is satisfied, so automatic API parity additions stop. Select a new language feature only for a demonstrated
 application blocker or an explicit change to the accepted target. First try
 existing source compositions. Gap item 9 (broader package interoperability)
 remains deferred by user instruction. Release acceptance (editor behavior,
@@ -40,6 +42,7 @@ the build and run commands.
 | [Scheduled worker](../fixtures/applications/scheduled-worker/README.md) | Passes with ten compiled runtime cases. A source-authored concrete policy owns repetition, transient retry, and resource release. The runtime entry point owns whole-worker interruption.                                                                                  | General opaque Schedule consumers remain an API gap. The native reference comparison covers the selected fixed policy, timing, and results only. A future application that needs opaque policies, richer scheduling, or an in-source shutdown protocol must supply its own blocker witness. Plan: [scheduled worker](archive/plans/2026-10-19-scheduled-worker-application.md#disposition-and-limits).                                                                                                   |
 | [Stream processor](../fixtures/applications/stream-processor/README.md) | Passes with ordered concurrent mapping, backpressure, selective fallback, and thirteen compiled runtime cases. Source owns the whole pipeline and the session lifetime.                                                                                                    | The application promises no rollback, no exactly-once delivery, no recovery of arbitrary mixed causes, and no global memory bound from one queue capacity. Native `catchTags` can hide an accompanying defect. Plan: [stream processor](archive/plans/2026-10-19-stream-processor-application.md#disposition-and-limits).                                                                                                                                                                                |
 | [Order lifecycle](../fixtures/applications/order-lifecycle/README.md)   | A witness for nominal types, not a gate application. Passes with nine compiled runtime cases. Four nominal record states cross a module boundary. A `match` by name covers each state. A recursive pricing rule tree uses a nominal record. Decoding keeps the module-qualified `_tag`. | The application has no service, no driver, and no concurrency. Percent pricing is not possible, because `/` gives `number`. Plan: [nominal examples](archive/plans/2026-10-23-nominal-examples.md).                                                                                                                                                                                                                                                                                                              |
+| [Portable publisher](../fixtures/applications/portable-publisher/README.md) | An exploratory portability witness, not a gate application. Source owns publication, conflict policy, grants, and serial batching. Memory and SQLite pass one shared KV suite. | The checks cover local storage in one process, finite batch completion, interruption, and cleanup. A committed write with a simulated lost acknowledgement returns uncertainty without retry. No crash recovery, exactly-once delivery, or HTTP admission protocol is promised. [Plan](plans/2026-10-23-portable-applications.md); [gap assessment](plans/portable-applications-gaps.md). |
 
 ## Remaining and deferred gaps
 

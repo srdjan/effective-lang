@@ -1,0 +1,28 @@
+import { Text, Bool, InvalidArticle, RevisionExhausted } from "./domain.eff"
+import { PublishReceipt, MissingArticle, PublishConflict } from "./feature.eff"
+import { Corrupt, StorageUnavailable, StorageUncertain } from "./ports.eff"
+import { PlatformUnavailable } from "./platform.eff"
+
+export error GrantDenied = { id: Text }
+export error Revoked = {}
+
+export type PublishOperation = (id: Text) => PublishReceipt
+  fails MissingArticle | InvalidArticle | RevisionExhausted | Corrupt | StorageUnavailable | StorageUncertain | PublishConflict | PlatformUnavailable
+
+export type PublishGrant = {
+  use: () => PublishReceipt
+    fails MissingArticle | InvalidArticle | RevisionExhausted | Corrupt | StorageUnavailable | StorageUncertain | PublishConflict | PlatformUnavailable | Revoked,
+  revoke: () => void
+}
+
+export const grantPublishOne = (publish: PublishOperation, id: Text, authorizedIds: Text[]): PublishGrant
+  fails GrantDenied => {
+    const authorized = authorizedIds |> fold(false, (found, candidate) => found || candidate === id)
+    if (authorized) {
+      const live: Ref<Bool> = makeRef(true)
+      ({
+        use: () => if (getRef(live)) { publish(id) } else { fail(Revoked({})) },
+        revoke: () => setRef(live, false)
+      })
+    } else { fail(GrantDenied({ id })) }
+  }

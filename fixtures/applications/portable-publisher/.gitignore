@@ -1,0 +1,17 @@
+/*.ts
+/*.ts.map
+/deno.lock
+!/backend.ts
+!/codecs.ts
+!/main.ts
+!/memory.ts
+!/runner.ts
+!/runtime_test.ts
+!/lifecycle_test.ts
+!/sqlite.ts
+!/kv_contract.ts
+!/sqlite_runtime_test.ts
+!/kv_contract.ts
+!/lifecycle_test.ts
+!/sqlite.ts
+!/sqlite_runtime_test.ts
