@@ -271,6 +271,14 @@
       "86296a9cfde6478e",
       "e38a514a697f60b4"
     ],
+    "fixtures/errors/declaration-opaque-field/host.effi": [
+      "0113e7786177d1c2",
+      "a906ad7d3701758f"
+    ],
+    "fixtures/errors/declaration-opaque-field/main.eff": [
+      "acbec28f4b9d8d29",
+      "a9f5b754f3e2e0b2"
+    ],
     "fixtures/errors/declaration-parameter-annotation.eff": [
       "e8d3a7449d4f2172",
       "ec634e3b1bb77b65"

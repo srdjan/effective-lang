@@ -300,6 +300,11 @@ export const DIAGNOSTIC_CODES = {
     description:
       "A data or error declaration has a field whose type contains a function or deferred type (Effect, Fiber, Stream, Sink, Schedule, RetrySchedule, Ref, Codec, Schema, provider, or scope), directly or through an alias. The emitter has no schema for such a type.",
   },
+  "declaration/016": {
+    category: "declaration",
+    description:
+      "A data or error field, or a brand base, contains an opaque type, directly or through an alias. An opaque type has no schema, so the emitter cannot build one for the declaration.",
+  },
   "module/001": {
     category: "module",
     description:

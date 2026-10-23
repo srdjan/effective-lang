@@ -1652,6 +1652,43 @@ export function containsDeferredType(
   }
 }
 
+/**
+ * Whether the type names an opaque type at any depth, which has no schema. An
+ * alias unfolds, and a repeated alias stops a cycle. A data type, an error,
+ * and a brand stop the walk, as in `containsDeferredType`. A function or
+ * deferred type is `containsDeferredType`'s case, so it reports nothing here.
+ */
+export function containsOpaqueType(
+  table: TypeTable,
+  ref: TypeRef,
+  seen = new Set<TypeRef>(),
+): boolean {
+  if (seen.has(ref)) return false;
+  seen.add(ref);
+  const type = table.node(ref);
+  const any = (children: readonly TypeRef[]): boolean =>
+    children.some((child) => containsOpaqueType(table, child, seen));
+  switch (type.kind) {
+    case "named": {
+      if (isErrorId(type.id)) return false;
+      if (table.isOpaque(type.id)) return true;
+      const alias = table.aliasOf(type.id);
+      return alias !== undefined && any([alias]);
+    }
+    case "record":
+      return any(type.fields.map((f) => f.type));
+    case "array":
+    case "option":
+      return any([type.element]);
+    case "tuple":
+      return any(type.elements);
+    case "union":
+      return any(type.members);
+    default:
+      return false;
+  }
+}
+
 function idName(id: string): string {
   const hash = id.indexOf("#");
   return hash < 0 ? id : id.slice(hash + 1);

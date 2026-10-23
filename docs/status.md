@@ -109,7 +109,8 @@ The `data` declaration is complete as of 2026-10-23
 ([plan](archive/plans/2026-10-23-nominal-data-types.md)). It declares a nominal
 record with a runtime `_tag`. It replaces `Brand<{...}>`, which now gives
 `declaration/014`. A `match` selects data types and errors by name. A data or
-error field cannot hold a function or deferred type (`declaration/015`). A data
+error field cannot hold a function or deferred type (`declaration/015`), or an
+opaque type (`declaration/016`). A data
 type can be recursive when every cycle has a base case. The editor, the TextMate
 grammar and the playground highlighter know the word `data`.
 

@@ -59,6 +59,7 @@ import {
 } from "./syntax.ts";
 import {
   containsDeferredType,
+  containsOpaqueType,
   dataOnly,
   guardedRecord,
   sortedUnique,
@@ -1677,18 +1678,25 @@ class ModuleChecker {
   }
 
   /**
-   * A data or error field cannot hold a function or deferred type, at any
-   * depth, after aliases unfold. The emitter has no schema for one. The check
-   * runs after every alias is defined, so a field may name a later alias.
+   * A data or error field cannot hold a function, deferred, or opaque type, at
+   * any depth, after aliases unfold. The emitter has no schema for one. The
+   * check runs after every alias is defined, so a field may name a later alias.
    */
   private checkDeferredFields(): void {
     for (const field of this.nominalFields) {
-      if (!containsDeferredType(this.table, field.type.ref)) continue;
-      this.lowerer.report(
-        "declaration/015",
-        `the field \`${field.name}\` has a function or deferred type, which a data or error declaration cannot hold`,
-        field.typeSpan,
-      );
+      if (containsDeferredType(this.table, field.type.ref)) {
+        this.lowerer.report(
+          "declaration/015",
+          `the field \`${field.name}\` has a function or deferred type, which a data or error declaration cannot hold`,
+          field.typeSpan,
+        );
+      } else if (containsOpaqueType(this.table, field.type.ref)) {
+        this.lowerer.report(
+          "declaration/016",
+          `the field \`${field.name}\` has an opaque type, which has no schema`,
+          field.typeSpan,
+        );
+      }
     }
   }
 
@@ -1707,7 +1715,16 @@ class ModuleChecker {
           (node.kind === "named" && !isErrorId(node.id) &&
             this.table.dataRecordOf(node.id) !== undefined);
       });
-      if (!nominal) continue;
+      if (!nominal) {
+        if (containsOpaqueType(this.table, base)) {
+          this.lowerer.report(
+            "declaration/016",
+            "a brand base cannot hold an opaque type, which has no schema",
+            brand.span,
+          );
+        }
+        continue;
+      }
       this.lowerer.report(
         "declaration/014",
         "a brand base cannot be a record or a data type; declare a nominal record with `data`",

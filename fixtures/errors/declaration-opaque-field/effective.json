@@ -1,0 +1,8 @@
+{
+  "host": {
+    "x": {
+      "interface": "./host.effi",
+      "module": "./x.ts"
+    }
+  }
+}

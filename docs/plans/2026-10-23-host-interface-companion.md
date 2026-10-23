@@ -1,6 +1,6 @@
 # Plan: a generated companion module for each host interface
 
-Status: validated, 2026-10-23. Fable reported 4 major and 9 minor findings. Opus accepted all 13. Section 6 maps each finding to its resolution. The decisions CM1 to CM5 wait for the user.
+Status: validated, 2026-10-23. Fable reported 4 major and 9 minor findings. Opus accepted all 13. Section 6 maps each finding to its resolution. On 2026-10-23 the user accepted CM1 to CM5 as recommended ("yes, accept").
 
 This plan uses the ID prefix CM. CM1 to CM5 are decisions for the user. CM6 and later are work items. The plan is the follow-up that HB2 (a) asked for in [the host boundary plan](../archive/plans/2026-10-23-host-boundary-checks.md).
 
@@ -73,7 +73,9 @@ A host module imports its data types, errors, and services from the companion mo
 
 ### CM6. Reject an opaque type in a data or error field (one commit)
 
-- Implements CM3 (a) in the checker, with a new `declaration` code and an error fixture, for `.eff` and `.effi` files. This item fixes a bug that exists without the companion module, so it lands first.
+- Implements CM3 (a) in the checker, with the new code `declaration/016` and the error fixture `fixtures/errors/declaration-opaque-field/`, for `.eff` and `.effi` files. This item fixes a bug that exists without the companion module, so it lands first.
+- A probe showed the same bug in a brand: `Brand<Conn>` emits `Conn.pipe(Schema.brand(...))`. So `declaration/016` also covers a brand base that contains an opaque type.
+- The rule rows in `docs/language-rules.md` and the status sentence change in this item, not in CM10.
 
 ### CM7. Lower and validate the declarations of an `.effi` file (one commit)
 
@@ -98,7 +100,7 @@ A host module imports its data types, errors, and services from the companion mo
 
 ### CM10. Documentation (one commit)
 
-- `docs/language-rules.md`: rewrite the row "Host interface data types", update "Host provider checks", and add the CM6 rule.
+- `docs/language-rules.md`: rewrite the row "Host interface data types", and update "Host provider checks".
 - `docs/api.md`: the host contract and the companion module.
 - `docs/status.md`: remove the limit at lines 116-117.
 
