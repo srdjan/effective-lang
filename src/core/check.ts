@@ -1264,6 +1264,8 @@ class ModuleChecker {
   constructor(
     private readonly info: ModuleInfo,
     readonly env: TypeEnv,
+    /** The alias bodies of the imported modules, in source field order. */
+    private readonly importedAliases: ReadonlyMap<string, Type>,
   ) {
     this.tree = env.tree;
     this.table = env.table;
@@ -1510,7 +1512,8 @@ class ModuleChecker {
       this.table.defineData(id, record);
       base = literal !== undefined && !hasTag
         ? lowered.ir
-        : this.table.toIr(record);
+        : (hasTag ? undefined : this.aliasRecordIr(lowered.ir)) ??
+          this.table.toIr(record);
       if (literal !== undefined) {
         for (const field of literal) {
           this.nominalFields.push({
@@ -1543,6 +1546,26 @@ class ModuleChecker {
       kind,
       refs,
     };
+  }
+
+  /**
+   * The record at the end of an alias chain, as the alias declares it. The
+   * table sorts record fields by name, and the emitted struct keeps the source order.
+   */
+  private aliasRecordIr(ir: Type): Type | undefined {
+    const seen = new Set<string>();
+    let current = ir;
+    while (current.kind === "named" && !seen.has(current.id)) {
+      const id = current.id;
+      seen.add(id);
+      const local = this.types.find((d) => d.id === id);
+      const next = local?.definition.kind === "alias"
+        ? local.definition.type
+        : this.importedAliases.get(id);
+      if (next === undefined) return undefined;
+      current = next;
+    }
+    return current.kind === "record" ? current : undefined;
   }
 
   private checkError(entry: DeclEntry): TypeNodeInfo {
@@ -2150,9 +2173,15 @@ export function checkModuleDeclarations(
     throw new Error(`module ${module} is not part of the analysis`);
   }
   const services = new Map<ServiceId, ServiceDecl>();
+  const aliases = new Map<string, Type>();
   for (const graph of imported.values()) {
     table.load(graph);
     for (const service of graph.services) services.set(service.id, service);
+    for (const type of graph.types) {
+      if (type.definition.kind === "alias") {
+        aliases.set(type.id, type.definition.type);
+      }
+    }
   }
   const env: TypeEnv = {
     module,
@@ -2161,5 +2190,5 @@ export function checkModuleDeclarations(
     table,
     services,
   };
-  return new ModuleChecker(info, env).run();
+  return new ModuleChecker(info, env, aliases).run();
 }

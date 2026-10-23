@@ -694,6 +694,22 @@ Deno.test("a nominal record emits field reads and updates that keep the data typ
   assertStringIncludes(text, "User.make({ id: UserId.make(");
 });
 
+Deno.test("a nominal type over a record alias keeps the field order of the alias", () => {
+  const emitted = emitFiles({
+    "effective.json": "{}",
+    "fields.eff": "export type Remote = { zeta: string, alpha: int }\n",
+    "m.eff":
+      'import { Remote } from "./fields.eff"\ntype Local = { zeta: string, alpha: int }\nexport nominal A = Local\nexport nominal B = Remote\n',
+  }, ["m.eff"]).get("m");
+  assert(emitted !== undefined);
+  for (const name of ["A", "B"]) {
+    assertStringIncludes(
+      emitted.text,
+      `Schema.TaggedStruct(\n  "m#${name}",\n  { zeta: Schema.String, alpha: $Int },\n)`,
+    );
+  }
+});
+
 Deno.test("a data type emits a TaggedStruct, a make call, and an unbrand copy without the tag", () => {
   const emitted = emitFiles(projectFiles("emit/forms"), ["data-types.eff"]).get(
     "data-types",
