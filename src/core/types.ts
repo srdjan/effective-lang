@@ -1254,6 +1254,16 @@ export class TypeTable {
         return this.assignable(s, alias, depth + 1, lift);
       }
     }
+    // A nominal value fits its base. A direct match, or a union that holds the
+    // nominal type, still goes on to the steps below.
+    if (
+      sn.kind === "named" && !isErrorId(sn.id) && !this.opaque.has(sn.id)
+    ) {
+      const base = this.dataRecords.get(sn.id) ?? this.brands.get(sn.id);
+      if (base !== undefined && this.assignable(base, t, depth + 1, lift)) {
+        return true;
+      }
+    }
     if (sn.kind === "union") {
       for (const member of sn.members) {
         if (!this.assignable(member, t, depth + 1)) return false;

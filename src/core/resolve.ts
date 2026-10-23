@@ -133,7 +133,6 @@ const PRELUDE = {
   withFiber: { shadowable: false },
   joinFiber: { shadowable: false },
   interruptFiber: { shadowable: false },
-  unbrand: { shadowable: false },
   Some: { shadowable: false },
   None: { shadowable: false },
   map: { shadowable: false },

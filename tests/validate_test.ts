@@ -2358,6 +2358,51 @@ type Bool = boolean
   assertEquals(codesOf(changed, lowered.sources), ["validation/002"]);
 });
 
+Deno.test("types: a nominal value fits its base and compares with it, and two nominal classes do not compare", () => {
+  const lowered = lowerText(`
+nominal Cents = int
+nominal Meters = int
+nominal UserId = string
+nominal Account = { id: UserId, name: Text }
+type Fields = { id: UserId, name: Text }
+const text = (id: UserId): Text => id
+const fields = (account: Account): Fields => account
+const same = (id: UserId): Bool => id === "u1"
+const positive = (cents: Cents): Bool => cents > 0
+const twice = (cents: Cents): Int => cents * 2
+const compare = (a: Cents, b: Cents): Bool => a === b
+const add = (a: Cents, b: Cents): Cents => a + b
+type Int = int
+type Text = string
+type Bool = boolean
+`);
+  assertEquals(codesOf(lowered.ir, lowered.sources), []);
+  const meters: Type = { kind: "named", id: "type:m#Meters" };
+  for (const name of ["compare", "add"]) {
+    const changed = copy(lowered.ir);
+    const forged = changed.declarations.find((d) => d.name === name);
+    assert(forged?.kind === "function" && forged.body.kind === "binary");
+    setAt(forged, "parameters[1].type", meters);
+    setAt(forged, "body.right.type", meters);
+    const found = validateModule(changed, lowered.sources);
+    assert(
+      found.some((d) =>
+        d.code === "validation/002" &&
+        d.message.includes(
+          "does not accept operands of type type:m#Cents and type:m#Meters",
+        )
+      ),
+      `${name}: ${JSON.stringify(found.map((d) => d.message))}`,
+    );
+  }
+  // A nominal value does not fit another nominal type.
+  const wrong = copy(lowered.ir);
+  const text = wrong.declarations.find((d) => d.name === "text");
+  assert(text?.kind === "function");
+  setAt(text, "body.type", { kind: "named", id: "type:m#Cents" });
+  assertEquals(codesOf(wrong, lowered.sources), ["validation/002"]);
+});
+
 Deno.test("types: a condition must be boolean", () => {
   assertEquals(
     mutated(
@@ -2793,6 +2838,7 @@ const ENV: TypeEnv = {
   brands: new Map<string, Type>([["type:m#Id", STRING]]),
   data: new Map(),
   errors: new Map<string, readonly Field[]>(),
+  opaque: new Set<string>(),
 };
 
 function fn(
@@ -2836,7 +2882,7 @@ Deno.test("compatibility: primitives, literals, aliases, and brands", () => {
   const id: Type = { kind: "named", id: "type:m#Id" };
   assert(fits(ENV, id, id));
   assert(!fits(ENV, STRING, id));
-  assert(!fits(ENV, id, STRING));
+  assert(fits(ENV, id, STRING));
 });
 
 Deno.test("compatibility: never fits everything and unknown is not a top type", () => {
@@ -2985,7 +3031,7 @@ const userSchema: Schema<User> = schema()
 const make = (): User => User({ id: UserId("u"), name: "Ann" })
 const nameOf = (user: User): Text => user.name
 const rename = (user: User): User => ({ ...user, name: "Bo" })
-const base = (user: User): Dog => unbrand(user)
+const base = (user: User): Dog => user
 const twin = (user: User): Twin => Twin({ id: user.id, name: user.name })
 `;
 

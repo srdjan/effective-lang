@@ -295,11 +295,11 @@ const TEMPLATES: readonly Template[] = [
   ],
   // A constant with an annotation.
   ({ n, rng }) => [`export const limit${n}: Int = ${pick(rng, 1, 9999)}`],
-  // A conditional and a brand removal.
+  // A conditional and a brand widened to its base.
   ({ n, rng }) => [
     `export const tier${n} = (n: Int): Text =>
   if (n > ${pick(rng, 1, 99)}) { "high" } else { "low" }`,
-    `export const raw${n} = (id: Id): Text => unbrand(id)`,
+    `export const raw${n} = (id: Id): Text => id`,
   ],
   // A record type with an optional field and an option field.
   ({ n }) => [

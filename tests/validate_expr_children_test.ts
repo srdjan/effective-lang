@@ -248,7 +248,6 @@ function syntheticNodes(): Record<Expr["kind"], Expr> {
       fields: [{ name: "a", value: leaf() }, { name: "b", value: leaf() }],
     },
     nominal: { ...a, kind: "nominal", nominal: "type:t#B", value: leaf() },
-    unbrand: { ...a, kind: "unbrand", value: leaf() },
     some: { ...a, kind: "some", value: leaf() },
     none: { ...a, kind: "none" },
     error: {
@@ -683,8 +682,8 @@ Deno.test("exprChildren equals a reflective walk on every node of every fixture 
 Deno.test("exprChildren equals a reflective walk on a synthetic node of every Expr kind", () => {
   const synthetic = syntheticNodes();
   const kinds = Object.keys(synthetic);
-  // The plan counts 100 kinds in the Expr union of src/core/ir.ts.
-  assertEquals(kinds.length, 100);
+  // The plan counts 99 kinds in the Expr union of src/core/ir.ts.
+  assertEquals(kinds.length, 99);
   for (const [kind, node] of Object.entries(synthetic)) {
     assertEquals(node.kind, kind);
     assertSameChildren(node, "synthetic");
@@ -711,6 +710,6 @@ Deno.test("the fixtures and the synthetic nodes together reach every Expr kind",
     for (const node of all) reached.add(node.kind);
   }
   const synthetic = new Set(Object.keys(syntheticNodes()));
-  assertEquals(new Set([...reached, ...synthetic]).size, 100);
+  assertEquals(new Set([...reached, ...synthetic]).size, 99);
   for (const kind of reached) assert(synthetic.has(kind), kind);
 });

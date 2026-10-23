@@ -129,7 +129,6 @@ export type Expr =
   | Node<{ kind: "get"; record: Expr; field: string }>
   | Node<{ kind: "update"; record: Expr; fields: readonly { readonly name: string; readonly value: Expr }[] }>
   | Node<{ kind: "nominal"; nominal: TypeId; value: Expr }>
-  | Node<{ kind: "unbrand"; value: Expr }>
   | Node<{ kind: "some"; value: Expr }>
   | Node<{ kind: "none" }>
   | Node<{ kind: "error"; error: ErrorId; fields: readonly { readonly name: string; readonly value: Expr }[] }>

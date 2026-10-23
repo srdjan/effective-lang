@@ -28,6 +28,8 @@ export interface TypeEnv {
   readonly data: ReadonlyMap<string, Extract<Type, { kind: "record" }>>;
   /** Error identity to its fields. */
   readonly errors: ReadonlyMap<string, readonly Field[]>;
+  /** Identities of opaque types. An opaque type does not widen to its base. */
+  readonly opaque: ReadonlySet<string>;
 }
 
 export const INT: Type = { kind: "primitive", name: "int" };
@@ -209,6 +211,13 @@ function assignable(
   if (t.kind === "named") {
     const alias = env.aliases.get(t.id);
     if (alias !== undefined) return assignable(env, s, alias, lift, depth + 1);
+  }
+  // A nominal value fits its base, as `TypeTable.assignable` does.
+  if (s.kind === "named" && !env.opaque.has(s.id)) {
+    const base = env.data.get(s.id) ?? env.brands.get(s.id);
+    if (base !== undefined && assignable(env, base, t, lift, depth + 1)) {
+      return true;
+    }
   }
   if (s.kind === "union") {
     for (const member of s.members) {
@@ -441,10 +450,6 @@ export function isBooleanLike(env: TypeEnv, type: Type): boolean {
   return fits(env, type, BOOLEAN) && !isNever(type);
 }
 
-export function isNumeric(env: TypeEnv, type: Type): boolean {
-  return fits(env, type, NUMBER) && !isNever(type);
-}
-
 /**
  * The brand type when the type, after aliases, is a brand of `int` or
  * `number`. A brand of a literal union or of another brand is not numeric.
@@ -459,10 +464,6 @@ export function numericBrandOf(env: TypeEnv, type: Type): Type | undefined {
       (baseType.name === "int" || baseType.name === "number")
     ? unfolded
     : undefined;
-}
-
-export function isStringLike(env: TypeEnv, type: Type): boolean {
-  return fits(env, type, STRING) && !isNever(type);
 }
 
 /**
@@ -499,6 +500,33 @@ export function comparisonClass(
     found = current;
   }
   return found;
+}
+
+const BRAND_CLASS = "brand:";
+
+/** The class of the base of a brand class, or undefined for another class. */
+function baseClass(env: TypeEnv, cls: string): string | undefined {
+  if (!cls.startsWith(BRAND_CLASS)) return undefined;
+  const base = env.brands.get(cls.slice(BRAND_CLASS.length));
+  return base === undefined ? undefined : comparisonClass(env, base);
+}
+
+/** Two classes are compatible when equal, or when one is a brand over the other. */
+export function compatibleClasses(
+  env: TypeEnv,
+  l: string,
+  r: string,
+): boolean {
+  return l === r || baseClass(env, l) === r || baseClass(env, r) === l;
+}
+
+/** True when the class is `number`, or a brand over a `number` class. */
+export function isNumericClass(env: TypeEnv, cls: string): boolean {
+  return cls === "number" || baseClass(env, cls) === "number";
+}
+
+export function isStringClass(env: TypeEnv, cls: string): boolean {
+  return cls === "string" || baseClass(env, cls) === "string";
 }
 
 /** The members of an identity set, or `never` for the empty set. */

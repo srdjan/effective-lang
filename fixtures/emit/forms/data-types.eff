@@ -36,9 +36,9 @@ export const rename = (user: User, name: Text): User =>
   ({ ...user, name })
 
 export const plain = (user: User): { id: UserId, name: Text, nick?: Text } =>
-  unbrand(user)
+  user
 
-export const twin = (user: User): Twin => Twin(unbrand(user))
+export const twin = (user: User): Twin => Twin(user)
 
 export const piped = (): Pin => ({ id: UserId("p1") }) |> Pin
 

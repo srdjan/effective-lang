@@ -13,12 +13,6 @@ function isError(table: TypeTable, ref: TypeRef): boolean {
   return table.node(ref).kind === "error";
 }
 
-/** True when the type is `int` or `number` (literals included). */
-export function isNumeric(table: TypeTable, ref: TypeRef): boolean {
-  return table.isAssignable(ref, table.number) &&
-    !isError(table, ref) && ref !== table.never;
-}
-
 /**
  * The brand id when the type, after aliases, is a brand of `int` or `number`.
  * A brand of a literal union or of another brand is not numeric.
@@ -49,11 +43,6 @@ export function sharedNumericBrand(
   return brand !== undefined && brand === numericBrand(table, right)
     ? brand
     : undefined;
-}
-
-export function isString(table: TypeTable, ref: TypeRef): boolean {
-  return table.isAssignable(ref, table.string) &&
-    !isError(table, ref) && ref !== table.never;
 }
 
 export function isBoolean(table: TypeTable, ref: TypeRef): boolean {
@@ -91,6 +80,29 @@ export function comparisonClass(
   return found;
 }
 
+const BRAND_CLASS = "brand:";
+
+/** The class of the base of a brand class, or undefined for another class. */
+function baseClass(table: TypeTable, cls: string): string | undefined {
+  if (!cls.startsWith(BRAND_CLASS)) return undefined;
+  const base = table.brandBaseOf(cls.slice(BRAND_CLASS.length) as TypeId);
+  return base === undefined ? undefined : comparisonClass(table, base);
+}
+
+/** Two classes are compatible when equal, or when one is a brand over the other. */
+function compatibleClasses(table: TypeTable, l: string, r: string): boolean {
+  return l === r || baseClass(table, l) === r || baseClass(table, r) === l;
+}
+
+/** True when the class is `number`, or a brand over a `number` class. */
+function isNumericClass(table: TypeTable, cls: string): boolean {
+  return cls === "number" || baseClass(table, cls) === "number";
+}
+
+function isStringClass(table: TypeTable, cls: string): boolean {
+  return cls === "string" || baseClass(table, cls) === "string";
+}
+
 /** The result type of a binary operator, and whether the operands do not fit it. */
 export interface OperatorResult {
   readonly type: TypeRef;
@@ -115,9 +127,13 @@ export function operatorResult(
     case "<=":
     case ">":
     case ">=": {
+      // `isNumeric` widens a brand to its base, so the classes decide.
+      const l = comparisonClass(table, left);
+      const r = comparisonClass(table, right);
       const mismatch = !either &&
-        !(isNumeric(table, left) && isNumeric(table, right)) &&
-        sharedNumericBrand(table, left, right) === undefined;
+        !(l !== undefined && r !== undefined &&
+          compatibleClasses(table, l, r) &&
+          isNumericClass(table, l) && isNumericClass(table, r));
       return { type: table.boolean, mismatch };
     }
     case "===":
@@ -132,7 +148,11 @@ export function operatorResult(
         };
         const nullable = (isNull(left) && table.isAssignable(left, right)) ||
           (isNull(right) && table.isAssignable(right, left));
-        if (!nullable && (l === undefined || r === undefined || l !== r)) {
+        if (
+          !nullable &&
+          (l === undefined || r === undefined ||
+            !compatibleClasses(table, l, r))
+        ) {
           mismatch = true;
         }
       }
@@ -144,13 +164,20 @@ export function operatorResult(
     case "/": {
       // An error operand hides whether the result is int or number.
       if (either) return { type: table.error, mismatch: false };
+      const l = comparisonClass(table, left);
+      const r = comparisonClass(table, right);
+      if (
+        l === undefined || r === undefined || !compatibleClasses(table, l, r)
+      ) {
+        return { type: table.error, mismatch: true };
+      }
       if (operator === "+" || operator === "-") {
         const brand = sharedNumericBrand(table, left, right);
         if (brand !== undefined) {
           return { type: table.named(brand), mismatch: false };
         }
       }
-      if (isNumeric(table, left) && isNumeric(table, right)) {
+      if (isNumericClass(table, l) && isNumericClass(table, r)) {
         const integral = operator !== "/" &&
           table.isAssignable(left, table.int) &&
           table.isAssignable(right, table.int);
@@ -159,7 +186,9 @@ export function operatorResult(
           mismatch: false,
         };
       }
-      if (operator === "+" && isString(table, left) && isString(table, right)) {
+      if (
+        operator === "+" && isStringClass(table, l) && isStringClass(table, r)
+      ) {
         return { type: table.string, mismatch: false };
       }
       return { type: table.error, mismatch: true };

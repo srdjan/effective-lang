@@ -74,7 +74,7 @@ import {
   without,
 } from "./tables.ts";
 import type { TypeRef, TypeTable } from "./types.ts";
-import { isErrorId, isTypeId, shortName } from "./ids.ts";
+import { isErrorId, shortName } from "./ids.ts";
 import {
   type Arg,
   type BuiltinContext,
@@ -894,10 +894,6 @@ class BodyChecker
 
   /** The rows of the builtins that call private members of the checker. */
   private static readonly CORE_ROWS: Rows<CoreRowName, BodyChecker> = {
-    unbrand: {
-      prologue: "own-arity",
-      handle: (c, node, _name, args) => c.unbrandCall(node, args),
-    },
     Some: {
       prologue: "own-arity",
       handle: (c, node, _name, args, expected) =>
@@ -934,43 +930,6 @@ class BodyChecker
       node,
     );
     return false;
-  }
-
-  private unbrandCall(node: NodeId, args: readonly Arg[]): NodeInfo {
-    this.fact(node, { kind: "unbrand" });
-    const rightCount = this.arity(node, "unbrand", 1, args);
-    const infos = args.map((a) => this.argInfo(a));
-    let type = this.table.error;
-    if (rightCount) {
-      const unfolded = this.table.node(this.table.unfold(infos[0].type));
-      if (
-        unfolded.kind === "named" && isTypeId(unfolded.id) &&
-        this.table.isOpaque(unfolded.id)
-      ) {
-        this.report(
-          "type-mismatch/010",
-          "an opaque type cannot be unbranded in source",
-          args[0].node,
-        );
-        return this.finish(node, this.table.error, combine(infos));
-      }
-      const base = unfolded.kind === "named" && !isErrorId(unfolded.id)
-        ? this.table.dataRecordOf(unfolded.id) ??
-          this.table.brandBaseOf(unfolded.id)
-        : undefined;
-      if (base !== undefined) {
-        type = base;
-      } else if (!this.isError(infos[0].type)) {
-        this.report(
-          "type-mismatch/010",
-          `\`unbrand\` needs a brand or data value, but the value has type ${
-            this.show(infos[0].type)
-          }`,
-          args[0].node,
-        );
-      }
-    }
-    return this.finish(node, type, combine(infos));
   }
 
   private someCall(

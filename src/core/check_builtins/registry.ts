@@ -16,10 +16,10 @@ import { SCOPE_ROWS, type ScopeContext } from "./scope.ts";
 import { STREAM_ROWS, type StreamContext } from "./stream.ts";
 
 /** The builtins whose rows stay in the body checker, because they call its private members. */
-export type CoreRowName = "unbrand" | "Some";
+export type CoreRowName = "Some";
 
 /** The names of the rows in `BodyChecker`. The type above and this list must agree. */
-export const CORE_ROW_NAMES: readonly CoreRowName[] = ["unbrand", "Some"];
+export const CORE_ROW_NAMES: readonly CoreRowName[] = ["Some"];
 
 /** Every operation that a family handler or prologue reads from the checker. */
 export type FamilyContext =

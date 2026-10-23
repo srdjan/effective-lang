@@ -28,6 +28,6 @@ export const nick = (user: User): Text =>
 export const activate = (user: User): User =>
   ({ ...user, active: true })
 
-export const plain = (user: User): Dog => unbrand(user)
+export const plain = (user: User): Dog => user
 
 type Text = string

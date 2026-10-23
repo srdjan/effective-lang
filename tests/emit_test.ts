@@ -710,7 +710,7 @@ Deno.test("a nominal type over a record alias keeps the field order of the alias
   }
 });
 
-Deno.test("a data type emits a TaggedStruct, a make call, and an unbrand copy without the tag", () => {
+Deno.test("a data type emits a TaggedStruct, a make call, and a copy without the tag for a widened argument", () => {
   const emitted = emitFiles(projectFiles("emit/forms"), ["data-types.eff"]).get(
     "data-types",
   );
@@ -731,10 +731,15 @@ Deno.test("a data type emits a TaggedStruct, a make call, and an unbrand copy wi
   assertStringIncludes(text, "({ ...user, name })");
   // A data value in an error needs no adapter.
   assertStringIncludes(text, "{ user: User, reason: Text }");
-  // A piped record literal reaches the constructor.
-  assertStringIncludes(text, "return Pin.make($p1);");
-  // The copy that unbrand makes leaves the tag out.
+  // A piped record literal reaches the constructor through a temporary, so it gets the copy too.
+  assertStringIncludes(
+    text,
+    "return Pin.make($untagged<{ readonly id: UserId }>($p1));",
+  );
+  // A non-literal argument of `make` gets the copy that leaves the tag out. A
+  // record literal written in the call does not.
   assertEquals(text.split("$untagged<").length - 1, 2);
+  assertStringIncludes(text, "Twin.make(\n    $untagged<{");
   assertStringIncludes(text, 'key !== "_tag"');
 });
 

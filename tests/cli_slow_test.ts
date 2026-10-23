@@ -256,6 +256,16 @@ Deno.test("build --validate --tsc accepts an effectful retry pipeline", async ()
   });
 });
 
+Deno.test("build --validate --tsc accepts a nominal value widened to its base and compared with it", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/nominal-operators/", FIXTURES), dir);
+    const built = await effective(["build", dir, "--validate", "--tsc"]);
+    assertEquals(built.code, 0, `${built.stdout}\n${built.stderr}`);
+    assertEquals(built.stdout, "");
+    assert(built.stderr.includes("1 module, 0 diagnostics"), built.stderr);
+  });
+});
+
 Deno.test("build --validate --tsc accepts a custom retry schedule", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");

@@ -253,7 +253,6 @@ type PositionalBuilders = {
 };
 
 const POSITIONAL_BUILDERS: PositionalBuilders = {
-  "unbrand": (arg) => ({ kind: "unbrand", value: arg(0) }),
   "some": (arg) => ({ kind: "some", value: arg(0) }),
   "fail": (arg) => ({ kind: "fail", error: arg(0) }),
   "retry-schedule": (arg) => ({ kind: "retry-schedule", step: arg(0) }),

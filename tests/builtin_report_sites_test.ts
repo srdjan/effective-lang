@@ -92,7 +92,7 @@ const SHAPE =
   `${INT}type Num = number\ntype Shape = { kind: "circle", radius: Num } | { kind: "square", side: Num }\n`;
 
 const ROWS: readonly SiteRow[] = [
-  // ---- brand, unbrand, retry, retrySchedule, codec
+  // ---- brand, retry, retrySchedule, codec
   {
     builtin: "brand constructor",
     change: "give the brand a second argument",
@@ -100,17 +100,6 @@ const ROWS: readonly SiteRow[] = [
     invalid: 'nominal UserId = string\nconst f = () => UserId("a", "b")\n',
     code: "type-mismatch/004",
     fragment: "the nominal type `UserId` takes one argument, but 2 are given",
-  },
-  {
-    builtin: "unbrand",
-    change: "unbrand an opaque host handle instead of a brand",
-    host: true,
-    valid:
-      'import { Handle, Text } from "host:files"\nnominal UserId = string\nconst f = (u: UserId): Text => unbrand(u)\n',
-    invalid:
-      'import { Handle, Text } from "host:files"\nnominal UserId = string\nconst f = (u: Handle): Text => unbrand(u)\n',
-    code: "type-mismatch/010",
-    fragment: "an opaque type cannot be unbranded in source",
   },
   {
     builtin: "retry",

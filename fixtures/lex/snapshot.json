@@ -8,8 +8,8 @@
       "e562fc63dc7a796d"
     ],
     "fixtures/applications/order-lifecycle/orders.eff": [
-      "688ee43868713f2e",
-      "79c44d7bb2eacaf5"
+      "5eed7b5f87b9f41d",
+      "afbd372330fd4fdd"
     ],
     "fixtures/applications/scheduled-worker/contracts.eff": [
       "a2c7c606af49fa94",
@@ -60,12 +60,12 @@
       "f6c105e227115704"
     ],
     "fixtures/emit/forms/data-types.eff": [
-      "3f4d3c11a3dd89bb",
-      "cb8d4a46d2d90324"
+      "1c18ce43df5522a9",
+      "ea9a697a5d0773c0"
     ],
     "fixtures/emit/forms/forms.eff": [
-      "9b79cd9af837ff88",
-      "6375c75c0fd8e9fa"
+      "ad2a1e5db0b7741b",
+      "962e569765885441"
     ],
     "fixtures/emit/forms/inline-records.eff": [
       "df8f1be0c5feb306",
@@ -80,8 +80,8 @@
       "d75b912da2bd4fcf"
     ],
     "fixtures/emit/forms/nominal-records.eff": [
-      "3a279c899be0688f",
-      "e1ac7aa992e8d2bf"
+      "b317422267575e90",
+      "eaa30bcfbf2eb0bd"
     ],
     "fixtures/emit/forms/optional-fields.eff": [
       "b90a99792cf958d7",
@@ -118,6 +118,10 @@
     "fixtures/emit/host-companion/main.eff": [
       "b8aef8514f430047",
       "b883e86e369ca6bc"
+    ],
+    "fixtures/emit/nominal-operators/main.eff": [
+      "07715d575f7d8755",
+      "9b4e2a07c5acd251"
     ],
     "fixtures/emit/schedules/composition.eff": [
       "b012eb53381c3d61",
@@ -500,8 +504,8 @@
       "7721fd50abb3aa7e"
     ],
     "fixtures/errors/type-mismatch-nominal-identity.eff": [
-      "f61ca254f56592aa",
-      "7723ca7fbfb468e5"
+      "71d1731d0799355b",
+      "5c3f3fb2ec3e7608"
     ],
     "fixtures/errors/type-mismatch-nominal-record.eff": [
       "c4c3b84802ed5bb6",

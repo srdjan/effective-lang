@@ -719,19 +719,31 @@ export class ExprEmitter implements ExprCore {
         const fields = declaration?.kind === "type"
           ? dataFields(declaration)
           : undefined;
+        const record: Type | undefined = fields === undefined
+          ? undefined
+          : { kind: "record", fields };
+        // A widened record value keeps its `_tag`, which `make` rejects. A
+        // record literal has none. Every other argument gets the copy.
+        const argument = record !== undefined && e.value.kind !== "record"
+          ? emitted([
+            this.scope.fieldHelper("untagged"),
+            "<",
+            typeDoc(this.scope, record),
+            ">",
+            callArguments([kid(e.value)]),
+          ])
+          : kid(e.value);
         // `make` reads a missing optional field through the prototype chain,
         // so a nested data value with such a field needs a copy without one.
         const value = fields?.some((f) => needsFieldAdapter(this.scope, f.type))
-          ? this.adaptedInput(kid(e.value), { kind: "record", fields }, "make")
-          : kid(e.value);
+          ? this.adaptedInput(argument, { kind: "record", fields }, "make")
+          : argument;
         return emitted(member(
           this.scope.nameOf(e.nominal),
           "make",
           callArguments([value]),
         ));
       }
-      case "unbrand":
-        return this.unbrand(e, kid);
       case "some": {
         const option = this.scope.effect("Option");
         const resolved = resolvedAs(
@@ -825,24 +837,6 @@ export class ExprEmitter implements ExprCore {
         // a case above nor a row in OPERAND_CALLS fails to compile here.
         return this.operandCall(e.kind, e, kid);
     }
-  }
-
-  /** A brand is bare at run time. A data value carries `_tag`, which the copy leaves out. */
-  private unbrand(e: Extract<Expr, { kind: "unbrand" }>, kid: Kid): Emitted {
-    const resolved = this.scope.resolve(e.value.type);
-    const declaration = resolved.kind === "named"
-      ? this.scope.typeLevelDeclaration(resolved.id)
-      : undefined;
-    if (declaration?.kind !== "type" || dataFields(declaration) === undefined) {
-      return kid(e.value);
-    }
-    return emitted([
-      this.scope.fieldHelper("untagged"),
-      "<",
-      typeDoc(this.scope, e.type),
-      ">",
-      callArguments([kid(e.value)]),
-    ]);
   }
 
   /** A structural kind that prints as `callee(operands)`. */
@@ -1593,7 +1587,6 @@ export class ExprEmitter implements ExprCore {
       case "get":
         return this.isTrivial(e.record);
       case "nominal":
-      case "unbrand":
       case "some":
         return this.isTrivial(e.value);
       default:

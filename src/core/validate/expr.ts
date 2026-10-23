@@ -46,13 +46,14 @@ import {
   asFunction,
   BOOLEAN,
   comparisonClass,
+  compatibleClasses,
   dataOnly,
   fieldsOf,
   fits,
   INT,
   isBooleanLike,
-  isNumeric,
-  isStringLike,
+  isNumericClass,
+  isStringClass,
   MAX_DEPTH,
   members,
   NEVER,
@@ -543,8 +544,6 @@ export class BodyValidator implements ValidatorCore {
         return this.update(e, path);
       case "nominal":
         return this.nominal(e, path);
-      case "unbrand":
-        return this.unbrand(e, path);
       case "some": {
         const v = this.check(e.value, `${path}.value`);
         return derivedResult(
@@ -991,38 +990,6 @@ export class BodyValidator implements ValidatorCore {
       );
     }
     return derivedResult({ kind: "named", id: e.nominal }, combine([v]));
-  }
-
-  private unbrand(e: Extract<Expr, { kind: "unbrand" }>, path: string): Comp {
-    const v = this.check(e.value, `${path}.value`);
-    const unfolded = unfold(this.env, v.type);
-    if (
-      unfolded.kind === "named" &&
-      this.ctx.world.types.get(unfolded.id)?.opaque === true
-    ) {
-      this.add(
-        AREA.types,
-        `${path}.value`,
-        "an opaque type cannot be unbranded in source",
-        e.value.span,
-      );
-      return this.poison();
-    }
-    const base = unfolded.kind === "named"
-      ? this.env.data.get(unfolded.id) ?? this.env.brands.get(unfolded.id)
-      : undefined;
-    if (base === undefined) {
-      this.add(
-        AREA.types,
-        `${path}.value`,
-        `unbrand needs a brand or data value, but the value has type ${
-          show(v.type)
-        }`,
-        e.value.span,
-      );
-      return checkedResult(combine([v]));
-    }
-    return derivedResult(base, combine([v]));
   }
 
   private errorConstruction(
@@ -1589,7 +1556,9 @@ export class BodyValidator implements ValidatorCore {
       );
       return checkedResult(active);
     };
-    // Two values of one numeric brand compare, add, and subtract (D32).
+    const l = comparisonClass(env, left.type);
+    const r = comparisonClass(env, right.type);
+    // Two values of one numeric brand add and subtract (D32).
     const leftBrand = numericBrandOf(env, left.type);
     const brand = leftBrand !== undefined && same(env, leftBrand, right.type)
       ? leftBrand
@@ -1604,14 +1573,14 @@ export class BodyValidator implements ValidatorCore {
       case "<=":
       case ">":
       case ">=":
-        return brand !== undefined ||
-            isNumeric(env, left.type) && isNumeric(env, right.type)
+        // `isNumeric` widens a brand to its base, so the classes decide.
+        return l !== undefined && r !== undefined &&
+            compatibleClasses(env, l, r) &&
+            isNumericClass(env, l) && isNumericClass(env, r)
           ? derivedResult(BOOLEAN, active)
           : mismatch();
       case "===":
       case "!==": {
-        const l = comparisonClass(env, left.type);
-        const r = comparisonClass(env, right.type);
         const isNull = (type: Type) => {
           const value = unfold(env, type);
           return value.kind === "literal" && value.value === null;
@@ -1619,7 +1588,8 @@ export class BodyValidator implements ValidatorCore {
         const nullable =
           (isNull(left.type) && fits(env, left.type, right.type)) ||
           (isNull(right.type) && fits(env, right.type, left.type));
-        return nullable || l !== undefined && l === r
+        return nullable ||
+            l !== undefined && r !== undefined && compatibleClasses(env, l, r)
           ? derivedResult(BOOLEAN, active)
           : mismatch();
       }
@@ -1627,17 +1597,19 @@ export class BodyValidator implements ValidatorCore {
       case "-":
       case "*":
       case "/": {
+        if (
+          l === undefined || r === undefined || !compatibleClasses(env, l, r)
+        ) return mismatch();
         if (brand !== undefined && (e.operator === "+" || e.operator === "-")) {
           return derivedResult(brand, active);
         }
-        if (isNumeric(env, left.type) && isNumeric(env, right.type)) {
+        if (isNumericClass(env, l) && isNumericClass(env, r)) {
           const integral = e.operator !== "/" && fits(env, left.type, INT) &&
             fits(env, right.type, INT);
           return derivedResult(integral ? INT : NUMBER, active);
         }
         if (
-          e.operator === "+" && isStringLike(env, left.type) &&
-          isStringLike(env, right.type)
+          e.operator === "+" && isStringClass(env, l) && isStringClass(env, r)
         ) {
           return derivedResult(STRING, active);
         }

@@ -120,7 +120,9 @@ export function buildWorld(ir: ModuleIR): World {
   const aliases = new Map<string, Type>();
   const brands = new Map<string, Type>();
   const data = new Map<string, Extract<Type, { kind: "record" }>>();
+  const opaque = new Set<string>();
   for (const t of types.values()) {
+    if (t.opaque === true) opaque.add(t.id);
     switch (t.definition.kind) {
       case "alias":
         aliases.set(t.id, t.definition.type);
@@ -136,7 +138,7 @@ export function buildWorld(ir: ModuleIR): World {
   for (const e of errors.values()) errorFields.set(e.id, e.fields);
   return {
     module: ir.module,
-    env: { aliases, brands, data, errors: errorFields },
+    env: { aliases, brands, data, errors: errorFields, opaque },
     types,
     errors,
     services,

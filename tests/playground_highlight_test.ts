@@ -89,11 +89,10 @@ Deno.test("fails, uses, provides, and from are keywords anywhere", () => {
 });
 
 Deno.test("a prelude name is a builtin", () => {
-  assertEquals(slices("fail retry provide unbrand map filter fold"), [
+  assertEquals(slices("fail retry provide map filter fold"), [
     ["fail", "builtin"],
     ["retry", "builtin"],
     ["provide", "builtin"],
-    ["unbrand", "builtin"],
     ["map", "builtin"],
     ["filter", "builtin"],
     ["fold", "builtin"],

@@ -128,13 +128,14 @@ Deno.test("mapGroups rejects structural, mixed, general number, and impure keys"
       "(n) => Some(n)",
       '(n) => if (n === 0) { "zero" } else { 1 }',
       '(n) => if (n === 0) { A("a") } else { B("b") }',
-      '(n) => if (n === 0) { A("a") } else { "a" }',
+      '(n): A | Text => if (n === 0) { A("a") } else { "a" }',
       "(n) => Read.key(n)",
       "(n): never => fail(Stop({}))",
     ]
   ) {
     const project = checkText(`type Int = int
 type Num = number
+type Text = string
 nominal A = string
 nominal B = string
 error Stop = {}
@@ -2502,31 +2503,85 @@ type Bool = boolean
   assertEquals(hoverContract(source, priceMinus), "Price");
 });
 
-Deno.test("a brand operator rejects multiplication, division, a plain number, another brand, and a string brand", () => {
-  const project = checkText(`
-nominal Count = int
-nominal Price = number
-nominal Name = string
-const times = (a: Count, b: Count): Count => a * b
-const divide = (a: Count, b: Count): Count => a / b
-const plain = (a: Count): Count => a + 1
-const mixed = (count: Count, price: Price): Price => count + price
-const names = (name: Name): Name => name + name
+const NOMINAL_OPERANDS = `
+nominal Cents = int
+nominal Meters = int
+nominal Rate = number
+nominal UserId = string
+nominal Email = string
 type Int = int
 type Num = number
 type Text = string
 type Bool = boolean
+`;
+
+Deno.test("arithmetic with a numeric brand widens it to its base", () => {
+  const project = checkText(`${NOMINAL_OPERANDS}
+const times = (a: Cents): Int => a * 2
+const plus = (a: Cents): Int => a + 5
+const minus = (a: Cents): Int => 5 - a
+const divide = (a: Cents): Num => a / 2
+const square = (a: Cents): Int => a * a
+const scaled = (r: Rate): Num => r * 2
+const half = (r: Rate): Num => r / r
+const keep = (a: Cents, b: Cents): Cents => a + b
 `);
-  assertEquals(codes(project), [
-    "type-mismatch/007",
-    "type-mismatch/007",
-    "type-mismatch/007",
-    "type-mismatch/007",
-    "type-mismatch/007",
-  ]);
+  assertEquals(messages(project), []);
+});
+
+Deno.test("arithmetic that widens a brand does not give the brand back", () => {
+  const project = checkText(`${NOMINAL_OPERANDS}
+const times = (a: Cents, b: Cents): Cents => a * b
+const divide = (a: Cents, b: Cents): Cents => a / b
+const plain = (a: Cents): Cents => a + 1
+`);
+  assertEquals(codes(project), Array(3).fill("type-mismatch/003"));
+});
+
+Deno.test("arithmetic with two different nominal classes is an error", () => {
+  const project = checkText(`${NOMINAL_OPERANDS}
+const mixed = (a: Cents, b: Meters): Int => a + b
+const product = (a: Cents, b: Meters): Int => a * b
+const rate = (a: Cents, r: Rate): Num => a * r
+const ids = (id: UserId, email: Email): Text => id + email
+`);
+  assertEquals(codes(project), Array(4).fill("type-mismatch/007"));
   assertEquals(
-    messages(project)[2],
-    "type-mismatch/007 the operator `+` does not accept operands of type Count and int",
+    messages(project)[0],
+    "type-mismatch/007 the operator `+` does not accept operands of type Cents and Meters",
+  );
+});
+
+Deno.test("a string brand widens to string for +, and for nothing else", () => {
+  const project = checkText(`${NOMINAL_OPERANDS}
+const greet = (id: UserId): Text => id + "x"
+const lead = (id: UserId): Text => "x" + id
+const both = (a: UserId, b: UserId): Text => a + b
+const minus = (id: UserId): Text => id - "x"
+const times = (id: UserId): Text => id * 2
+`);
+  assertEquals(codes(project), Array(2).fill("type-mismatch/007"));
+});
+
+Deno.test("comparisons need compatible classes, and ordering needs a numeric class", () => {
+  const project = checkText(`${NOMINAL_OPERANDS}
+const idEq = (id: UserId): Bool => id === "u1"
+const idNe = (id: UserId): Bool => "u1" !== id
+const sameId = (a: UserId, b: UserId): Bool => a === b
+const positive = (a: Cents): Bool => a > 0
+const below = (a: Cents, b: Cents): Bool => a < b
+const atLeast = (a: Cents, n: Int): Bool => n <= a
+const rateAbove = (r: Rate): Bool => r >= 0.5
+const otherId = (id: UserId, email: Email): Bool => id === email
+const otherCents = (a: Cents, b: Meters): Bool => a < b
+const otherEq = (a: Cents, b: Meters): Bool => a !== b
+const idText = (id: UserId): Bool => id < "u"
+const idNumber = (id: UserId): Bool => id === 1
+`);
+  assertEquals(codes(project), Array(5).fill("type-mismatch/007"));
+  assertEquals(
+    project.diagnostics.map((d) => d.message.includes("Cents and Meters")),
+    [false, true, true, false, false],
   );
 });
 
@@ -2639,27 +2694,91 @@ type Text = string
   assertEquals(codes(project), ["type-mismatch/006"]);
 });
 
-Deno.test("brand construction and unbrand follow the nominal rules", () => {
+Deno.test("brand construction follows the nominal rules, and unbrand is an unknown name", () => {
   const project = checkText(`
 nominal Id = string
 type Name = string
 const a = (s: Text): Id => Id(s)
-const b = (i: Id): Text => unbrand(i)
+const b = (i: Id): Text => i
 const c = (n: Int): Id => Id(n)
-const d = (s: Text): Text => unbrand(s)
+const d = (s: Text): Id => s
 const e = (s: Text): Name => Name(s)
-const f = (i: Id): Text => i
+const f = (i: Id): Text => unbrand(i)
 type Int = int
 type Text = string
 `);
   assertEquals(codes(project), [
     "type-mismatch/003",
-    "type-mismatch/010",
-    "type-mismatch/010",
     "type-mismatch/003",
+    "type-mismatch/010",
+    "unknown-name/001",
   ]);
   const kinds = factsOf(project, "m", "a").map((f) => f.kind);
   assertEquals(kinds, ["brand-construction"]);
+});
+
+const WIDENING = `
+type Text = string
+type Int = int
+nominal UserId = string
+nominal Account = { id: UserId, name: Text }
+type Fields = { id: UserId, name: Text }
+const take = (s: Text): Text => s
+const takeFields = (f: Fields): Text => f.name
+const make = (): Account => Account({ id: UserId("u1"), name: "Ann" })
+`;
+
+Deno.test("a nominal value fits its base in an argument, a return, a field, an array, and an option", () => {
+  const project = checkText(`${WIDENING}
+type Holder = { text: Text, list: Text[], maybe: Option<Text>, pair: [Text, Int] }
+const arg = (id: UserId): Text => take(id)
+const ret = (id: UserId): Text => id
+const field = (id: UserId): Holder => ({ text: id, list: [id], maybe: Some(id), pair: [id, 1] })
+const list = (ids: UserId[]): Text[] => ids
+const option = (id: Option<UserId>): Option<Text> => id
+const either = (id: UserId): Text | Int => id
+const record = (a: Account): Fields => a
+const records = (accounts: Account[]): Fields[] => accounts
+const call = (a: Account): Text => takeFields(a)
+const kept = (id: UserId): UserId | Int => id
+const keptText = (id: UserId): UserId | Text => id
+`);
+  assertEquals(messages(project), []);
+});
+
+Deno.test("a base value does not fit a nominal type, and one nominal type does not fit another", () => {
+  const project = checkText(`${WIDENING}
+nominal Email = string
+nominal Twin = { id: UserId, name: Text }
+const down = (s: Text): UserId => s
+const list = (ss: Text[]): UserId[] => ss
+const option = (s: Option<Text>): Option<UserId> => s
+const record = (f: Fields): Account => f
+const sideways = (id: UserId): Email => id
+const twin = (a: Account): Twin => a
+const union = (s: Text): UserId | Int => s
+`);
+  assertEquals(codes(project), Array(7).fill("type-mismatch/003"));
+});
+
+Deno.test("an invariant position and a function parameter keep their variance", () => {
+  const project = checkText(`${WIDENING}
+const ref = (r: Ref<UserId>): Ref<Text> => r
+const refBack = (r: Ref<Text>): Ref<UserId> => r
+const accepts = (f: (id: Text) => Text): (id: UserId) => Text => f
+const rejects = (f: (id: UserId) => Text): (id: Text) => Text => f
+const returns = (f: (id: Text) => UserId): (id: Text) => Text => f
+`);
+  assertEquals(codes(project), Array(3).fill("type-mismatch/003"));
+});
+
+Deno.test("an error value does not widen to its record", () => {
+  const project = checkText(`
+type Text = string
+error Failed = { reason: Text }
+const wrong = (e: Failed): { reason: Text } => e
+`);
+  assertEquals(codes(project), ["type-mismatch/003"]);
 });
 
 Deno.test("Some and None take their type from the expected type", () => {
@@ -3473,14 +3592,14 @@ type Dog = { id: UserId, name: Text, nick?: Text }
 const user = (): User => User({ id: UserId("u"), name: "Ann" })
 `;
 
-Deno.test("a data type is constructed, read, updated, and unbranded", () => {
+Deno.test("a data type is constructed, read, updated, and widened", () => {
   const project = checkText(`${DATA_TYPES}
 const nameOf = (u: User): Text => u.name
 const nick = (u: User): Option<Text> => u.nick
 const rename = (u: User): User => ({ ...u, name: "Bo" })
-const base = (u: User): Dog => unbrand(u)
-const twin = (u: User): Twin => Twin(unbrand(u))
-const piped = (u: User): Twin => unbrand(u) |> Twin
+const base = (u: User): Dog => u
+const twin = (u: User): Twin => Twin(u)
+const piped = (u: User): Twin => u |> Twin
 const marker = (): Marker => Marker({})
 `);
   assertEquals(messages(project), []);
@@ -3500,11 +3619,13 @@ const wrong: User = { id: UserId("u"), name: "Ann" }
   assertEquals(codes(project), ["type-mismatch/003"]);
 });
 
-Deno.test("a data type does not fit a structural record of equal fields", () => {
+Deno.test("a data type fits a structural record of equal fields, and the record does not fit back", () => {
   const project = checkText(`${DATA_TYPES}
-const wrong = (u: User): Dog => u
+const widened = (u: User): Dog => u
+const wrong = (d: Dog): User => d
 `);
   assertEquals(codes(project), ["type-mismatch/003"]);
+  assertEquals(project.diagnostics[0].message.includes("User"), true);
 });
 
 Deno.test("two data types with equal fields are distinct", () => {
@@ -3514,10 +3635,11 @@ const wrong = (u: User): Twin => u
   assertEquals(codes(project), ["type-mismatch/003"]);
 });
 
-Deno.test("a data constructor rejects a data argument and takes it after unbrand", () => {
+Deno.test("a data constructor takes a data argument of equal fields, and rejects one with other fields", () => {
   const project = checkText(`${DATA_TYPES}
-const wrong = (u: User): Twin => Twin(u)
-const right = (u: User): Twin => Twin(unbrand(u))
+nominal Other = { id: UserId }
+const right = (u: User): Twin => Twin(u)
+const wrong = (o: Other): Twin => Twin(o)
 `);
   assertEquals(codes(project), ["type-mismatch/003"]);
   assertEquals(project.diagnostics[0].message.includes("Twin"), true);
@@ -3594,7 +3716,7 @@ const length = (list: List): Count =>
   }
 const first = (tree: Tree): Tree[] => tree.children
 const renamed = (tree: Tree): Tree => ({ ...tree, label: "x" })
-const plain = (tree: Tree): { label: Text, children: Tree[] } => unbrand(tree)
+const plain = (tree: Tree): { label: Text, children: Tree[] } => tree
 const treeSchema: Schema<Tree> = schema()
 const listSchema: Schema<List> = schema()
 const forestSchema: Schema<Forest> = schema()
@@ -3753,7 +3875,7 @@ type Name = string
 type Fields = { name: Name }
 nominal Account = ,
 error Boom = Fields
-export const a = (account: Account): Fields => unbrand(account)
+export const a = (account: Account): Fields => account
 export const b = (account: Account): Name => account.name
 export const c = (name: Name): Account => Account({ name })
 export const d = (name: Name): Name fails Boom => fail(Boom({ name }))

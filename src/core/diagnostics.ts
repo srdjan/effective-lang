@@ -155,7 +155,7 @@ export const DIAGNOSTIC_CODES = {
   "type-mismatch/010": {
     category: "type-mismatch",
     description:
-      "A prelude function or constructor gets an argument that it does not accept: fail, unbrand, retry, provide, a nominal constructor, or a collection builtin.",
+      "A prelude function or constructor gets an argument that it does not accept: fail, retry, provide, a nominal constructor, or a collection builtin.",
   },
   "type-mismatch/011": {
     category: "type-mismatch",

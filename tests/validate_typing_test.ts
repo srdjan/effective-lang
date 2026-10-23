@@ -14,6 +14,7 @@ const ENV: TypeEnv = {
   brands: new Map<string, Type>(),
   data: new Map(),
   errors: new Map<string, readonly Field[]>(),
+  opaque: new Set<string>(),
 };
 
 const INT: Type = { kind: "primitive", name: "int" };
@@ -529,4 +530,42 @@ Deno.test("null and unit do not fit each other in either direction", () => {
   const optionalUnit: Type = { kind: "union", members: [STRING, UNIT] };
   assert(!fits(ENV, NULL, optionalUnit), "null does not fit a union with unit");
   relate("null against string", NULL, STRING, UNRELATED);
+});
+
+// ------------------------------------------------------------------ nominal
+
+Deno.test("a nominal value fits its base, an opaque type does not, and a base value does not fit a nominal type", () => {
+  const id: Type = { kind: "named", id: "type:m#Id" };
+  const handle: Type = { kind: "named", id: "type:m#Handle" };
+  const account: Type = { kind: "named", id: "type:m#Account" };
+  const record: Extract<Type, { kind: "record" }> = {
+    kind: "record",
+    fields: [{ name: "id", type: id, optional: false }],
+  };
+  const env: TypeEnv = {
+    ...ENV,
+    brands: new Map<string, Type>([
+      ["type:m#Id", STRING],
+      ["type:m#Handle", UNKNOWN],
+    ]),
+    data: new Map([["type:m#Account", record]]),
+    opaque: new Set(["type:m#Handle"]),
+  };
+  assertEquals(fits(env, id, STRING), true);
+  assertEquals(fits(env, STRING, id), false);
+  assertEquals(fits(env, account, record), true);
+  assertEquals(fits(env, record, account), false);
+  assertEquals(fits(env, id, { kind: "union", members: [STRING, INT] }), true);
+  assertEquals(
+    fits(env, { kind: "array", element: id }, {
+      kind: "array",
+      element: STRING,
+    }),
+    true,
+  );
+  assertEquals(
+    fits(env, { kind: "ref", element: id }, { kind: "ref", element: STRING }),
+    false,
+  );
+  assertEquals(fits(env, handle, UNKNOWN), false);
 });

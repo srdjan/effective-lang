@@ -27,7 +27,6 @@ export function exprChildren(e: Expr): readonly Expr[] {
     case "update":
       return [e.record, ...e.fields.map((f) => f.value)];
     case "nominal":
-    case "unbrand":
     case "some":
     case "run":
     case "scoped":

@@ -162,7 +162,6 @@ const ARITY_ROWS: readonly ArityRow[] = [
   ...fixed("withFiber", 2),
   ...fixed("joinFiber", 1),
   ...fixed("interruptFiber", 1),
-  ...fixed("unbrand", 1),
   ...fixed("Some", 1),
   ...fixed("map", 2),
   ...fixed("filter", 2),

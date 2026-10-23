@@ -3169,7 +3169,7 @@ console.log(JSON.stringify({ good: Option.getOrUndefined(good), bad: Option.isNo
     assertEquals(result, { good: 5, bad: true, encoded: 4 });
   });
 });
-Deno.test("data values carry a tag, lose it through unbrand, and round trip through a schema and a codec", async () => {
+Deno.test("data values carry a tag, keep it when widened, and round trip through a schema and a codec", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/forms/", FIXTURES), dir);
     build(dir, ["data-types.eff"]);
@@ -3198,7 +3198,7 @@ console.log(JSON.stringify({
     const ann = { _tag: "data-types#User", id: "u1", name: "Ann" };
     assertEquals(result, {
       user: ann,
-      plain: { id: "u1", name: "Ann" },
+      plain: ann,
       twin: { _tag: "data-types#Twin", id: "u1", name: "Ann" },
       piped: { _tag: "data-types#Pin", id: "p1" },
       renamed: { ...ann, name: "Bo" },
@@ -3209,6 +3209,89 @@ console.log(JSON.stringify({
     });
   });
 });
+const WIDENED_RECORDS = [
+  "type Int = int",
+  "type Text = string",
+  "type Fields = { x: Int }",
+  "nominal A = Fields",
+  "nominal B = Fields",
+  "nominal C = { inner: Fields, label: Text }",
+  "const fieldsSchema: Schema<Fields> = schema()",
+  "export const make = (x: Int): A => A({ x })",
+  "export const widen = (a: A): B => B(a)",
+  "export const update = (a: A): B => B({ ...a, x: 9 })",
+  'export const nested = (a: A): C => C({ inner: a, label: "n" })',
+  "export const encodeFields = (a: A): Fields fails SchemaError =>",
+  "  schemaEncode(fieldsSchema, a)",
+  "",
+].join("\n");
+
+Deno.test("a widened record value constructs another nominal type, in a copy, an update, and a nested field, and encodes without its tag", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/main.eff`, WIDENED_RECORDS);
+    build(dir, ["main.eff"]);
+    const result = await runScript(
+      dir,
+      `
+import { Effect } from "effect";
+import * as M from "./main.ts";
+const a = M.make(1);
+console.log(JSON.stringify({
+  widen: M.widen(a),
+  update: M.update(a),
+  nested: M.nested(a),
+  encoded: await Effect.runPromise(M.encodeFields(a)),
+  source: a,
+}));
+`,
+    );
+    assertEquals(result, {
+      widen: { _tag: "main#B", x: 1 },
+      update: { _tag: "main#B", x: 9 },
+      nested: { _tag: "main#C", inner: { x: 1 }, label: "n" },
+      encoded: { x: 1 },
+      source: { _tag: "main#A", x: 1 },
+    });
+  });
+});
+
+Deno.test("nominal operators compare and compute on the base value at run time", async () => {
+  await withTemporary(async (dir) => {
+    copyDirectory(new URL("emit/nominal-operators/", FIXTURES), dir);
+    build(dir, ["main.eff"]);
+    const result = await runScript(
+      dir,
+      `
+import * as M from "./main.ts";
+const total = M.Cents.make(21);
+console.log(JSON.stringify({
+  text: M.asText(M.UserId.make("u1")),
+  greet: M.greet(M.UserId.make("u1")),
+  first: [M.isFirst(M.UserId.make("u1")), M.isFirst(M.UserId.make("u2"))],
+  positive: [M.positive(total), M.positive(M.Cents.make(0))],
+  double: M.double(total),
+  shifted: M.shifted(total),
+  half: M.half(total),
+  square: M.square(total),
+  sum: M.sum(total, total),
+}));
+`,
+    );
+    assertEquals(result, {
+      text: "u1",
+      greet: "u1!",
+      first: [true, false],
+      positive: [true, false],
+      double: 42,
+      shifted: 26,
+      half: 10.5,
+      square: 441,
+      sum: 42,
+    });
+  });
+});
+
 Deno.test("a data value with a missing optional prototype-named field nests in another data value", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
@@ -3234,6 +3317,43 @@ console.log(JSON.stringify(box()));
     );
     assertEquals(result, {
       _tag: "main#Box",
+      tok: { _tag: "main#Tok", label: "a" },
+      all: [{ _tag: "main#Tok", label: "b" }],
+      maybe: {
+        _id: "Option",
+        _tag: "Some",
+        value: { _tag: "main#Tok", label: "c" },
+      },
+    });
+  });
+});
+Deno.test("a widened record value with a nested optional prototype-named field loses its tag and keeps the field adapter", async () => {
+  await withTemporary(async (dir) => {
+    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(
+      `${dir}/main.eff`,
+      [
+        "type Text = string",
+        "export nominal Tok = { label: Text, toString?: Text }",
+        "export type Toks = Tok[]",
+        "export nominal Box = { tok: Tok, all: Toks, maybe: Option<Tok> }",
+        "export nominal Boxed = { tok: Tok, all: Toks, maybe: Option<Tok> }",
+        "export const tok = (l: Text): Tok => Tok({ label: l })",
+        'export const box = (): Box => Box({ tok: tok("a"), all: [tok("b")], maybe: Some(tok("c")) })',
+        "export const rebox = (b: Box): Boxed => Boxed(b)",
+        "",
+      ].join("\n"),
+    );
+    build(dir, ["main.eff"]);
+    const result = await runScript(
+      dir,
+      `
+import { box, rebox } from "./main.ts";
+console.log(JSON.stringify(rebox(box())));
+`,
+    );
+    assertEquals(result, {
+      _tag: "main#Boxed",
       tok: { _tag: "main#Tok", label: "a" },
       all: [{ _tag: "main#Tok", label: "b" }],
       maybe: {

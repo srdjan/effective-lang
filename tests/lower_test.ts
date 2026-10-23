@@ -545,7 +545,7 @@ const pick = (n: Int): Text =>
 const code = (e: Boom | Bust): Int =>
   match e { Boom(b) => b.code, Bust(x) => 0 }
 const wrap = (v: Text): Id => Id(v)
-const raw = (i: Id): Text => unbrand(i)
+const raw = (i: Id): Text => i
 const nothing = (): void => {
   const x = 1
 }
@@ -610,7 +610,6 @@ Deno.test("every expression kind and pattern kind lowers", () => {
       "reference",
       "retry",
       "some",
-      "unbrand",
       "update",
     ],
   );
