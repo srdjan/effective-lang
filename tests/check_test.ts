@@ -491,10 +491,8 @@ Deno.test("a missing mode entry is a Result error that names every function", ()
   // Functions with nonempty sets need no entry.
   assert(project.modules.get("users")!.interface.ok);
   assert(project.modules.get("log")!.interface.ok);
-  const pay = project.modules.get("pay")!.interface;
-  assert(!pay.ok);
-  // saveOrder has an open fails clause, so its body decides part of its type.
-  assertEquals(pay.error.ids, ["value:pay#markPaid", "value:pay#saveOrder"]);
+  // The local functions of pay carry no result annotation and need no entry.
+  assert(project.modules.get("pay")!.interface.ok);
 });
 
 Deno.test("buildInterface can be called again after the modes arrive", () => {

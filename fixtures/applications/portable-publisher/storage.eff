@@ -1,6 +1,6 @@
 import { Key, Payload, Version, KeyValue, LexicalOps, InvalidKey, InvalidPayload, PlatformUnavailable, CompareConflict, WriteUncertain, Platform, TextRules, Text } from "./platform.eff"
-import { ArticleId, Revision, NonBlankText, Instant, Draft, Published, Article, PublishPlan } from "./domain.eff"
-import { SnapshotToken, ObservedArticle, Corrupt, StorageUnavailable, StorageUncertain, ArticleConflict, ArticleStore } from "./ports.eff"
+import { ArticleId, Revision, NonBlankText, Instant, Draft, Published, PublishPlan } from "./domain.eff"
+import { SnapshotToken, Corrupt, StorageUnavailable, StorageUncertain, ArticleConflict, ArticleStore } from "./ports.eff"
 
 export type StoredArticle = {
   kind: "draft" | "published",
@@ -21,12 +21,11 @@ export service ArticleJson {
 
 export const storedArticleSchema: Schema<StoredArticle> = schema()
 
-const keyOf = (id: ArticleId): Key => Key("articles/" + id)
+const keyOf = (id: ArticleId) => Key("articles/" + id)
 
-const unavailable = (cause: unknown): StorageUnavailable => StorageUnavailable({ cause })
+const unavailable = (cause: unknown) => StorageUnavailable({ cause })
 
-const readEntry = (store: KeyValue, id: ArticleId): Option<{ key: Key, entry: { payload: Payload, version: Version } }>
-  fails Corrupt | StorageUnavailable => {
+const readEntry = (store: KeyValue, id: ArticleId) => {
     const key = keyOf(id)
     try {
       match store.get(key) {
@@ -39,14 +38,13 @@ const readEntry = (store: KeyValue, id: ArticleId): Option<{ key: Key, entry: { 
     }
   }
 
-const decodeStored = (serializer: ArticleCodec, key: Key, payload: Payload): StoredArticle fails Corrupt =>
+const decodeStored = (serializer: ArticleCodec, key: Key, payload: Payload) =>
   match serializer.decode(payload) {
     Some(article) => article,
     None => fail(Corrupt({ key, reason: "invalid article payload" }))
   }
 
-const toArticle = (lexical: LexicalOps, key: Key, expectedId: ArticleId, stored: StoredArticle): Article
-  fails Corrupt => {
+const toArticle = (lexical: LexicalOps, key: Key, expectedId: ArticleId, stored: StoredArticle) => {
     if (lexical.isBlank(stored.id)) {
       fail(Corrupt({ key, reason: "blank article id" }))
     } else if (stored.id !== expectedId) {
@@ -87,8 +85,7 @@ const toArticle = (lexical: LexicalOps, key: Key, expectedId: ArticleId, stored:
     }
   }
 
-const load = (store: KeyValue, serializer: ArticleCodec, lexical: LexicalOps, id: ArticleId): Option<ObservedArticle>
-  fails Corrupt | StorageUnavailable =>
+const load = (store: KeyValue, serializer: ArticleCodec, lexical: LexicalOps, id: ArticleId) =>
   if (lexical.isBlank(id)) {
     fail(Corrupt({ key: keyOf(id), reason: "blank article id" }))
   } else { match readEntry(store, id) {
@@ -108,8 +105,7 @@ const storedPublished = (article: Published): StoredArticle => ({
   publishedAt: article.publishedAt
 })
 
-const write = (store: KeyValue, serializer: ArticleCodec, plan: PublishPlan, token: SnapshotToken): void
-  fails Corrupt | StorageUnavailable | StorageUncertain | ArticleConflict => {
+const write = (store: KeyValue, serializer: ArticleCodec, plan: PublishPlan, token: SnapshotToken) => {
     const key = keyOf(plan.next.id)
     const payload = serializer.encode(storedPublished(plan.next))
     try {
@@ -128,7 +124,7 @@ export const articleStoreLive: Layer<ArticleStore, PlatformUnavailable, Platform
   const serializer = ArticleJson.acquire()
   const lexical = TextRules.acquire()
   ({
-    load: (id: ArticleId) => load(store, serializer, lexical, id),
-    publish: (plan: PublishPlan, token: SnapshotToken) => write(store, serializer, plan, token)
+    load: (id) => load(store, serializer, lexical, id),
+    publish: (plan, token) => write(store, serializer, plan, token)
   })
 })

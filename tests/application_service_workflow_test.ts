@@ -74,7 +74,7 @@ Deno.test("service workflow rejects erased result, failure and retained service 
     checked(
       files["workflow.eff"].replace(
         "(input: unknown): Receipt",
-        "(input: unknown): Int",
+        "(input: unknown): Receipt[]",
       ),
     ).diagnostics.some((d) => d.category === "type-mismatch"),
   );

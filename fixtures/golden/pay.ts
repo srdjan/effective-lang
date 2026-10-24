@@ -43,7 +43,7 @@ export class Payments extends Context.Service<Payments, {
   readonly charge: (a: Cents) => Effect.Effect<ChargeId, PaymentDeclined>;
 }>()("pay#Payments") {}
 
-const findOrder = (id: OrderId): Effect.Effect<Order, OrderNotFound, Orders> =>
+const findOrder = (id: OrderId) =>
   Effect.gen(function* () {
     return yield* Option.match(yield* Orders.use(($s) => $s.find(id)), {
       onNone: () => Effect.fail(new OrderNotFound({ id })),
@@ -51,11 +51,7 @@ const findOrder = (id: OrderId): Effect.Effect<Order, OrderNotFound, Orders> =>
     });
   });
 
-const chargeOrder = (order: Order): Effect.Effect<
-  Order,
-  PaymentDeclined,
-  Payments
-> =>
+const chargeOrder = (order: Order) =>
   Effect.gen(function* () {
     yield* Effect.retry(
       Effect.suspend(() => Payments.use(($s) => $s.charge(order.totalCents))),
@@ -64,12 +60,9 @@ const chargeOrder = (order: Order): Effect.Effect<
     return order;
   });
 
-const markPaid = (order: Order): Order => ({
-  ...order,
-  status: "paid" as const,
-});
+const markPaid = (order: Order) => ({ ...order, status: "paid" as const });
 
-const saveOrder = (order: Order): Effect.Effect<Order, never, Orders> =>
+const saveOrder = (order: Order) =>
   Effect.gen(function* () {
     yield* Orders.use(($s) => $s.save(order));
     return order;

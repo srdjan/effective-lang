@@ -20,26 +20,21 @@ service Payments {
   charge(amount: Cents): ChargeId fails PaymentDeclined
 }
 
-const findOrder = (id: OrderId): Order
-  fails OrderNotFound
-  uses Orders.find =>
+const findOrder = (id: OrderId) =>
   match Orders.find(id) {
     Some(order) => order,
     None => fail(OrderNotFound({ id }))
   }
 
-const chargeOrder = (order: Order): Order
-  fails PaymentDeclined
-  uses Payments.charge => {
+const chargeOrder = (order: Order) => {
   retry(() => Payments.charge(order.totalCents), { times: 2 })
   order
 }
 
-const markPaid = (order: Order): Order =>
+const markPaid = (order: Order) =>
   ({ ...order, status: "paid" })
 
-const saveOrder = (order: Order): Order
-  uses Orders.save => {
+const saveOrder = (order: Order) => {
   Orders.save(order)
   order
 }

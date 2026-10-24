@@ -58,7 +58,7 @@ export const cancelAny = (order: Order, reason: Reason): Cancelled fails Invalid
     Cancelled(c) => fail(InvalidTransition({ id: c.id, state: "cancelled" }))
   }
 
-const min = (left: Cents, right: Cents): Cents =>
+const min = (left: Cents, right: Cents) =>
   if (left < right) { left } else { right }
 
 export const price = (rule: Rule, base: Cents): Cents =>

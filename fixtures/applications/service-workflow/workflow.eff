@@ -1,9 +1,9 @@
-import { Int, Request, Receipt, InvalidOrder, CatalogFailure, StoreFailure, Catalog, Store } from "./contracts.eff"
+import { Request, Receipt, InvalidOrder, CatalogFailure, StoreFailure, Catalog, Store } from "./contracts.eff"
 import { StoreLive, Runtime } from "host:store"
 
 const requestSchema: Schema<Request> = schema()
 const storageRetry: RetrySchedule<StoreFailure> =
-  retrySchedule((error: StoreFailure, attempt: Int): Option<Int> =>
+  retrySchedule((error, attempt) =>
     if (error.kind === "Transient" && attempt <= 2) { Some(attempt * 5) } else { None })
 
 export const submit = (input: unknown): Receipt

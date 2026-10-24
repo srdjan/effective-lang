@@ -3,26 +3,25 @@ import { Int, Policy, Report, JobFailure, InvalidPolicy, Jobs, Clock } from "./c
 const policySchema: Schema<Policy> = schema()
 
 export const retryPolicy = (policy: Policy): RetrySchedule<JobFailure> =>
-  retrySchedule((error: JobFailure, attempt: Int): Option<Int> =>
+  retrySchedule((error, attempt) =>
     if (error.kind === "Transient" && attempt <= policy.retries) {
       Some(policy.retryMillis)
     } else { None })
 
-const attempt = (): Int fails JobFailure uses Jobs.open | Jobs.execute | Jobs.close =>
+const attempt = () =>
   withResource(
     () => {
       const id = Jobs.open()
       {
-        execute: (): Int fails JobFailure uses Jobs.execute => Jobs.execute(id),
-        close: (): void uses Jobs.close => Jobs.close(id)
+        execute: () => Jobs.execute(id),
+        close: () => Jobs.close(id)
       }
     },
     (job) => job.execute(),
     (job) => job.close()
   )
 
-const cycle = (policy: Policy, completed: Int, last: Option<Int>): Report
-  fails JobFailure uses Jobs.open | Jobs.execute | Jobs.close | Clock.wait =>
+const cycle = (policy: Policy, completed: Int, last: Option<Int>): Report =>
   if (completed >= policy.runs) {
     { completed, last }
   } else {

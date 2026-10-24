@@ -120,7 +120,7 @@ Deno.test("uses Orders in pay.eff resolves to the service", () => {
   assertEquals(
     targetsOf(examples, "pay", SyntaxKind.QualifiedName, "Payments.charge")
       .length,
-    2,
+    1,
   );
 });
 

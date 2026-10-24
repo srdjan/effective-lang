@@ -53,8 +53,27 @@ Deno.test("portable publisher rejects erased failures, services, and result cont
   const files = sources();
   const original = files["publisher.eff"];
   assert(original);
-  const without = (kind: "fails" | "uses", name: string) =>
+  // Expand the named error set so that each member can be erased one by one.
+  const members = [
+    "MissingArticle",
+    "InvalidArticle",
+    "RevisionExhausted",
+    "Corrupt",
+    "StorageUnavailable",
+    "StorageUncertain",
+    "PublishConflict",
+  ];
+  const expanded = [
+    'import { InvalidArticle, RevisionExhausted } from "./domain.eff"',
+    'import { Corrupt, StorageUnavailable, StorageUncertain } from "./ports.eff"',
+    'import { MissingArticle, PublishConflict } from "./feature.eff"',
+  ].join("\n") + "\n" +
     original.replaceAll(
+      "fails PublishFailure | PlatformUnavailable",
+      `fails ${members.join(" | ")} | PlatformUnavailable`,
+    );
+  const without = (kind: "fails" | "uses", name: string) =>
+    expanded.replaceAll(
       new RegExp(`${kind} ([^\\n]+?)(?= =>|\\n)`, "g"),
       (_clause, names: string) => {
         const remaining = names.split(" | ").filter((item) => item !== name);
@@ -62,7 +81,7 @@ Deno.test("portable publisher rejects erased failures, services, and result cont
       },
     );
   const rejected = (source: string, category: string) => {
-    assert(source !== original);
+    assert(source !== original && source !== expanded);
     const result = checkProject(
       memoryHost({ ...files, "publisher.eff": source }),
       "",
@@ -87,6 +106,10 @@ Deno.test("portable publisher rejects erased failures, services, and result cont
       "PlatformUnavailable",
     ]
   ) rejected(without("fails", failure), "failure-contract");
+  rejected(
+    original.replaceAll("PublishFailure | ", ""),
+    "failure-contract",
+  );
   for (
     const capability of [
       "Platform.acquire",
