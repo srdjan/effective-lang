@@ -8,7 +8,7 @@ const lookup = (id: Text): Text
   fails Missing
   uses Store.find => Store.find(id)
 
-const broken = (id: Text): Text
+export const broken = (id: Text): Text
   uses Store.find =>
   // error: failure-contract/001
   lookup(id)

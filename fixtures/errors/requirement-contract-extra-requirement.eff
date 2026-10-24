@@ -2,7 +2,7 @@ service Clock {
   now(): Int
 }
 
-const bad = (): Int =>
+export const bad = (): Int =>
   // error: requirement-contract/001
   Clock.now()
 

@@ -113,11 +113,14 @@ export interface BodyEnv {
   readonly methodType: (capability: CapabilityId) => TypeRef;
 }
 
-/** The contract of a function body. A result means the contract is explicit and closed. */
+/**
+ * The contract of a function body. An absent part is open: the body infers it.
+ * A present part is closed, and the body must stay within it.
+ */
 export interface Contract {
   readonly result: TypeRef | undefined;
-  readonly failures: readonly ErrorId[];
-  readonly requirements: readonly CapabilityId[];
+  readonly failures: readonly ErrorId[] | undefined;
+  readonly requirements: readonly CapabilityId[] | undefined;
 }
 
 /** What checking the body expression of a function produces. */
@@ -126,7 +129,7 @@ export interface BodyOutcome {
   readonly body: NodeInfo | undefined;
   /** The declared or inferred result type. */
   readonly result: TypeRef;
-  /** The invocation sets: declared for an explicit contract, inferred otherwise. */
+  /** The invocation sets: declared for a closed set, inferred for an open one. */
   readonly failures: readonly ErrorId[];
   readonly requirements: readonly CapabilityId[];
   /** The invocation mode. */
@@ -338,10 +341,8 @@ class BodyChecker
     hint: TypeRef | undefined,
   ): BodyOutcome {
     if (bodyNode === undefined) {
-      const failures = contract.result === undefined ? [] : contract.failures;
-      const requirements = contract.result === undefined
-        ? []
-        : contract.requirements;
+      const failures = contract.failures ?? [];
+      const requirements = contract.requirements ?? [];
       return {
         body: undefined,
         result: contract.result ?? this.table.error,
@@ -351,17 +352,12 @@ class BodyChecker
       };
     }
     const body = this.expr(bodyNode, contract.result ?? hint);
-    if (contract.result === undefined) {
-      return {
-        body,
-        result: this.widen(body.type),
-        failures: body.failures,
-        requirements: body.requirements,
-        mode: body.mode,
-      };
+    if (contract.result !== undefined) {
+      this.fits(bodyNode, body.type, contract.result, "the function body");
     }
-    this.fits(bodyNode, body.type, contract.result, "the function body");
-    const extraFailures = without(body.failures, contract.failures);
+    const extraFailures = contract.failures === undefined
+      ? []
+      : without(body.failures, contract.failures);
     if (extraFailures.length > 0) {
       this.report(
         "failure-contract/001",
@@ -371,7 +367,9 @@ class BodyChecker
         bodyNode,
       );
     }
-    const extraRequirements = without(body.requirements, contract.requirements);
+    const extraRequirements = contract.requirements === undefined
+      ? []
+      : without(body.requirements, contract.requirements);
     if (extraRequirements.length > 0) {
       this.report(
         "requirement-contract/001",
@@ -381,14 +379,14 @@ class BodyChecker
         bodyNode,
       );
     }
+    const failures = contract.failures ?? body.failures;
+    const requirements = contract.requirements ?? body.requirements;
     return {
       body,
-      result: contract.result,
-      failures: contract.failures,
-      requirements: contract.requirements,
-      mode: contract.failures.length + contract.requirements.length > 0
-        ? "effect"
-        : body.mode,
+      result: contract.result ?? this.widen(body.type),
+      failures,
+      requirements,
+      mode: failures.length + requirements.length > 0 ? "effect" : body.mode,
     };
   }
 
@@ -1790,8 +1788,12 @@ class BodyChecker
       result: resultNode === undefined
         ? undefined
         : this.lowerer.lower(resultNode).ref,
-      failures: this.lowerer.failures(failsNode),
-      requirements: this.lowerer.requirements(usesNode),
+      failures: failsNode === undefined
+        ? undefined
+        : this.lowerer.failures(failsNode),
+      requirements: usesNode === undefined
+        ? undefined
+        : this.lowerer.requirements(usesNode),
     };
     const run = this.checkBody(bodyNode, contract, context?.result);
     const type = this.table.function({
@@ -1804,7 +1806,11 @@ class BodyChecker
     this.fact(node, {
       kind: "arrow",
       parameters: parameterFacts,
-      contract: resultNode === undefined ? "inferred" : "explicit",
+      written: {
+        result: resultNode !== undefined,
+        fails: failsNode !== undefined,
+        uses: usesNode !== undefined,
+      },
     });
     return this.finish(node, type, PURE_EFFECTS);
   }
@@ -2097,12 +2103,11 @@ export function checkFunctionBody(
       checker.body.locals.set(parameter.id, parameter.type.ref);
     }
   }
-  const explicit = signature.contract === "explicit" &&
-    signature.result !== undefined;
+  const { written } = signature;
   const contract: Contract = {
-    result: explicit ? signature.result?.ref : undefined,
-    failures: explicit ? signature.failures : [],
-    requirements: explicit ? signature.requirements : [],
+    result: written.result ? signature.result?.ref : undefined,
+    failures: written.fails ? signature.failures : undefined,
+    requirements: written.uses ? signature.requirements : undefined,
   };
   const run = checker.checkBody(bodyNode, contract, undefined);
   if (

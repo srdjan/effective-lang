@@ -360,7 +360,8 @@ export class BodyValidator implements ValidatorCore {
       );
     }
     const declared = d.type.effects;
-    if (d.contract === "explicit") {
+    // A written set bounds the body from above. An inferred set equals the body.
+    if (d.written.fails) {
       const extraF = minus(body.failures, declared.failures);
       if (extraF.length > 0) {
         this.add(
@@ -374,6 +375,17 @@ export class BodyValidator implements ValidatorCore {
           d.body.span,
         );
       }
+    } else if (!sameSet(declared.failures, body.failures)) {
+      this.add(
+        AREA.contracts,
+        `${path}.type.effects.failures`,
+        `an inferred contract equals the body: expected ${
+          list(body.failures)
+        }, recorded ${list(declared.failures)}`,
+        d.span,
+      );
+    }
+    if (d.written.uses) {
       const extraR = minus(body.requirements, declared.requirements);
       if (extraR.length > 0) {
         this.add(
@@ -385,27 +397,15 @@ export class BodyValidator implements ValidatorCore {
           d.body.span,
         );
       }
-    } else {
-      if (!sameSet(declared.failures, body.failures)) {
-        this.add(
-          AREA.contracts,
-          `${path}.type.effects.failures`,
-          `an inferred contract equals the body: expected ${
-            list(body.failures)
-          }, recorded ${list(declared.failures)}`,
-          d.span,
-        );
-      }
-      if (!sameSet(declared.requirements, body.requirements)) {
-        this.add(
-          AREA.contracts,
-          `${path}.type.effects.requirements`,
-          `an inferred contract equals the body: expected ${
-            list(body.requirements)
-          }, recorded ${list(declared.requirements)}`,
-          d.span,
-        );
-      }
+    } else if (!sameSet(declared.requirements, body.requirements)) {
+      this.add(
+        AREA.contracts,
+        `${path}.type.effects.requirements`,
+        `an inferred contract equals the body: expected ${
+          list(body.requirements)
+        }, recorded ${list(declared.requirements)}`,
+        d.span,
+      );
     }
     this.checkExecution(d.type, body, path, d.span);
   }

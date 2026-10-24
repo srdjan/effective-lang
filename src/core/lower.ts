@@ -1547,7 +1547,7 @@ function lowerDeclarations(
   for (const fn of module.functions.values()) {
     found.push({
       start: fn.signature.span.start,
-      declaration: lowerFunction(checked, module, ctx, fn),
+      declaration: lowerFunction(checked, ctx, fn),
     });
   }
   for (const constant of module.constants.values()) {
@@ -1562,7 +1562,6 @@ function lowerDeclarations(
 
 function lowerFunction(
   checked: CheckedProject,
-  module: CheckedModule,
   ctx: ModuleContext,
   fn: FunctionBody,
 ): Declaration {
@@ -1572,8 +1571,15 @@ function lowerFunction(
     throw internal(`the function ${signature.name} has no body`);
   }
   let type: FunctionType;
-  if (signature.contract === "explicit") {
-    const computed = signatureType(checked.table, signature, module.modes);
+  if (signature.written.result) {
+    // The written result keeps source order, which `toIrFunction` loses.
+    const computed = signatureType(checked.table, signature, {
+      get: () => ({
+        mode: fn.mode,
+        failures: fn.failures,
+        requirements: fn.requirements,
+      }),
+    });
     if (!computed.ok) {
       throw internal(`the function ${signature.name} has no computed mode`);
     }
@@ -1599,7 +1605,7 @@ function lowerFunction(
     name: signature.name,
     parameters,
     type,
-    contract: signature.contract,
+    written: signature.written,
     body: lowerer.expr(fn.bodyNode),
     span: signature.span,
   };

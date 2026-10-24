@@ -7,6 +7,7 @@ import {
   executionOf,
   type FunctionSignature,
   type ModeMap,
+  modesAsSolved,
   type ModuleDeclarations,
   signatureType,
   type TypeGraph,
@@ -200,15 +201,15 @@ Deno.test("the type of log equals the type in log.ir.json", () => {
   const type = signatureType(
     project.modules.get("example/log")!.declarations.env.table,
     signature,
-    modes,
+    modesAsSolved(modes),
   );
   assert(type.ok);
   const fixture = fixtureDeclaration("value:example/log#log");
   assertEquals(type.value.ir, fixture.type);
   // The same type through the intern table and its conversion back to IR.
   assertEquals(project.table.toIrFunction(type.value.ref), fixture.type);
-  assertEquals(signature.contract, "explicit");
-  assertEquals(fixture.contract, "explicit");
+  assertEquals(signature.written, { result: true, fails: true, uses: true });
+  assertEquals(fixture.written, { result: true, fails: true, uses: true });
   const ref =
     (fixture.parameters as readonly { id: string; name: string }[])[0];
   assertEquals(signature.parameters[0].id, ref.id);
@@ -379,16 +380,16 @@ type Text = string
   });
 });
 
-Deno.test("a function without a result annotation has an inferred contract", () => {
+Deno.test("a function without a result annotation has an open contract", () => {
   const project = checkText(
     "const twice = (x: Int) => x + x\ntype Int = int\n",
   );
   const twice = signatureOf(project, "m", "value:m#twice");
-  assertEquals(twice.contract, "inferred");
+  assertEquals(twice.written, { result: false, fails: false, uses: false });
   assertEquals(twice.result, undefined);
   assertEquals(twice.parameters.length, 1);
   assertEquals(project.diagnostics, []);
-  const mode = executionOf(twice, new Map());
+  const mode = executionOf(twice, modesAsSolved(new Map()));
   assert(!mode.ok && mode.error.tag === "inferred-contract");
 });
 
@@ -399,7 +400,7 @@ Deno.test("a binding annotation that is a function type supplies the signature",
   );
   assertEquals(project.diagnostics, []);
   const add = signatureOf(project, "m", "value:m#add");
-  assertEquals(add.contract, "explicit");
+  assertEquals(add.written, { result: true, fails: true, uses: true });
   assertEquals(add.annotation, "binding");
   assertEquals(add.parameters.map((p) => p.name), ["a", "b"]);
   const value = interfaceOf(project, "m").payload.values[0];
@@ -492,7 +493,8 @@ Deno.test("a missing mode entry is a Result error that names every function", ()
   assert(project.modules.get("log")!.interface.ok);
   const pay = project.modules.get("pay")!.interface;
   assert(!pay.ok);
-  assertEquals(pay.error.ids, ["value:pay#markPaid"]);
+  // saveOrder has an open fails clause, so its body decides part of its type.
+  assertEquals(pay.error.ids, ["value:pay#markPaid", "value:pay#saveOrder"]);
 });
 
 Deno.test("buildInterface can be called again after the modes arrive", () => {
@@ -509,11 +511,11 @@ Deno.test("nonempty sets force effect mode whatever the map says", () => {
   const getUser = signatureOf(project, "users", "value:users#getUser");
   const forced = executionOf(
     getUser,
-    new Map([["value:users#getUser", "pure"]]),
+    modesAsSolved(new Map([["value:users#getUser", "pure"]])),
   );
   assert(forced.ok);
   assertEquals(forced.value, "effect");
-  const withoutEntry = executionOf(getUser, new Map());
+  const withoutEntry = executionOf(getUser, modesAsSolved(new Map()));
   assert(withoutEntry.ok);
   assertEquals(withoutEntry.value, "effect");
 });
@@ -521,13 +523,17 @@ Deno.test("nonempty sets force effect mode whatever the map says", () => {
 Deno.test("an empty-set function without an entry is a Result error", () => {
   const project = checkExamples();
   const total = signatureOf(project, "collections", "value:collections#total");
-  const missing = executionOf(total, new Map());
+  const missing = executionOf(total, modesAsSolved(new Map()));
   assert(!missing.ok);
   assertEquals(missing.error, {
     tag: "missing-mode",
     id: "value:collections#total",
   });
-  const type = signatureType(new TypeTable(), total, new Map());
+  const type = signatureType(
+    new TypeTable(),
+    total,
+    modesAsSolved(new Map()),
+  );
   assert(!type.ok);
 });
 

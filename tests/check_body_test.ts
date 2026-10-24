@@ -15,7 +15,7 @@ import {
   reachableModules,
 } from "../src/core/interface.ts";
 import type { TypeGraph } from "../src/core/check.ts";
-import { solveModeGroup } from "../src/core/modes.ts";
+import { type Solved, solveModeGroup } from "../src/core/modes.ts";
 import type { Execution, ValueId } from "../src/core/ir.ts";
 import { memoryHost, spanText } from "../src/core/source.ts";
 import { kindOf, type NodeId, SyntaxKind } from "../src/core/syntax.ts";
@@ -1074,7 +1074,7 @@ type Int = int
 error Stop = {}
 service Source { next(n: Int): Option<[Int, Int]> fails Stop }
 const source = unfold(0, (n) => Source.next(n))
-const main = (): Int => foldStream(source, 0, (total, n) => total + n)
+export const main = (): Int => foldStream(source, 0, (total, n) => total + n)
 `);
   assert(codes(missingChannels).includes("failure-contract/001"));
   assert(codes(missingChannels).includes("requirement-contract/001"));
@@ -1185,7 +1185,7 @@ type Int = int
 error Stop = {}
 service Source { next(n: Int): Option<[Int, Int]> fails Stop }
 const source = unfold(0, (n) => Source.next(n))
-const main = (): Int[] => collectStream(source)
+export const main = (): Int[] => collectStream(source)
 `);
   assert(codes(missingChannels).includes("failure-contract/001"));
   assert(codes(missingChannels).includes("requirement-contract/001"));
@@ -1226,7 +1226,7 @@ type Int = int
 error Stop = {}
 service Source { next(n: Int): Option<[Int, Int]> fails Stop }
 const source = unfold(0, (n) => Source.next(n))
-const main = (): Option<Int> => headStream(source)
+export const main = (): Option<Int> => headStream(source)
 `);
   assert(codes(missingChannels).includes("failure-contract/001"));
   assert(codes(missingChannels).includes("requirement-contract/001"));
@@ -1267,7 +1267,7 @@ type Int = int
 error Stop = {}
 service Source { next(n: Int): Option<[Int, Int]> fails Stop }
 const source = unfold(0, (n) => Source.next(n))
-const main = (): Option<Int> => lastStream(source)
+export const main = (): Option<Int> => lastStream(source)
 `);
   assert(codes(missingChannels).includes("failure-contract/001"));
   assert(codes(missingChannels).includes("requirement-contract/001"));
@@ -1308,7 +1308,7 @@ type Int = int
 error Stop = {}
 service Source { next(n: Int): Option<[Int, Int]> fails Stop }
 const source = unfold(0, (n) => Source.next(n))
-const main = (): void => drainStream(source)
+export const main = (): void => drainStream(source)
 `);
   assert(codes(missingChannels).includes("failure-contract/001"));
   assert(codes(missingChannels).includes("requirement-contract/001"));
@@ -1687,7 +1687,7 @@ const parent = (): Int uses Child.run | Child.wait | Child.alive =>
 
 Deno.test("forkScoped needs a scope and a job without typed failures", () => {
   const outside = checkText(
-    `const outside = (): void => forkScoped(defer(() => 1))`,
+    `export const outside = (): void => forkScoped(defer(() => 1))`,
   );
   assert(
     codes(outside).includes("requirement-contract/001"),
@@ -1754,7 +1754,7 @@ Deno.test("scope operations check arity, owners, finalizers, and escape boundari
   const generic = checkText("type Bad = CloseableScope<CloseableScope>");
   assert(generic.diagnostics.length > 0);
   const missing = checkText(`service Audit { record(): void }
-const bad = (owner: CloseableScope): void => addScopeFinalizer(owner, defer(() => Audit.record()))`);
+export const bad = (owner: CloseableScope): void => addScopeFinalizer(owner, defer(() => Audit.record()))`);
   assert(
     codes(missing).includes("requirement-contract/001"),
     messages(missing).join("\n"),
@@ -1785,7 +1785,7 @@ Deno.test("provideScope only discharges latent Scope requirements", () => {
     const project = checkText(`
 const makeJob = () => { forkScoped(defer(() => {})); defer(() => {}) }
 const makeOwner = () => { forkScoped(defer(() => {})); makeScope() }
-const bad = (owner: CloseableScope): void => ${expression}
+export const bad = (owner: CloseableScope): void => ${expression}
 `);
     assert(
       codes(project).includes("requirement-contract/001"),
@@ -1878,7 +1878,7 @@ Deno.test("run requires deferred failures and requirements in the caller contrac
 error Stop = {}
 service Counter { next(): Int fails Stop }
 const make = (): Effect<Int, Stop, Counter.next> => defer(() => Counter.next())
-const missing = (): Int => run(make())
+export const missing = (): Int => run(make())
 type Int = int
 `);
   assertEquals(codes(project), [
@@ -2152,8 +2152,8 @@ type Int = int
   assertEquals(messages(project), []);
 });
 
-Deno.test("an arrow with a result annotation is checked against its closed contract", () => {
-  const project = checkText(`
+Deno.test("an arrow with a result annotation infers its sets and the closed contract of the function catches them", () => {
+  const open = checkText(`
 error E = { m: string }
 const f = (n: Int): Int fails E => fail(E({ m: "x" }))
 const g = (n: Int): Int fails E => {
@@ -2162,7 +2162,17 @@ const g = (n: Int): Int fails E => {
 }
 type Int = int
 `);
-  assertEquals(codes(project), ["failure-contract/001"]);
+  assertEquals(codes(open), []);
+  const closed = checkText(`
+error E = { m: string }
+const f = (n: Int): Int fails E => fail(E({ m: "x" }))
+export const g = (n: Int): Int => {
+  const h = (k: Int): Int => f(k)
+  h(n)
+}
+type Int = int
+`);
+  assertEquals(codes(closed), ["failure-contract/001"]);
 });
 
 Deno.test("function results with a wider declared type accept narrower bodies", () => {
@@ -2193,7 +2203,7 @@ error Stop = { at: int }
 service S { step(n: Int): Int fails Stop }
 const good = (xs: Int[]): Int[] fails Stop uses S.step =>
   traverse(xs, (n) => S.step(n))
-const missing = (xs: Int[]): Int[] =>
+export const missing = (xs: Int[]): Int[] =>
   xs |> traverse((n) => S.step(n))
 type Int = int
 `);
@@ -2325,25 +2335,30 @@ Deno.test("the mode solver starts pure, converges, and reports a cap hit", () =>
   const b = "value:m#b" as ValueId;
   // b is intrinsically effectful. a is effectful when b is.
   let rounds = 0;
+  const state = (mode: Execution): Solved => ({
+    mode,
+    failures: [],
+    requirements: [],
+  });
   const solved = solveModeGroup([a, b], (assumed) => {
     rounds++;
     return {
       results: rounds,
-      computed: new Map<ValueId, Execution>([
-        [a, assumed.get(b) === "effect" ? "effect" : "pure"],
-        [b, "effect"],
+      computed: new Map<ValueId, Solved>([
+        [a, state(assumed.get(b)?.mode === "effect" ? "effect" : "pure")],
+        [b, state("effect")],
       ]),
     };
   });
   assertEquals(solved.settled, true);
-  assertEquals(solved.modes.get(a), "effect");
-  assertEquals(solved.modes.get(b), "effect");
+  assertEquals(solved.solved.get(a)?.mode, "effect");
+  assertEquals(solved.solved.get(b)?.mode, "effect");
   assertEquals(solved.rounds, 3);
   const capped = solveModeGroup([a, b], (assumed) => ({
     results: 0,
-    computed: new Map<ValueId, Execution>([
-      [a, assumed.get(b) === "effect" ? "effect" : "pure"],
-      [b, "effect"],
+    computed: new Map<ValueId, Solved>([
+      [a, state(assumed.get(b)?.mode === "effect" ? "effect" : "pure")],
+      [b, state("effect")],
     ]),
   }), 2);
   assertEquals(capped.settled, false);
@@ -3124,9 +3139,10 @@ const quiet = (): Int => provide(DbLive, () => 1)
 type Int = int
 `,
   }, ["main.eff"]);
-  // quiet fails with Down, which its empty fails clause does not list.
-  assertEquals(codes(project), ["failure-contract/001"]);
+  // quiet is local, so it infers the failure Down.
+  assertEquals(codes(project), []);
   assertEquals(fn(project, "main", "quiet").mode, "effect");
+  assertEquals(shortIds(fn(project, "main", "quiet").failures), ["Down"]);
 });
 
 // ------------------------------------------------------------------ try and catch
@@ -6185,7 +6201,7 @@ const ISSUE_AND_HINT_CASES: readonly SchemaCase[] = [
   },
   {
     name: "decode result type mismatch",
-    tail: "const shown = (): Int => schemaDecode(text, 1)",
+    tail: "export const shown = (): Int => schemaDecode(text, 1)",
     expected: [
       "failure-contract/001 | the body can fail with error:effect/SchemaError, which the `fails` clause does not list | schemaDecode(text, 1)",
       "type-mismatch/003 | the function body has type Text, but Int is expected | schemaDecode(text, 1)",
@@ -6193,7 +6209,7 @@ const ISSUE_AND_HINT_CASES: readonly SchemaCase[] = [
   },
   {
     name: "decode rejects an optional descriptor",
-    tail: "const bad = (): Text => schemaDecode(optionalText, 1)",
+    tail: "export const bad = (): Text => schemaDecode(optionalText, 1)",
     expected: [
       "failure-contract/001 | the body can fail with error:effect/SchemaError, which the `fails` clause does not list | schemaDecode(optionalText, 1)",
       "type-mismatch/010 | `schemaDecode` needs a Schema value | optionalText",
@@ -6201,7 +6217,7 @@ const ISSUE_AND_HINT_CASES: readonly SchemaCase[] = [
   },
   {
     name: "encode input mismatch",
-    tail: "const bad = (): Text => schemaEncode(text, 1)",
+    tail: "export const bad = (): Text => schemaEncode(text, 1)",
     expected: [
       "failure-contract/001 | the body can fail with error:effect/SchemaError, which the `fails` clause does not list | schemaEncode(text, 1)",
       "type-mismatch/003 | the schema encode input has type int, but Text is expected | 1",
@@ -6209,7 +6225,7 @@ const ISSUE_AND_HINT_CASES: readonly SchemaCase[] = [
   },
   {
     name: "make input mismatch",
-    tail: "const bad = (): Text => schemaMake(text, 1)",
+    tail: "export const bad = (): Text => schemaMake(text, 1)",
     expected: [
       "failure-contract/001 | the body can fail with error:effect/SchemaIssue, which the `fails` clause does not list | schemaMake(text, 1)",
       "type-mismatch/003 | the schema make input has type int, but Text is expected | 1",

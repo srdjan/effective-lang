@@ -322,7 +322,7 @@ export function orderConstants(ir: ModuleIR): ConstantDecl[] {
 
 /**
  * The parameter list of a function declaration, and the result type when
- * `result` is `"always"` or when the contract is explicit. The emitter passes
+ * `result` is `"always"` or when the result is written. The emitter passes
  * `"contract"`. Hover passes `"always"`, because it shows the inferred result.
  */
 export function functionHeaderDoc(
@@ -336,7 +336,7 @@ export function functionHeaderDoc(
     d.parameters.map((p) => property(p.name, typeDoc(scope, p.type))),
     false,
   );
-  if (result === "contract" && d.contract !== "explicit") return parameters;
+  if (result === "contract" && !d.written.result) return parameters;
   const resultDoc = typeDoc(scope, d.type.result);
   const returns = d.type.execution === "effect"
     ? effectTypeDoc(scope, resultDoc, d.type.effects)

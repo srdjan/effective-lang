@@ -121,7 +121,6 @@
           "name": "string"
         }
       },
-      "contract": "explicit",
       "id": "value:log#log",
       "kind": "function",
       "name": "log",
@@ -166,6 +165,11 @@
           "kind": "primitive",
           "name": "unit"
         }
+      },
+      "written": {
+        "fails": true,
+        "result": true,
+        "uses": true
       }
     }
   ],

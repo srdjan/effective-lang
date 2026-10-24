@@ -256,6 +256,13 @@ export interface ServiceDecl {
   readonly span: Span;
 }
 
+/** Which parts of a function contract are closed. A closed set bounds the body from above. An open set equals the body set. */
+export interface WrittenParts {
+  readonly result: boolean;
+  readonly fails: boolean;
+  readonly uses: boolean;
+}
+
 export interface FunctionDecl {
   readonly kind: "function";
   readonly id: ValueId;
@@ -263,7 +270,7 @@ export interface FunctionDecl {
   readonly parameters: readonly Parameter[];
   /** The callable interface. Its effects can exceed the inferred body effects. */
   readonly type: FunctionType;
-  readonly contract: "explicit" | "inferred";
+  readonly written: WrittenParts;
   readonly body: Expr;
   readonly span: Span;
 }

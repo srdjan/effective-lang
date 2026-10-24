@@ -360,8 +360,8 @@ Deno.test("semantic classifications retain UTF-16 spans and lexical fallback on 
 Deno.test("contract actions derive and validate missing effects while preserving existing entries", () => {
   for (
     const text of [
-      "type Int = int\nerror Stop = {}\nconst f = (): Int => fail(Stop({}))\n",
-      "type Int = int\nservice Clock { now(): Int }\nconst f = (): Int => Clock.now()\n",
+      "type Int = int\nerror Stop = {}\nexport const f = (): Int => fail(Stop({}))\n",
+      "type Int = int\nservice Clock { now(): Int }\nexport const f = (): Int => Clock.now()\n",
       "type Int = int\nerror First = {}\nerror Second = {}\nservice Clock { now(): Int fails Second }\nconst f = (): Int fails First => Clock.now()\n",
     ]
   ) {

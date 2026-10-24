@@ -34,7 +34,7 @@ function effectName(
   return undefined;
 }
 
-/** Missing fails/uses only, for explicit inline contracts with reliable bodies. */
+/** Missing fails/uses only, for written clauses of inline contracts with reliable bodies. */
 export function contractActionsAt(
   revision: Revision,
   path: string,
@@ -47,7 +47,7 @@ export function contractActionsAt(
   for (const fn of module.functions.values()) {
     const { signature, body } = fn;
     if (
-      signature.annotation !== "arrow" || signature.contract !== "explicit" ||
+      signature.annotation !== "arrow" || !signature.written.result ||
       body === undefined || signature.span.end < start ||
       end < signature.span.start
     ) continue;
@@ -63,12 +63,13 @@ export function contractActionsAt(
         d.code !== "requirement-contract/001"
       )
     ) continue;
-    const missingFailures = body.failures.filter((id) =>
-      !signature.failures.includes(id)
-    );
-    const missingUses = body.requirements.filter((id) =>
-      !signature.requirements.includes(id)
-    );
+    // An open set has no clause to extend, so it never misses an entry.
+    const missingFailures = signature.written.fails
+      ? body.failures.filter((id) => !signature.failures.includes(id))
+      : [];
+    const missingUses = signature.written.uses
+      ? body.requirements.filter((id) => !signature.requirements.includes(id))
+      : [];
     if (missingFailures.length === 0 && missingUses.length === 0) continue;
     const failureNames = missingFailures.map((id) =>
       effectName(revision, module.module, id)
@@ -134,11 +135,14 @@ export function contractActionsAt(
       ?.functions.get(signature.id);
     if (
       changedFunction === undefined || changedFunction.body === undefined ||
-      changedFunction.body.failures.some((id) =>
-        !changedFunction.signature.failures.includes(id)
-      ) || changedFunction.body.requirements.some((id) =>
-        !changedFunction.signature.requirements.includes(id)
-      )
+      (changedFunction.signature.written.fails &&
+        changedFunction.body.failures.some((id) =>
+          !changedFunction.signature.failures.includes(id)
+        )) ||
+      (changedFunction.signature.written.uses &&
+        changedFunction.body.requirements.some((id) =>
+          !changedFunction.signature.requirements.includes(id)
+        ))
     ) {
       continue;
     }

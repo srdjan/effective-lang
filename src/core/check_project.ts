@@ -17,10 +17,10 @@ import {
   type ConstantSignature,
   type FunctionSignature,
   isPendingMode,
-  type ModeLookup,
   type ModeMap,
   type ModuleDeclarations,
   signatureType,
+  type SolvedLookup,
   type TypeGraph,
   type ValueSignature,
 } from "./check.ts";
@@ -50,7 +50,11 @@ import {
   reachableModules,
 } from "./interface.ts";
 import type { CapabilityId, Execution, ValueId } from "./ir.ts";
-import { solveModeGroup, stronglyConnectedComponents } from "./modes.ts";
+import {
+  type Solved,
+  solveModeGroup,
+  stronglyConnectedComponents,
+} from "./modes.ts";
 import type { ConfigError, ModuleInfo } from "./project.ts";
 import type { Result, SourceHost } from "./source.ts";
 import {
@@ -213,14 +217,14 @@ function collectEntries(args: CheckArguments): Entry[] {
  * `publish` and `settle` are the only writers of the maps.
  */
 interface ModuleValues {
-  /** The environment of a body check, with `view` as the mode of other functions. */
-  environment(view: ModeLookup): BodyEnv;
+  /** The environment of a body check, with `view` as the state of other functions. */
+  environment(view: SolvedLookup): BodyEnv;
   /** Records the final run of a declaration and publishes its diagnostics. */
   publish(run: Run, recursive: boolean): void;
-  /** Records the modes that a recursive group settled on. */
-  settle(modes: ReadonlyMap<ValueId, Execution>): void;
-  /** The modes published so far. The map is live, so later writes show in it. */
-  settledModes(): ModeLookup;
+  /** Records the state that a recursive group settled on. */
+  settle(solved: ReadonlyMap<ValueId, Solved>): void;
+  /** The state published so far. The map is live, so later writes show in it. */
+  settled(): SolvedLookup;
   /** The published bodies, in the order of publication. */
   bodies(): {
     readonly functions: ReadonlyMap<ValueId, FunctionBody>;
@@ -229,9 +233,10 @@ interface ModuleValues {
 }
 
 /**
- * The values of one module. A function with an inferred contract and a
+ * The values of one module. A function without a written result and a
  * constant without a type read their type from the results that `publish`
- * stores later. The callee-first component order makes that read safe.
+ * stores later. A function with a written result reads its mode and open sets
+ * from the state that `publish` and `settle` store. The callee-first component order makes that read safe.
  * `diagnostics` receives the diagnostics of each published run.
  */
 function moduleValues(
@@ -266,17 +271,17 @@ function moduleValues(
     return ref;
   };
 
-  const modes = new Map<ValueId, Execution>();
+  const solved = new Map<ValueId, Solved>();
   const inferred = new Map<ValueId, TypeRef>();
   const constantTypes = new Map<ValueId, TypeRef>();
   const functions = new Map<ValueId, FunctionBody>();
   const constants = new Map<ValueId, ConstantBody>();
-  const values = (view: ModeLookup) => (id: ValueId): TypeRef => {
+  const values = (view: SolvedLookup) => (id: ValueId): TypeRef => {
     const signature: ValueSignature | undefined = declarations.values.get(id);
     if (signature === undefined) return importedValues.get(id) ?? table.error;
     switch (signature.kind) {
       case "function": {
-        if (signature.contract === "inferred") {
+        if (!signature.written.result) {
           return inferred.get(id) ?? table.error;
         }
         const type = signatureType(table, signature, view);
@@ -299,8 +304,12 @@ function moduleValues(
       if (run.kind === "function") {
         const { signature, bodyNode } = run.entry;
         const { diagnostics: _, ...result } = run.run;
-        modes.set(signature.id, result.mode);
-        if (signature.contract === "inferred" && !recursive) {
+        solved.set(signature.id, {
+          mode: result.mode,
+          failures: result.failures,
+          requirements: result.requirements,
+        });
+        if (!signature.written.result && !recursive) {
           inferred.set(signature.id, result.type);
         }
         functions.set(signature.id, {
@@ -322,10 +331,10 @@ function moduleValues(
         });
       }
     },
-    settle(settled) {
-      for (const [id, mode] of settled) modes.set(id, mode);
+    settle(state) {
+      for (const [id, entry] of state) solved.set(id, entry);
     },
-    settledModes: () => modes,
+    settled: () => solved,
     bodies: () => ({ functions, constants }),
   };
 }
@@ -354,21 +363,21 @@ function scheduleRuns(
         run: checkConstantBody(benv, entry.signature, entry.initNode),
       };
 
-  const modes = values.settledModes();
+  const solved = values.settled();
   for (const component of stronglyConnectedComponents(entries.length, edges)) {
     const members = component.map((i) => entries[i]);
     const recursive = members.length > 1 ||
       edges[component[0]].includes(component[0]);
     if (!recursive) {
       values.publish(
-        runEntry(members[0], values.environment(modes)),
+        runEntry(members[0], values.environment(solved)),
         false,
       );
       continue;
     }
     for (const member of members) {
       const signature = member.signature;
-      if (signature.kind === "function" && signature.contract === "inferred") {
+      if (signature.kind === "function" && !signature.written.result) {
         diagnostics.push(makeDiagnostic(
           "execution-mode/003",
           `\`${signature.name}\` is recursive, so it needs explicit parameter and result annotations`,
@@ -384,27 +393,31 @@ function scheduleRuns(
       }
     }
     const solution = solveModeGroup(pending, (assumed) => {
-      // Solver assumptions overlay settled modes without publishing into them.
+      // Solver assumptions overlay settled state without publishing into it.
       const benv = values.environment({
-        get: (id) => assumed.get(id) ?? modes.get(id),
+        get: (id) => assumed.get(id) ?? solved.get(id),
       });
       const runs = members.map((entry) => runEntry(entry, benv));
-      const computed = new Map<ValueId, Execution>();
+      const computed = new Map<ValueId, Solved>();
       runs.forEach((run) => {
         if (
           run.kind === "function" && pending.includes(run.entry.signature.id)
         ) {
-          computed.set(run.entry.signature.id, run.run.mode);
+          computed.set(run.entry.signature.id, {
+            mode: run.run.mode,
+            failures: run.run.failures,
+            requirements: run.run.requirements,
+          });
         }
       });
       return { results: runs, computed };
     });
-    values.settle(solution.modes);
+    values.settle(solution.solved);
     if (!solution.settled) {
       const first = members[0].signature;
       diagnostics.push(makeDiagnostic(
         "execution-mode/004",
-        `the execution modes of the recursive group with \`${first.name}\` did not settle within the round cap`,
+        `the execution modes and effect sets of the recursive group with \`${first.name}\` did not settle within the round cap`,
         first.nameSpan,
       ));
     }

@@ -10,11 +10,13 @@
 //   it for the annotations inside bodies.
 // - `ModuleDeclarations.values` holds one signature for each module-level const
 //   and provider. The body checker checks each body against its signature.
-// - A function signature with `contract: "inferred"` has no result and empty
-//   sets. The body checker infers them.
-// - The execution mode of a function with empty sets comes from a `ModeMap`
-//   that the body checker supplies. `executionOf` and `signatureType` take the
-//   map and return a Result error when an entry is missing.
+// - A function signature without a written result has no result and empty
+//   sets. A set whose clause is not written (`written.fails` or `written.uses`
+//   is false) is open: the body checker infers it, and the signature holds an
+//   empty set for it.
+// - The execution mode and the open sets of a function come from a `Solved`
+//   lookup that the body checker supplies. `executionOf` and `signatureType`
+//   take the lookup and return a Result error when an entry is missing.
 
 import type { Analysis } from "./analyze.ts";
 import {
@@ -39,9 +41,10 @@ import type {
   TypeDecl,
   TypeId,
   ValueId,
+  WrittenParts,
 } from "./ir.ts";
 import { TokenKind } from "./lex.ts";
-import { stronglyConnectedComponents } from "./modes.ts";
+import { type Solved, stronglyConnectedComponents } from "./modes.ts";
 import { flattenMembers } from "./patterns.ts";
 import type { ModuleInfo } from "./project.ts";
 import type { Target } from "./resolve.ts";
@@ -136,15 +139,19 @@ interface SignatureBase {
 export interface FunctionSignature extends SignatureBase {
   readonly kind: "function";
   readonly id: ValueId;
-  readonly contract: "explicit" | "inferred";
-  /** Where an explicit contract comes from: the arrow, or the binding type annotation. */
+  /**
+   * The parts that close the contract. A part that is not written is inferred.
+   * An exported function closes both sets: an omitted clause is an empty set.
+   */
+  readonly written: WrittenParts;
+  /** Where a written result comes from: the arrow, or the binding type annotation. */
   readonly annotation: "arrow" | "binding" | "none";
   readonly parameters: readonly ParameterSignature[];
-  /** Absent when the contract is inferred. */
+  /** Absent when the result is not written. */
   readonly result: Lowered | undefined;
-  /** Sorted and unique. Empty when the contract is inferred. */
+  /** Sorted and unique. Empty when the set is open. */
   readonly failures: readonly ErrorId[];
-  /** Sorted and unique. A whole service is expanded to all its methods. */
+  /** Sorted and unique. A whole service is expanded to all its methods. Empty when the set is open. */
   readonly requirements: readonly CapabilityId[];
   /** Present when a binding type requires pure execution. */
   readonly expectedExecution?: "pure";
@@ -190,39 +197,92 @@ export interface ModuleDeclarations {
 
 // ------------------------------------------------------------------ modes
 
-/** The execution mode of each function whose mode the sets do not decide. */
+/** The mode map of a module: the invocation mode of each function. */
 export type ModeMap = ReadonlyMap<ValueId, Execution>;
-/** Mode consumers can look up a mode without owning or mutating the map. */
-export type ModeLookup = Pick<ModeMap, "get">;
+/** Consumers can look up a solved state without owning or mutating the map. */
+export type SolvedLookup = Pick<ReadonlyMap<ValueId, Solved>, "get">;
 
 type SignatureError =
   | { readonly tag: "missing-mode"; readonly id: ValueId }
   | { readonly tag: "inferred-contract"; readonly id: ValueId };
 
-/** True when the sets of an explicit contract are empty, so the body decides the mode. */
-export function isPendingMode(signature: FunctionSignature): boolean {
-  return signature.contract === "explicit" &&
-    signature.failures.length === 0 &&
-    signature.requirements.length === 0;
+/**
+ * The lookup of a mode map for a signature whose sets are closed. Exported
+ * functions are closed, so their sets never come from the lookup.
+ */
+export function modesAsSolved(modes: Pick<ModeMap, "get">): SolvedLookup {
+  return {
+    get: (id) => {
+      const mode = modes.get(id);
+      return mode === undefined
+        ? undefined
+        : { mode, failures: [], requirements: [] };
+    },
+  };
 }
 
 /**
- * The execution mode of an explicit signature. A nonempty failure or requirement
- * set gives `effect`. Empty sets need an entry in the mode map.
+ * True when the body decides part of the contract of a function with a written
+ * result: the mode, because the closed sets are empty, or an open set.
+ */
+export function isPendingMode(signature: FunctionSignature): boolean {
+  const { written } = signature;
+  return written.result &&
+    !(written.fails && written.uses &&
+      signature.failures.length + signature.requirements.length > 0);
+}
+
+/**
+ * The mode and the sets of a signature with a written result. A closed set is
+ * the written one. An open set and a pending mode come from `solved`, which must
+ * hold an entry then.
+ */
+function contractOf(
+  signature: FunctionSignature,
+  solved: SolvedLookup,
+): Result<Solved, SignatureError> {
+  if (!signature.written.result) {
+    return { ok: false, error: { tag: "inferred-contract", id: signature.id } };
+  }
+  const { written } = signature;
+  if (!isPendingMode(signature)) {
+    return {
+      ok: true,
+      value: {
+        mode: "effect",
+        failures: signature.failures,
+        requirements: signature.requirements,
+      },
+    };
+  }
+  const entry = solved.get(signature.id);
+  if (entry === undefined) {
+    return { ok: false, error: { tag: "missing-mode", id: signature.id } };
+  }
+  const failures = written.fails ? signature.failures : entry.failures;
+  const requirements = written.uses
+    ? signature.requirements
+    : entry.requirements;
+  return {
+    ok: true,
+    value: {
+      mode: failures.length + requirements.length > 0 ? "effect" : entry.mode,
+      failures,
+      requirements,
+    },
+  };
+}
+
+/**
+ * The execution mode of a signature with a written result. A nonempty set gives
+ * `effect`. Otherwise the mode comes from `solved`.
  */
 export function executionOf(
   signature: FunctionSignature,
-  modes: ModeLookup,
+  solved: SolvedLookup,
 ): Result<Execution, SignatureError> {
-  if (signature.contract !== "explicit") {
-    return { ok: false, error: { tag: "inferred-contract", id: signature.id } };
-  }
-  if (!isPendingMode(signature)) return { ok: true, value: "effect" };
-  const mode = modes.get(signature.id);
-  if (mode === undefined) {
-    return { ok: false, error: { tag: "missing-mode", id: signature.id } };
-  }
-  return { ok: true, value: mode };
+  const contract = contractOf(signature, solved);
+  return contract.ok ? { ok: true, value: contract.value.mode } : contract;
 }
 
 interface SignatureType {
@@ -230,14 +290,14 @@ interface SignatureType {
   readonly ir: FunctionType;
 }
 
-/** The function type of an explicit signature, with the mode from the map. */
+/** The function type of a signature with a written result, with the state from `solved`. */
 export function signatureType(
   table: TypeTable,
   signature: FunctionSignature,
-  modes: ModeLookup,
+  solved: SolvedLookup,
 ): Result<SignatureType, SignatureError> {
-  const execution = executionOf(signature, modes);
-  if (!execution.ok) return execution;
+  const contract = contractOf(signature, solved);
+  if (!contract.ok) return contract;
   const result = signature.result;
   if (result === undefined) {
     return { ok: false, error: { tag: "inferred-contract", id: signature.id } };
@@ -246,11 +306,11 @@ export function signatureType(
     ok: true,
     value: loweredFunction(
       table,
-      execution.value,
+      contract.value.mode,
       signature.parameters.map((p) => p.type),
       result,
-      signature.failures,
-      signature.requirements,
+      contract.value.failures,
+      contract.value.requirements,
       signature.parameters.map((p) => p.borrow),
     ),
   };
@@ -2060,16 +2120,33 @@ class ModuleChecker {
     let failures: ErrorId[] = [];
     let requirements: CapabilityId[] = [];
     let annotation: FunctionSignature["annotation"] = "none";
+    // A binding type is a type, so it closes every part. An exported function
+    // closes both sets: an omitted clause is an empty set.
+    let closedParts: WrittenParts = {
+      result: false,
+      fails: false,
+      uses: false,
+    };
     if (resultNode !== undefined) {
       result = lowerer.lower(resultNode);
-      failures = lowerer.failures(failsNode);
-      requirements = lowerer.requirements(usesNode);
       annotation = "arrow";
+      closedParts = { result: true, fails: false, uses: false };
     } else if (bindingFn !== undefined) {
       result = { ref: bindingFn.result, ir: bindingFn.type.result };
       failures = [...bindingFn.type.effects.failures];
       requirements = [...bindingFn.type.effects.requirements];
       annotation = "binding";
+      closedParts = { result: true, fails: true, uses: true };
+    }
+    if (annotation !== "binding") {
+      const closed = entry.exported || bindingFn !== undefined;
+      closedParts = {
+        ...closedParts,
+        fails: failsNode !== undefined || closed,
+        uses: usesNode !== undefined || closed,
+      };
+      if (closedParts.fails) failures = lowerer.failures(failsNode);
+      if (closedParts.uses) requirements = lowerer.requirements(usesNode);
     }
 
     if (!entry.broken && binding !== undefined) {
@@ -2101,12 +2178,12 @@ class ModuleChecker {
       kind: "function",
       id,
       ...this.base(entry),
-      contract: explicit ? "explicit" : "inferred",
+      written: closedParts,
       annotation,
       parameters,
-      result: explicit ? result : undefined,
-      failures: explicit ? failures : [],
-      requirements: explicit ? requirements : [],
+      result,
+      failures,
+      requirements,
       ...(bindingFn?.type.execution === "pure"
         ? { expectedExecution: "pure" as const }
         : {}),

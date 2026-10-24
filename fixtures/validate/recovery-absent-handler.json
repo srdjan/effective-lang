@@ -408,7 +408,6 @@
           "kind": "named"
         }
       },
-      "contract": "explicit",
       "id": "value:users#getUser",
       "kind": "function",
       "name": "getUser",
@@ -454,6 +453,11 @@
           "id": "type:users#User",
           "kind": "named"
         }
+      },
+      "written": {
+        "fails": true,
+        "result": true,
+        "uses": true
       }
     },
     {
@@ -714,7 +718,6 @@
           "kind": "named"
         }
       },
-      "contract": "explicit",
       "id": "value:users#rename",
       "kind": "function",
       "name": "rename",
@@ -778,6 +781,11 @@
           "id": "type:users#User",
           "kind": "named"
         }
+      },
+      "written": {
+        "fails": true,
+        "result": true,
+        "uses": true
       }
     },
     {
@@ -1007,7 +1015,6 @@
           "kind": "named"
         }
       },
-      "contract": "explicit",
       "id": "value:users#displayName",
       "kind": "function",
       "name": "displayName",
@@ -1052,6 +1059,11 @@
           "id": "type:users#Name",
           "kind": "named"
         }
+      },
+      "written": {
+        "fails": true,
+        "result": true,
+        "uses": true
       }
     },
     {
@@ -1507,7 +1519,6 @@
           "kind": "array"
         }
       },
-      "contract": "explicit",
       "id": "value:users#activeNames",
       "kind": "function",
       "name": "activeNames",
@@ -1536,6 +1547,11 @@
           },
           "kind": "array"
         }
+      },
+      "written": {
+        "fails": true,
+        "result": true,
+        "uses": true
       }
     }
   ],

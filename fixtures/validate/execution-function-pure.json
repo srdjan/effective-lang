@@ -104,7 +104,6 @@
           }
         }
       },
-      "contract": "explicit",
       "id": "value:empty-effect#empty",
       "kind": "function",
       "name": "empty",
@@ -126,6 +125,11 @@
           "id": "type:empty-effect#Int",
           "kind": "named"
         }
+      },
+      "written": {
+        "fails": true,
+        "result": true,
+        "uses": true
       }
     }
   ],

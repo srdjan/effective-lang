@@ -655,7 +655,7 @@ Deno.test("a const with an arrow value lowers to a function", () => {
   const byName = new Map(wide.declarations.map((d) => [d.name, d]));
   const twice = byName.get("twice");
   assert(twice?.kind === "function");
-  assertEquals(twice.contract, "explicit");
+  assertEquals(twice.written, { result: true, fails: true, uses: true });
   assertEquals(twice.parameters.map((p) => p.name), ["x"]);
   assertEquals(twice.type.parameters, [{ kind: "named", id: "type:m#Int" }]);
   assertEquals(byName.get("limit")?.kind, "constant");
@@ -674,7 +674,7 @@ Deno.test("an inferred function uses its inferred type", () => {
   const ir = lowerText(`const inc = (n: Int) => n + 1\ntype Int = int`);
   const inc = ir.declarations[0];
   assert(inc.kind === "function");
-  assertEquals(inc.contract, "inferred");
+  assertEquals(inc.written, { result: false, fails: false, uses: false });
   assertEquals(inc.type.result, { kind: "primitive", name: "int" });
   assertEquals(inc.type.execution, "pure");
 });

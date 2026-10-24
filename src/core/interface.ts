@@ -19,6 +19,7 @@ import {
   type FunctionSignature,
   isPendingMode,
   type ModeMap,
+  modesAsSolved,
   type ModuleDeclarations,
   referencedIds,
   signatureType,
@@ -86,7 +87,7 @@ function exportedValueIds(declarations: ModuleDeclarations): Set<string> {
     if (!signature.exported) continue;
     switch (signature.kind) {
       case "function":
-        if (signature.contract !== "explicit") break;
+        if (!signature.written.result) break;
         for (const parameter of signature.parameters) {
           referencedIds(parameter.type.ir, ids);
         }
@@ -244,8 +245,12 @@ export function buildInterface(
     if (!signature.exported) continue;
     switch (signature.kind) {
       case "function": {
-        if (signature.contract !== "explicit") break;
-        const type = signatureType(declarations.env.table, signature, modes);
+        if (!signature.written.result) break;
+        const type = signatureType(
+          declarations.env.table,
+          signature,
+          modesAsSolved(modes),
+        );
         // Every explicit function passed the check above, so this cannot fail.
         if (!type.ok) break;
         values.push({

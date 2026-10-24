@@ -16,6 +16,7 @@ import type {
   ServiceId,
   TypeId,
   ValueId,
+  WrittenParts,
 } from "./ir.ts";
 import type { NodeId } from "./syntax.ts";
 import { sortedUnique, type TypeRef } from "./types.ts";
@@ -256,7 +257,7 @@ export type NodeFact =
   | {
     readonly kind: "arrow";
     readonly parameters: readonly ArrowParameterFact[];
-    readonly contract: "explicit" | "inferred";
+    readonly written: WrittenParts;
   }
   /** A block `const`. */
   | {

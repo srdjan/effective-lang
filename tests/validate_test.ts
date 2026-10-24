@@ -2645,9 +2645,47 @@ Deno.test("contracts: an inferred function records exactly its body sets", () =>
   assertEquals(codesOf(ir, sources), []);
   const copyIr = copy(ir);
   const f = decl(copyIr, "inc");
-  assertEquals(at(copyIr, `declarations[${f}].contract`), "inferred");
+  assertEquals(at(copyIr, `declarations[${f}].written`), {
+    result: false,
+    fails: false,
+    uses: false,
+  });
   setAt(copyIr, `declarations[${f}].type.effects.requirements`, []);
   assert(codesOf(copyIr, sources).includes("validation/003"));
+});
+
+Deno.test("contracts: an inferred set is exact and a written set is an upper bound", () => {
+  const { ir, sources } = lowerText(
+    "service S { go(): Int }\nservice T { go(): Int }\nconst open = (x: Int): Int => x + S.go()\nconst half = (x: Int): Int uses S.go => x + S.go()\nexport const f = (x: Int): Int uses S.go => open(x)\ntype Int = int",
+  );
+  assertEquals(codesOf(ir, sources), []);
+  const requirementsOf = (name: string) =>
+    `declarations[${decl(ir, name)}].type.effects.requirements`;
+  const mutate = (path: string, value: unknown) => {
+    const copyIr = copy(ir);
+    setAt(copyIr, path, value);
+    return codesOf(copyIr, sources);
+  };
+  // An inferred set that lost an entry is too small.
+  assert(mutate(requirementsOf("open"), []).includes("validation/003"));
+  // An inferred set that gained an entry is not the body set.
+  assert(
+    mutate(requirementsOf("open"), ["cap:m#S.go", "cap:m#T.go"]).includes(
+      "validation/003",
+    ),
+  );
+  // A written set that lost an entry no longer bounds the body.
+  assert(mutate(requirementsOf("half"), []).includes("validation/003"));
+  // A written set that gained an entry still bounds the body.
+  assertEquals(
+    mutate(requirementsOf("half"), ["cap:m#S.go", "cap:m#T.go"]),
+    [],
+  );
+  // The flag decides which rule applies: the same too-large set fails when inferred.
+  const flagged = copy(ir);
+  setAt(flagged, `declarations[${decl(flagged, "half")}].written.uses`, false);
+  setAt(flagged, requirementsOf("half"), ["cap:m#S.go", "cap:m#T.go"]);
+  assertEquals(codesOf(flagged, sources), ["validation/003"]);
 });
 
 // ------------------------------------------------------------------ execution

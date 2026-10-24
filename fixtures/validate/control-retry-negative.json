@@ -430,7 +430,6 @@
           "kind": "named"
         }
       },
-      "contract": "explicit",
       "id": "value:pay#findOrder",
       "kind": "function",
       "name": "findOrder",
@@ -475,6 +474,11 @@
           "id": "type:pay#Order",
           "kind": "named"
         }
+      },
+      "written": {
+        "fails": true,
+        "result": true,
+        "uses": true
       }
     },
     {
@@ -635,7 +639,6 @@
           "kind": "named"
         }
       },
-      "contract": "explicit",
       "id": "value:pay#chargeOrder",
       "kind": "function",
       "name": "chargeOrder",
@@ -680,6 +683,11 @@
           "id": "type:pay#Order",
           "kind": "named"
         }
+      },
+      "written": {
+        "fails": true,
+        "result": true,
+        "uses": true
       }
     },
     {
@@ -741,7 +749,6 @@
           "kind": "named"
         }
       },
-      "contract": "explicit",
       "id": "value:pay#markPaid",
       "kind": "function",
       "name": "markPaid",
@@ -782,6 +789,11 @@
           "id": "type:pay#Order",
           "kind": "named"
         }
+      },
+      "written": {
+        "fails": false,
+        "result": true,
+        "uses": false
       }
     },
     {
@@ -867,7 +879,6 @@
           "kind": "named"
         }
       },
-      "contract": "explicit",
       "id": "value:pay#saveOrder",
       "kind": "function",
       "name": "saveOrder",
@@ -910,6 +921,11 @@
           "id": "type:pay#Order",
           "kind": "named"
         }
+      },
+      "written": {
+        "fails": false,
+        "result": true,
+        "uses": true
       }
     },
     {
@@ -1317,7 +1333,6 @@
           "kind": "named"
         }
       },
-      "contract": "explicit",
       "id": "value:pay#pay",
       "kind": "function",
       "name": "pay",
@@ -1365,6 +1380,11 @@
           "id": "type:pay#Order",
           "kind": "named"
         }
+      },
+      "written": {
+        "fails": true,
+        "result": true,
+        "uses": true
       }
     }
   ],

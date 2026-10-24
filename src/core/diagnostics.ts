@@ -171,7 +171,7 @@ export const DIAGNOSTIC_CODES = {
   "failure-contract/001": {
     category: "failure-contract",
     description:
-      "The body of a function with a result annotation can fail with errors that its fails clause does not list.",
+      "The body of a function with a written fails clause can fail with errors that the clause does not list. An exported function and a function with a binding type annotation have a written fails clause, empty when omitted.",
   },
   "failure-contract/002": {
     category: "failure-contract",
@@ -185,7 +185,7 @@ export const DIAGNOSTIC_CODES = {
   "requirement-contract/001": {
     category: "requirement-contract",
     description:
-      "The body of a function with a result annotation needs service methods that its uses clause does not list.",
+      "The body of a function with a written uses clause needs service methods that the clause does not list. An exported function and a function with a binding type annotation have a written uses clause, empty when omitted.",
   },
   "execution-mode/001": {
     category: "execution-mode",
@@ -200,12 +200,12 @@ export const DIAGNOSTIC_CODES = {
   "execution-mode/003": {
     category: "execution-mode",
     description:
-      "A function calls itself, directly or through other functions, without an explicit signature, or a local function refers to itself.",
+      "A function calls itself, directly or through other functions, without a parameter and result annotation, or a block-level function refers to itself.",
   },
   "execution-mode/004": {
     category: "execution-mode",
     description:
-      "The execution modes of a recursive group did not settle within the round cap.",
+      "The execution modes and effect sets of a recursive group did not settle within the round cap.",
   },
   "execution-mode/005": {
     category: "execution-mode",

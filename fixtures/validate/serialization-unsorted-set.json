@@ -157,7 +157,6 @@
           "kind": "named"
         }
       },
-      "contract": "explicit",
       "id": "value:main#main",
       "kind": "function",
       "name": "main",
@@ -181,6 +180,11 @@
           "id": "type:users#Name",
           "kind": "named"
         }
+      },
+      "written": {
+        "fails": true,
+        "result": true,
+        "uses": true
       }
     }
   ],
