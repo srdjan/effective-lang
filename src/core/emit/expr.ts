@@ -716,6 +716,11 @@ export class ExprEmitter implements ExprCore {
       }
       case "nominal": {
         const declaration = this.scope.typeLevelDeclaration(e.nominal);
+        // An untagged non-record nominal type is erased: its value is the base value.
+        if (
+          declaration?.kind === "type" &&
+          declaration.definition.kind === "alias"
+        ) return kid(e.value);
         const fields = declaration?.kind === "type"
           ? dataFields(declaration)
           : undefined;
@@ -1073,7 +1078,7 @@ export class ExprEmitter implements ExprCore {
     }
     const arithmetic = e.operator === "+" || e.operator === "-" ||
       e.operator === "*";
-    if (arithmetic && isIntType(e.type)) {
+    if (arithmetic && isIntType(this.scope.resolve(e.type))) {
       return this.intCall(emitted(runDoc(run, 1), prec));
     }
     return emitted(runDoc(run, 1), prec, {

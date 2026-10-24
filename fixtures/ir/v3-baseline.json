@@ -6311,7 +6311,7 @@
         "emitted": {
           "module": "pay",
           "path": "pay.ts",
-          "text": "// Generated from pay.eff by the Effektive compiler. Do not edit.\n\nimport { Context, Effect, Option, Schema } from \"effect\";\n\nconst $Int = Schema.Finite.check(\n  Schema.makeFilter(\n    (value) => Number.isSafeInteger(value) || \"expected a safe integer\",\n  ),\n);\n\nexport const Cents = $Int;\nexport type Cents = typeof Cents.Type;\n\nexport const ChargeId = Schema.String;\nexport type ChargeId = typeof ChargeId.Type;\n\nexport const OrderId = Schema.String.pipe(Schema.brand(\"pay#OrderId\"));\nexport type OrderId = typeof OrderId.Type;\n\nexport const Order = Schema.Struct({\n  id: OrderId,\n  totalCents: $Int,\n  status: Schema.Literals([\"pending\", \"paid\"]),\n});\nexport type Order = typeof Order.Type;\n\nexport class OrderNotFound extends Schema.TaggedError<OrderNotFound>()(\n  \"pay#OrderNotFound\",\n  { id: OrderId },\n) {}\n\nexport class PaymentDeclined extends Schema.TaggedError<PaymentDeclined>()(\n  \"pay#PaymentDeclined\",\n  { reason: Schema.String },\n) {}\n\nexport class Orders extends Context.Service<Orders, {\n  readonly find: (a: OrderId) => Effect.Effect<Option.Option<Order>>;\n  readonly save: (a: Order) => Effect.Effect<void>;\n}>()(\"pay#Orders\") {}\n\nexport class Payments extends Context.Service<Payments, {\n  readonly charge: (a: Cents) => Effect.Effect<ChargeId, PaymentDeclined>;\n}>()(\"pay#Payments\") {}\n\nconst findOrder = (id: OrderId) =>\n  Effect.gen(function* () {\n    return yield* Option.match(yield* Orders.use(($s) => $s.find(id)), {\n      onNone: () => Effect.fail(new OrderNotFound({ id })),\n      onSome: (order) => Effect.succeed(order),\n    });\n  });\n\nconst chargeOrder = (order: Order) =>\n  Effect.gen(function* () {\n    yield* Effect.retry(\n      Effect.suspend(() => Payments.use(($s) => $s.charge(order.totalCents))),\n      { times: 2 },\n    );\n    return order;\n  });\n\nconst markPaid = (order: Order) => ({ ...order, status: \"paid\" as const });\n\nconst saveOrder = (order: Order) =>\n  Effect.gen(function* () {\n    yield* Orders.use(($s) => $s.save(order));\n    return order;\n  });\n\nexport const pay = (id: OrderId): Effect.Effect<\n  Order,\n  OrderNotFound | PaymentDeclined,\n  Orders | Payments\n> =>\n  Effect.gen(function* () {\n    const $p1: OrderId = id;\n    const $p2: Order = yield* findOrder($p1);\n    const $p3: Order = yield* chargeOrder($p2);\n    const $p4: Order = markPaid($p3);\n    return yield* saveOrder($p4);\n  });\n//# sourceMappingURL=pay.ts.map\n",
+          "text": "// Generated from pay.eff by the Effektive compiler. Do not edit.\n\nimport { Context, Effect, Option, Schema } from \"effect\";\n\nconst $Int = Schema.Finite.check(\n  Schema.makeFilter(\n    (value) => Number.isSafeInteger(value) || \"expected a safe integer\",\n  ),\n);\n\nexport const Cents = $Int;\nexport type Cents = typeof Cents.Type;\n\nexport const ChargeId = Schema.String;\nexport type ChargeId = typeof ChargeId.Type;\n\nexport const OrderId = Schema.String;\nexport type OrderId = typeof OrderId.Type;\n\nexport const Order = Schema.Struct({\n  id: OrderId,\n  totalCents: $Int,\n  status: Schema.Literals([\"pending\", \"paid\"]),\n});\nexport type Order = typeof Order.Type;\n\nexport class OrderNotFound extends Schema.TaggedError<OrderNotFound>()(\n  \"pay#OrderNotFound\",\n  { id: OrderId },\n) {}\n\nexport class PaymentDeclined extends Schema.TaggedError<PaymentDeclined>()(\n  \"pay#PaymentDeclined\",\n  { reason: Schema.String },\n) {}\n\nexport class Orders extends Context.Service<Orders, {\n  readonly find: (a: OrderId) => Effect.Effect<Option.Option<Order>>;\n  readonly save: (a: Order) => Effect.Effect<void>;\n}>()(\"pay#Orders\") {}\n\nexport class Payments extends Context.Service<Payments, {\n  readonly charge: (a: Cents) => Effect.Effect<ChargeId, PaymentDeclined>;\n}>()(\"pay#Payments\") {}\n\nconst findOrder = (id: OrderId) =>\n  Effect.gen(function* () {\n    return yield* Option.match(yield* Orders.use(($s) => $s.find(id)), {\n      onNone: () => Effect.fail(new OrderNotFound({ id })),\n      onSome: (order) => Effect.succeed(order),\n    });\n  });\n\nconst chargeOrder = (order: Order) =>\n  Effect.gen(function* () {\n    yield* Effect.retry(\n      Effect.suspend(() => Payments.use(($s) => $s.charge(order.totalCents))),\n      { times: 2 },\n    );\n    return order;\n  });\n\nconst markPaid = (order: Order) => ({ ...order, status: \"paid\" as const });\n\nconst saveOrder = (order: Order) =>\n  Effect.gen(function* () {\n    yield* Orders.use(($s) => $s.save(order));\n    return order;\n  });\n\nexport const pay = (id: OrderId): Effect.Effect<\n  Order,\n  OrderNotFound | PaymentDeclined,\n  Orders | Payments\n> =>\n  Effect.gen(function* () {\n    const $p1: OrderId = id;\n    const $p2: Order = yield* findOrder($p1);\n    const $p3: Order = yield* chargeOrder($p2);\n    const $p4: Order = markPaid($p3);\n    return yield* saveOrder($p4);\n  });\n//# sourceMappingURL=pay.ts.map\n",
           "spans": [
             {
               "start": 263,
@@ -6333,7 +6333,7 @@
             },
             {
               "start": 415,
-              "end": 529,
+              "end": 495,
               "span": {
                 "source": "pay.eff",
                 "start": 41,
@@ -6341,8 +6341,8 @@
               }
             },
             {
-              "start": 531,
-              "end": 693,
+              "start": 497,
+              "end": 659,
               "span": {
                 "source": "pay.eff",
                 "start": 66,
@@ -6350,8 +6350,8 @@
               }
             },
             {
-              "start": 695,
-              "end": 813,
+              "start": 661,
+              "end": 779,
               "span": {
                 "source": "pay.eff",
                 "start": 147,
@@ -6359,8 +6359,8 @@
               }
             },
             {
-              "start": 815,
-              "end": 949,
+              "start": 781,
+              "end": 915,
               "span": {
                 "source": "pay.eff",
                 "start": 185,
@@ -6368,8 +6368,8 @@
               }
             },
             {
-              "start": 951,
-              "end": 1148,
+              "start": 917,
+              "end": 1114,
               "span": {
                 "source": "pay.eff",
                 "start": 229,
@@ -6377,8 +6377,8 @@
               }
             },
             {
-              "start": 1150,
-              "end": 1306,
+              "start": 1116,
+              "end": 1272,
               "span": {
                 "source": "pay.eff",
                 "start": 311,
@@ -6386,8 +6386,8 @@
               }
             },
             {
-              "start": 1436,
-              "end": 1438,
+              "start": 1402,
+              "end": 1404,
               "span": {
                 "source": "pay.eff",
                 "start": 444,
@@ -6395,8 +6395,8 @@
               }
             },
             {
-              "start": 1402,
-              "end": 1440,
+              "start": 1368,
+              "end": 1406,
               "span": {
                 "source": "pay.eff",
                 "start": 432,
@@ -6404,8 +6404,8 @@
               }
             },
             {
-              "start": 1476,
-              "end": 1501,
+              "start": 1442,
+              "end": 1467,
               "span": {
                 "source": "pay.eff",
                 "start": 493,
@@ -6413,8 +6413,8 @@
               }
             },
             {
-              "start": 1464,
-              "end": 1502,
+              "start": 1430,
+              "end": 1468,
               "span": {
                 "source": "pay.eff",
                 "start": 488,
@@ -6422,8 +6422,8 @@
               }
             },
             {
-              "start": 1544,
-              "end": 1549,
+              "start": 1510,
+              "end": 1515,
               "span": {
                 "source": "pay.eff",
                 "start": 469,
@@ -6431,8 +6431,8 @@
               }
             },
             {
-              "start": 1529,
-              "end": 1550,
+              "start": 1495,
+              "end": 1516,
               "span": {
                 "source": "pay.eff",
                 "start": 469,
@@ -6440,8 +6440,8 @@
               }
             },
             {
-              "start": 1382,
-              "end": 1558,
+              "start": 1348,
+              "end": 1524,
               "span": {
                 "source": "pay.eff",
                 "start": 426,
@@ -6449,8 +6449,8 @@
               }
             },
             {
-              "start": 1345,
-              "end": 1564,
+              "start": 1311,
+              "end": 1530,
               "span": {
                 "source": "pay.eff",
                 "start": 426,
@@ -6458,8 +6458,8 @@
               }
             },
             {
-              "start": 1308,
-              "end": 1565,
+              "start": 1274,
+              "end": 1531,
               "span": {
                 "source": "pay.eff",
                 "start": 389,
@@ -6467,8 +6467,8 @@
               }
             },
             {
-              "start": 1716,
-              "end": 1721,
+              "start": 1682,
+              "end": 1687,
               "span": {
                 "source": "pay.eff",
                 "start": 591,
@@ -6476,8 +6476,8 @@
               }
             },
             {
-              "start": 1716,
-              "end": 1732,
+              "start": 1682,
+              "end": 1698,
               "span": {
                 "source": "pay.eff",
                 "start": 591,
@@ -6485,8 +6485,8 @@
               }
             },
             {
-              "start": 1685,
-              "end": 1734,
+              "start": 1651,
+              "end": 1700,
               "span": {
                 "source": "pay.eff",
                 "start": 575,
@@ -6494,8 +6494,8 @@
               }
             },
             {
-              "start": 1679,
-              "end": 1734,
+              "start": 1645,
+              "end": 1700,
               "span": {
                 "source": "pay.eff",
                 "start": 569,
@@ -6503,8 +6503,8 @@
               }
             },
             {
-              "start": 1637,
-              "end": 1762,
+              "start": 1603,
+              "end": 1728,
               "span": {
                 "source": "pay.eff",
                 "start": 563,
@@ -6512,8 +6512,8 @@
               }
             },
             {
-              "start": 1775,
-              "end": 1780,
+              "start": 1741,
+              "end": 1746,
               "span": {
                 "source": "pay.eff",
                 "start": 626,
@@ -6521,8 +6521,8 @@
               }
             },
             {
-              "start": 1607,
-              "end": 1786,
+              "start": 1573,
+              "end": 1752,
               "span": {
                 "source": "pay.eff",
                 "start": 559,
@@ -6530,8 +6530,8 @@
               }
             },
             {
-              "start": 1567,
-              "end": 1787,
+              "start": 1533,
+              "end": 1753,
               "span": {
                 "source": "pay.eff",
                 "start": 521,
@@ -6539,8 +6539,8 @@
               }
             },
             {
-              "start": 1830,
-              "end": 1835,
+              "start": 1796,
+              "end": 1801,
               "span": {
                 "source": "pay.eff",
                 "start": 678,
@@ -6548,8 +6548,8 @@
               }
             },
             {
-              "start": 1845,
-              "end": 1860,
+              "start": 1811,
+              "end": 1826,
               "span": {
                 "source": "pay.eff",
                 "start": 693,
@@ -6557,8 +6557,8 @@
               }
             },
             {
-              "start": 1825,
-              "end": 1862,
+              "start": 1791,
+              "end": 1828,
               "span": {
                 "source": "pay.eff",
                 "start": 673,
@@ -6566,8 +6566,8 @@
               }
             },
             {
-              "start": 1789,
-              "end": 1864,
+              "start": 1755,
+              "end": 1830,
               "span": {
                 "source": "pay.eff",
                 "start": 635,
@@ -6575,8 +6575,8 @@
               }
             },
             {
-              "start": 1968,
-              "end": 1973,
+              "start": 1934,
+              "end": 1939,
               "span": {
                 "source": "pay.eff",
                 "start": 756,
@@ -6584,8 +6584,8 @@
               }
             },
             {
-              "start": 1934,
-              "end": 1975,
+              "start": 1900,
+              "end": 1941,
               "span": {
                 "source": "pay.eff",
                 "start": 744,
@@ -6593,8 +6593,8 @@
               }
             },
             {
-              "start": 1988,
-              "end": 1993,
+              "start": 1954,
+              "end": 1959,
               "span": {
                 "source": "pay.eff",
                 "start": 765,
@@ -6602,8 +6602,8 @@
               }
             },
             {
-              "start": 1904,
-              "end": 1999,
+              "start": 1870,
+              "end": 1965,
               "span": {
                 "source": "pay.eff",
                 "start": 740,
@@ -6611,8 +6611,8 @@
               }
             },
             {
-              "start": 1866,
-              "end": 2000,
+              "start": 1832,
+              "end": 1966,
               "span": {
                 "source": "pay.eff",
                 "start": 704,
@@ -6620,17 +6620,17 @@
               }
             },
             {
+              "start": 2139,
+              "end": 2141,
+              "span": {
+                "source": "pay.eff",
+                "start": 891,
+                "end": 893
+              }
+            },
+            {
               "start": 2173,
-              "end": 2175,
-              "span": {
-                "source": "pay.eff",
-                "start": 891,
-                "end": 893
-              }
-            },
-            {
-              "start": 2207,
-              "end": 2216,
+              "end": 2182,
               "span": {
                 "source": "pay.eff",
                 "start": 901,
@@ -6638,8 +6638,8 @@
               }
             },
             {
-              "start": 2217,
-              "end": 2220,
+              "start": 2183,
+              "end": 2186,
               "span": {
                 "source": "pay.eff",
                 "start": 891,
@@ -6647,8 +6647,8 @@
               }
             },
             {
-              "start": 2200,
-              "end": 2221,
+              "start": 2166,
+              "end": 2187,
               "span": {
                 "source": "pay.eff",
                 "start": 901,
@@ -6656,8 +6656,8 @@
               }
             },
             {
-              "start": 2253,
-              "end": 2264,
+              "start": 2219,
+              "end": 2230,
               "span": {
                 "source": "pay.eff",
                 "start": 918,
@@ -6665,30 +6665,57 @@
               }
             },
             {
-              "start": 2265,
+              "start": 2231,
+              "end": 2234,
+              "span": {
+                "source": "pay.eff",
+                "start": 891,
+                "end": 910
+              }
+            },
+            {
+              "start": 2212,
+              "end": 2235,
+              "span": {
+                "source": "pay.eff",
+                "start": 918,
+                "end": 929
+              }
+            },
+            {
+              "start": 2260,
               "end": 2268,
-              "span": {
-                "source": "pay.eff",
-                "start": 891,
-                "end": 910
-              }
-            },
-            {
-              "start": 2246,
-              "end": 2269,
-              "span": {
-                "source": "pay.eff",
-                "start": 918,
-                "end": 929
-              }
-            },
-            {
-              "start": 2294,
-              "end": 2302,
               "span": {
                 "source": "pay.eff",
                 "start": 937,
                 "end": 945
+              }
+            },
+            {
+              "start": 2269,
+              "end": 2272,
+              "span": {
+                "source": "pay.eff",
+                "start": 891,
+                "end": 929
+              }
+            },
+            {
+              "start": 2260,
+              "end": 2273,
+              "span": {
+                "source": "pay.eff",
+                "start": 937,
+                "end": 945
+              }
+            },
+            {
+              "start": 2293,
+              "end": 2302,
+              "span": {
+                "source": "pay.eff",
+                "start": 953,
+                "end": 962
               }
             },
             {
@@ -6697,48 +6724,21 @@
               "span": {
                 "source": "pay.eff",
                 "start": 891,
-                "end": 929
+                "end": 945
               }
             },
             {
-              "start": 2294,
+              "start": 2286,
               "end": 2307,
               "span": {
                 "source": "pay.eff",
-                "start": 937,
-                "end": 945
-              }
-            },
-            {
-              "start": 2327,
-              "end": 2336,
-              "span": {
-                "source": "pay.eff",
                 "start": 953,
                 "end": 962
               }
             },
             {
-              "start": 2337,
-              "end": 2340,
-              "span": {
-                "source": "pay.eff",
-                "start": 891,
-                "end": 945
-              }
-            },
-            {
-              "start": 2320,
-              "end": 2341,
-              "span": {
-                "source": "pay.eff",
-                "start": 953,
-                "end": 962
-              }
-            },
-            {
-              "start": 2122,
-              "end": 2347,
+              "start": 2088,
+              "end": 2313,
               "span": {
                 "source": "pay.eff",
                 "start": 891,
@@ -6746,8 +6746,8 @@
               }
             },
             {
-              "start": 2002,
-              "end": 2348,
+              "start": 1968,
+              "end": 2314,
               "span": {
                 "source": "pay.eff",
                 "start": 774,

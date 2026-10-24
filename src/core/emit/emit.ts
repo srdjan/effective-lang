@@ -3,7 +3,7 @@ import { fieldHelperDeclarations } from "./fields.ts";
 // `ModuleIR` into the text of one TypeScript module. It reads only the IR and
 // the project configuration. It is synchronous and pure: the caller writes files.
 
-import type { ModuleIR, Result } from "../ir.ts";
+import type { Declaration, ModuleIR, Result, TypeDecl } from "../ir.ts";
 import type { ProjectConfig } from "../project.ts";
 import type { Span } from "../ir.ts";
 import {
@@ -99,7 +99,28 @@ function blankSeparated(sections: readonly (readonly Doc[])[]): Doc {
   return out;
 }
 
-function build(ir: ModuleIR, context: EmitContext): EmittedModule {
+/**
+ * A `nominal` type with an untagged, non-opaque, non-record body has its identity
+ * in the checker only. The emitter reads it as an alias of its base.
+ */
+function erased<D extends Declaration | TypeDecl>(d: D): D {
+  return d.kind === "type" && d.definition.kind === "nominal" &&
+      d.definition.tagged !== true && d.opaque !== true &&
+      d.definition.base.kind !== "record"
+    ? { ...d, definition: { kind: "alias", type: d.definition.base } }
+    : d;
+}
+
+function normalized(ir: ModuleIR): ModuleIR {
+  return {
+    ...ir,
+    imports: ir.imports.map((i) => ({ ...i, types: i.types.map(erased) })),
+    declarations: ir.declarations.map(erased),
+  };
+}
+
+function build(source: ModuleIR, context: EmitContext): EmittedModule {
+  const ir = normalized(source);
   const scope = new Scope(ir, context.config);
   const exported = exportedIds(ir);
   const emitter = new DeclarationEmitter(

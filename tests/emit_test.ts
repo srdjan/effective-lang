@@ -691,7 +691,7 @@ Deno.test("a nominal record emits field reads and updates that keep the data typ
   assertStringIncludes(text, "Option.fromUndefinedOr(user.nickname)");
   // The update is a plain spread; it keeps the data type in the TypeScript type.
   assertStringIncludes(text, "({ ...user, active: true })");
-  assertStringIncludes(text, "User.make({ id: UserId.make(");
+  assertStringIncludes(text, 'User.make({ id: "u1", name:');
 });
 
 Deno.test("a nominal type over a record alias keeps the field order of the alias", () => {
@@ -724,7 +724,7 @@ Deno.test("a data type emits a TaggedStruct, a make call, and a copy without the
   assertStringIncludes(text, "export type User = typeof User.Type;");
   // An empty body gives a variant with no fields.
   assertStringIncludes(text, 'Schema.TaggedStruct("data-types#Marker", {})');
-  assertStringIncludes(text, "User.make({ id: UserId.make(");
+  assertStringIncludes(text, 'User.make({ id: "u1", name:');
   assertStringIncludes(text, "Marker.make({})");
   assertStringIncludes(text, "(user: User): Text => user.name;");
   assertStringIncludes(text, "Option.fromUndefinedOr(user.nick)");
@@ -1139,26 +1139,34 @@ Deno.test("the forms fixture emits the plan's control forms", () => {
   assertStringIncludes(text, "Effect.succeed(addOne($t0))");
   // The optional field read.
   assertStringIncludes(text, "Option.fromUndefinedOr(p.nickname)");
-  // Brand construction.
-  assertStringIncludes(text, "Id.make(s)");
+  // A nominal type over a string has no brand: construction prints the value.
+  assertStringIncludes(text, "(s: StrVal): Id => s;");
+  assert(!text.includes("Schema.brand"));
 });
 
-Deno.test("the brand operators fixture wraps a sum or a difference in the brand", () => {
+Deno.test("the brand operators fixture prints the operators of the base type", () => {
   const text =
     emitFiles(projectFiles("emit/forms"), ["brand-operators.eff"]).get(
       "brand-operators",
     )?.text ?? "";
-  // A brand of int keeps the $int check inside the brand constructor.
-  assertStringIncludes(text, "Count.make($int(a + b))");
-  assertStringIncludes(text, "Count.make($int(a - b))");
-  assertStringIncludes(text, "Count.make($int(Count.make($int(a + b)) - c))");
+  // A nominal type over int keeps the $int check and has no brand constructor.
+  assertStringIncludes(text, "$int(a + b)");
+  assertStringIncludes(text, "$int(a - b)");
+  assertStringIncludes(text, "$int($int(a + b) - c)");
   assertStringIncludes(
     text,
-    "Count.make($int((yield* Counter.use(($s) => $s.read())) + a))",
+    "$int((yield* Counter.use(($s) => $s.read())) + a)",
   );
-  // A brand of number has no $int.
-  assertStringIncludes(text, "Price.make(a + b)");
-  assertStringIncludes(text, "Price.make(a - b)");
+  // A nominal type over number has no $int.
+  assertStringIncludes(
+    text,
+    "addPrice = (a: Price, b: Price): Price => a + b;",
+  );
+  assertStringIncludes(
+    text,
+    "subPrice = (a: Price, b: Price): Price => a - b;",
+  );
+  assert(!text.includes(".make("));
   // A comparison needs no brand wrapper.
   assertStringIncludes(text, "a < b;");
   assertStringIncludes(text, "a >= b;");

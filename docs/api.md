@@ -291,8 +291,8 @@ or `nominal`. A `nominal` definition has a `base` type. The flag `tagged` marks
 a nominal record, and its base is a record. An expression has the node
 `nominal` for a construction of a nominal type, and a match arm has the pattern
 kind `nominal`. The IR has no `unbrand` node, because a nominal value fits its
-base type. The emitter prints a `TaggedStruct` for a tagged definition and an
-Effect brand for any other base.
+base type. The emitter prints a `TaggedStruct` for a tagged definition. It prints any
+other nominal type as an alias of its base, with no brand.
 
 The IR holds the declarations in source order, the sorted export identities, and
 one `Import` for each import declaration. The `module` of an `Import` is the

@@ -67,7 +67,7 @@ A quiet value is pure and has no failure and no requirement. When the left value
 
 The type that a `nominal` declaration declares, such as `nominal UserId = string` or `nominal User = { id: UserId, name: Name }`. A `type` declaration is structural: types with equal structure are interchangeable.
 
-A nominal type has its own identity. A program builds a value with the constructor, as in `UserId(s)` or `User(record)`. An open nominal value fits its base type, and a base value does not fit the nominal type. A sealed nominal type restricts base widening to its owner. A body that is a record after aliases unfold gives a nominal record with a runtime `_tag`. Any other body lowers to an Effect brand, which the compiler emits and the source does not name.
+A nominal type has its own identity. A program builds a value with the constructor, as in `UserId(s)` or `User(record)`. An open nominal value fits its base type, and a base value does not fit the nominal type. A sealed nominal type restricts base widening to its owner. A body that is a record after aliases unfold gives a nominal record with a runtime `_tag`. Any other body has its identity in the checker only: the emitted TypeScript is the schema and the type of the body.
 _Avoid: data type, brand type, record brand_
 
 ### Nominal domain

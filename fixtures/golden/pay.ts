@@ -14,7 +14,7 @@ export type Cents = typeof Cents.Type;
 export const ChargeId = Schema.String;
 export type ChargeId = typeof ChargeId.Type;
 
-export const OrderId = Schema.String.pipe(Schema.brand("pay#OrderId"));
+export const OrderId = Schema.String;
 export type OrderId = typeof OrderId.Type;
 
 export const Order = Schema.Struct({
