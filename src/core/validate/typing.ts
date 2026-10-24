@@ -18,8 +18,10 @@
 import type { Execution, Field, FunctionType, Type } from "../ir.ts";
 import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID } from "../ir.ts";
 import { effectsFit, isSubset, sameSet } from "./sets.ts";
+import { typeChildren } from "./type_children.ts";
 
 export interface TypeEnv {
+  readonly module: string;
   /** Alias identity to the aliased type. */
   readonly aliases: ReadonlyMap<string, Type>;
   /** Brand identity to the base type. */
@@ -30,6 +32,8 @@ export interface TypeEnv {
   readonly errors: ReadonlyMap<string, readonly Field[]>;
   /** Identities of opaque types. An opaque type does not widen to its base. */
   readonly opaque: ReadonlySet<string>;
+  /** Identities of sealed nominal types. */
+  readonly sealed: ReadonlySet<string>;
 }
 
 export const INT: Type = { kind: "primitive", name: "int" };
@@ -48,6 +52,11 @@ export const MAX_DEPTH = 1536;
 
 export function isNever(type: Type): boolean {
   return type.kind === "primitive" && type.name === "never";
+}
+
+/** True when a nominal type is open or belongs to the module under validation. */
+export function ownsSealed(env: TypeEnv, id: string): boolean {
+  return !env.sealed.has(id) || id.startsWith(`type:${env.module}#`);
 }
 
 /** Follows aliases until the type is not an alias. A brand or an error stays named. */
@@ -213,7 +222,10 @@ function assignable(
     if (alias !== undefined) return assignable(env, s, alias, lift, depth + 1);
   }
   // A nominal value fits its base, as `TypeTable.assignable` does.
-  if (s.kind === "named" && !env.opaque.has(s.id)) {
+  if (
+    s.kind === "named" && !env.opaque.has(s.id) &&
+    ownsSealed(env, s.id)
+  ) {
     const base = env.data.get(s.id) ?? env.brands.get(s.id);
     if (base !== undefined && assignable(env, base, t, lift, depth + 1)) {
       return true;
@@ -434,6 +446,49 @@ export function fieldsOf(
     return env.data.get(unfolded.id)?.fields;
   }
   return undefined;
+}
+
+/** The sealed nominal identity below aliases, if this type is one. */
+export function sealedRootOf(env: TypeEnv, type: Type): string | undefined {
+  let current = type;
+  const seen = new Set<Type>();
+  while (!seen.has(current)) {
+    seen.add(current);
+    if (current.kind !== "named") return undefined;
+    if (env.sealed.has(current.id)) return current.id;
+    const alias = env.aliases.get(current.id);
+    if (alias === undefined) return undefined;
+    current = alias;
+  }
+  return undefined;
+}
+
+/** A foreign sealed nominal identity contained in this type, if one exists. */
+export function foreignSealedOf(
+  env: TypeEnv,
+  type: Type,
+): string | undefined {
+  const seen = new Set<Type>();
+  const visit = (current: Type): string | undefined => {
+    if (seen.has(current)) return undefined;
+    seen.add(current);
+    if (current.kind === "named") {
+      if (!ownsSealed(env, current.id)) return current.id;
+      const fields = env.errors.get(current.id);
+      const target = env.aliases.get(current.id) ?? env.data.get(current.id) ??
+        env.brands.get(current.id) ??
+        (fields === undefined
+          ? undefined
+          : { kind: "record" as const, fields });
+      return target === undefined ? undefined : visit(target);
+    }
+    for (const child of typeChildren(current)) {
+      const found = visit(child.type);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  };
+  return visit(type);
 }
 
 export function asFunction(env: TypeEnv, type: Type): FunctionType | undefined {

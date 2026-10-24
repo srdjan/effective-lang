@@ -27,7 +27,8 @@ export interface Completion {
     | "class"
     | "interface"
     | "method"
-    | "property";
+    | "property"
+    | "keyword";
   readonly span: Span;
 }
 
@@ -120,6 +121,18 @@ export function completionsAt(
       lexed.kinds[i] !== TokenKind.Eof
     ) previousToken = i;
   }
+  const lineStart = text.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
+  const beforeOnLine: number[] = [];
+  for (let i = 0; i < lexed.count; i++) {
+    if (
+      lexed.starts[i] >= lineStart && lexed.ends[i] <= start &&
+      lexed.kinds[i] !== TokenKind.Newline &&
+      lexed.kinds[i] !== TokenKind.Eof
+    ) beforeOnLine.push(i);
+  }
+  let declarationStart = beforeOnLine.length === 0 ||
+    (beforeOnLine.length === 1 &&
+      lexed.kinds[beforeOnLine[0]] === TokenKind.KwExport);
   if (previousToken >= 0 && lexed.kinds[previousToken] === TokenKind.Dot) {
     let baseToken = previousToken - 1;
     while (baseToken >= 0 && lexed.kinds[baseToken] === TokenKind.Newline) {
@@ -159,6 +172,11 @@ export function completionsAt(
   let context: "value" | "type" | "fails" | "uses" = "value";
   while (node >= 0) {
     const kind = kindOf(tree, node);
+    if (
+      kind === SyntaxKind.ConstDecl || kind === SyntaxKind.ImportDecl ||
+      kind === SyntaxKind.TypeDecl || kind === SyntaxKind.ErrorDecl ||
+      kind === SyntaxKind.ServiceDecl || kind === SyntaxKind.ProviderDecl
+    ) declarationStart = false;
     if (kind === SyntaxKind.FailsClause) {
       context = "fails";
       break;
@@ -216,6 +234,9 @@ export function completionsAt(
     for (const name of PRELUDE_NAMES) {
       if (!values.has(name)) values.set(name, make(name, "function"));
     }
+    if (declarationStart && !values.has("sealed")) {
+      values.set("sealed", make("sealed", "keyword"));
+    }
   } else if (context === "type") {
     for (
       const name of [
@@ -224,7 +245,7 @@ export function completionsAt(
         ...EFFECT_ERROR_IDS.keys(),
       ]
     ) if (!values.has(name)) values.set(name, make(name, "type"));
-    values.set("pure", make("pure", "type"));
+    if (!values.has("pure")) values.set("pure", make("pure", "keyword"));
   } else if (context === "fails") {
     for (const name of EFFECT_ERROR_IDS.keys()) {
       values.set(name, make(name, "class"));

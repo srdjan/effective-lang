@@ -1480,12 +1480,16 @@ class ModuleChecker {
       : literal !== undefined
       ? this.lowerer.recordOf(literal)
       : this.lowerer.lower(body);
-    this.table.defineBrand(id, lowered.ref);
+    this.table.defineBrand(id, lowered.ref, entry.sealed);
     this.types.push({
       kind: "type",
       id,
       name: entry.name,
-      definition: { kind: "nominal", base: lowered.ir },
+      definition: {
+        kind: "nominal",
+        base: lowered.ir,
+        ...(entry.sealed ? { sealed: true } : {}),
+      },
       span: entry.span,
     });
     return {
@@ -1513,7 +1517,7 @@ class ModuleChecker {
     if (node.kind === "error") {
       // A body that did not parse or resolve acts as a record, so its uses report nothing more.
       kind = "data";
-      this.table.defineData(id, unfolded);
+      this.table.defineData(id, unfolded, entry.sealed);
     } else if (node.kind === "record") {
       kind = "data";
       const hasTag = node.fields.some((f) => f.name === "_tag");
@@ -1526,7 +1530,7 @@ class ModuleChecker {
       }
       const fields = node.fields.filter((f) => f.name !== "_tag");
       const record = hasTag ? this.table.record(fields) : unfolded;
-      this.table.defineData(id, record);
+      this.table.defineData(id, record, entry.sealed);
       base = literal !== undefined && !hasTag
         ? lowered.ir
         : (hasTag ? undefined : this.aliasRecordIr(lowered.ir)) ??
@@ -1551,7 +1555,11 @@ class ModuleChecker {
     }
     this.types[pending.index] = {
       ...this.types[pending.index],
-      definition: { kind: "nominal", base },
+      definition: {
+        kind: "nominal",
+        base,
+        ...(entry.sealed ? { sealed: true } : {}),
+      },
     };
     const refs = new Set<string>();
     referencedIds(base, refs);
@@ -2164,7 +2172,7 @@ class ModuleChecker {
       failures: effects.failures,
       requirements: effects.requirements,
     });
-    if (!this.table.isAssignable(found, binding.ref)) {
+    if (!this.table.isAssignableIn(this.env.module, found, binding.ref)) {
       this.lowerer.report(
         "type-mismatch/003",
         `the function has type ${

@@ -13,6 +13,7 @@ export type Category =
   | "pattern"
   | "declaration"
   | "module"
+  | "sealed"
   | "host-boundary"
   | "validation";
 
@@ -327,6 +328,26 @@ export const DIAGNOSTIC_CODES = {
     category: "module",
     description:
       "A direct import is not allowed by the first matching project import rule.",
+  },
+  "sealed/001": {
+    category: "sealed",
+    description:
+      "A module constructs a sealed nominal type that another module declares.",
+  },
+  "sealed/002": {
+    category: "sealed",
+    description:
+      "A record update retains a sealed nominal type outside its declaring module.",
+  },
+  "sealed/003": {
+    category: "sealed",
+    description:
+      "Arithmetic uses a sealed nominal type outside its declaring module.",
+  },
+  "sealed/004": {
+    category: "sealed",
+    description:
+      "A module derives or executes a Schema or Codec that produces a foreign sealed nominal type.",
   },
   "host-boundary/001": {
     category: "host-boundary",

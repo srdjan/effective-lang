@@ -193,4 +193,15 @@ export const apply = (callback: pure (value: Int) => Int): Int => callback(1)
     )?.type,
     "keyword",
   );
+
+  const bindingText = "type pure = int\nexport const value: pu = 1\n";
+  const binding = new Program("").update({
+    set: { "effective.json": "{}", "main.eff": bindingText },
+  });
+  assert(binding.ok, JSON.stringify(binding));
+  assertEquals(
+    completionsAt(binding.value, "main.eff", bindingText.indexOf("pu =") + 2)
+      .find((item) => item.label === "pure")?.kind,
+    "type",
+  );
 });

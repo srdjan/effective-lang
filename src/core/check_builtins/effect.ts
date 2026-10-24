@@ -25,6 +25,7 @@ export interface EffectContext extends
   Pick<
     BuiltinContext,
     | "table"
+    | "assignable"
     | "argInfo"
     | "callback"
     | "finish"
@@ -101,7 +102,7 @@ export function retryCall(
       );
     } else if (fn !== undefined) {
       for (const failure of fn.failures) {
-        if (!c.table.isAssignable(c.table.named(failure), policy.error)) {
+        if (!c.assignable(c.table.named(failure), policy.error)) {
           c.report(
             "type-mismatch/003",
             `the retry schedule does not accept ${failure}`,
@@ -263,8 +264,8 @@ export function raceCall(
     c.report("type-mismatch/010", "`race` needs two Effect values", node);
     return c.finish(node, c.table.error, combine([left, right]));
   }
-  const aFitsB = c.table.isAssignable(a.result, b.result);
-  const bFitsA = c.table.isAssignable(b.result, a.result);
+  const aFitsB = c.assignable(a.result, b.result);
+  const bFitsA = c.assignable(b.result, a.result);
   if (!aFitsB && !bFitsA) {
     c.report(
       "type-mismatch/010",

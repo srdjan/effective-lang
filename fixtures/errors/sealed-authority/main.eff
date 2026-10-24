@@ -1,0 +1,16 @@
+import { Int, Text, Positive, Article, positiveSchema } from "./lib.eff"
+
+const construct = (): Positive =>
+  // error: sealed/001
+  Positive(1)
+
+const update = (value: Article): Article =>
+  // error: sealed/002
+  ({ ...value, title: "changed" })
+
+const arithmetic = (value: Positive): Int =>
+  // error: sealed/003
+  value * 2
+
+// error: sealed/004
+const derived: Schema<Positive> = schema()

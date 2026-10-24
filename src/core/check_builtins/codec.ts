@@ -40,8 +40,8 @@ export function codecCall(
   const decoded = c.widen(d.result);
   const encoded = c.widen(d.parameters[0]);
   if (
-    !c.table.isAssignable(decoded, e.parameters[0]) ||
-    !c.table.isAssignable(e.result, encoded)
+    !c.assignable(decoded, e.parameters[0]) ||
+    !c.assignable(e.result, encoded)
   ) {
     c.report(
       "type-mismatch/003",
@@ -56,6 +56,16 @@ export function codecCall(
     c.report(
       "type-mismatch/010",
       "codec types need compiler-derived schemas",
+      node,
+    );
+  }
+  if (
+    c.table.containsForeignSealed(c.module, decoded) ||
+    c.table.containsForeignSealed(c.module, encoded)
+  ) {
+    c.report(
+      "sealed/004",
+      "only the declaring module can derive a Codec for a sealed nominal type",
       node,
     );
   }

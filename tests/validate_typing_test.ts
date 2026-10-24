@@ -8,6 +8,7 @@ import type { Field, Type } from "../src/core/ir.ts";
 import { fits, same, type TypeEnv } from "../src/core/validate/typing.ts";
 
 const ENV: TypeEnv = {
+  module: "m",
   aliases: new Map<string, Type>([
     ["type:m#Alias", { kind: "primitive", name: "string" }],
   ]),
@@ -15,6 +16,7 @@ const ENV: TypeEnv = {
   data: new Map(),
   errors: new Map<string, readonly Field[]>(),
   opaque: new Set<string>(),
+  sealed: new Set<string>(),
 };
 
 const INT: Type = { kind: "primitive", name: "int" };

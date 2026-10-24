@@ -116,7 +116,7 @@ that is a record after aliases unfold gives a nominal record with a runtime
 `_tag`. Any other body lowers to an Effect brand that the source does not name.
 `data` is an ordinary name, and `Brand` and `unbrand` are unknown names.
 
-A nominal value fits its base type, so `unbrand` is removed. A base value needs
+An open nominal value fits its base type, so `unbrand` is removed. Sealed types restrict that conversion to their declaring module. A base value needs
 the constructor. Operators compare and combine nominal values by class:
 `id === "u1"` and `total > 0` are legal, `total * 2` gives `int`, and
 `cents + meters` is an error. A nominal body cannot hold a nominal record or a
@@ -154,6 +154,18 @@ application with real I/O is not measured.
 | One `provide`, one array of 100 values | 3.6 us      | 19.4 us          | 15.8 us                        |
 | One `provide`, a stream of 1000 values | 6.6 us      | 133.4 us         | about 0.13 us for each element |
 | The extra arm test of one `match`      | -           | -                | about 0.27 ns                  |
+
+### Portable extensions
+
+The user approved the [portable extensions](plans/2026-10-23-portable-extensions.md)
+after the publishing witness established its existing composition.
+Sealed nominal types restrict construction, updates, arithmetic, widening, and schema derivation to the declaring module.
+Pure function types require pure execution and empty effect sets. Optional import rules restrict direct dependency edges.
+Existing open nominal types, unmarked function types, and projects without import rules retain their behavior.
+
+The [extension worklog](plans/portable-extensions-worklog.md) records the compiler, validator, editor, and example checks.
+The sibling website includes paired source and TypeScript panels and a runnable project for all three controls.
+These changes do not expand the three-application stopping rule. Named platforms continue to use existing services and Layers.
 
 ### Separate release acceptance
 

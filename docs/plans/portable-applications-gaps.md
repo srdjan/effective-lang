@@ -2,6 +2,10 @@
 
 Date: 2026-10-23. Scope: PP5 of the accepted portable application roadmap.
 
+The evidence below records the original baseline, `9498cb3`. The user subsequently approved all three proposed extensions.
+The [extension plan](2026-10-23-portable-extensions.md) and [worklog](portable-extensions-worklog.md) track their implementation and current checks.
+The review-only descriptions below preserve the original design decisions. They no longer request approval.
+
 ## Result
 
 The probes found two language gaps and one tooling gap. Named platform selection uses existing composition.
@@ -246,4 +250,4 @@ No proposal adds a framework, generic facility, or effect runtime. No proposal c
 
 PP5 supplies evidence and review designs only. It adds no compiler form and makes no extension implementation commitment.
 
-Next action: the user will review the retained designs before any extension implementation.
+Implementation and validation results are recorded in the separate [extension worklog](portable-extensions-worklog.md).

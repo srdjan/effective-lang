@@ -181,7 +181,7 @@ entry files. Relative imports must end in `.eff`. The import `host:key` selects
 a host interface file from `effective.json`.
 
 An optional `imports` array restricts direct imports. Each rule contains `from` and `allow` patterns.
-Patterns match normalized module names without `.eff` or `.effi`. A `*` matches one path segment; `**` matches zero or more.
+Patterns match normalized module names without `.eff` or `.effi`. A standalone `*` matches one path segment; `**` matches zero or more. Wildcards occupy a complete segment.
 The first matching `from` rule controls the module. An unmatched module remains unrestricted.
 Host targets use exact `host:` specifiers or `host:*`. A forbidden edge reports `module/005` on the import specifier.
 Configuration and import edits update these diagnostics through the existing `Program` and language server paths.
@@ -319,6 +319,9 @@ the node, for example `declarations[2].body.arguments[0]`.
 `lowerProject` returns. It reads the source texts from the parse trees of the
 project. A module that did not lower has no entry in the result. The command
 `build --validate` calls this function.
+
+Each lowered map key must equal the recorded IR module name. A mismatch reports `validation/001`.
+Non-prelude import payloads cannot declare identities owned by the consumer module. Payloads can retain supporting types from other modules.
 
 The validator recomputes types, failure sets, requirement sets, and execution
 modes from the children of each node, with the equations of the spec. It

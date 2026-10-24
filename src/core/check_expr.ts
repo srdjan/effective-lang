@@ -177,6 +177,7 @@ class BodyChecker
   private readonly lowerer: TypeLowerer;
   readonly tree: SyntaxTree;
   readonly table: TypeTable;
+  readonly module: string;
   readonly targets: ReadonlyMap<NodeId, Target>;
   /** Block-local functions whose bodies are being checked. */
   private readonly pendingLocals = new Set<LocalId>();
@@ -186,6 +187,7 @@ class BodyChecker
   constructor(private readonly benv: BodyEnv, declaration: ValueId) {
     this.tree = benv.env.tree;
     this.table = benv.env.table;
+    this.module = benv.env.module;
     this.targets = benv.env.targets;
     this.lowerer = new TypeLowerer(benv.env, this.sink);
     this.body = newBodyTable(declaration);
@@ -253,6 +255,11 @@ class BodyChecker
     return this.finish(node, this.table.error, PURE_EFFECTS);
   }
 
+  /** Source compatibility in the module that owns this body. */
+  assignable(found: TypeRef, expected: TypeRef): boolean {
+    return this.table.isAssignableIn(this.module, found, expected);
+  }
+
   /** Reports a mismatch when `found` does not fit `expected`. Returns true when it fits. */
   fits(
     node: NodeId,
@@ -260,7 +267,7 @@ class BodyChecker
     expected: TypeRef | undefined,
     what: string,
   ): boolean {
-    if (expected === undefined || this.table.isAssignable(found, expected)) {
+    if (expected === undefined || this.assignable(found, expected)) {
       return true;
     }
     this.report(
@@ -786,6 +793,15 @@ class BodyChecker
       );
       return this.finish(node, this.table.error, combine(infos));
     }
+    if (!this.table.ownsSealed(this.module, id)) {
+      this.report(
+        "sealed/001",
+        `only the declaring module can construct the sealed nominal type \`${
+          shortName(id)
+        }\``,
+        node,
+      );
+    }
     this.fact(node, { kind: "brand-construction", brand: id });
     return this.constructFrom(node, id, base, "nominal type", args);
   }
@@ -796,6 +812,15 @@ class BodyChecker
     record: TypeRef,
     args: readonly Arg[],
   ): NodeInfo {
+    if (!this.table.ownsSealed(this.module, id)) {
+      this.report(
+        "sealed/001",
+        `only the declaring module can construct the sealed nominal type \`${
+          shortName(id)
+        }\``,
+        node,
+      );
+    }
     this.fact(node, { kind: "data-construction", data: id });
     return this.constructFrom(node, id, record, "nominal type", args);
   }
@@ -1113,7 +1138,7 @@ class BodyChecker
       );
     } else {
       parameters.forEach((expected, i) => {
-        if (!this.table.isAssignable(expected, fn.parameters[i])) {
+        if (!this.assignable(expected, fn.parameters[i])) {
           this.report(
             "type-mismatch/003",
             `parameter ${i + 1} of the callback has type ${
@@ -1372,9 +1397,9 @@ class BodyChecker
       const next = this.widen(infos[i].type);
       if (this.isError(element) || this.isError(next)) {
         element = table.error;
-      } else if (table.isAssignable(next, element)) {
+      } else if (this.assignable(next, element)) {
         continue;
-      } else if (table.isAssignable(element, next)) {
+      } else if (this.assignable(element, next)) {
         element = next;
       } else {
         this.report(
@@ -1461,7 +1486,7 @@ class BodyChecker
       [...literals].every(([label, value]) => {
         const field = c.fields.find((f) => f.name === label);
         return field !== undefined &&
-          this.table.isAssignable(this.table.literal(value), field.type);
+          this.assignable(this.table.literal(value), field.type);
       })
     );
     const narrowed = (discriminated.length > 0 ? discriminated : fitting)
@@ -1470,7 +1495,7 @@ class BodyChecker
           [...known].every(([label, type]) => {
             const field = c.fields.find((f) => f.name === label);
             return field !== undefined &&
-              this.table.isAssignable(type, field.type);
+              this.assignable(type, field.type);
           }),
       );
     return narrowed[0] ?? discriminated[0] ?? fitting[0] ?? candidates[0];
@@ -1605,6 +1630,16 @@ class BodyChecker
     if (baseNode === undefined) return this.errorInfo(node);
     const base = this.expr(baseNode);
     this.finish(spread, base.type, base);
+    const sealed = this.table.sealedRootOf(base.type);
+    if (sealed !== undefined && !this.table.ownsSealed(this.module, sealed)) {
+      this.report(
+        "sealed/002",
+        `only the declaring module can update the sealed nominal type \`${
+          shortName(sealed)
+        }\``,
+        node,
+      );
+    }
     const baseFields = this.isError(base.type)
       ? undefined
       : this.recordFields(base.type);
@@ -1672,8 +1707,22 @@ class BodyChecker
     const equality = operator === "===" || operator === "!==";
     const right = this.expr(kids[1], equality ? left.type : undefined);
     const eff = combine([left, right]);
-    const result = operatorResult(this.table, operator, left.type, right.type);
-    if (result.mismatch) {
+    const result = operatorResult(
+      this.table,
+      this.module,
+      operator,
+      left.type,
+      right.type,
+    );
+    if (result.sealed !== undefined) {
+      this.report(
+        "sealed/003",
+        `only the declaring module can use arithmetic on the sealed nominal type \`${
+          shortName(result.sealed)
+        }\``,
+        node,
+      );
+    } else if (result.mismatch) {
       this.report(
         "type-mismatch/007",
         `the operator \`${operator}\` does not accept operands of type ${
@@ -1840,9 +1889,9 @@ class BodyChecker
         joined = type;
       } else if (this.isError(joined) || this.isError(type)) {
         joined = this.table.error;
-      } else if (this.table.isAssignable(type, joined)) {
+      } else if (this.assignable(type, joined)) {
         // The earlier type already covers this branch.
-      } else if (this.table.isAssignable(joined, type)) {
+      } else if (this.assignable(joined, type)) {
         joined = type;
       } else {
         this.report(
@@ -1865,7 +1914,10 @@ class BodyChecker
     const condition = kids[0];
     if (condition === undefined) return this.errorInfo(node);
     const cond = this.expr(condition);
-    if (!this.isError(cond.type) && !isBoolean(this.table, cond.type)) {
+    if (
+      !this.isError(cond.type) &&
+      !isBoolean(this.table, this.module, cond.type)
+    ) {
       this.report(
         "type-mismatch/007",
         `a condition must be boolean, but it has type ${this.show(cond.type)}`,

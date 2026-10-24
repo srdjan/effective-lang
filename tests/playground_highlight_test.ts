@@ -46,6 +46,36 @@ Deno.test("nominal is a keyword at the start of a declaration and a name elsewhe
   ]);
 });
 
+Deno.test("sealed nominal modifiers are keywords and ordinary sealed names remain names", () => {
+  assertEquals(slices("export sealed nominal Proof = int\n").slice(0, 3), [
+    ["export", "keyword"],
+    ["sealed", "keyword"],
+    ["nominal", "keyword"],
+  ]);
+  assertEquals(slices("const sealed = 1\n").map(([word]) => word), [
+    "const",
+    "=",
+    "1",
+  ]);
+});
+
+Deno.test("pure function types are keywords and ordinary pure calls remain names", () => {
+  assert(
+    slices("type Fn = pure (value: Int) => Int\n").some(([word, kind]) =>
+      word === "pure" && kind === "keyword"
+    ),
+  );
+  assert(
+    slices("type Fn = pure\n(value: Int)\n=> Int\n").some(([word, kind]) =>
+      word === "pure" && kind === "keyword"
+    ),
+  );
+  assert(
+    !slices("const pure = (value: Int) => value\nconst n = pure(1)\n")
+      .some(([word]) => word === "pure"),
+  );
+});
+
 Deno.test("type, error, service, and provider are keywords after export", () => {
   assertEquals(slices("export type A = int\n").slice(0, 2), [
     ["export", "keyword"],

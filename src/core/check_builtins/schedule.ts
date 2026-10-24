@@ -58,7 +58,7 @@ export function scheduleFromStepCall(
     : undefined;
   if (
     input === undefined ||
-    !c.table.isAssignable(
+    !c.assignable(
       c.table.scheduleInput(input),
       step.parameters[1],
     )
@@ -81,7 +81,7 @@ export function scheduleFromStepCall(
   const output = outputs.length > 0 ? c.table.union(outputs) : c.table.error;
   if (
     outputs.length === 0 ||
-    !c.table.isAssignable(
+    !c.assignable(
       step.result,
       c.table.scheduleDecision(state, output),
     )
@@ -164,7 +164,7 @@ export function scheduleComposeCall(
   }
   const accepts = (input: TypeRef, offered: TypeRef): boolean =>
     c.table.unfold(input) === c.table.unknown ||
-    c.table.isAssignable(offered, input);
+    c.assignable(offered, input);
   const input = accepts(second.input, first.input)
     ? first.input
     : accepts(first.input, second.input)

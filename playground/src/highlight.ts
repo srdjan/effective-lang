@@ -76,9 +76,26 @@ function isCapitalized(word: string): boolean {
   return first >= 0x41 && first <= 0x5a;
 }
 
+function functionTypeOpeners(
+  kinds: ArrayLike<number>,
+  count: number,
+): ReadonlySet<number> {
+  const openers = new Set<number>();
+  const closes: boolean[] = [];
+  let next = TokenKind.Eof;
+  for (let i = count - 1; i >= 0; i--) {
+    const kind = kinds[i];
+    if (kind === TokenKind.RParen) closes.push(next === TokenKind.Arrow);
+    else if (kind === TokenKind.LParen && closes.pop() === true) openers.add(i);
+    if (kind !== TokenKind.Newline) next = kind;
+  }
+  return openers;
+}
+
 /** The ranges of `text`, sorted by `from`. */
 export function highlightTokens(text: string): HighlightRange[] {
   const lexed = lex("", text);
+  const pureTypeOpeners = functionTypeOpeners(lexed.kinds, lexed.count);
   const ranges: HighlightRange[] = [];
 
   for (let i = 0; i < lexed.trivia.kinds.length; i++) {
@@ -110,8 +127,26 @@ export function highlightTokens(text: string): HighlightRange[] {
       const previous = i === 0 ? undefined : lexed.kinds[i - 1] as TokenKind;
       const startsDeclaration = previous === undefined ||
         previous === TokenKind.Newline || previous === TokenKind.KwExport;
+      const previousWord = i === 0
+        ? ""
+        : text.slice(lexed.starts[i - 1], lexed.ends[i - 1]);
+      const beforePrevious = i < 2 ? undefined : lexed.kinds[i - 2];
+      const afterSealed = previousWord === "sealed" &&
+        (beforePrevious === undefined || beforePrevious === TokenKind.Newline ||
+          beforePrevious === TokenKind.KwExport);
       if (CLAUSE_WORDS.has(word)) result = "keyword";
-      else if (DECLARATION_WORDS.has(word) && startsDeclaration) {
+      else if (
+        word === "sealed" && startsDeclaration &&
+        text.slice(lexed.starts[i + 1], lexed.ends[i + 1]) === "nominal"
+      ) result = "keyword";
+      else if (word === "pure") {
+        let open = i + 1;
+        while (lexed.kinds[open] === TokenKind.Newline) open++;
+        if (pureTypeOpeners.has(open)) result = "keyword";
+      } else if (
+        DECLARATION_WORDS.has(word) &&
+        (startsDeclaration || (word === "nominal" && afterSealed))
+      ) {
         result = "keyword";
       } else if (PRELUDE_NAMES.has(word)) result = "builtin";
       else if (BUILTIN_TYPE_NAMES.has(word) || isCapitalized(word)) {

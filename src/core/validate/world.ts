@@ -121,8 +121,12 @@ export function buildWorld(ir: ModuleIR): World {
   const brands = new Map<string, Type>();
   const data = new Map<string, Extract<Type, { kind: "record" }>>();
   const opaque = new Set<string>();
+  const sealed = new Set<string>();
   for (const t of types.values()) {
     if (t.opaque === true) opaque.add(t.id);
+    if (t.definition.kind === "nominal" && t.definition.sealed === true) {
+      sealed.add(t.id);
+    }
     switch (t.definition.kind) {
       case "alias":
         aliases.set(t.id, t.definition.type);
@@ -138,7 +142,15 @@ export function buildWorld(ir: ModuleIR): World {
   for (const e of errors.values()) errorFields.set(e.id, e.fields);
   return {
     module: ir.module,
-    env: { aliases, brands, data, errors: errorFields, opaque },
+    env: {
+      module: ir.module,
+      aliases,
+      brands,
+      data,
+      errors: errorFields,
+      opaque,
+      sealed,
+    },
     types,
     errors,
     services,
@@ -517,6 +529,26 @@ function checkServiceDecl(
 }
 
 function checkTypeDecl(ctx: Ctx, d: TypeDecl, path: string): void {
+  const sealed = "sealed" in d.definition ? d.definition.sealed : undefined;
+  if (
+    sealed !== undefined &&
+    (d.definition.kind !== "nominal" || sealed !== true)
+  ) {
+    ctx.report.add(
+      AREA.types,
+      `${path}.definition.sealed`,
+      "sealed must be true and belongs only to a nominal definition",
+      d.span,
+    );
+  }
+  if (sealed === true && d.span.source.endsWith(".effi")) {
+    ctx.report.add(
+      AREA.types,
+      `${path}.definition.sealed`,
+      "a sealed nominal type cannot be declared in a host interface",
+      d.span,
+    );
+  }
   if (d.opaque === true && !d.span.source.endsWith(".effi")) {
     ctx.report.add(
       AREA.types,
@@ -1143,6 +1175,21 @@ function checkImport(
   const span: Span = { source: ir.sources[0] ?? ir.module, start: 0, end: 0 };
   const ids = new Set<string>();
   const add = (id: string, at: string, s: Span): void => {
+    if (imp.module !== PRELUDE_MODULE && typeof id === "string") {
+      const colon = id.indexOf(":");
+      const hash = id.indexOf("#", colon + 1);
+      if (
+        colon >= 0 && hash > colon &&
+        id.slice(colon + 1, hash) === ir.module
+      ) {
+        report.add(
+          AREA.identity,
+          at,
+          `an import payload cannot claim this module's identity ${id}`,
+          s,
+        );
+      }
+    }
     if (ids.has(id)) {
       report.add(AREA.identity, at, `the payload declares ${id} twice`, s);
     }

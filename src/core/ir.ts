@@ -227,7 +227,7 @@ export interface TypeDecl {
   readonly name: string;
   readonly definition:
     | { readonly kind: "alias"; readonly type: Type }
-    | { readonly kind: "nominal"; readonly base: Type };
+    | { readonly kind: "nominal"; readonly base: Type; readonly sealed?: true };
   readonly opaque?: boolean;
   readonly span: Span;
 }

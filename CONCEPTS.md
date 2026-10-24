@@ -61,7 +61,7 @@ A quiet value is pure and has no failure and no requirement. When the left value
 
 The type that a `nominal` declaration declares, such as `nominal UserId = string` or `nominal User = { id: UserId, name: Name }`. A `type` declaration is structural: types with equal structure are interchangeable.
 
-A nominal type has its own identity. A program builds a value with the constructor, as in `UserId(s)` or `User(record)`. A nominal value fits its base type, and a base value does not fit the nominal type. A body that is a record after aliases unfold gives a nominal record with a runtime `_tag`. Any other body lowers to an Effect brand, which the compiler emits and the source does not name.
+A nominal type has its own identity. A program builds a value with the constructor, as in `UserId(s)` or `User(record)`. An open nominal value fits its base type, and a base value does not fit the nominal type. A sealed nominal type restricts base widening to its owner. A body that is a record after aliases unfold gives a nominal record with a runtime `_tag`. Any other body lowers to an Effect brand, which the compiler emits and the source does not name.
 _Avoid: data type, brand type, record brand_
 
 ### Nominal domain
@@ -69,6 +69,19 @@ _Avoid: data type, brand type, record brand_
 The pattern domain of a `match` subject whose members are all nominal records or errors, after aliases are unfolded.
 
 Arms name the members, as in `Circle(c)`, and coverage needs one arm for each member or `_`. A record pattern does not apply to a nominal domain. A subject that mixes nominal and structural members has no domain, and the checker reports it.
+
+### Sealed nominal type
+
+A nominal type whose declaring module owns construction and operations that can invalidate its rules.
+
+The declaration uses `sealed nominal Name = T`. Other modules can pass, compare, and read values. The owner exports conversions and decoders when needed.
+The source restriction does not isolate generated TypeScript from unsound host code.
+
+### Pure function type
+
+A function type that requires pure execution and empty failure and requirement sets.
+
+The form is `pure (value: T) => U`. Empty effect sets alone do not establish purity. An unmarked function type retains effect execution.
 
 ### Companion module
 

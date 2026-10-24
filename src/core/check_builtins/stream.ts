@@ -186,8 +186,8 @@ export function mapGroupsCall(
   // A wider annotated parameter must not erase the special borrowed Stream.
   if (
     fn !== undefined && fn.parameters[1] !== undefined &&
-    (!c.table.isAssignable(fn.parameters[1], group) ||
-      !c.table.isAssignable(group, fn.parameters[1]))
+    (!c.assignable(fn.parameters[1], group) ||
+      !c.assignable(group, fn.parameters[1]))
   ) {
     c.report(
       "type-mismatch/010",
@@ -285,7 +285,7 @@ export function mapAccumStreamCall(
     : undefined;
   if (
     result.kind !== "tuple" || result.elements.length !== 2 ||
-    !c.table.isAssignable(state, seed.type) || outputs?.kind !== "array"
+    !c.assignable(state, seed.type) || outputs?.kind !== "array"
   ) {
     c.report(
       "type-mismatch/003",
@@ -458,7 +458,7 @@ export function retryStreamCall(
   }
   if (source.kind === "stream" && schedule.kind === "retry-schedule") {
     for (const failure of source.failures) {
-      if (!c.table.isAssignable(c.table.named(failure), schedule.error)) {
+      if (!c.assignable(c.table.named(failure), schedule.error)) {
         c.report(
           "type-mismatch/003",
           `the retry schedule does not accept ${failure}`,
@@ -843,8 +843,8 @@ export function streamPairCall(
   } else if (name === "concatStreams") {
     element = c.table.union([a.element, b.element]);
   } else {
-    const aFitsB = c.table.isAssignable(a.element, b.element);
-    const bFitsA = c.table.isAssignable(b.element, a.element);
+    const aFitsB = c.assignable(a.element, b.element);
+    const bFitsA = c.assignable(b.element, a.element);
     if (!aFitsB && !bFitsA) {
       c.report(
         "type-mismatch/010",

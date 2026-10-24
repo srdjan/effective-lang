@@ -3,7 +3,13 @@
 import type { Expr } from "../../ir.ts";
 import { AREA } from "../report.ts";
 import { combine, invocationOf, isQuiet } from "../sets.ts";
-import { asFunction, dataOnly, fits, unfold } from "../typing.ts";
+import {
+  asFunction,
+  dataOnly,
+  fits,
+  foreignSealedOf,
+  unfold,
+} from "../typing.ts";
 import { type Comp, derivedResult, type ValidatorCore } from "./context.ts";
 
 export function codec(
@@ -54,6 +60,17 @@ export function codec(
       AREA.types,
       path,
       "codec types need compiler-derived schemas",
+      e.span,
+    );
+  }
+  if (
+    foreignSealedOf(c.env, d.result) !== undefined ||
+    foreignSealedOf(c.env, d.parameters[0]) !== undefined
+  ) {
+    c.add(
+      AREA.types,
+      path,
+      "a foreign module cannot derive a Codec for a sealed nominal type",
       e.span,
     );
   }

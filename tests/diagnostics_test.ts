@@ -19,7 +19,7 @@ Deno.test("every code has the form category/NNN and matches its category", () =>
   }
 });
 
-Deno.test("A1 to A3b, A5, and A6b register only the codes of their own categories", () => {
+Deno.test("registered diagnostics use documented categories", () => {
   const categories = [
     "syntax",
     "unknown-name",
@@ -32,6 +32,7 @@ Deno.test("A1 to A3b, A5, and A6b register only the codes of their own categorie
     "pattern",
     "validation",
     "host-boundary",
+    "sealed",
   ];
   for (const code of registeredCodes()) {
     assertEquals(categories.includes(categoryOf(code)), true, code);

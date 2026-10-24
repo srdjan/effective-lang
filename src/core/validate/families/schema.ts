@@ -17,7 +17,15 @@ import {
   QUIET,
   sortedUnique,
 } from "../sets.ts";
-import { asFunction, dataOnly, fits, same, STRING, unfold } from "../typing.ts";
+import {
+  asFunction,
+  dataOnly,
+  fits,
+  foreignSealedOf,
+  same,
+  STRING,
+  unfold,
+} from "../typing.ts";
 import {
   type Comp,
   derivedResult,
@@ -113,6 +121,25 @@ function inheritedDefault(
 
 function inheritedMakeInput(target: SchemaType): Pick<SchemaType, "makeInput"> {
   return target.makeInput === undefined ? {} : { makeInput: target.makeInput };
+}
+
+function checkCallbackInputAuthority(
+  c: ValidatorCore,
+  call: SchemaCall,
+  source: SchemaType,
+  target: SchemaType,
+): void {
+  if (
+    foreignSealedOf(c.env, source.decoded) !== undefined &&
+    foreignSealedOf(c.env, target.decoded) === undefined
+  ) {
+    c.add(
+      AREA.types,
+      call.path,
+      "a foreign module cannot pass a sealed nominal type to a schema transformation callback",
+      call.e.span,
+    );
+  }
 }
 
 /**
@@ -231,7 +258,20 @@ export function schema(c: ValidatorCore, e: SchemaExpr, path: string): Comp {
   if (!isSchemaOp(e.op)) {
     return schemaBad(c, call, "unknown schema constructor");
   }
-  return schemaRows[e.op].run(c, call);
+  const result = schemaRows[e.op].run(c, call);
+  const recorded = unfold(c.env, e.type);
+  if (
+    recorded.kind === "schema" &&
+    foreignSealedOf(c.env, recorded.decoded) !== undefined
+  ) {
+    c.add(
+      AREA.types,
+      path,
+      "a foreign module cannot derive a Schema that decodes to a sealed nominal type",
+      e.span,
+    );
+  }
+  return result;
 }
 
 /** The Schema that the operation accepts as input, or undefined. */
@@ -655,6 +695,7 @@ function schemaOptionalFromRequired(c: ValidatorCore, call: SchemaCall): Comp {
       "schemaOptionalFromRequired needs required-to-optional callbacks with only SchemaIssue failure",
     );
   }
+  checkCallbackInputAuthority(c, call, source, target);
   return schemaResult(call, {
     kind: "schema",
     decoded: target.decoded,
@@ -702,6 +743,7 @@ function schemaOptionalTransform(c: ValidatorCore, call: SchemaCall): Comp {
       "schemaOptionalTransform needs directional Option callbacks with only SchemaIssue failure",
     );
   }
+  checkCallbackInputAuthority(c, call, source, target);
   return schemaResult(call, {
     kind: "schema",
     decoded: target.decoded,
@@ -769,6 +811,7 @@ function schemaTransform(c: ValidatorCore, call: SchemaCall): Comp {
       "schemaTransform callback types or failure channels do not match",
     );
   }
+  checkCallbackInputAuthority(c, call, source, target);
   return schemaResult(call, {
     kind: "schema",
     decoded: target.decoded,
@@ -902,6 +945,17 @@ export function schemaOperation(
       e.span,
     );
     return c.poison();
+  }
+  if (
+    e.kind !== "schema-encode" &&
+    foreignSealedOf(c.env, type.decoded) !== undefined
+  ) {
+    c.add(
+      AREA.types,
+      path,
+      "a foreign module cannot decode or make a sealed nominal type",
+      e.span,
+    );
   }
   if (
     e.kind !== "schema-decode" &&

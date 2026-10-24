@@ -42,6 +42,8 @@ export interface DeclEntry {
   readonly name: string;
   readonly kind: DeclKind;
   readonly exported: boolean;
+  /** True only for a `sealed nominal` declaration. */
+  readonly sealed: boolean;
   readonly node: NodeId;
   readonly nameNode: NodeId;
   readonly nameSpan: Span;
@@ -275,8 +277,13 @@ function indexDecl(
   if (nameNode === undefined) return undefined;
   const name = nameTextOf(tree, nameNode);
   if (name === undefined) return undefined;
-  const first = childrenOf(tree, decl)[0];
+  const children = childrenOf(tree, decl);
+  const first = children[0];
   const exported = tokenKindOf(tree, first) === TokenKind.KwExport;
+  const head = children[exported ? 1 : 0];
+  const sealed = kind === "data" &&
+    tokenKindOf(tree, head) === TokenKind.Ident &&
+    tree.text.slice(tree.starts[head], tree.ends[head]) === "sealed";
   const span = nodeSpan(tree, decl);
   const split = splitDecl(tree, decl, kind, nameNode);
   const headerSpan: Span = {
@@ -298,6 +305,7 @@ function indexDecl(
     name,
     kind,
     exported,
+    sealed,
     node: decl,
     nameNode,
     nameSpan: nodeSpan(tree, nameNode),

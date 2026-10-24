@@ -11,9 +11,10 @@ import type { Revision } from "./db.ts";
 import { type Doc, render } from "./emit/doc.ts";
 import { constantTypeDoc, functionHeaderDoc } from "./emit/decls.ts";
 import { EmitFailure, Scope } from "./emit/scope.ts";
-import { methodOfCapability, serviceOfCapability } from "./ids.ts";
+import { methodOfCapability, serviceOfCapability, shortName } from "./ids.ts";
 import type { ModuleIR } from "./ir.ts";
 import type { DeclEntry, FileIndex } from "./index.ts";
+import { symbolIndex } from "./editor_index.ts";
 import { parseFileFresh } from "./project.ts";
 import type { Target } from "./resolve.ts";
 import type { Span } from "./source.ts";
@@ -182,6 +183,20 @@ function hoverPass(
         `${constant.signature.name}: ${table.show(constant.type)}`,
       ),
       backend: backendOf(revision, module, constant.signature.id),
+    };
+  }
+  for (
+    const occurrence of symbolIndex(revision).byPath.get(module.path) ?? []
+  ) {
+    if (
+      occurrence.target.kind !== "type" ||
+      !table.isSealed(occurrence.target.id) ||
+      !covers(occurrence.span, offset, afterEnd)
+    ) continue;
+    return {
+      span: occurrence.span,
+      contract: `sealed nominal ${shortName(occurrence.target.id)}`,
+      backend: undefined,
     };
   }
   const tables = [

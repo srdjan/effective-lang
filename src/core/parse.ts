@@ -73,6 +73,7 @@ const DECL_WORDS: ReadonlySet<string> = new Set([
   "opaque",
   "error",
   "nominal",
+  "sealed",
   "service",
   "provider",
 ]);
@@ -746,6 +747,9 @@ class Parser {
       } else if (word === "nominal") {
         kind = SyntaxKind.DataDecl;
         this.parseTypeBody();
+      } else if (word === "sealed") {
+        kind = SyntaxKind.DataDecl;
+        this.parseSealedNominalBody();
       } else if (word === "error") {
         kind = SyntaxKind.ErrorDecl;
         this.parseErrorBody();
@@ -797,6 +801,25 @@ class Parser {
       this.missing("`=`");
     }
     this.parseType();
+  }
+
+  private parseSealedNominalBody(): void {
+    const start = this.starts[this.pos];
+    const end = this.ends[this.pos];
+    this.tok(); // sealed
+    if (this.mode === "effi") {
+      this.report(
+        "syntax/008",
+        "a sealed nominal declaration is not allowed in a host interface file",
+        start,
+        end,
+      );
+    }
+    if (this.kind() === TokenKind.Ident && this.isWordAt(this.pos, "nominal")) {
+      this.parseTypeBody();
+    } else {
+      this.missing("`nominal`");
+    }
   }
 
   private parseOpaqueTypeBody(): void {

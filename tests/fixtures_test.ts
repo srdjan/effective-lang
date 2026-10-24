@@ -162,6 +162,7 @@ const CATEGORIES = [
   "pattern",
   "declaration",
   "module",
+  "sealed",
   "host-boundary",
 ];
 

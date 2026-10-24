@@ -28,6 +28,8 @@ export interface SchemaContext extends
   Pick<
     BuiltinContext,
     | "table"
+    | "module"
+    | "assignable"
     | "argInfo"
     | "callback"
     | "finish"
@@ -407,7 +409,19 @@ export function schemaCall(
   const builtin: SchemaBuiltin = SCHEMA_BUILTINS[name];
   const op = schemaOp(c, node);
   const handler = SCHEMA_HANDLERS[op];
-  return handler(c, { node, name, builtin, op, args, expected });
+  const result = handler(c, { node, name, builtin, op, args, expected });
+  const type = c.table.node(c.table.unfold(result.type));
+  if (
+    type.kind === "schema" &&
+    c.table.containsForeignSealed(c.module, type.decoded)
+  ) {
+    c.report(
+      "sealed/004",
+      "only the declaring module can derive a Schema that decodes to a sealed nominal type",
+      node,
+    );
+  }
+  return result;
 }
 
 function changedMakeInput(c: SchemaContext, type: SchemaNode): boolean {
@@ -596,7 +610,7 @@ function schemaRecursiveCall(c: SchemaContext, call: SchemaCall): NodeInfo {
       args[0].node,
     );
   }
-  if (!c.table.isAssignable(callback.result, hint.type)) {
+  if (!c.assignable(callback.result, hint.type)) {
     c.report(
       "type-mismatch/003",
       "recursive schema body does not fit its expected Schema",
@@ -764,7 +778,7 @@ function schemaConstructorDefaultCall(
     fn.requirements.length !== 0 ||
     !failsOnlyWith(fn.failures, [SCHEMA_ISSUE_ID]) ||
     (schema !== undefined &&
-      !c.table.isAssignable(
+      !c.assignable(
         callback.result,
         schema.makeInput ?? schema.decoded,
       ))
@@ -801,8 +815,8 @@ function schemaNullToMissingKeyCall(
   const nil = c.table.literal(null);
   if (
     schema !== undefined &&
-    (c.table.isAssignable(nil, schema.decoded) ||
-      c.table.isAssignable(nil, schema.encoded))
+    (c.assignable(nil, schema.decoded) ||
+      c.assignable(nil, schema.encoded))
   ) {
     c.report(
       "type-mismatch/010",
@@ -894,8 +908,8 @@ function schemaDefaultKeyCall(c: SchemaContext, call: SchemaCall, variant: {
   const nil = c.table.literal(null);
   if (
     nullable && schema !== undefined &&
-    (c.table.isAssignable(nil, schema.decoded) ||
-      c.table.isAssignable(nil, schema.encoded))
+    (c.assignable(nil, schema.decoded) ||
+      c.assignable(nil, schema.encoded))
   ) {
     c.report(
       "type-mismatch/010",
@@ -927,7 +941,7 @@ function schemaDefaultKeyCall(c: SchemaContext, call: SchemaCall, variant: {
   }
   if (
     defaultType !== undefined &&
-    !c.table.isAssignable(fallback.result, defaultType)
+    !c.assignable(fallback.result, defaultType)
   ) {
     c.report(
       "type-mismatch/003",
@@ -994,6 +1008,18 @@ function schemaOperationCall(
       ? schema?.makeInput ?? schema?.decoded
       : schema?.decoded,
   );
+  if (
+    op !== "encode" && schema !== undefined &&
+    c.table.containsForeignSealed(c.module, schema.decoded)
+  ) {
+    c.report(
+      "sealed/004",
+      `only the declaring module can run schema${
+        op === "decode" ? "Decode" : "Make"
+      } for a sealed nominal type`,
+      node,
+    );
+  }
   if (op !== "decode" && schema !== undefined) {
     c.fits(
       args[1].node,
@@ -1029,6 +1055,16 @@ function schemaTransformCall(c: SchemaContext, call: SchemaCall): NodeInfo {
   if (schema === undefined || target === undefined) {
     const rest = args.slice(2).map((a) => c.argInfo(a));
     return c.finish(node, c.table.error, combine([first, targetInfo, ...rest]));
+  }
+  if (
+    c.table.containsForeignSealed(c.module, schema.decoded) &&
+    !c.table.containsForeignSealed(c.module, target.decoded)
+  ) {
+    c.report(
+      "sealed/004",
+      "only the declaring module can pass a sealed nominal type to a schema transformation callback",
+      node,
+    );
   }
   const decode = c.callback(
     name,
@@ -1073,8 +1109,8 @@ function schemaTransformCall(c: SchemaContext, call: SchemaCall): NodeInfo {
     ? schema.decoded
     : c.table.option(schema.decoded);
   if (
-    !c.table.isAssignable(decode.result, decodeExpected) ||
-    !c.table.isAssignable(encode.result, encodeExpected)
+    !c.assignable(decode.result, decodeExpected) ||
+    !c.assignable(encode.result, encodeExpected)
   ) {
     c.report(
       "type-mismatch/003",
@@ -1117,6 +1153,16 @@ function optionalBridge(
   fromRequired: boolean,
 ): NodeInfo {
   const { sourceInfo, targetInfo, source, target } = parts;
+  if (
+    c.table.containsForeignSealed(c.module, source.decoded) &&
+    !c.table.containsForeignSealed(c.module, target.decoded)
+  ) {
+    c.report(
+      "sealed/004",
+      `only the declaring module can pass a sealed nominal type to a ${name} callback`,
+      node,
+    );
+  }
   const sourceValue = fromRequired
     ? source.decoded
     : c.table.option(source.decoded);
@@ -1153,8 +1199,8 @@ function optionalBridge(
     c.report("type-mismatch/010", `${name} needs inline callbacks`, node);
   }
   if (
-    !c.table.isAssignable(decode.result, c.table.option(target.encoded)) ||
-    !c.table.isAssignable(encode.result, sourceValue)
+    !c.assignable(decode.result, c.table.option(target.encoded)) ||
+    !c.assignable(encode.result, sourceValue)
   ) {
     c.report(
       "type-mismatch/003",

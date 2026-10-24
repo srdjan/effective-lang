@@ -2825,6 +2825,7 @@ Deno.test("a wrong shape in a declaration header or an import gives a diagnostic
 // ------------------------------------------------------------------ type compatibility
 
 const ENV: TypeEnv = {
+  module: "m",
   aliases: new Map<string, Type>([
     ["type:m#Alias", { kind: "primitive", name: "string" }],
     ["type:m#Status", {
@@ -2839,6 +2840,7 @@ const ENV: TypeEnv = {
   data: new Map(),
   errors: new Map<string, readonly Field[]>(),
   opaque: new Set<string>(),
+  sealed: new Set<string>(),
 };
 
 function fn(

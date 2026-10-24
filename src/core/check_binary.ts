@@ -45,8 +45,12 @@ export function sharedNumericBrand(
     : undefined;
 }
 
-export function isBoolean(table: TypeTable, ref: TypeRef): boolean {
-  return table.isAssignable(ref, table.boolean) &&
+export function isBoolean(
+  table: TypeTable,
+  module: string,
+  ref: TypeRef,
+): boolean {
+  return table.isAssignableIn(module, ref, table.boolean) &&
     !isError(table, ref) && ref !== table.never;
 }
 
@@ -122,10 +126,12 @@ function isStringClass(table: TypeTable, cls: string): boolean {
 export interface OperatorResult {
   readonly type: TypeRef;
   readonly mismatch: boolean;
+  readonly sealed?: TypeId;
 }
 
 export function operatorResult(
   table: TypeTable,
+  module: string,
   operator: BinaryOperator,
   left: TypeRef,
   right: TypeRef,
@@ -135,7 +141,7 @@ export function operatorResult(
     case "&&":
     case "||": {
       const mismatch = !either &&
-        !(isBoolean(table, left) && isBoolean(table, right));
+        !(isBoolean(table, module, left) && isBoolean(table, module, right));
       return { type: table.boolean, mismatch };
     }
     case "<":
@@ -179,6 +185,11 @@ export function operatorResult(
     case "/": {
       // An error operand hides whether the result is int or number.
       if (either) return { type: table.error, mismatch: false };
+      const sealed = table.foreignSealedOf(module, left) ??
+        table.foreignSealedOf(module, right);
+      if (sealed !== undefined) {
+        return { type: table.error, mismatch: false, sealed };
+      }
       const l = comparisonClass(table, left);
       const r = comparisonClass(table, right);
       if (
@@ -194,8 +205,8 @@ export function operatorResult(
       }
       if (isNumericClass(table, l) && isNumericClass(table, r)) {
         const integral = operator !== "/" &&
-          table.isAssignable(left, table.int) &&
-          table.isAssignable(right, table.int);
+          table.isAssignableIn(module, left, table.int) &&
+          table.isAssignableIn(module, right, table.int);
         return {
           type: integral ? table.int : table.number,
           mismatch: false,

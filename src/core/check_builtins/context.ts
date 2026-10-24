@@ -34,6 +34,8 @@ export type ConcurrencyOperation =
 /** Shared operations needed by the extracted builtin families. */
 export interface BuiltinContext {
   readonly table: TypeTable;
+  readonly module: string;
+  assignable(found: TypeRef, expected: TypeRef): boolean;
   argInfo(arg: Arg, expected?: TypeRef): NodeInfo;
   callback(
     name: string,

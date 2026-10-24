@@ -201,6 +201,7 @@ const completionKinds = {
   interface: 8,
   method: 2,
   property: 10,
+  keyword: 14,
 } as const;
 export function completionRequest(
   params: EditorPositionParams,

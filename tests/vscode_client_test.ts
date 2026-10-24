@@ -153,6 +153,23 @@ Deno.test("the grammar highlights nominal only as a declaration word", () => {
   assertEquals(found("const f = (nominal: Int): Int => nominal"), undefined);
 });
 
+Deno.test("the grammar highlights sealed and pure only as modifiers", () => {
+  const matchers = collectMatches(
+    readJson("syntaxes/effective.tmLanguage.json"),
+  ).map((match) => new RegExp(match));
+  const found = (text: string, word: string): string | undefined =>
+    matchers.map((matcher) => matcher.exec(text)?.[0]).find((hit) =>
+      hit === word
+    );
+  assertEquals(
+    found("export sealed nominal User = {}", "sealed"),
+    "sealed",
+  );
+  assertEquals(found("const sealed = 1", "sealed"), undefined);
+  assertEquals(found("pure (value: Int) => Int", "pure"), "pure");
+  assertEquals(found("const pure = 1", "pure"), undefined);
+});
+
 Deno.test("the builtin-types rule matches every builtin type name exactly", () => {
   const rule = field(
     field(readJson("syntaxes/effective.tmLanguage.json"), "repository"),

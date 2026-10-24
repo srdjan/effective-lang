@@ -23,7 +23,7 @@ import { direct, piped, type PreludeCallName, type Rows } from "./rows.ts";
 export interface LayerContext extends
   Pick<
     BuiltinContext,
-    "table" | "argInfo" | "finish" | "isError" | "report"
+    "table" | "assignable" | "argInfo" | "finish" | "isError" | "report"
   >,
   Pick<SyntaxView, "tree">,
   ResolveView,
@@ -129,7 +129,7 @@ export function layerCall(
       const field = implementation.fields.find((f) => f.name === method.name);
       if (
         field === undefined || field.optional ||
-        !c.table.isAssignable(field.type, c.table.fromIr(method.type))
+        !c.assignable(field.type, c.table.fromIr(method.type))
       ) {
         c.report(
           "type-mismatch/010",

@@ -5,7 +5,11 @@
 // This file sits outside `validate/` because it reads the project type. The
 // validator itself stays independent of the checker and the lowering.
 
-import type { Diagnostic } from "./diagnostics.ts";
+import {
+  type Diagnostic,
+  makeDiagnostic,
+  normalizeDiagnostics,
+} from "./diagnostics.ts";
 import type { LowerError } from "./lower.ts";
 import type { ModuleIR, Result } from "./ir.ts";
 import type { Project } from "./project.ts";
@@ -33,7 +37,19 @@ export function validateProject(
   const result = new Map<string, readonly Diagnostic[]>();
   for (const [name, module] of lowered) {
     if (!module.ok) continue;
-    result.set(name, validateModule(module.value, sources));
+    const diagnostics = validateModule(module.value, sources);
+    const recorded = module.value?.module;
+    result.set(
+      name,
+      recorded === name ? diagnostics : normalizeDiagnostics([
+        makeDiagnostic(
+          "validation/001",
+          `module: expected the lowered module ${name}, recorded ${recorded}`,
+          { source: project.modules.get(name)?.path ?? name, start: 0, end: 0 },
+        ),
+        ...diagnostics,
+      ]),
+    );
   }
   return result;
 }

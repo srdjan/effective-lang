@@ -1,0 +1,5 @@
+export type Int = int
+export type Text = string
+export sealed nominal Positive = Int
+export sealed nominal Article = { title: Text }
+export const positiveSchema: Schema<Positive> = schema()

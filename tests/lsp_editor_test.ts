@@ -176,6 +176,26 @@ Deno.test("LSP completion and full semantic tokens recover after malformed unsav
   assert("error" in record(bad));
 });
 
+Deno.test("LSP maps sealed completion to the keyword kind", () => {
+  const h = harness();
+  const text = "export sea\n";
+  h.deliver({
+    jsonrpc: "2.0",
+    method: "textDocument/didChange",
+    params: { textDocument: { uri, version: 8 }, contentChanges: [{ text }] },
+  });
+  const completions = record(
+    request(h, "textDocument/completion", {
+      textDocument: { uri },
+      position: position(text, "sea", 3),
+    }),
+  );
+  const sealed = list(completions.items).map(record).find((item) =>
+    item.label === "sealed"
+  );
+  assertEquals(sealed?.kind, 14);
+});
+
 Deno.test("LSP missing-effect actions return validated versioned source edits", () => {
   const h = harness();
   const text =

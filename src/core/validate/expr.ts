@@ -50,6 +50,7 @@ import {
   dataOnly,
   fieldsOf,
   fits,
+  foreignSealedOf,
   INT,
   isBooleanLike,
   isNumericClass,
@@ -59,7 +60,9 @@ import {
   NEVER,
   NUMBER,
   numericBrandOf,
+  ownsSealed,
   same,
+  sealedRootOf,
   show,
   STRING,
   type TypeEnv,
@@ -926,6 +929,15 @@ export class BodyValidator implements ValidatorCore {
       this.check(f.value, `${path}.fields[${i}].value`)
     );
     const active = combine([base, ...outs]);
+    const sealed = sealedRootOf(this.env, base.type);
+    if (sealed !== undefined && !ownsSealed(this.env, sealed)) {
+      this.add(
+        AREA.types,
+        path,
+        `a foreign module cannot retain the sealed nominal type ${sealed} after an update`,
+        e.span,
+      );
+    }
     const unfolded = unfold(this.env, base.type);
     const fields = unfolded.kind === "union"
       ? undefined
@@ -977,6 +989,16 @@ export class BodyValidator implements ValidatorCore {
         AREA.types,
         `${path}.nominal`,
         "an opaque type cannot be constructed in source",
+        e.span,
+      );
+    } else if (
+      decl.definition.sealed === true &&
+      !ownsSealed(this.env, e.nominal)
+    ) {
+      this.add(
+        AREA.types,
+        `${path}.nominal`,
+        `the module cannot construct the foreign sealed nominal type ${e.nominal}`,
         e.span,
       );
     } else if (!fits(this.env, v.type, decl.definition.base)) {
@@ -1560,6 +1582,19 @@ export class BodyValidator implements ValidatorCore {
     };
     const l = comparisonClass(env, left.type);
     const r = comparisonClass(env, right.type);
+    if (
+      (e.operator === "+" || e.operator === "-" || e.operator === "*" ||
+        e.operator === "/") &&
+      (foreignSealedOf(env, left.type) !== undefined ||
+        foreignSealedOf(env, right.type) !== undefined)
+    ) {
+      this.add(
+        AREA.types,
+        path,
+        "arithmetic cannot use a foreign sealed nominal type",
+        e.span,
+      );
+    }
     // Two values of one numeric brand add and subtract (D32).
     const leftBrand = numericBrandOf(env, left.type);
     const brand = leftBrand !== undefined && same(env, leftBrand, right.type)

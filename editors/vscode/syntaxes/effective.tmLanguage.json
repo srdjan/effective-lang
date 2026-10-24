@@ -70,8 +70,16 @@
           "match": "\\bnominal\\b(?=\\s+[A-Za-z_$][A-Za-z0-9_$]*\\s*=)"
         },
         {
+          "name": "storage.modifier.effective",
+          "match": "\\bsealed\\b(?=\\s+nominal\\s+[A-Za-z_$][A-Za-z0-9_$]*\\s*=)"
+        },
+        {
           "name": "keyword.other.clause.effective",
-          "match": "\\b(?:fails|uses|provides|from|pure)\\b"
+          "match": "\\b(?:fails|uses|provides|from)\\b"
+        },
+        {
+          "name": "storage.modifier.effective",
+          "match": "\\bpure\\b(?=\\s*\\([^\\n]*\\)\\s*=>)"
         }
       ]
     },

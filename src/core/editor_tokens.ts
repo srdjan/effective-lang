@@ -30,6 +30,7 @@ const contextualKeywords = new Set([
   "type",
   "error",
   "nominal",
+  "sealed",
   "service",
   "provider",
   "opaque",

@@ -17,7 +17,7 @@ import type {
   TypeId,
 } from "./ir.ts";
 import { SCHEMA_ERROR_ID, SCHEMA_ISSUE_ID } from "./ir.ts";
-import { isErrorId } from "./ids.ts";
+import { isErrorId, moduleOfId } from "./ids.ts";
 import { compareText } from "./util.ts";
 
 declare const typeRefBrand: unique symbol;
@@ -309,7 +309,11 @@ interface DefinitionSource {
     readonly opaque?: boolean;
     readonly definition:
       | { readonly kind: "alias"; readonly type: Type }
-      | { readonly kind: "nominal"; readonly base: Type };
+      | {
+        readonly kind: "nominal";
+        readonly base: Type;
+        readonly sealed?: true;
+      };
   }[];
   readonly errors: readonly {
     readonly id: ErrorId;
@@ -332,6 +336,7 @@ export type TypeReader = Pick<
   | "brandBaseOf"
   | "dataRecordOf"
   | "errorRecordOf"
+  | "isSealed"
   | "error"
   | "size"
 >;
@@ -346,6 +351,7 @@ export class TypeTable {
   private readonly brands = new Map<TypeId, TypeRef>();
   private readonly dataRecords = new Map<TypeId, TypeRef>();
   private readonly opaque = new Set<TypeId>();
+  private readonly sealed = new Set<TypeId>();
   private readonly errorRecords = new Map<ErrorId, TypeRef>();
 
   /** The recovery type. */
@@ -743,6 +749,7 @@ export class TypeTable {
     this.dataRecords.delete(id);
     this.opaque.delete(id);
     this.guardedAliases.delete(id);
+    this.sealed.delete(id);
     this.aliases.set(id, target);
   }
 
@@ -750,20 +757,24 @@ export class TypeTable {
     this.guardedAliases.add(id);
   }
 
-  defineBrand(id: TypeId, base: TypeRef): void {
+  defineBrand(id: TypeId, base: TypeRef, sealed = false): void {
     this.aliases.delete(id);
     this.dataRecords.delete(id);
     this.guardedAliases.delete(id);
     this.opaque.delete(id);
+    if (sealed) this.sealed.add(id);
+    else this.sealed.delete(id);
     this.brands.set(id, base);
   }
 
   /** Registers the base record of a `data` declaration. */
-  defineData(id: TypeId, record: TypeRef): void {
+  defineData(id: TypeId, record: TypeRef, sealed = false): void {
     this.aliases.delete(id);
     this.brands.delete(id);
     this.opaque.delete(id);
     this.guardedAliases.delete(id);
+    if (sealed) this.sealed.add(id);
+    else this.sealed.delete(id);
     this.dataRecords.set(id, record);
   }
 
@@ -773,6 +784,106 @@ export class TypeTable {
 
   isOpaque(id: TypeId): boolean {
     return this.opaque.has(id);
+  }
+
+  isSealed(id: TypeId): boolean {
+    return this.sealed.has(id);
+  }
+
+  ownsSealed(module: string, id: TypeId): boolean {
+    return !this.sealed.has(id) || moduleOfId(id) === module;
+  }
+
+  /** The sealed nominal identity below aliases, if this type is one. */
+  sealedRootOf(ref: TypeRef): TypeId | undefined {
+    let current = ref;
+    const seen = new Set<TypeRef>();
+    while (!seen.has(current)) {
+      seen.add(current);
+      const node = this.node(current);
+      if (node.kind !== "named" || isErrorId(node.id)) return undefined;
+      if (this.sealed.has(node.id)) return node.id;
+      const alias = this.aliases.get(node.id);
+      if (alias === undefined) return undefined;
+      current = alias;
+    }
+    return undefined;
+  }
+
+  /** A foreign sealed nominal identity contained in this type, if one exists. */
+  foreignSealedOf(module: string, ref: TypeRef): TypeId | undefined {
+    const seen = new Set<TypeRef>();
+    const visitAll = (refs: readonly TypeRef[]): TypeId | undefined => {
+      for (const child of refs) {
+        const found = visit(child);
+        if (found !== undefined) return found;
+      }
+      return undefined;
+    };
+    const visit = (current: TypeRef): TypeId | undefined => {
+      if (seen.has(current)) return undefined;
+      seen.add(current);
+      const node = this.node(current);
+      switch (node.kind) {
+        case "named": {
+          if (!isErrorId(node.id) && !this.ownsSealed(module, node.id)) {
+            return node.id;
+          }
+          const target = isErrorId(node.id)
+            ? this.errorRecords.get(node.id)
+            : this.aliases.get(node.id) ?? this.dataRecords.get(node.id) ??
+              this.brands.get(node.id);
+          return target === undefined ? undefined : visit(target);
+        }
+        case "record":
+          return visitAll(node.fields.map((field) => field.type));
+        case "array":
+        case "option":
+        case "ref":
+          return visit(node.element);
+        case "tuple":
+          return visitAll(node.elements);
+        case "union":
+          return visitAll(node.members);
+        case "retry-schedule":
+          return visit(node.error);
+        case "codec":
+          return visitAll([node.decoded, node.encoded]);
+        case "schema":
+          return visitAll([
+            node.decoded,
+            node.encoded,
+            ...(node.makeInput === undefined ? [] : [node.makeInput]),
+          ]);
+        case "fiber":
+        case "effect":
+          return visit(node.result);
+        case "stream":
+          return visit(node.element);
+        case "schedule":
+          return visitAll([node.output, node.input]);
+        case "sink":
+          return visitAll([node.input, node.result, node.leftover]);
+        case "function":
+          return visitAll([...node.parameters, node.result]);
+        case "primitive":
+        case "literal":
+        case "closeable-scope":
+        case "provider":
+        case "error":
+          return undefined;
+        default: {
+          const unreachable: never = node;
+          return unreachable;
+        }
+      }
+    };
+    return visit(ref);
+  }
+
+  /** True when a type contains a sealed nominal type from another module. */
+  containsForeignSealed(module: string, ref: TypeRef): boolean {
+    return this.foreignSealedOf(module, ref) !== undefined;
   }
 
   /** Registers the field record of an error declaration. */
@@ -839,9 +950,17 @@ export class TypeTable {
         }
       } else if (decl.definition.base.kind === "record") {
         // A nominal type over a record is a tagged record at run time.
-        this.defineData(decl.id, this.fromIr(decl.definition.base));
+        this.defineData(
+          decl.id,
+          this.fromIr(decl.definition.base),
+          decl.definition.sealed === true,
+        );
       } else {
-        this.defineBrand(decl.id, this.fromIr(decl.definition.base));
+        this.defineBrand(
+          decl.id,
+          this.fromIr(decl.definition.base),
+          decl.definition.sealed === true,
+        );
         if (decl.opaque === true) this.markOpaque(decl.id);
       }
     }
@@ -1218,6 +1337,11 @@ export class TypeTable {
     return this.assignable(source, target, 0, true);
   }
 
+  /** Compatibility in one source module. Sealed nominal widening needs this authority. */
+  isAssignableIn(module: string, source: TypeRef, target: TypeRef): boolean {
+    return this.assignable(source, target, 0, true, module);
+  }
+
   /**
    * `lift` is true only at the top of a value position. There a pure function
    * may fit an effect function type, because the emitter wraps the value. A
@@ -1229,11 +1353,14 @@ export class TypeTable {
     t: TypeRef,
     depth: number,
     lift = false,
+    module?: string,
   ): boolean {
     if (s === t) return true;
     if (depth > MAX_DEPTH) return false;
     const sn = this.node(s);
     const tn = this.node(t);
+    const nested = (source: TypeRef, target: TypeRef, nestedLift = false) =>
+      this.assignable(source, target, depth + 1, nestedLift, module);
     if (
       sn.kind === "named" && tn.kind === "named" && sn.id !== tn.id &&
       !isErrorId(sn.id) && !isErrorId(tn.id) &&
@@ -1245,34 +1372,35 @@ export class TypeTable {
     if (sn.kind === "named" && !isErrorId(sn.id)) {
       const alias = this.aliases.get(sn.id);
       if (alias !== undefined) {
-        return this.assignable(alias, t, depth + 1, lift);
+        return nested(alias, t, lift);
       }
     }
     if (tn.kind === "named" && !isErrorId(tn.id)) {
       const alias = this.aliases.get(tn.id);
       if (alias !== undefined) {
-        return this.assignable(s, alias, depth + 1, lift);
+        return nested(s, alias, lift);
       }
     }
     // A nominal value fits its base. A direct match, or a union that holds the
     // nominal type, still goes on to the steps below.
     if (
-      sn.kind === "named" && !isErrorId(sn.id) && !this.opaque.has(sn.id)
+      sn.kind === "named" && !isErrorId(sn.id) && !this.opaque.has(sn.id) &&
+      (module === undefined || this.ownsSealed(module, sn.id))
     ) {
       const base = this.dataRecords.get(sn.id) ?? this.brands.get(sn.id);
-      if (base !== undefined && this.assignable(base, t, depth + 1, lift)) {
+      if (base !== undefined && nested(base, t, lift)) {
         return true;
       }
     }
     if (sn.kind === "union") {
       for (const member of sn.members) {
-        if (!this.assignable(member, t, depth + 1)) return false;
+        if (!nested(member, t)) return false;
       }
       return true;
     }
     if (tn.kind === "union") {
       for (const member of tn.members) {
-        if (this.assignable(s, member, depth + 1)) return true;
+        if (nested(s, member)) return true;
       }
       return false;
     }
@@ -1301,76 +1429,74 @@ export class TypeTable {
           const other = tn.fields[i];
           if (
             field.name !== other.name || field.optional !== other.optional ||
-            !this.assignable(field.type, other.type, depth + 1)
+            !nested(field.type, other.type)
           ) return false;
         }
         return true;
       case "array":
         return sn.kind === "array" &&
-          this.assignable(sn.element, tn.element, depth + 1);
+          nested(sn.element, tn.element);
       case "option":
         return sn.kind === "option" &&
-          this.assignable(sn.element, tn.element, depth + 1);
+          nested(sn.element, tn.element);
       case "ref":
         return sn.kind === "ref" &&
-          this.assignable(sn.element, tn.element, depth + 1) &&
-          this.assignable(tn.element, sn.element, depth + 1);
+          nested(sn.element, tn.element) &&
+          nested(tn.element, sn.element);
       case "retry-schedule":
         return sn.kind === "retry-schedule" &&
-          this.assignable(sn.error, tn.error, depth + 1) &&
-          this.assignable(tn.error, sn.error, depth + 1);
+          nested(sn.error, tn.error) &&
+          nested(tn.error, sn.error);
       case "codec":
         return sn.kind === "codec" &&
-          this.assignable(sn.decoded, tn.decoded, depth + 1) &&
-          this.assignable(tn.decoded, sn.decoded, depth + 1) &&
-          this.assignable(sn.encoded, tn.encoded, depth + 1) &&
-          this.assignable(tn.encoded, sn.encoded, depth + 1);
+          nested(sn.decoded, tn.decoded) &&
+          nested(tn.decoded, sn.decoded) &&
+          nested(sn.encoded, tn.encoded) &&
+          nested(tn.encoded, sn.encoded);
       case "schema":
         return sn.kind === "schema" &&
           sn.presence === tn.presence &&
           sn.constructorDefault === tn.constructorDefault &&
-          this.assignable(
+          nested(
             sn.makeInput ?? sn.decoded,
             tn.makeInput ?? tn.decoded,
-            depth + 1,
           ) &&
-          this.assignable(
+          nested(
             tn.makeInput ?? tn.decoded,
             sn.makeInput ?? sn.decoded,
-            depth + 1,
           ) &&
-          this.assignable(sn.decoded, tn.decoded, depth + 1) &&
-          this.assignable(tn.decoded, sn.decoded, depth + 1) &&
-          this.assignable(sn.encoded, tn.encoded, depth + 1) &&
-          this.assignable(tn.encoded, sn.encoded, depth + 1) &&
+          nested(sn.decoded, tn.decoded) &&
+          nested(tn.decoded, sn.decoded) &&
+          nested(sn.encoded, tn.encoded) &&
+          nested(tn.encoded, sn.encoded) &&
           isSubset(sn.decodeRequirements, tn.decodeRequirements) &&
           isSubset(sn.encodeRequirements, tn.encodeRequirements);
       case "fiber":
         return sn.kind === "fiber" &&
-          this.assignable(sn.result, tn.result, depth + 1) &&
+          nested(sn.result, tn.result) &&
           sameList(sn.failures, tn.failures);
       case "effect":
         return sn.kind === "effect" &&
-          this.assignable(sn.result, tn.result, depth + 1) &&
+          nested(sn.result, tn.result) &&
           isSubset(sn.failures, tn.failures) &&
           isSubset(sn.requirements, tn.requirements);
       case "stream":
         return sn.kind === "stream" &&
-          this.assignable(sn.element, tn.element, depth + 1) &&
+          nested(sn.element, tn.element) &&
           isSubset(sn.failures, tn.failures) &&
           isSubset(sn.requirements, tn.requirements);
       case "schedule":
         return sn.kind === "schedule" &&
-          this.assignable(sn.output, tn.output, depth + 1) &&
+          nested(sn.output, tn.output) &&
           (this.unfold(sn.input) === this.unknown ||
-            this.assignable(tn.input, sn.input, depth + 1)) &&
+            nested(tn.input, sn.input)) &&
           isSubset(sn.failures, tn.failures) &&
           isSubset(sn.requirements, tn.requirements);
       case "sink":
         return sn.kind === "sink" &&
-          this.assignable(tn.input, sn.input, depth + 1) &&
-          this.assignable(sn.result, tn.result, depth + 1) &&
-          this.assignable(sn.leftover, tn.leftover, depth + 1) &&
+          nested(tn.input, sn.input) &&
+          nested(sn.result, tn.result) &&
+          nested(sn.leftover, tn.leftover) &&
           isSubset(sn.failures, tn.failures) &&
           isSubset(sn.requirements, tn.requirements);
       case "tuple":
@@ -1378,7 +1504,7 @@ export class TypeTable {
           return false;
         }
         for (let i = 0; i < sn.elements.length; i++) {
-          if (!this.assignable(sn.elements[i], tn.elements[i], depth + 1)) {
+          if (!nested(sn.elements[i], tn.elements[i])) {
             return false;
           }
         }
@@ -1397,9 +1523,9 @@ export class TypeTable {
         }
         if (!isSubset(sn.failures, tn.failures)) return false;
         if (!isSubset(sn.requirements, tn.requirements)) return false;
-        if (!this.assignable(sn.result, tn.result, depth + 1)) return false;
+        if (!nested(sn.result, tn.result)) return false;
         for (let i = 0; i < tn.parameters.length; i++) {
-          if (!this.assignable(tn.parameters[i], sn.parameters[i], depth + 1)) {
+          if (!nested(tn.parameters[i], sn.parameters[i])) {
             return false;
           }
         }
