@@ -141,7 +141,7 @@ record these boundaries with compiled checks.
 ### Type identity
 
 A `type` declaration has identity by name as of 2026-10-24
-([plan](plans/2026-10-24-type-identity.md)). The `nominal` declaration word is
+([plan](archive/plans/2026-10-24-type-identity.md)). The `nominal` declaration word is
 deleted. It had been in place since 2026-10-23
 ([plan](archive/plans/2026-10-23-nominal-keyword.md)), and it had replaced the
 `data` declaration ([earlier plan](archive/plans/2026-10-23-nominal-data-types.md))

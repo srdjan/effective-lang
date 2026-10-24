@@ -1,6 +1,6 @@
 # Type identity: nominal qualities on `type` declarations
 
-Date: 2026-10-24. Base: `8fc5fc6` on local `main`. Status: plan, not started. This document uses the ID prefix TI. It refers to the NI items of [the ideation document](2026-10-24-implicit-nominal-ideation.md) by their IDs.
+Date: 2026-10-24. Base: `8fc5fc6` on local `main`. Status: done. Commits: TI1 `ea9dce2`, TI2 `6ea76e8`, TI3a and TI3b `89c7a37` with the fix `79fc013`, TI3c `cb0e63c`, TI4 `acd6763` and `1bb4dbc`, TI5 `2198630` and `5cc1244` in the website repository, TI6 `cdf9da1` and `ac1a435` (website). TI6 kept tagged variant constructors for readability. This document uses the ID prefix TI. It refers to the NI items of [the ideation document](2026-10-24-implicit-nominal-ideation.md) by their IDs.
 
 ## 1. Goal and decisions
 
