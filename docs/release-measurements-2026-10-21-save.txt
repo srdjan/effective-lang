@@ -1,4 +1,4 @@
-effective-lang measurements, profile full
+effektive-lang measurements, profile full
 deno 2.9.7, v8 15.0.245.2-rusty, typescript 6.0.3, aarch64-apple-darwin
 logical cores 14, timer performance.now(), single thread, not pinned
 No number below is a claim. Read each number with the noise floor of its row.

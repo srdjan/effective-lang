@@ -8,7 +8,7 @@ No files changed. Measurement scripts used `--no-lock`. I did not repeat the ful
 
    The proposed test rejects Deno calls anywhere in `src/core`. Capture inserts files there that call `Deno.writeTextFileSync`.
 
-   Evidence: [behavior_capture.ts:38](/Users/srdjans/Code/effective-lang/scripts/behavior_capture.ts:38), hook paths at line 69, and instrumented test execution at line 145.
+   Evidence: [behavior_capture.ts:38](/Users/srdjans/Code/effektive-lang/scripts/behavior_capture.ts:38), hook paths at line 69, and instrumented test execution at line 145.
 
    **Recommended fix:** run the boundary test against uninstrumented sources. Define a narrow capture-only exclusion or inspect tracked source files. Preserve the production invariant.
 
@@ -16,7 +16,7 @@ No files changed. Measurement scripts used `--no-lock`. I did not repeat the ful
 
    `Program` has no method that returns revision diagnostics. `Program.update` returns a `Result<Revision, ConfigError>`. The diagnostics getter belongs to `Revision`.
 
-   Evidence: [db.ts:179](/Users/srdjans/Code/effective-lang/src/core/db.ts:179) and [db.ts:317](/Users/srdjans/Code/effective-lang/src/core/db.ts:317). The scout explicitly left the target unread at `scout-TST.md:70`.
+   Evidence: [db.ts:179](/Users/srdjans/Code/effektive-lang/src/core/db.ts:179) and [db.ts:317](/Users/srdjans/Code/effektive-lang/src/core/db.ts:317). The scout explicitly left the target unread at `scout-TST.md:70`.
 
    **Recommended fix:** name the exact hook target, payload, and recording frequency. Specify handling for failed updates and cached revisions. Define serialization for successful and failed lower results.
 
@@ -26,7 +26,7 @@ No files changed. Measurement scripts used `--no-lock`. I did not repeat the ful
 
    P0-5 refers to “other unhit report sites” in the checker report. That report contains only selected groups. The full list exists only in an unretained scratch file.
 
-   Evidence: [scout-CHK.md:386](/Users/srdjans/Code/effective-lang/docs/plans/rederive-review-evidence/scout-CHK.md:386). Validator gaps also include purity checks beyond the two proposed mutation forms: `scout-VAL.md:262`.
+   Evidence: [scout-CHK.md:386](/Users/srdjans/Code/effektive-lang/docs/plans/rederive-review-evidence/scout-CHK.md:386). Validator gaps also include purity checks beyond the two proposed mutation forms: `scout-VAL.md:262`.
 
    **Recommended fix:** retain a site-to-test matrix. Include the builtin, valid setup, mutation, expected diagnostic, and required coverage hit. Distinguish fixed arities, overloaded forms, and non-callable `None`.
 
@@ -34,7 +34,7 @@ No files changed. Measurement scripts used `--no-lock`. I did not repeat the ful
 
    Adding generator mutations changes the expected disk fixtures. The existing equality test then fails until the corresponding files and manifest change. The plan prohibits `validate:update` without explaining this exception.
 
-   Evidence: [validate_test.ts:2202](/Users/srdjans/Code/effective-lang/tests/validate_test.ts:2202) and [validate_fixtures.ts:454](/Users/srdjans/Code/effective-lang/scripts/validate_fixtures.ts:454).
+   Evidence: [validate_test.ts:2202](/Users/srdjans/Code/effektive-lang/tests/validate_test.ts:2202) and [validate_fixtures.ts:454](/Users/srdjans/Code/effektive-lang/scripts/validate_fixtures.ts:454).
 
    **Recommended fix:** permit reviewed additions while requiring existing fixture bytes to remain unchanged. Alternatively, keep the new mutations entirely in memory.
 
@@ -42,7 +42,7 @@ No files changed. Measurement scripts used `--no-lock`. I did not repeat the ful
 
    The typed child switch is inside a private method. The reflective walkers are also private. P0-8 precedes R5, which would extract the typed switch.
 
-   Evidence: [validate/expr.ts:3027](/Users/srdjans/Code/effective-lang/src/core/validate/expr.ts:3027). The retained probe reached only 48 of 100 kinds: `scout-VAL.md:93`.
+   Evidence: [validate/expr.ts:3027](/Users/srdjans/Code/effektive-lang/src/core/validate/expr.ts:3027). The retained probe reached only 48 of 100 kinds: `scout-VAL.md:93`.
 
    **Recommended fix:** specify temporary test instrumentation or an initial behavior-preserving extraction. Retain the independent reflective oracle. Inventory uncovered kinds and add synthetic cases where fixtures provide none.
 
@@ -50,7 +50,7 @@ No files changed. Measurement scripts used `--no-lock`. I did not repeat the ful
 
    `lowerModule` accepts a `CheckedProject`, not forged IR. The emitter accepts IR. P0-9 also tests unsupported sites “that stay,” but their classification remains deferred.
 
-   Evidence: [lower.ts:1751](/Users/srdjans/Code/effective-lang/src/core/lower.ts:1751), [emit/emit.ts:181](/Users/srdjans/Code/effective-lang/src/core/emit/emit.ts:181), and `scout-ARC.md:303`.
+   Evidence: [lower.ts:1751](/Users/srdjans/Code/effektive-lang/src/core/lower.ts:1751), [emit/emit.ts:181](/Users/srdjans/Code/effektive-lang/src/core/emit/emit.ts:181), and `scout-ARC.md:303`.
 
    **Recommended fix:** classify the sites first. Specify forged checked-project inputs for lowering and forged IR for emission. Include the uncovered `no-interface` result and error-conversion paths.
 
@@ -68,7 +68,7 @@ No files changed. Measurement scripts used `--no-lock`. I did not repeat the ful
 
    Phase 1 deliberately changes diagnostics and emitted output. The phase gate nevertheless requires every baseline record to remain present.
 
-   Evidence: [behavior_capture.ts:229](/Users/srdjans/Code/effective-lang/scripts/behavior_capture.ts:229) treats missing records as failure.
+   Evidence: [behavior_capture.ts:229](/Users/srdjans/Code/effektive-lang/scripts/behavior_capture.ts:229) treats missing records as failure.
 
    **Recommended fix:** define reviewed expected differences for each defect commit. Establish the refactor baseline after those fixes. Keep strict equality for subsequent behavior-preserving work.
 
@@ -86,7 +86,7 @@ No files changed. Measurement scripts used `--no-lock`. I did not repeat the ful
 
     The validator currently reports an unknown Schema operation as a type diagnostic. An unchecked table lookup can instead throw and produce a serialization diagnostic.
 
-    Evidence: [validate/expr.ts:2273](/Users/srdjans/Code/effective-lang/src/core/validate/expr.ts:2273) and [validate/index.ts:49](/Users/srdjans/Code/effective-lang/src/core/validate/index.ts:49). `scout-VAL.md:180` explicitly requires the runtime guard.
+    Evidence: [validate/expr.ts:2273](/Users/srdjans/Code/effektive-lang/src/core/validate/expr.ts:2273) and [validate/index.ts:49](/Users/srdjans/Code/effektive-lang/src/core/validate/index.ts:49). `scout-VAL.md:180` explicitly requires the runtime guard.
 
     **Recommended fix:** preserve membership validation before dispatch. Add a forged unknown-operation test that pins the diagnostic code, path, and message.
 
@@ -98,7 +98,7 @@ No files changed. Measurement scripts used `--no-lock`. I did not repeat the ful
 
     A checker rejection also cannot prove the independent validator fix. Normal lowering stops before producing that invalid codec IR.
 
-    Evidence: [check_expr.ts:1594](/Users/srdjans/Code/effective-lang/src/core/check_expr.ts:1594) and [validate/expr.ts:1701](/Users/srdjans/Code/effective-lang/src/core/validate/expr.ts:1701).
+    Evidence: [check_expr.ts:1594](/Users/srdjans/Code/effektive-lang/src/core/check_expr.ts:1594) and [validate/expr.ts:1701](/Users/srdjans/Code/effektive-lang/src/core/validate/expr.ts:1701).
 
     **Recommended fix:** retain the complete reproduction, target configuration, command, and output. Test both reserved errors independently in checker and validator tests. Preserve a valid `codec<void, void>` case: `schemaData` rejects `unit`, while codec’s current rule accepts it.
 
@@ -108,7 +108,7 @@ No files changed. Measurement scripts used `--no-lock`. I did not repeat the ful
 
     The existing Schema case omits `makeInput`. The emitted Schema type can expose that field through `"~type.make.in"`.
 
-    Evidence: [emit/decls.ts:79](/Users/srdjans/Code/effective-lang/src/core/emit/decls.ts:79) and [emit/types.ts:234](/Users/srdjans/Code/effective-lang/src/core/emit/types.ts:234).
+    Evidence: [emit/decls.ts:79](/Users/srdjans/Code/effektive-lang/src/core/emit/decls.ts:79) and [emit/types.ts:234](/Users/srdjans/Code/effektive-lang/src/core/emit/types.ts:234).
 
     **Recommended fix:** traverse `makeInput` when present. Add an emitter regression with a private type reachable only through that field. Source-level reachability still needs a reproduction.
 
@@ -120,7 +120,7 @@ No files changed. Measurement scripts used `--no-lock`. I did not repeat the ful
 
     The three silent guards are confirmed. The plan does not select the maximum depth, first rejected depth, diagnostic code, path, or duplicate-report policy.
 
-    Evidence: [validate/world.ts:165](/Users/srdjans/Code/effective-lang/src/core/validate/world.ts:165), line 332, and line 738.
+    Evidence: [validate/world.ts:165](/Users/srdjans/Code/effektive-lang/src/core/validate/world.ts:165), line 332, and line 738.
 
     **Recommended fix:** specify those values and behaviors. Test below, at, and beyond the boundary for identities, duplicate fields, and recursion. Keep the latter two defect effects marked probable until reproduced.
 
@@ -154,7 +154,7 @@ No files changed. Measurement scripts used `--no-lock`. I did not repeat the ful
 
     The three listed stream families contain ten handlers: four terminals, two count operations, and four predicates. They do not contain eleven.
 
-    Evidence: [scout-CHK.md:89](/Users/srdjans/Code/effective-lang/docs/plans/rederive-review-evidence/scout-CHK.md:89) and line 124.
+    Evidence: [scout-CHK.md:89](/Users/srdjans/Code/effektive-lang/docs/plans/rederive-review-evidence/scout-CHK.md:89) and line 124.
 
     **Recommended fix:** describe one control shape with two result modes. Correct the family count and recount the claimed line reduction.
 
@@ -162,11 +162,11 @@ No files changed. Measurement scripts used `--no-lock`. I did not repeat the ful
 
     Not all listed defaults silently swallow cases. `invoke` throws, and `namedIn` has no default at all.
 
-    Evidence: [lower.ts:983](/Users/srdjans/Code/effective-lang/src/core/lower.ts:983) and [emit/decls.ts:45](/Users/srdjans/Code/effective-lang/src/core/emit/decls.ts:45).
+    Evidence: [lower.ts:983](/Users/srdjans/Code/effektive-lang/src/core/lower.ts:983) and [emit/decls.ts:45](/Users/srdjans/Code/effektive-lang/src/core/emit/decls.ts:45).
 
     R9’s claim that no gate records IR is also false. The mutation-fixture equality test pins lowered IR for four example modules.
 
-    Evidence: [validate_test.ts:2202](/Users/srdjans/Code/effective-lang/tests/validate_test.ts:2202).
+    Evidence: [validate_test.ts:2202](/Users/srdjans/Code/effektive-lang/tests/validate_test.ts:2202).
 
     **Recommended fix:** separate silent fallbacks, runtime failures, and non-exhaustive switches. Say that *behavior capture* lacks IR records. Describe the six high-complexity units as functions, since several use conditional chains rather than switches.
 
@@ -174,7 +174,7 @@ No files changed. Measurement scripts used `--no-lock`. I did not repeat the ful
 
     The counted 80 groups comprise 60 positional groups, 13 groups with fact fields, and seven logic groups. The proposal specifies only positional builders and retained logic groups.
 
-    Evidence: [scout-EMT.md:58](/Users/srdjans/Code/effective-lang/docs/plans/rederive-review-evidence/scout-EMT.md:58).
+    Evidence: [scout-EMT.md:58](/Users/srdjans/Code/effektive-lang/docs/plans/rederive-review-evidence/scout-EMT.md:58).
 
     **Recommended fix:** explicitly retain or convert the thirteen fact-field groups. State whether the five concurrency groups belong to this change.
 
@@ -182,7 +182,7 @@ No files changed. Measurement scripts used `--no-lock`. I did not repeat the ful
 
     Both tests ran below one second individually without coverage. The reported overruns occurred under coverage. The parser result is reported as one second, not a precise value above one second.
 
-    Evidence: [scout-TST.md:140](/Users/srdjans/Code/effective-lang/docs/plans/rederive-review-evidence/scout-TST.md:140).
+    Evidence: [scout-TST.md:140](/Users/srdjans/Code/effektive-lang/docs/plans/rederive-review-evidence/scout-TST.md:140).
 
     **Recommended fix:** label the headline “under coverage.” Define whether the acceptance threshold applies to isolated execution, suite execution, or both.
 
@@ -194,7 +194,7 @@ No files changed. Measurement scripts used `--no-lock`. I did not repeat the ful
 
     The validator’s duplicate builtin-name parsing finding has no accepted, deferred, or rejected disposition. The evidence identifies malformed-payload behavior that must survive any rewrite.
 
-    Evidence: [scout-VAL.md:226](/Users/srdjans/Code/effective-lang/docs/plans/rederive-review-evidence/scout-VAL.md:226).
+    Evidence: [scout-VAL.md:226](/Users/srdjans/Code/effektive-lang/docs/plans/rederive-review-evidence/scout-VAL.md:226).
 
     **Recommended fix:** rank individual work units, mark Phase 2 as mixed risk, and assign every additional task a phase or disposition. Explicitly defer or reject omitted evidence findings. Schedule the measurement tool and lexer oracle before dependent work.
 

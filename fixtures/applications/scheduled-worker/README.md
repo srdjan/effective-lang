@@ -5,7 +5,7 @@ policy, transient retry selection, resource brackets and result state.
 The TypeScript driver supplies recording in-memory jobs and primitive waits.
 The runtime entry point supplies drivers and runs the exported worker.
 
-From the effective-lang repository root:
+From the effektive-lang repository root:
 
 ```sh
 deno task effective build fixtures/applications/scheduled-worker --validate --tsc

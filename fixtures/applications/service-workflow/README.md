@@ -6,7 +6,7 @@ retries. The registered StoreLive adapter supplies one atomic save operation.
 The adapter uses the pinned native SqlClient transaction wrapper and validates
 receipt rows before commit.
 
-From the effective-lang repository root:
+From the effektive-lang repository root:
 
 ```sh
 deno task effective build fixtures/applications/service-workflow --validate --tsc

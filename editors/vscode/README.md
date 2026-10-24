@@ -9,7 +9,7 @@ The language client supports diagnostics, hover, definitions, document symbols, 
 ## Settings
 
 - `effective.server.deno` (default `deno`): the Deno 2.9.8 executable.
-- `effective.server.repository` (default empty): an explicit development override pointing to an effective-lang checkout. Empty uses the bundled server.
+- `effective.server.repository` (default empty): an explicit development override pointing to an effektive-lang checkout. Empty uses the bundled server.
 - `effective.writeOnSave` (default `true`): on save, write every generated `.ts` and `.ts.map` file that changed, from the saved files on disk.
 - `effective.debounceMs` (default `0`): compilation delay after an edit, in milliseconds.
 

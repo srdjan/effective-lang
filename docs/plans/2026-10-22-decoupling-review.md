@@ -338,7 +338,7 @@ Corrections to section 3. ED1 said that 24 test files read `revision.project.*` 
 
 ED7 said that 8 `mod.ts` exports have no user outside the core. A name search over every `.ts` file outside `src/core` finds 20 such names. Only 4 of them are values: `methodOfCapability`, `moduleOfId`, `nameOfId`, and `readConfig`. The other 16 are types, and several of them name the result of a public function, for example `Completion` and `HoverBackend`. A public signature needs its types, so ED7 keeps the 16 type exports.
 
-`docs/api.md:271` documents the `Revision` queries and does not name `project` or `checked`. `deno.json` exports `src/core/mod.ts` as the package `@srdjan/effective-lang` 0.6.0. So the private fields and the 4 removed values are a change of the package surface, but not of its documented contract. Each commit body states the change.
+`docs/api.md:271` documents the `Revision` queries and does not name `project` or `checked`. `deno.json` exports `src/core/mod.ts` as the package `@srdjan/effektive-lang` 0.6.0. So the private fields and the 4 removed values are a change of the package surface, but not of its documented contract. Each commit body states the change.
 
 ### ED1 (read-only queries on `Revision`)
 

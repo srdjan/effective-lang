@@ -21,7 +21,7 @@ over `Order` has one arm for each state and no `_` arm. A missing state gives
 builds a `Pending` value with the data constructor. JSON that has a wrong or
 missing `_tag` fails `decodeOrder`.
 
-From the effective-lang repository root:
+From the effektive-lang repository root:
 
 ```sh
 deno task effective build fixtures/applications/order-lifecycle --validate --tsc

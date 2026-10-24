@@ -70,7 +70,7 @@
         "effective.server.repository": {
           "type": "string",
           "default": "",
-          "description": "Development override: path of an effective-lang checkout. Empty uses the language server bundled in the extension."
+          "description": "Development override: path of an effektive-lang checkout. Empty uses the language server bundled in the extension."
         },
         "effective.writeOnSave": {
           "type": "boolean",

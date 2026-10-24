@@ -5,7 +5,7 @@ live pulls, ordered concurrent transformation, selective fallback, buffering,
 batch selection and terminal consumption. The recording driver supplies only
 primitive operations. It performs no network or file I/O.
 
-From the effective-lang repository root:
+From the effektive-lang repository root:
 
 ```sh
 deno task effective build fixtures/applications/stream-processor --validate --tsc

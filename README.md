@@ -1,4 +1,4 @@
-# effective-lang
+# effektive-lang
 
 Effective is a small functional language that transpiles to Effect-TS 4. This
 repository holds the transpiler core library, its command-line tool, a language

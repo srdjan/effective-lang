@@ -97,7 +97,7 @@ export function parseOptions(
 
 function header(options: Options): string {
   return [
-    `effective-lang measurements, profile ${options.profile}`,
+    `effektive-lang measurements, profile ${options.profile}`,
     `deno ${Deno.version.deno}, v8 ${Deno.version.v8}, typescript ${Deno.version.typescript}, ${Deno.build.target}`,
     `logical cores ${navigator.hardwareConcurrency}, timer performance.now(), single thread, not pinned`,
     "No number below is a claim. Read each number with the noise floor of its row.",

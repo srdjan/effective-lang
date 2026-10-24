@@ -25,7 +25,7 @@ Decided by the user on 2026-10-16 and 2026-10-17. Each entry took the recommende
 | D12 Output formatting | (a) Own printer with one fixed style. A test confirms that `deno fmt --check` accepts the output unchanged. |
 | D13 Exported constants (Q4) | (a) Every exported constant requires a type annotation. This closes firewall hole I6. |
 | D14 `int` arithmetic (Q6) | (a) The emitter wraps `int` operations in a runtime helper that raises a defect outside the safe integer range. The cost needs to be measured. |
-| D15 Repository | (a) The transpiler lives in `effective-lang`, separate from the `effective` site and spec repository. |
+| D15 Repository | (a) The transpiler lives in `effektive-lang`, separate from the `effective` site and spec repository. |
 | D16 Next phase (2026-10-16) | The LSP comes before Phase B. Phase B waits for the D9 budget, and D9 waits for M1, which needs the LSP (design 4.5 and D9). |
 | D17 JSON-RPC transport (2026-10-16) | Hand-written Content-Length framing over stdio. No npm dependency in the server. |
 | D18 Editor client (2026-10-16) | A thin VS Code client in `editors/vscode/`, plain JavaScript, with `vscode-languageclient`. npm is used only inside that directory. |
@@ -755,7 +755,7 @@ the noise floor from M6 beside every number. Keep a rejected-ideas ledger in
 ## 11. Proposed repository layout
 
 ```
-effective-lang/
+effektive-lang/
   deno.json                 tasks: test, check, build, bench
   src/core/                 lex, parse, syntax, index, link, resolve, types,
                             check, modes, lower, ir (typed-ir.ts copied),
@@ -778,7 +778,7 @@ Each decision lists its options. One option is marked as recommended. The
 decision record at the top of this document shows which ones the user settled.
 
 **D15. Repository.**
-(a) The transpiler lives in `effective-lang`. Recommended.
+(a) The transpiler lives in `effektive-lang`. Recommended.
 (b) The transpiler lives in the `effective` repository, beside the spec.
 
 **D1. Deliverable shape.**
