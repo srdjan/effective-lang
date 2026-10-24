@@ -67,7 +67,8 @@ The tables below are a record of gaps, not an implementation queue.
 | General language extensions         | User-defined generics, effect-row polymorphism, source purity assertions, macros and early returns remain deferred language extensions.                                                                                                                         | Builtin generic types and concrete source compositions cover the accepted applications. The [specification](../../effektive/public/effektive-spec.html#examples) retains the broader language boundary.                                                                |
 
 Reopen an item only for a demonstrated application blocker or an explicit change
-to the accepted target. First check equivalent existing source compositions.
+to the accepted target. On 2026-10-24 the user accepted one such change: a compiler or syntax
+change that makes source more terse and elegant needs no application blocker. First check equivalent existing source compositions.
 Record a minimal witness, intended contract, observed diagnostic or behavior,
 and the required failure, cancellation and cleanup semantics. No item has an
 automatic priority or implementation commitment.
