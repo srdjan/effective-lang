@@ -3,6 +3,7 @@
 import {
   completionsAt,
   contractActionsAt,
+  inlayHintsAt,
   joinPath,
   lineStarts,
   prepareRenameAt,
@@ -21,6 +22,7 @@ import type { RequestFailure, ServerContext } from "./server.ts";
 import type {
   CodeActionParams,
   EditorPositionParams,
+  InlayHintParams,
   ReferencesParams,
   RenameParams,
   TextDocumentParams,
@@ -291,5 +293,27 @@ export function codeActionRequest(
         edit: workspaceEdit(context, action.edits),
       }),
     ),
+  );
+}
+
+/** Kind 1 (Type): the label states an inferred contract. */
+export function inlayHintRequest(
+  params: InlayHintParams,
+  ctx: ServerContext,
+): Answer {
+  const context = contextOf({ ...params, position: params.range.start }, ctx);
+  if (context === undefined) return answer([]);
+  const { text } = context;
+  const starts = lineStarts(text);
+  return answer(
+    inlayHintsAt(context.revision, context.path, {
+      start: context.offset,
+      end: positionToOffset(text, starts, params.range.end),
+    }).map((hint) => ({
+      position: offsetToPosition(text, starts, hint.position),
+      label: hint.label,
+      kind: 1,
+      paddingLeft: false,
+    })),
   );
 }

@@ -1,6 +1,7 @@
 import {
   codeActionRequest,
   completionRequest,
+  inlayHintRequest,
   prepareRenameRequest,
   referencesRequest,
   renameRequest,
@@ -49,6 +50,7 @@ import {
   type Narrowed,
   narrowEditorPositionParams,
   narrowInitializeParams,
+  narrowInlayHintParams,
   narrowPositionParams,
   narrowReferencesParams,
   narrowRenameParams,
@@ -163,6 +165,10 @@ const REQUEST_HANDLERS: ReadonlyMap<string, RequestHandler> = new Map<
   [
     "textDocument/codeAction",
     withParams(narrowCodeActionParams, codeActionRequest),
+  ],
+  [
+    "textDocument/inlayHint",
+    withParams(narrowInlayHintParams, inlayHintRequest),
   ],
   [
     "textDocument/definition",

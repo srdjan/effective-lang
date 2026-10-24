@@ -117,5 +117,7 @@ export { BUILTIN_TYPE_NAMES, PRELUDE_NAMES } from "./resolve.ts";
 // The IR types.
 export type * from "./ir.ts";
 
+export { inlayHintsAt } from "./editor_hints.ts";
+export type { InlayHint } from "./editor_hints.ts";
 export { contractActionsAt } from "./editor_actions.ts";
 export type { ContractAction } from "./editor_actions.ts";

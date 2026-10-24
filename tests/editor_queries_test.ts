@@ -1,5 +1,6 @@
 import { contractActionsAt } from "../src/core/editor_actions.ts";
 import { completionsAt } from "../src/core/editor_completion.ts";
+import { inlayHintsAt } from "../src/core/editor_hints.ts";
 import { semanticClassifications } from "../src/core/editor_tokens.ts";
 import {
   applySourceEdits,
@@ -440,4 +441,48 @@ Deno.test("member completion tolerates whitespace around the dot", () => {
     ),
     ["read"],
   );
+});
+
+const hintSource = `import { Int, Stop, S } from "./lib.eff"
+const plain = (x: Int) => x
+const open = (x: Int) => { S.read() + x }
+const result = (x: Int): Int => { S.read() + x }
+const oneWritten = (x: Int): Int uses S.read => { S.read() + x }
+export const shown = (x: Int): Int fails Stop uses S.read => { S.read() + x }
+`;
+
+function hints(range?: { start: number; end: number }) {
+  const loaded = new Program("").update({
+    set: {
+      "effektive.json": "{}",
+      "lib.eff": library,
+      "m.eff": hintSource,
+    },
+  });
+  assert(loaded.ok);
+  return inlayHintsAt(
+    loaded.value,
+    "m.eff",
+    range ?? { start: 0, end: hintSource.length },
+  );
+}
+
+Deno.test("inlay hints show the inferred parts of non-exported functions only", () => {
+  const found = hints();
+  const after = (marker: string) => hintSource.indexOf(marker) + marker.length;
+  assertEquals(
+    found.map((h) => [h.position, h.label]),
+    [
+      [after("const open = (x: Int)"), " fails Stop uses S.read"],
+      [after("const result = (x: Int): Int"), " fails Stop uses S.read"],
+      [after("const oneWritten = (x: Int): Int uses S.read"), " fails Stop"],
+    ],
+  );
+});
+
+Deno.test("inlay hints keep only the positions inside the range", () => {
+  const start = hintSource.indexOf("const result");
+  const end = hintSource.indexOf("export");
+  assertEquals(hints({ start, end }).length, 2);
+  assertEquals(hints({ start: 0, end: 1 }), []);
 });

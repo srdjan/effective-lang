@@ -674,6 +674,9 @@ The server announces `positionEncoding: "utf-16"`. It supports these features.
 - Contract quick fixes. Missing `fails` and `uses` entries come from checked
   body effects. Reliable explicit inline contracts receive validated source
   edits that preserve existing entries. Diagnostic prose is not parsed.
+- Inlay hints. A non-exported function with an open, non-empty `fails` or `uses`
+  set shows the inferred part, as the hover prints it, before `=>`. Inline
+  arrows and functions with errors have no hint.
 
 Diagnostics follow a fixed order. The server publishes the open documents of the
 project first, sorted by path. An open document gets a message when the compile

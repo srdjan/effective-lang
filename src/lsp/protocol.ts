@@ -110,6 +110,7 @@ interface ServerCapabilities {
     readonly full: true;
   };
   readonly codeActionProvider: { readonly codeActionKinds: readonly string[] };
+  readonly inlayHintProvider: true;
 }
 
 export const SERVER_CAPABILITIES: ServerCapabilities = {
@@ -133,6 +134,7 @@ export const SERVER_CAPABILITIES: ServerCapabilities = {
     full: true,
   },
   codeActionProvider: { codeActionKinds: ["quickfix"] },
+  inlayHintProvider: true,
 };
 
 interface InitializeResult {
@@ -495,6 +497,10 @@ export interface CodeActionParams extends TextDocumentParams {
   readonly range: Range;
 }
 
+export interface InlayHintParams extends TextDocumentParams {
+  readonly range: Range;
+}
+
 // Editor requests validate the position before an optional document version.
 export function narrowEditorPositionParams(
   params: unknown,
@@ -544,5 +550,11 @@ const codeActionParams = params("request", {
 export function narrowCodeActionParams(
   params: unknown,
 ): Narrowed<CodeActionParams> {
+  return codeActionParams(params);
+}
+
+export function narrowInlayHintParams(
+  params: unknown,
+): Narrowed<InlayHintParams> {
   return codeActionParams(params);
 }

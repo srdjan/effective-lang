@@ -271,3 +271,37 @@ Deno.test("editor edits are withheld while project configuration is invalid", ()
     [],
   );
 });
+
+Deno.test("LSP answers inlay hints with UTF-16 positions", () => {
+  const text =
+    'import { Int, S } from "./lib.eff"\n// 😀\nconst open = (x: Int) => { S.read() + x }\nexport const shown = (x: Int): Int uses S.read => S.read() + x\n';
+  const h = makeHarness({
+    files: {
+      [`${root}/effektive.json`]: "{}",
+      [`${root}/lib.eff`]:
+        "export type Int = int\nexport error Stop = {}\nexport service S { read(): Int fails Stop }\n",
+      [`${root}/m.eff`]: text,
+    },
+  });
+  h.start();
+  h.deliver({
+    jsonrpc: "2.0",
+    method: "textDocument/didOpen",
+    params: {
+      textDocument: { uri, languageId: "effektive", version: 1, text },
+    },
+  });
+  const hints = list(
+    request(h, "textDocument/inlayHint", {
+      textDocument: { uri },
+      range: {
+        start: { line: 0, character: 0 },
+        end: { line: 4, character: 0 },
+      },
+    }),
+  ).map(record);
+  assertEquals(hints.length, 1);
+  assertEquals(hints[0].label, " fails Stop uses S.read");
+  assertEquals(hints[0].position, { line: 2, character: 21 });
+  assertEquals(hints[0].paddingLeft, false);
+});

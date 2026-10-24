@@ -42,6 +42,7 @@ Deno.test("method names and capabilities", () => {
   assertEquals(GENERATED_SCHEME, "effektive-generated");
   assertEquals(TextDocumentSyncKind.Incremental, 2);
   assertEquals(SERVER_CAPABILITIES.positionEncoding, "utf-16");
+  assertEquals(SERVER_CAPABILITIES.inlayHintProvider, true);
   assertEquals(SERVER_CAPABILITIES.textDocumentSync.change, 2);
   assertEquals(SERVER_CAPABILITIES.textDocumentSync.save, {
     includeText: false,
