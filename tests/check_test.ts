@@ -493,6 +493,23 @@ Deno.test("a missing mode entry is a Result error that names every function", ()
   assert(project.modules.get("log")!.interface.ok);
   // The local functions of pay carry no result annotation and need no entry.
   assert(project.modules.get("pay")!.interface.ok);
+  // A written result with open sets leaves part of the type to the body.
+  const annotated = checkExamples((files) => {
+    files["pay.eff"] = files["pay.eff"]
+      .replace(
+        "const markPaid = (order: Order) =>",
+        "const markPaid = (order: Order): Order =>",
+      )
+      .replace(
+        "const saveOrder = (order: Order) => {",
+        "const saveOrder = (order: Order): Order => {",
+      );
+  }, new Map()).modules.get("pay")!.interface;
+  assert(!annotated.ok);
+  assertEquals(annotated.error.ids, [
+    "value:pay#markPaid",
+    "value:pay#saveOrder",
+  ]);
 });
 
 Deno.test("buildInterface can be called again after the modes arrive", () => {
