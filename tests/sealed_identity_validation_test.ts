@@ -22,7 +22,7 @@ function lowered(files: Readonly<Record<string, string>>) {
 
 Deno.test("an imported sealed type cannot claim the consumer's identity", () => {
   const base = lowered({
-    "lib.eff": "export nominal Positive = int\n",
+    "lib.eff": "export type Positive = int\n",
     "main.eff":
       'import { Positive } from "./lib.eff"\nexport const make = (): Positive => Positive(1)\n',
   });
@@ -51,7 +51,7 @@ Deno.test("an imported sealed type cannot claim the consumer's identity", () => 
 Deno.test("project validation binds an IR module to its lowered map key", () => {
   const base = lowered({
     "main.eff":
-      "export sealed nominal Positive = int\nexport const make = (): Positive => Positive(1)\n",
+      "export sealed type Positive = int\nexport const make = (): Positive => Positive(1)\n",
   });
   const main = base.modules.get("main");
   assert(main?.ok);
@@ -73,7 +73,7 @@ Deno.test("project validation binds an IR module to its lowered map key", () => 
 Deno.test("import payloads keep supporting types from a third module", () => {
   const base = lowered({
     "domain.eff":
-      "export sealed nominal Positive = int\nexport const positive = (): Positive => Positive(1)\n",
+      "export sealed type Positive = int\nexport const positive = (): Positive => Positive(1)\n",
     "lib.eff":
       'import { Positive, positive } from "./domain.eff"\nexport const read = (): Positive => positive()\n',
     "main.eff":

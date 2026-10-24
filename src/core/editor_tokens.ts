@@ -29,7 +29,6 @@ export interface SemanticClassification {
 const contextualKeywords = new Set([
   "type",
   "error",
-  "nominal",
   "sealed",
   "service",
   "provider",
@@ -166,7 +165,7 @@ export function semanticClassifications(
         );
         const type = declaration?.kind === "type"
           ? "type"
-          : declaration?.kind === "error" || declaration?.kind === "data"
+          : declaration?.kind === "error"
           ? "class"
           : declaration?.kind === "service"
           ? "interface"

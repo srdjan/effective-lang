@@ -354,7 +354,6 @@ export class TypeTable {
   /** Identity records that carry a tag. Nothing marks one yet. */
   private readonly tagged = new Set<TypeId>();
   private readonly brands = new Map<TypeId, TypeRef>();
-  private readonly dataRecords = new Map<TypeId, TypeRef>();
   private readonly opaque = new Set<TypeId>();
   private readonly sealed = new Set<TypeId>();
   private readonly errorRecords = new Map<ErrorId, TypeRef>();
@@ -751,7 +750,6 @@ export class TypeTable {
   /** Registers the definition of an alias. The last definition wins. */
   defineAlias(id: TypeId, target: TypeRef): void {
     this.brands.delete(id);
-    this.dataRecords.delete(id);
     this.opaque.delete(id);
     this.guardedAliases.delete(id);
     this.sealed.delete(id);
@@ -775,10 +773,9 @@ export class TypeTable {
     if (this.identities.has(id)) this.sealed.add(id);
   }
 
-  /** True for a brand, a data record, or an alias with identity. */
+  /** True for a brand or an alias with identity. */
   isIdentity(id: TypeId): boolean {
-    return this.identities.has(id) || this.brands.has(id) ||
-      this.dataRecords.has(id);
+    return this.identities.has(id) || this.brands.has(id);
   }
 
   markGuardedAlias(id: TypeId): void {
@@ -787,7 +784,6 @@ export class TypeTable {
 
   defineBrand(id: TypeId, base: TypeRef, sealed = false): void {
     this.aliases.delete(id);
-    this.dataRecords.delete(id);
     this.guardedAliases.delete(id);
     this.identities.delete(id);
     this.tagged.delete(id);
@@ -795,19 +791,6 @@ export class TypeTable {
     if (sealed) this.sealed.add(id);
     else this.sealed.delete(id);
     this.brands.set(id, base);
-  }
-
-  /** Registers the base record of a `data` declaration. */
-  defineData(id: TypeId, record: TypeRef, sealed = false): void {
-    this.aliases.delete(id);
-    this.brands.delete(id);
-    this.opaque.delete(id);
-    this.guardedAliases.delete(id);
-    this.identities.delete(id);
-    this.tagged.delete(id);
-    if (sealed) this.sealed.add(id);
-    else this.sealed.delete(id);
-    this.dataRecords.set(id, record);
   }
 
   markOpaque(id: TypeId): void {
@@ -863,8 +846,7 @@ export class TypeTable {
           }
           const target = isErrorId(node.id)
             ? this.errorRecords.get(node.id)
-            : this.aliases.get(node.id) ?? this.dataRecords.get(node.id) ??
-              this.brands.get(node.id);
+            : this.aliases.get(node.id) ?? this.brands.get(node.id);
           return target === undefined ? undefined : visit(target);
         }
         case "record":
@@ -935,10 +917,9 @@ export class TypeTable {
         : undefined);
   }
 
-  /** The record of a data type, or the body of a tagged identity. */
+  /** The body of a tagged record. */
   dataRecordOf(id: TypeId): TypeRef | undefined {
-    return this.dataRecords.get(id) ??
-      (this.tagged.has(id) ? this.aliases.get(id) : undefined);
+    return this.tagged.has(id) ? this.aliases.get(id) : undefined;
   }
 
   errorRecordOf(id: ErrorId): TypeRef | undefined {
@@ -949,8 +930,7 @@ export class TypeTable {
   isDefined(id: TypeId | ErrorId): boolean {
     return isErrorId(id)
       ? this.errorRecords.has(id)
-      : this.aliases.has(id) || this.brands.has(id) ||
-        this.dataRecords.has(id);
+      : this.aliases.has(id) || this.brands.has(id);
   }
 
   /**
@@ -988,16 +968,6 @@ export class TypeTable {
         if (guardedRecord(decl.definition.type, decl.id, tagOf)) {
           this.markGuardedAlias(decl.id);
         }
-      } else if (
-        decl.definition.tagged === true &&
-        decl.definition.base.kind === "record"
-      ) {
-        // A nominal type over a record is a tagged record at run time.
-        this.defineData(
-          decl.id,
-          this.fromIr(decl.definition.base),
-          decl.definition.sealed === true,
-        );
       } else if (decl.opaque === true) {
         this.defineBrand(
           decl.id,
@@ -1006,10 +976,11 @@ export class TypeTable {
         );
         this.markOpaque(decl.id);
       } else {
-        // An untagged nominal type is an alias with identity.
+        // A nominal type is an alias with identity. A tagged one is a tagged record.
         this.defineAlias(decl.id, this.fromIr(decl.definition.base));
         this.markIdentity(decl.id);
-        if (guardedRecord(decl.definition.base, decl.id, tagOf)) {
+        if (decl.definition.tagged === true) this.markTagged(decl.id);
+        else if (guardedRecord(decl.definition.base, decl.id, tagOf)) {
           this.markGuardedAlias(decl.id);
         }
         if (decl.definition.sealed === true) this.markSealed(decl.id);
@@ -1099,7 +1070,10 @@ export class TypeTable {
   private childRefs(node: TypeNode): readonly TypeRef[] {
     switch (node.kind) {
       case "named": {
-        if (isErrorId(node.id) || this.guardedAliases.has(node.id)) return [];
+        if (
+          isErrorId(node.id) || this.guardedAliases.has(node.id) ||
+          this.tagged.has(node.id)
+        ) return [];
         const alias = this.aliases.get(node.id);
         return alias === undefined ? [] : [alias];
       }
@@ -1492,17 +1466,18 @@ export class TypeTable {
       sn.kind === "named" && !isErrorId(sn.id) && !this.opaque.has(sn.id) &&
       (module === undefined || this.ownsSealed(module, sn.id))
     ) {
-      const base = this.dataRecords.get(sn.id) ?? this.brands.get(sn.id);
+      const base = this.brands.get(sn.id);
       if (base !== undefined && nested(base, t, lift, false)) {
         return true;
       }
     }
-    // An unnamed value fits an identity whose body it fits. A sealed identity
-    // needs the authority of its module.
+    // An unnamed value fits an untagged identity whose body it fits. A tagged
+    // record takes a record literal only through implicit construction. A
+    // sealed identity needs the authority of its module.
     if (
       adopt && tn.kind === "named" && !isErrorId(tn.id) &&
       sn.kind !== "named" && this.identities.has(tn.id) &&
-      !this.opaque.has(tn.id) &&
+      !this.tagged.has(tn.id) && !this.opaque.has(tn.id) &&
       (module === undefined || this.ownsSealed(module, tn.id))
     ) {
       const body = this.aliases.get(tn.id);
@@ -1882,7 +1857,7 @@ export function dataOnly(
 /**
  * Whether the type contains a function or deferred type at any depth: a value
  * without an encoded form, such as an Effect, a Stream, or a Ref. An alias
- * unfolds, and a repeated alias stops a cycle. A data type, an error, and a
+ * unfolds, and a repeated alias stops a cycle. A tagged record, an error, and a
  * brand stop the walk, because their own declarations are checked on their own.
  */
 export function containsDeferredType(
@@ -1910,7 +1885,11 @@ export function containsDeferredType(
     case "closeable-scope":
       return true;
     case "named": {
-      const alias = isErrorId(type.id) ? undefined : table.aliasOf(type.id);
+      // A tagged record stops the walk: its own declaration is checked on its own.
+      const alias =
+        isErrorId(type.id) || table.dataRecordOf(type.id) !== undefined
+          ? undefined
+          : table.aliasOf(type.id);
       return alias !== undefined && any([alias]);
     }
     case "record":
@@ -1935,7 +1914,7 @@ export function containsDeferredType(
 
 /**
  * Whether the type names an opaque type at any depth, which has no schema. An
- * alias unfolds, and a repeated alias stops a cycle. A data type, an error,
+ * alias unfolds, and a repeated alias stops a cycle. A tagged record, an error,
  * and a brand stop the walk, as in `containsDeferredType`. A function or
  * deferred type is `containsDeferredType`'s case, so it reports nothing here.
  */
@@ -1953,6 +1932,7 @@ export function containsOpaqueType(
     case "named": {
       if (isErrorId(type.id)) return false;
       if (table.isOpaque(type.id)) return true;
+      if (table.dataRecordOf(type.id) !== undefined) return false;
       const alias = table.aliasOf(type.id);
       return alias !== undefined && any([alias]);
     }

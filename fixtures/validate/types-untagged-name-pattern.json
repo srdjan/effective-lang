@@ -1,0 +1,412 @@
+{
+  "declarations": [
+    {
+      "definition": {
+        "base": {
+          "kind": "primitive",
+          "name": "int"
+        },
+        "kind": "nominal"
+      },
+      "id": "type:tagged#Cents",
+      "kind": "type",
+      "name": "Cents",
+      "span": {
+        "end": 16,
+        "source": "tagged.eff",
+        "start": 0
+      }
+    },
+    {
+      "definition": {
+        "base": {
+          "fields": [
+            {
+              "name": "amount",
+              "optional": false,
+              "type": {
+                "id": "type:tagged#Cents",
+                "kind": "named"
+              }
+            }
+          ],
+          "kind": "record"
+        },
+        "kind": "nominal"
+      },
+      "id": "type:tagged#Fixed",
+      "kind": "type",
+      "name": "Fixed",
+      "span": {
+        "end": 47,
+        "source": "tagged.eff",
+        "start": 17
+      }
+    },
+    {
+      "definition": {
+        "base": {
+          "fields": [
+            {
+              "name": "factor",
+              "optional": false,
+              "type": {
+                "id": "type:tagged#Cents",
+                "kind": "named"
+              }
+            }
+          ],
+          "kind": "record"
+        },
+        "kind": "nominal",
+        "tagged": true
+      },
+      "id": "type:tagged#Times",
+      "kind": "type",
+      "name": "Times",
+      "span": {
+        "end": 78,
+        "source": "tagged.eff",
+        "start": 48
+      }
+    },
+    {
+      "definition": {
+        "kind": "alias",
+        "type": {
+          "kind": "union",
+          "members": [
+            {
+              "id": "type:tagged#Fixed",
+              "kind": "named"
+            },
+            {
+              "id": "type:tagged#Times",
+              "kind": "named"
+            }
+          ]
+        }
+      },
+      "id": "type:tagged#Rule",
+      "kind": "type",
+      "name": "Rule",
+      "span": {
+        "end": 104,
+        "source": "tagged.eff",
+        "start": 79
+      }
+    },
+    {
+      "body": {
+        "effects": {
+          "failures": [],
+          "requirements": []
+        },
+        "execution": "pure",
+        "kind": "nominal",
+        "nominal": "type:tagged#Fixed",
+        "span": {
+          "end": 154,
+          "source": "tagged.eff",
+          "start": 140
+        },
+        "type": {
+          "id": "type:tagged#Fixed",
+          "kind": "named"
+        },
+        "value": {
+          "effects": {
+            "failures": [],
+            "requirements": []
+          },
+          "execution": "pure",
+          "fields": [
+            {
+              "name": "amount",
+              "value": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "literal",
+                "span": {
+                  "end": 152,
+                  "source": "tagged.eff",
+                  "start": 150
+                },
+                "type": {
+                  "kind": "primitive",
+                  "name": "int"
+                },
+                "value": 50
+              }
+            }
+          ],
+          "kind": "record",
+          "span": {
+            "end": 154,
+            "source": "tagged.eff",
+            "start": 140
+          },
+          "type": {
+            "fields": [
+              {
+                "name": "amount",
+                "optional": false,
+                "type": {
+                  "id": "type:tagged#Cents",
+                  "kind": "named"
+                }
+              }
+            ],
+            "kind": "record"
+          }
+        }
+      },
+      "id": "value:tagged#fixed",
+      "kind": "function",
+      "name": "fixed",
+      "parameters": [],
+      "span": {
+        "end": 155,
+        "source": "tagged.eff",
+        "start": 105
+      },
+      "type": {
+        "effects": {
+          "failures": [],
+          "requirements": []
+        },
+        "execution": "pure",
+        "kind": "function",
+        "parameters": [],
+        "result": {
+          "id": "type:tagged#Fixed",
+          "kind": "named"
+        }
+      },
+      "written": {
+        "fails": true,
+        "result": true,
+        "uses": true
+      }
+    },
+    {
+      "body": {
+        "arms": [
+          {
+            "body": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "field": "amount",
+              "kind": "get",
+              "record": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "reference",
+                "span": {
+                  "end": 235,
+                  "source": "tagged.eff",
+                  "start": 234
+                },
+                "target": "local:tagged#amountOf/f",
+                "type": {
+                  "id": "type:tagged#Fixed",
+                  "kind": "named"
+                }
+              },
+              "span": {
+                "end": 242,
+                "source": "tagged.eff",
+                "start": 234
+              },
+              "type": {
+                "id": "type:tagged#Cents",
+                "kind": "named"
+              }
+            },
+            "pattern": {
+              "binding": {
+                "id": "local:tagged#amountOf/f",
+                "name": "f",
+                "span": {
+                  "end": 229,
+                  "source": "tagged.eff",
+                  "start": 228
+                },
+                "type": {
+                  "id": "type:tagged#Fixed",
+                  "kind": "named"
+                }
+              },
+              "kind": "nominal",
+              "nominal": "type:tagged#Fixed",
+              "span": {
+                "end": 230,
+                "source": "tagged.eff",
+                "start": 222
+              }
+            }
+          },
+          {
+            "body": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "field": "factor",
+              "kind": "get",
+              "record": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "reference",
+                "span": {
+                  "end": 261,
+                  "source": "tagged.eff",
+                  "start": 260
+                },
+                "target": "local:tagged#amountOf/t",
+                "type": {
+                  "id": "type:tagged#Times",
+                  "kind": "named"
+                }
+              },
+              "span": {
+                "end": 268,
+                "source": "tagged.eff",
+                "start": 260
+              },
+              "type": {
+                "id": "type:tagged#Cents",
+                "kind": "named"
+              }
+            },
+            "pattern": {
+              "binding": {
+                "id": "local:tagged#amountOf/t",
+                "name": "t",
+                "span": {
+                  "end": 255,
+                  "source": "tagged.eff",
+                  "start": 254
+                },
+                "type": {
+                  "id": "type:tagged#Times",
+                  "kind": "named"
+                }
+              },
+              "kind": "nominal",
+              "nominal": "type:tagged#Times",
+              "span": {
+                "end": 256,
+                "source": "tagged.eff",
+                "start": 248
+              }
+            }
+          }
+        ],
+        "effects": {
+          "failures": [],
+          "requirements": []
+        },
+        "execution": "pure",
+        "kind": "match",
+        "span": {
+          "end": 272,
+          "source": "tagged.eff",
+          "start": 205
+        },
+        "subject": {
+          "effects": {
+            "failures": [],
+            "requirements": []
+          },
+          "execution": "pure",
+          "kind": "reference",
+          "span": {
+            "end": 215,
+            "source": "tagged.eff",
+            "start": 211
+          },
+          "target": "local:tagged#amountOf/rule",
+          "type": {
+            "id": "type:tagged#Rule",
+            "kind": "named"
+          }
+        },
+        "type": {
+          "id": "type:tagged#Cents",
+          "kind": "named"
+        }
+      },
+      "id": "value:tagged#amountOf",
+      "kind": "function",
+      "name": "amountOf",
+      "parameters": [
+        {
+          "id": "local:tagged#amountOf/rule",
+          "name": "rule",
+          "span": {
+            "end": 191,
+            "source": "tagged.eff",
+            "start": 181
+          },
+          "type": {
+            "id": "type:tagged#Rule",
+            "kind": "named"
+          }
+        }
+      ],
+      "span": {
+        "end": 272,
+        "source": "tagged.eff",
+        "start": 156
+      },
+      "type": {
+        "effects": {
+          "failures": [],
+          "requirements": []
+        },
+        "execution": "pure",
+        "kind": "function",
+        "parameters": [
+          {
+            "id": "type:tagged#Rule",
+            "kind": "named"
+          }
+        ],
+        "result": {
+          "id": "type:tagged#Cents",
+          "kind": "named"
+        }
+      },
+      "written": {
+        "fails": true,
+        "result": true,
+        "uses": true
+      }
+    }
+  ],
+  "exports": [
+    "value:tagged#amountOf",
+    "value:tagged#fixed"
+  ],
+  "format": "light-functional-ir",
+  "imports": [],
+  "module": "tagged",
+  "sources": [
+    "tagged.eff"
+  ],
+  "version": 5
+}

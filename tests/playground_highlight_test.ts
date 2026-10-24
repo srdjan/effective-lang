@@ -32,12 +32,10 @@ Deno.test("type, error, service, and provider are keywords at the start of a lin
   assertEquals(slices("a type"), []);
 });
 
-Deno.test("nominal is a keyword at the start of a declaration and a name elsewhere", () => {
-  assertEquals(slices("nominal U = { id: int }\n")[0], ["nominal", "keyword"]);
-  assertEquals(slices("export nominal U = {}\n").slice(0, 2), [
-    ["export", "keyword"],
-    ["nominal", "keyword"],
-  ]);
+Deno.test("nominal is an ordinary name", () => {
+  assert(
+    slices("nominal U = { id: int }\n").every(([word]) => word !== "nominal"),
+  );
   assertEquals(slices("a nominal"), []);
   assertEquals(slices("const nominal = 1\n").map(([word]) => word), [
     "const",
@@ -46,11 +44,11 @@ Deno.test("nominal is a keyword at the start of a declaration and a name elsewhe
   ]);
 });
 
-Deno.test("sealed nominal modifiers are keywords and ordinary sealed names remain names", () => {
-  assertEquals(slices("export sealed nominal Proof = int\n").slice(0, 3), [
+Deno.test("sealed type modifiers are keywords and ordinary sealed names remain names", () => {
+  assertEquals(slices("export sealed type Proof = int\n").slice(0, 3), [
     ["export", "keyword"],
     ["sealed", "keyword"],
-    ["nominal", "keyword"],
+    ["type", "keyword"],
   ]);
   assertEquals(slices("const sealed = 1\n").map(([word]) => word), [
     "const",

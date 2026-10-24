@@ -1,0 +1,10 @@
+// error: declaration/009
+type Broken = { _tag: string, name: string }
+
+type Other = { name: string }
+
+// A union alias of the module tags each record that it lists.
+type Both = Broken | Other
+
+// A record that no union lists has no tag, so it can have a field named `_tag`.
+type Free = { _tag: string }

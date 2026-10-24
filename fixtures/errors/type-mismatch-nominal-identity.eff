@@ -1,20 +1,28 @@
-nominal UserId = Text
+type UserId = string
 
-nominal Email = string
+type Email = string
 
-nominal User = { id: UserId, name: string, nick?: string }
+type Text = string
 
-nominal Twin = { id: UserId, name: string, nick?: string }
+type Flag = boolean
 
-type Dog = { id: UserId, name: string, nick?: string }
+type User = { id: UserId, name: Text, nick?: Text }
+
+type Twin = { id: UserId, name: Text, nick?: Text }
+
+// A union alias of the module tags the records that it lists.
+type Account = User | Twin
 
 const make = (): User => User({ id: UserId("u1"), name: "Ann" })
 
-const structural = (): User =>
-  // error: type-mismatch/003
-  ({ id: UserId("u2"), name: "Bo" })
+// A record literal at a tagged record is a construction.
+const implicit = (): User => ({ id: UserId("u2"), name: "Bo" })
 
-const asRecord = (user: User): Dog => user
+const structural = (value: { id: UserId, name: Text, nick?: Text }): User =>
+  // error: type-mismatch/003
+  value
+
+const asRecord = (user: User): { id: UserId, name: Text, nick?: Text } => user
 
 const asTwin = (user: User): Twin =>
   // error: type-mismatch/003
@@ -22,11 +30,11 @@ const asTwin = (user: User): Twin =>
 
 const wrapped = (user: User): Twin => Twin(user)
 
-const asBase = (id: UserId): Text => id
+const asBase = (id: UserId): Text => Text(id)
 
-const asNominal = (text: Text): UserId =>
+const asNominal = (email: Email): UserId =>
   // error: type-mismatch/003
-  text
+  email
 
 const sameId = (id: UserId): Flag => id === "u1"
 
@@ -37,7 +45,3 @@ const otherId = (id: UserId, email: Email): Flag =>
 const same = (a: User, b: User): Flag =>
   // error: type-mismatch/007
   a === b
-
-type Text = string
-
-type Flag = boolean

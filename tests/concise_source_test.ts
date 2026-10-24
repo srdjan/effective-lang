@@ -229,7 +229,7 @@ export const read = (article: Article): Int => { const { id, revision: expectedR
     ),
   );
   checked(
-    `type Int = int\nnominal A = { id: Int, optional?: Int }\nexport const read = (value: A): Option<Int> => { const { id, optional } = value; optional }`,
+    `type Int = int\ntype A = { id: Int, optional?: Int }\nexport const read = (value: A): Option<Int> => { const { id, optional } = value; optional }`,
   );
   checked(
     `type Int = int\ntype U = { id: Int, a: Int } | { id: Int, b: Int }\nexport const read = (value: U): Int => { const { id } = value; id }`,

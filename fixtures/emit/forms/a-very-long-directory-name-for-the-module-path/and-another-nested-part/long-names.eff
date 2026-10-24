@@ -1,6 +1,6 @@
 export error AVeryLongErrorNameThatKeepsGoingAndGoing = { id: string }
 export error AnotherLongErrorNameThatKeepsGoingOnAndOn = { why: string }
-export nominal AVeryLongBrandNameThatKeepsGoingAndGoingOn = string
+export type AVeryLongBrandNameThatKeepsGoingAndGoingOn = string
 export type Status = "a-very-long-literal-member-one" | "a-very-long-literal-member-two" | "three"
 export type Shape = { kind: "a-very-long-tag-name-that-is-long-enough-to-break-the-line-xxxxxx", r: int } | { kind: "sq", side: int }
 export service AVeryLongServiceNameThatKeepsGoingAndGoing {

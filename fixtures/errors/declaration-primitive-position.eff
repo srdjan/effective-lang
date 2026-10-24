@@ -2,7 +2,7 @@ type Count = int
 type Text = string
 type Flag = boolean
 type Paid = "paid"
-nominal Id = string
+type Id = string
 type Record = { name: string, tags: string[], ready: boolean, status: "a" | "b" }
 error Declined = { reason: string, code: int }
 

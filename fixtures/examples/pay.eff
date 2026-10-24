@@ -1,7 +1,7 @@
 type Cents = int
 type ChargeId = string
 
-nominal OrderId = string
+type OrderId = string
 type Order = {
   id: OrderId,
   totalCents: int,

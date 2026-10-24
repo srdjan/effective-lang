@@ -137,7 +137,10 @@ interface Bases {
 function lowerBases(): Bases {
   const checked = checkProject(diskHost(), "examples", EXAMPLE_ENTRIES);
   if (!checked.ok) throw new Error(JSON.stringify(checked.error));
-  const emptyEffect = checkProject(diskHost(), "ir", ["empty-effect.eff"]);
+  const emptyEffect = checkProject(diskHost(), "ir", [
+    "empty-effect.eff",
+    "tagged.eff",
+  ]);
   if (!emptyEffect.ok) throw new Error(JSON.stringify(emptyEffect.error));
   const modules = new Map<string, unknown>();
   for (const project of [checked.value, emptyEffect.value]) {
@@ -172,6 +175,7 @@ interface Mutation {
 
 const LOG = ["log.eff"];
 const EMPTY_EFFECT = ["empty-effect.eff"];
+const TAGGED = ["tagged.eff"];
 const MAIN = ["main.eff", "users.eff"];
 
 const MUTATIONS: readonly Mutation[] = [
@@ -308,6 +312,34 @@ const MUTATIONS: readonly Mutation[] = [
       return `declarations[${
         declIndex(ir, "main")
       }].body.job.body.arguments[0]`;
+    },
+  },
+  {
+    name: "types-record-into-tagged",
+    area: "types",
+    base: "tagged",
+    mutation:
+      "The record literal at Fixed in fixed has no construction: the nominal node is replaced by the record, which is recorded as Fixed.",
+    sources: TAGGED,
+    apply(ir) {
+      const path = `declarations[${declIndex(ir, "fixed")}].body`;
+      const record = clone(at(ir, `${path}.value`));
+      setAt(record, "type", { kind: "named", id: "type:tagged#Fixed" });
+      setAt(ir, path, record);
+      return `${path}.type`;
+    },
+  },
+  {
+    name: "types-untagged-name-pattern",
+    area: "types",
+    base: "tagged",
+    mutation:
+      "Fixed loses its tagged flag, so the name pattern Fixed in amountOf has no tagged member to match.",
+    sources: TAGGED,
+    apply(ir) {
+      const f = declIndex(ir, "Fixed");
+      delete obj(ir, `declarations[${f}].definition`).tagged;
+      return `declarations[${declIndex(ir, "amountOf")}].body.arms[0].pattern`;
     },
   },
   {
@@ -518,6 +550,7 @@ const SOURCE_PATHS: Readonly<Record<string, string>> = {
   "main.eff": "examples/main.eff",
   "users.eff": "examples/users.eff",
   "pay.eff": "examples/pay.eff",
+  "tagged.eff": "ir/tagged.eff",
 };
 
 export function buildFixtures(): Built {

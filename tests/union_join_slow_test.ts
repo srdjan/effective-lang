@@ -7,8 +7,9 @@ Deno.test("an inferred union of nominal records type-checks under the strict tar
       "main.eff": `
 type Text = string
 type Bool = boolean
-nominal Circle = { radius: Text }
-nominal Square = { side: Text }
+type Circle = { radius: Text }
+type Square = { side: Text }
+type Shape = Circle | Square
 const pick = (flag: Bool) => if (flag) { Circle({ radius: "r" }) } else { Square({ side: "s" }) }
 export const describe = (flag: Bool): Text =>
   match pick(flag) {

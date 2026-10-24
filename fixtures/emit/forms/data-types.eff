@@ -1,19 +1,22 @@
-nominal UserId = string
+type UserId = string
 type Text = string
 
-export nominal User = { id: UserId, name: Text, nick?: Text }
+export type User = { id: UserId, name: Text, nick?: Text }
 
-nominal Twin = { id: UserId, name: Text, nick?: Text }
+type Twin = { id: UserId, name: Text, nick?: Text }
 
-export nominal Marker = {}
+export type Marker = {}
 
 export error Rejected = { user: User, reason: Text }
 
-nominal Pin = { id: UserId }
+type Pin = { id: UserId }
 
-export nominal Circle = { radius: Text }
+// A union alias of the module tags the records that it lists.
+type Records = User | Twin | Marker | Pin
 
-export nominal Square = { side: Text }
+export type Circle = { radius: Text }
+
+export type Square = { side: Text }
 
 export type Shape = Circle | Square
 

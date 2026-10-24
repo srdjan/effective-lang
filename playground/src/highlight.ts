@@ -36,7 +36,6 @@ interface HighlightRange {
 const DECLARATION_WORDS: ReadonlySet<string> = new Set([
   "type",
   "error",
-  "nominal",
   "service",
   "provider",
 ]);
@@ -143,7 +142,7 @@ export function highlightTokens(text: string): HighlightRange[] {
       else if (CLAUSE_WORDS.has(word)) result = "keyword";
       else if (
         word === "sealed" && startsDeclaration &&
-        text.slice(lexed.starts[i + 1], lexed.ends[i + 1]) === "nominal"
+        text.slice(lexed.starts[i + 1], lexed.ends[i + 1]) === "type"
       ) result = "keyword";
       else if (word === "pure") {
         let open = i + 1;
@@ -151,7 +150,7 @@ export function highlightTokens(text: string): HighlightRange[] {
         if (pureTypeOpeners.has(open)) result = "keyword";
       } else if (
         DECLARATION_WORDS.has(word) &&
-        (startsDeclaration || (word === "nominal" && afterSealed))
+        (startsDeclaration || (word === "type" && afterSealed))
       ) {
         result = "keyword";
       } else if (PRELUDE_NAMES.has(word)) result = "builtin";

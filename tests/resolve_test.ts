@@ -347,7 +347,7 @@ Deno.test("match arms bind Some, error, and spread names", () => {
 
 Deno.test("an error name and a brand name resolve as constructors when called", () => {
   const analysis = single([
-    "nominal Id = string",
+    "type Id = string",
     "error E = { id: Id }",
     "const f = (s: string): E => E({ id: Id(s) })",
     "",
@@ -401,7 +401,7 @@ Deno.test("a shorthand field refers to the variable of that name", () => {
 
 Deno.test("types resolve to declarations and builtin type names", () => {
   const analysis = single([
-    "nominal Id = string",
+    "type Id = string",
     "type U = { id: Id, n?: Option<int>, tags: string[], k: void }",
     "",
   ].join("\n"));

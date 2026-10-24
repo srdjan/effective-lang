@@ -25,7 +25,7 @@ import {
   type SyntaxTree,
 } from "./syntax.ts";
 
-type DeclKind = "type" | "error" | "data" | "service" | "provider" | "const";
+type DeclKind = "type" | "error" | "service" | "provider" | "const";
 
 export interface MethodEntry {
   readonly name: string;
@@ -42,7 +42,7 @@ export interface DeclEntry {
   readonly name: string;
   readonly kind: DeclKind;
   readonly exported: boolean;
-  /** True only for a `sealed nominal` declaration. */
+  /** True only for a `sealed type` declaration. */
   readonly sealed: boolean;
   readonly node: NodeId;
   readonly nameNode: NodeId;
@@ -219,7 +219,6 @@ function splitDecl(
       return splitAtEquals(tree, decl, true);
     case "type":
     case "error":
-    case "data":
       return splitAtEquals(tree, decl, false);
     case "service": {
       const brace = childrenOf(tree, decl).find((c) =>
@@ -241,7 +240,6 @@ function splitDecl(
 const DECL_KINDS: ReadonlyMap<SyntaxKind, DeclKind> = new Map([
   [SyntaxKind.TypeDecl, "type"],
   [SyntaxKind.ErrorDecl, "error"],
-  [SyntaxKind.DataDecl, "data"],
   [SyntaxKind.ServiceDecl, "service"],
   [SyntaxKind.ProviderDecl, "provider"],
   [SyntaxKind.ConstDecl, "const"],
@@ -281,7 +279,7 @@ function indexDecl(
   const first = children[0];
   const exported = tokenKindOf(tree, first) === TokenKind.KwExport;
   const head = children[exported ? 1 : 0];
-  const sealed = kind === "data" &&
+  const sealed = kind === "type" &&
     tokenKindOf(tree, head) === TokenKind.Ident &&
     tree.text.slice(tree.starts[head], tree.ends[head]) === "sealed";
   const span = nodeSpan(tree, decl);

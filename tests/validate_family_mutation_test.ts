@@ -127,7 +127,7 @@ const defaulted: SchemaEncodedOptional<Text> = schemaDefaultKey(text, (): Text =
 const defaultedNull: SchemaEncodedOptional<Text, Nullable> = schemaDefaultKey(text, (): Text => "x", { on: "null" })
 const defaultedEncoded: SchemaEncodedOptional<Text> = schemaDefaultKey(text, (): Text => "x", { on: "encoded" })
 const withDefault: SchemaConstructorDefault<Int> = schemaConstructorDefault(integer, (): Int => 4)
-const structured: Schema<Short> = schemaStruct({ name: text })
+const structured: Schema<{ name: Text }> = schemaStruct({ name: text })
 const unioned: Schema<Shape> = schemaUnion([short, long])
 const transformed: Schema<Int, Text> = schemaTransform(
   text,

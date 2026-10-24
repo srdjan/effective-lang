@@ -36,8 +36,7 @@
     },
     {
       "definition": {
-        "kind": "alias",
-        "type": {
+        "base": {
           "fields": [
             {
               "name": "name",
@@ -57,7 +56,8 @@
             }
           ],
           "kind": "record"
-        }
+        },
+        "kind": "nominal"
       },
       "id": "type:collections#User",
       "kind": "type",

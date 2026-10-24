@@ -61,7 +61,7 @@ function sources(width: number): Record<string, string> {
       `type Box = { ${field}?: string }\nexport const read = (box: Box): Option<Text> => box.${field}`,
     nested:
       `type Box = { nested: { ${field}: string } }\nexport const read = (box: Box): Text => box.nested.${field}`,
-    brand: `nominal ${
+    brand: `type ${
       identifier("Brand", width)
     } = string\nexport const read = (text: Text): ${
       identifier("Brand", width)

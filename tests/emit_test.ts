@@ -643,7 +643,8 @@ Deno.test("an interface emits a companion module with every declaration exported
   assertStringIncludes(text, "export type Link = Conn;");
   // The provider has no code.
   assert(!text.includes("StoreLive"), text);
-  // Every declaration is exported, also `Label`, `Boom`, and `Token`.
+  // Every declaration is exported, also `Label`, `Boom`, and `Token`. The
+  // record `Token` has no tag, because no union of the interface lists it.
   for (
     const form of [
       "export const Handle =",
@@ -658,9 +659,9 @@ Deno.test("an interface emits a companion module with every declaration exported
     assertStringIncludes(text, form);
   }
   assert(!/^(?:const|type|class) (?!\$)/m.test(text), text);
-  // The tags keep the module name of the interface.
-  assertStringIncludes(text, '"host#Token"');
+  // The tag of an error keeps the module name of the interface.
   assertStringIncludes(text, '"host#Boom"');
+  assert(!text.includes("TaggedStruct"), text);
 });
 
 Deno.test("traverse emits exactly its golden file", () => {
@@ -705,12 +706,11 @@ Deno.test("a nominal record emits field reads and updates that keep the data typ
   assertStringIncludes(text, 'User.make({ id: "u1", name:');
 });
 
-Deno.test("a nominal type over a record alias keeps the field order of the alias", () => {
+Deno.test("a tagged record keeps the field order of its declaration", () => {
   const emitted = emitFiles({
     "effektive.json": "{}",
-    "fields.eff": "export type Remote = { zeta: string, alpha: int }\n",
     "m.eff":
-      'import { Remote } from "./fields.eff"\ntype Local = { zeta: string, alpha: int }\nexport nominal A = Local\nexport nominal B = Remote\n',
+      "type A = { zeta: string, alpha: int }\ntype B = { zeta: string, alpha: int }\nexport type Both = A | B\n",
   }, ["m.eff"]).get("m");
   assert(emitted !== undefined);
   for (const name of ["A", "B"]) {
@@ -775,11 +775,41 @@ Deno.test("a match over data and error types tests the tag of each arm and throw
   assertStringIncludes(text, '$t0._tag === "data-types#Marker"');
 });
 
+Deno.test("a record literal at a tagged record emits make, and a spread update emits none", () => {
+  const text = oneModule(`
+type Cents = int
+type Fixed = { amount: Cents }
+type Times = { factor: Cents }
+export type Rule = Fixed | Times
+export const fixed: Fixed = { amount: 50 }
+export const rule: Rule = Times({ factor: 2 })
+export const nested = (): Option<Fixed> => Some({ amount: 1 })
+export const update = (value: Fixed): Fixed => ({ ...value, amount: 1 })
+`);
+  assertStringIncludes(text, "Fixed.make({ amount: 50 })");
+  assertStringIncludes(text, "Times.make({ factor: 2 })");
+  assertStringIncludes(text, "Option.some<Fixed>(Fixed.make({ amount: 1 }))");
+  assertStringIncludes(text, "({ ...value, amount: 1 })");
+  assertEquals(text.split("Fixed.make(").length - 1, 2);
+});
+
+Deno.test("a record without a tag emits a plain object and no make", () => {
+  const text = oneModule(`
+type Cents = int
+export type Plain = { amount: Cents }
+export const plain: Plain = { amount: 50 }
+export const wrapped = (): Plain => Plain({ amount: 2 })
+`);
+  assertStringIncludes(text, "Schema.Struct({ amount: Cents })");
+  assert(!text.includes("TaggedStruct"), text);
+  assert(!text.includes(".make("), text);
+});
+
 Deno.test("a match whose last arm is _ keeps the else branch and needs no helper", () => {
   const text = oneModule(`
 type Text = string
-export nominal Circle = { radius: Text }
-export nominal Square = { side: Text }
+export type Circle = { radius: Text }
+export type Square = { side: Text }
 export type Shape = Circle | Square
 export const radius = (shape: Shape): Text =>
   match shape {
@@ -794,8 +824,8 @@ export const radius = (shape: Shape): Text =>
 Deno.test("the helper name of a failed match is a fresh name", () => {
   const text = oneModule(`
 type Text = string
-export nominal Circle = { radius: Text }
-export nominal Square = { side: Text }
+export type Circle = { radius: Text }
+export type Square = { side: Text }
 export type Shape = Circle | Square
 export const $unmatched = (shape: Shape): Text =>
   match shape {
@@ -825,7 +855,9 @@ Deno.test("a literal result in a generated function is as const", () => {
 Deno.test("a data type with field names from Object.prototype keeps them valid", () => {
   const output = oneModule(`
 type Text = string
-export nominal Odd = { constructor: Text, __proto__: Text, toString?: Text }
+export type Odd = { constructor: Text, __proto__: Text, toString?: Text }
+export type Other = { n: Text }
+export type Odds = Odd | Other
 export const make = (): Odd => Odd({ constructor: "c", __proto__: "p" })
 export const ts = (o: Odd): Option<Text> => o.toString
 `);
@@ -1017,7 +1049,8 @@ Deno.test("source code imports a host interface data type, error, and service fr
     'import { Boom, Clock, Count, Text, Tok } from "./h.effi.ts";',
   );
   assertStringIncludes(text, 'import { ClockLive } from "./adapter.ts";');
-  assertStringIncludes(text, "Tok.make({ id })");
+  // The record `Tok` has no tag, so the literal is a plain object.
+  assertStringIncludes(text, "({ id })");
   assertStringIncludes(text, 'new Boom({ message: "x" })');
   assertEquals(text.includes('"./h.ts"'), false);
 });

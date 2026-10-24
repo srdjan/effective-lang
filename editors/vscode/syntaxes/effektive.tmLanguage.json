@@ -90,12 +90,8 @@
           "match": "\\b(?:type|error|service|provider)\\b"
         },
         {
-          "name": "storage.type.declaration.effektive",
-          "match": "\\bnominal\\b(?=\\s+[A-Za-z_$][A-Za-z0-9_$]*\\s*=)"
-        },
-        {
           "name": "storage.modifier.effektive",
-          "match": "\\bsealed\\b(?=\\s+nominal\\s+[A-Za-z_$][A-Za-z0-9_$]*\\s*=)"
+          "match": "\\bsealed\\b(?=\\s+type\\s+[A-Za-z_$][A-Za-z0-9_$]*\\s*=)"
         },
         {
           "name": "keyword.other.clause.effektive",

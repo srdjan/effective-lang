@@ -59,7 +59,12 @@ import {
   type TypeEnv,
   TypeLowerer,
 } from "./check.ts";
-import { domainOf, flattenMembers, type LiteralValue } from "./patterns.ts";
+import {
+  domainOf,
+  flattenIdentityMembers,
+  flattenMembers,
+  type LiteralValue,
+} from "./patterns.ts";
 import {
   type ArrowParameterFact,
   type BodyTable,
@@ -74,7 +79,7 @@ import {
   without,
 } from "./tables.ts";
 import type { TypeRef, TypeTable } from "./types.ts";
-import { isErrorId, shortName } from "./ids.ts";
+import { isErrorId, isTypeId, shortName } from "./ids.ts";
 import {
   type Arg,
   type BuiltinContext,
@@ -795,13 +800,16 @@ class BodyChecker
     const base = this.table.brandBaseOf(id);
     if (base === undefined) {
       const infos = args.map((a) => this.argInfo(a));
-      this.report(
-        "type-mismatch/010",
-        `\`${
-          shortName(id)
-        }\` has no identity; only a type with identity is a constructor`,
-        node,
-      );
+      // A body that did not parse has the error type, so its uses report nothing more.
+      if (!this.hasErrorRecord(this.table.named(id))) {
+        this.report(
+          "type-mismatch/010",
+          `\`${
+            shortName(id)
+          }\` has no identity; only a type with identity is a constructor`,
+          node,
+        );
+      }
       return this.finish(node, this.table.error, combine(infos));
     }
     if (!this.table.ownsSealed(this.module, id)) {
@@ -1299,9 +1307,10 @@ class BodyChecker
     return this.finish(node, read.type, baseInfo);
   }
 
-  /** True for a nominal type or an error whose body did not parse. */
+  /** True for a type or an error whose body did not parse. */
   private hasErrorRecord(ref: TypeRef): boolean {
     const node = this.table.node(this.table.unfold(ref));
+    if (node.kind === "error") return true;
     if (node.kind !== "named") return false;
     const record = isErrorId(node.id)
       ? this.table.errorRecordOf(node.id)
@@ -1485,7 +1494,12 @@ class BodyChecker
     return this.finish(field, info.type, info);
   }
 
-  /** Picks the record type that a construction targets. */
+  /**
+   * Picks the record type that a construction targets. `construct` is set when
+   * the expected type is exactly a tagged record, so the literal is an implicit
+   * construction. `variants` is set when a record literal at a union picks a
+   * tagged record: the author must write the constructor.
+   */
   private recordTarget(
     expected: TypeRef | undefined,
     labels: readonly string[],
@@ -1498,15 +1512,37 @@ class BodyChecker
       readonly type: TypeRef;
       readonly optional: boolean;
     }[];
+    readonly construct?: TypeId;
+    readonly variants?: readonly TypeId[];
   } | undefined {
     if (expected === undefined) return undefined;
-    const unfolded = this.table.unfold(expected);
-    const node = this.table.node(unfolded);
-    if (node.kind === "record") return { ref: expected, fields: node.fields };
+    const table = this.table;
+    const unfolded = table.unfold(expected);
+    const node = table.node(unfolded);
+    if (node.kind === "record") {
+      const direct = table.node(table.unfoldTransparent(expected));
+      const tagged = direct.kind === "named" && isTypeId(direct.id) &&
+          table.dataRecordOf(direct.id) !== undefined
+        ? direct.id
+        : undefined;
+      return {
+        ref: expected,
+        fields: node.fields,
+        ...(tagged === undefined ? {} : { construct: tagged }),
+      };
+    }
     if (node.kind !== "union") return undefined;
-    const candidates = flattenMembers(this.table, expected).flatMap((m) => {
-      const mNode = this.table.node(m);
-      return mNode.kind === "record" ? [{ ref: m, fields: mNode.fields }] : [];
+    const members = flattenIdentityMembers(table, expected);
+    const candidates = members.flatMap((m) => {
+      const mNode = table.node(m);
+      const id = mNode.kind === "named" && isTypeId(mNode.id) &&
+          table.dataRecordOf(mNode.id) !== undefined
+        ? mNode.id
+        : undefined;
+      const body = table.node(table.unfold(m));
+      return body.kind === "record"
+        ? [{ ref: m, fields: body.fields, tagged: id }]
+        : [];
     });
     const fitting = candidates.filter((c) =>
       labels.every((l) => c.fields.some((f) => f.name === l)) &&
@@ -1516,7 +1552,7 @@ class BodyChecker
       [...literals].every(([label, value]) => {
         const field = c.fields.find((f) => f.name === label);
         return field !== undefined &&
-          this.assignable(this.table.literal(value), field.type);
+          this.assignable(table.literal(value), field.type);
       })
     );
     const narrowed = (discriminated.length > 0 ? discriminated : fitting)
@@ -1528,7 +1564,19 @@ class BodyChecker
               this.assignable(type, field.type);
           }),
       );
-    return narrowed[0] ?? discriminated[0] ?? fitting[0] ?? candidates[0];
+    const chosen = narrowed[0] ?? discriminated[0] ?? fitting[0] ??
+      candidates[0];
+    if (chosen === undefined) return undefined;
+    if (chosen.tagged !== undefined) {
+      return {
+        ref: chosen.ref,
+        fields: chosen.fields,
+        variants: candidates.flatMap((c) =>
+          c.tagged === undefined ? [] : [c.tagged]
+        ),
+      };
+    }
+    return { ref: chosen.ref, fields: chosen.fields };
   }
 
   /**
@@ -1582,7 +1630,19 @@ class BodyChecker
       const value = literalOf(this.tree, valueNode);
       if (value !== undefined) literals.set(parts.label, value);
     }
-    const target = this.recordTarget(expected, labels, literals, known);
+    const picked = this.recordTarget(expected, labels, literals, known);
+    // A record literal does not pick a tagged variant, so it has no target.
+    const target = picked?.variants === undefined ? picked : undefined;
+    if (picked?.variants !== undefined) {
+      this.report(
+        "type-mismatch/003",
+        `a record literal does not pick a variant; write ${
+          picked.variants.map((v) => `\`${shortName(v)}({ ... })\``).sort()
+            .join(" or ")
+        }`,
+        node,
+      );
+    }
     const seen = new Set<string>();
     const infos: NodeInfo[] = [];
     const inferred: { name: string; type: TypeRef; optional: boolean }[] = [];
@@ -1645,8 +1705,13 @@ class BodyChecker
         );
       }
       type = target.ref;
+      if (target.construct !== undefined) {
+        this.fact(node, { kind: "data-construction", data: target.construct });
+      }
     } else {
-      type = this.table.record(inferred);
+      type = picked?.variants === undefined
+        ? this.table.record(inferred)
+        : this.table.error;
     }
     return this.finish(node, type, combine(infos));
   }
@@ -2050,10 +2115,10 @@ class BodyChecker
     return joined ?? this.table.never;
   }
 
-  /** True when every member of both types is a nominal record or an Effektive error, as in `domainOf`. */
+  /** True when every member of both types is a tagged record or an Effektive error, as in `domainOf`. */
   private isNominalJoin(a: TypeRef, b: TypeRef): boolean {
     return [a, b].every((type) =>
-      flattenMembers(this.table, type).every((member) => {
+      flattenIdentityMembers(this.table, type).every((member) => {
         const node = this.table.node(member);
         return node.kind === "named" &&
           (isErrorId(node.id) ||

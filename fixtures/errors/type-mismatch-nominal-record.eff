@@ -1,8 +1,11 @@
-nominal UserId = string
+type UserId = string
 
-nominal User = { id: UserId, name: string, active: boolean }
+type User = { id: UserId, name: string, active: boolean }
 
 type Dog = { id: UserId, name: string, active: boolean }
+
+// A union alias of the module tags the records that it lists.
+type Pet = User | Dog
 
 const activate = (user: User): User => ({ ...user, active: true })
 
@@ -12,6 +15,4 @@ const wrong = (): User =>
   // error: type-mismatch/003
   activate(dog)
 
-const literal = (): User =>
-  // error: type-mismatch/003
-  ({ id: UserId("u2"), name: "Bo", active: true })
+const literal = (): User => ({ id: UserId("u2"), name: "Bo", active: true })

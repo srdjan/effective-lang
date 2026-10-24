@@ -1,5 +1,5 @@
-export nominal OrderId = string
-export nominal Cents = int
+export type OrderId = string
+export type Cents = int
 export type Count = int
 export type Bool = boolean
 export type Text = string
@@ -9,18 +9,18 @@ export type Receipt = { number: Text }
 export type Tracking = { code: Text }
 export type Reason = { note: Text }
 
-export nominal Pending = { id: OrderId, total: Cents }
-export nominal Paid = { id: OrderId, total: Cents, receipt: Receipt }
-export nominal Shipped = { id: OrderId, receipt: Receipt, tracking: Tracking }
-export nominal Cancelled = { id: OrderId, reason: Reason }
+export type Pending = { id: OrderId, total: Cents }
+export type Paid = { id: OrderId, total: Cents, receipt: Receipt }
+export type Shipped = { id: OrderId, receipt: Receipt, tracking: Tracking }
+export type Cancelled = { id: OrderId, reason: Reason }
 export type Order = Pending | Paid | Shipped | Cancelled
 
 export error InvalidTransition = { id: OrderId, state: StateName }
 
-export nominal Fixed = { amount: Cents }
-export nominal Times = { factor: Count }
-export nominal Capped = { rule: Rule, cap: Cents }
-export nominal Sum = { parts: Rule[] }
+export type Fixed = { amount: Cents }
+export type Times = { factor: Count }
+export type Capped = { rule: Rule, cap: Cents }
+export type Sum = { parts: Rule[] }
 export type Rule = Fixed | Times | Capped | Sum
 
 export type OrderInput = { id: Text, total: Count }

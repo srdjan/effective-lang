@@ -144,7 +144,7 @@ function hoverPass(
     ) continue;
     return {
       span: occurrence.span,
-      contract: `sealed nominal ${shortName(occurrence.target.id)}`,
+      contract: `sealed type ${shortName(occurrence.target.id)}`,
       declaration: undefined,
     };
   }
@@ -260,7 +260,6 @@ export type EditorSymbolKind =
   | "constant"
   | "type"
   | "error"
-  | "data"
   | "service"
   | "method"
   | "provider";

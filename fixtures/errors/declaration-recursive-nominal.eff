@@ -1,32 +1,44 @@
 // A cycle that passes through an array, an Option, or a union with an outside member is legal.
-nominal Tree = { children: Tree[] }
+type Tree = { children: Tree[] }
 
-nominal Opt = { next: Option<Opt> }
+type Opt = { next: Option<Opt> }
 
-nominal Forest = { first: Option<Node> }
+type Forest = { first: Option<Node> }
 
-nominal Node = { rest: Forest }
+type Node = { rest: Forest }
 
-nominal Cons = { tail: List }
+type Cons = { tail: List }
 
-nominal Nil = {}
+type Nil = {}
 
 type List = Cons | Nil
 
+// A union alias of the module tags each record that it lists.
+type Linked = Opt | Forest | Node
+
+// A record that no union lists has no tag. Its cycles follow the alias rules, and an Option is no guard.
+// error: declaration/007
+type Lone = { next: Option<Lone> }
+
+// error: declaration/007
+type Odd = { even: Option<Even> }
+
+type Even = { odd: Option<Odd> }
+
 // A cycle of required fields only has no base case.
 // error: declaration/007
-nominal Loop = { next: Loop }
+type Loop = { next: Loop }
 
 // error: declaration/007
-nominal Ping = { pong: Pong }
+type Ping = { pong: Pong }
 
-nominal Pong = { ping: Ping }
+type Pong = { ping: Ping }
 
 // A union with no member outside the cycle has no base case.
 // error: declaration/007
-nominal Left = { next: Left | Right }
+type Left = { next: Left | Right }
 
-nominal Right = { next: Left }
+type Right = { next: Left }
 
 // A cycle of aliases alone stays rejected, even beside a data type.
 // error: declaration/007
@@ -34,10 +46,13 @@ type First = Second
 
 type Second = First | Anchor
 
-nominal Anchor = { next: Option<Second> }
+type Anchor = { next: Option<Second> }
 
 // A cycle through an error keeps the old rule.
 // error: declaration/007
-nominal Wraps = { cause: Option<Failure> }
+type Wraps = { cause: Option<Failure> }
 
 error Failure = { inner: Option<Wraps> }
+
+// A union alias tags these records too. A tagged record needs a base case as well.
+type Cycles = Loop | Ping | Pong | Left | Right

@@ -96,8 +96,8 @@ const ROWS: readonly SiteRow[] = [
   {
     builtin: "brand constructor",
     change: "give the brand a second argument",
-    valid: 'nominal UserId = string\nconst f = () => UserId("a")\n',
-    invalid: 'nominal UserId = string\nconst f = () => UserId("a", "b")\n',
+    valid: 'type UserId = string\nconst f = () => UserId("a")\n',
+    invalid: 'type UserId = string\nconst f = () => UserId("a", "b")\n',
     code: "type-mismatch/004",
     fragment: "the nominal type `UserId` takes one argument, but 2 are given",
   },

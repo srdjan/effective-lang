@@ -529,7 +529,6 @@ class Resolver {
       declarationId(prefix, module, decl.name);
     switch (decl.kind) {
       case "type":
-      case "data":
         return { target: { kind: "type", id: id("type") }, span };
       case "error":
         return { target: { kind: "error", id: id("error") }, span };
@@ -1026,7 +1025,6 @@ class Resolver {
     switch (decl.kind) {
       case "type":
       case "error":
-      case "data":
         for (const kid of this.kids(node)) {
           if (kid !== decl.nameNode) this.resolveType(kid);
         }

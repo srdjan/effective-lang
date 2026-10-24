@@ -5,12 +5,12 @@ type Step = (n: Count) => Count
 type Steps = Step[]
 
 // error: declaration/015
-nominal Direct = { run: (n: Count) => Count }
+type Direct = { run: (n: Count) => Count }
 
 // error: declaration/015
 error Failed = { run: (n: Count) => Count }
 
-nominal Wrapped = {
+type Wrapped = {
   // error: declaration/015
   maybe: Option<Step>,
   // error: declaration/015
@@ -22,7 +22,7 @@ nominal Wrapped = {
 }
 
 // error: declaration/015
-nominal ThroughAlias = { steps: Steps }
+type ThroughAlias = { steps: Steps }
 
 // The alias that the field names comes later in the file.
 // error: declaration/015
@@ -30,7 +30,7 @@ error Late = { later: LaterSteps }
 
 type LaterSteps = Step[]
 
-nominal Deferred = {
+type Deferred = {
   // error: declaration/015
   job: Effect<Count>,
   // error: declaration/015
@@ -39,6 +39,9 @@ nominal Deferred = {
   items: Stream<Count>
 }
 
-nominal Fine = { count: Count, direct: Direct, raw: unknown }
+type Fine = { count: Count, direct: Direct, raw: unknown }
 
 error FineToo = { count: Count }
+
+// A union alias of the module tags each record that it lists.
+type Tagged = Direct | Wrapped | ThroughAlias | Deferred | Fine

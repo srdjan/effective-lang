@@ -161,7 +161,7 @@ export const DIAGNOSTIC_CODES = {
   "type-mismatch/010": {
     category: "type-mismatch",
     description:
-      "A prelude function or constructor gets an argument that it does not accept: fail, retry, provide, a nominal constructor, or a collection builtin.",
+      "A prelude function or constructor gets an argument that it does not accept: fail, retry, provide, an identity constructor, or a collection builtin.",
   },
   "type-mismatch/011": {
     category: "type-mismatch",
@@ -274,12 +274,12 @@ export const DIAGNOSTIC_CODES = {
   "declaration/007": {
     category: "declaration",
     description:
-      "A type definition refers to itself, directly or through other aliases, nominal types, or errors.",
+      "A type definition refers to itself, directly or through other aliases, types with identity, or errors.",
   },
   "declaration/009": {
     category: "declaration",
     description:
-      "A nominal or error declaration has a field named _tag, which generated tags reserve. A nominal type over a record alias has the field through the alias.",
+      "A tagged record or an error declaration has a field named _tag, which generated tags reserve. A union alias of its module tags a record.",
   },
   "declaration/010": {
     category: "declaration",
@@ -298,22 +298,22 @@ export const DIAGNOSTIC_CODES = {
   "declaration/013": {
     category: "declaration",
     description:
-      "A primitive type (string, int, number, boolean, or a literal type) appears outside the body of a type, nominal, or error declaration.",
-  },
-  "declaration/014": {
-    category: "declaration",
-    description:
-      "A nominal body is a nominal record, or a union that has a record or a nominal record as a member. Declare each record alone.",
+      "A primitive type (string, int, number, boolean, or a literal type) appears outside the body of a type or error declaration.",
   },
   "declaration/015": {
     category: "declaration",
     description:
-      "A nominal or error declaration has a field, or a nominal declaration has a body, whose type contains a function or deferred type (Effect, Fiber, Stream, Sink, Schedule, RetrySchedule, Ref, Codec, Schema, provider, or scope), directly or through an alias. The emitter has no schema for such a type.",
+      "A tagged record or an error declaration has a field whose type contains a function or deferred type (Effect, Fiber, Stream, Sink, Schedule, RetrySchedule, Ref, Codec, Schema, provider, or scope), directly or through an alias. The emitter has no schema for such a type.",
   },
   "declaration/016": {
     category: "declaration",
     description:
-      "A nominal or error field, or the body of a nominal type, contains an opaque type, directly or through an alias. An opaque type has no schema, so the emitter cannot build one for the declaration.",
+      "A tagged record field or an error field contains an opaque type, directly or through an alias. An opaque type has no schema, so the emitter cannot build one for the declaration.",
+  },
+  "declaration/017": {
+    category: "declaration",
+    description:
+      "A sealed declaration has a body without identity: a union with a non-literal member, or a bare name. Only a type with identity can be sealed.",
   },
   "module/001": {
     category: "module",
@@ -342,22 +342,21 @@ export const DIAGNOSTIC_CODES = {
   "sealed/001": {
     category: "sealed",
     description:
-      "A module constructs a sealed nominal type that another module declares.",
+      "A module constructs a sealed type that another module declares.",
   },
   "sealed/002": {
     category: "sealed",
     description:
-      "A record update retains a sealed nominal type outside its declaring module.",
+      "A record update retains a sealed type outside its declaring module.",
   },
   "sealed/003": {
     category: "sealed",
-    description:
-      "Arithmetic uses a sealed nominal type outside its declaring module.",
+    description: "Arithmetic uses a sealed type outside its declaring module.",
   },
   "sealed/004": {
     category: "sealed",
     description:
-      "A module derives or executes a Schema or Codec that produces a foreign sealed nominal type.",
+      "A module derives or executes a Schema or Codec that produces a foreign sealed type.",
   },
   "host-boundary/001": {
     category: "host-boundary",

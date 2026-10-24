@@ -872,10 +872,16 @@ if (await Effect.runPromise(Schema.encodeEffect(converted)("Ada")) !== "Ada") th
 const invalid = await Effect.runPromiseExit(readScalar(true));
 if (!Exit.isFailure(invalid) || !(Option.getOrUndefined(Cause.findErrorOption(invalid.cause)) instanceof Schema.SchemaError)) throw new Error("invalid scalar");
 
-const record = { name: "Ada", score: 3 };
-if (JSON.stringify(await Effect.runPromise(Schema.decodeUnknownEffect(shortFirst)(record))) !== '{"name":"Ada"}') throw new Error("short first decode");
-if (JSON.stringify(await Effect.runPromise(Schema.decodeUnknownEffect(longFirst)(record))) !== JSON.stringify(record)) throw new Error("long first decode");
-if (JSON.stringify(await Effect.runPromise(Schema.encodeEffect(shortFirst)(record))) !== '{"name":"Ada"}') throw new Error("short first encode");
+// The union lists two records of the module, so each carries a tag that picks its branch.
+const record = { _tag: "main#Long", name: "Ada", score: 3 } as const;
+const short = { _tag: "main#Short", name: "Bo" } as const;
+for (const schema of [shortFirst, longFirst]) {
+  if (JSON.stringify(await Effect.runPromise(Schema.decodeUnknownEffect(schema)(record))) !== JSON.stringify(record)) throw new Error("tagged long decode");
+  if (JSON.stringify(await Effect.runPromise(Schema.decodeUnknownEffect(schema)(short))) !== JSON.stringify(short)) throw new Error("tagged short decode");
+  if (JSON.stringify(await Effect.runPromise(Schema.encodeEffect(schema)(record))) !== JSON.stringify(record)) throw new Error("tagged long encode");
+}
+const untagged = await Effect.runPromiseExit(Schema.decodeUnknownEffect(shortFirst)({ name: "Ada", score: 3 }));
+if (!Exit.isFailure(untagged)) throw new Error("untagged record accepted");
 
 const calls: string[] = [];
 const check = Layer.succeed(Check)({ accept: (value) => Effect.sync(() => { calls.push(value); return value; }).pipe(

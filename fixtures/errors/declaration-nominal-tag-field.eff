@@ -1,8 +1,0 @@
-// error: declaration/009
-nominal Broken = { _tag: string, name: string }
-
-type Fine = { _tag: string }
-
-// A record alias gives the same field to the nominal type.
-// error: declaration/009
-nominal ViaAlias = Fine

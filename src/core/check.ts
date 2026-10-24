@@ -45,7 +45,7 @@ import type {
 } from "./ir.ts";
 import { TokenKind } from "./lex.ts";
 import { type Solved, stronglyConnectedComponents } from "./modes.ts";
-import { flattenMembers } from "./patterns.ts";
+import { flattenIdentityMembers } from "./patterns.ts";
 import type { ModuleInfo } from "./project.ts";
 import type { Target } from "./resolve.ts";
 import type { Result, Span } from "./source.ts";
@@ -686,7 +686,7 @@ export class TypeLowerer {
 
   /**
    * The fields of a record type in source order. Reports duplicate names, void
-   * fields, and, for a nominal or error declaration, a field named `_tag`.
+   * fields, and, for an error declaration, a field named `_tag`.
    */
   fields(node: NodeId, errorDeclaration: boolean): LoweredField[] {
     const result: LoweredField[] = [];
@@ -1333,13 +1333,11 @@ type TypeNodeInfo =
     | { readonly kind: "error"; readonly id: ErrorId }
   );
 
-/** A nominal declaration that waits for the record classification of `classifyNominal`. */
-type PendingNominal = {
-  readonly pending: true;
+/** A record declaration that waits for tag inference. */
+type RecordIdentity = {
   readonly entry: DeclEntry;
   readonly id: TypeId;
   readonly index: number;
-  readonly lowered: Lowered;
   readonly literal: LoweredField[] | undefined;
   readonly span: Span;
 };
@@ -1354,17 +1352,14 @@ class ModuleChecker {
   private readonly table: TypeTable;
   private readonly types: TypeDecl[] = [];
   private readonly errors: ErrorDecl[] = [];
-  /** The fields and record bodies of nominal and error declarations, for the deferred-type rule. */
+  /** The fields and record bodies of tagged records and error declarations, for the deferred-type rule. */
   private readonly nominalFields: {
     readonly subject: string;
     readonly ref: TypeRef;
     readonly span: Span;
   }[] = [];
-  /** The body of every nominal declaration that is not a record, for rule 12. */
-  private readonly nominalBodies: {
-    readonly id: TypeId;
-    readonly span: Span;
-  }[] = [];
+  /** The record declarations of this module, which a union alias may tag. */
+  private readonly recordIdentities: RecordIdentity[] = [];
   private readonly services: ServiceDecl[] = [];
   private readonly methodTypes = new Map<CapabilityId, TypeRef>();
   private readonly values = new Map<ValueId, ValueSignature>();
@@ -1373,8 +1368,6 @@ class ModuleChecker {
   constructor(
     private readonly info: ModuleInfo,
     readonly env: TypeEnv,
-    /** The alias bodies of the imported modules, in source field order. */
-    private readonly importedAliases: ReadonlyMap<string, Type>,
   ) {
     this.tree = env.tree;
     this.table = env.table;
@@ -1396,20 +1389,17 @@ class ModuleChecker {
 
   run(): ModuleDeclarations {
     const entries = this.entries();
-    const slots: (TypeNodeInfo | PendingNominal)[] = [];
+    const infos: TypeNodeInfo[] = [];
     for (const entry of entries) {
-      if (entry.kind === "type") slots.push(this.checkType(entry));
-      else if (entry.kind === "data") slots.push(this.checkNominal(entry));
-      else if (entry.kind === "error") slots.push(this.checkError(entry));
+      if (entry.kind === "type") infos.push(this.checkType(entry));
+      else if (entry.kind === "error") infos.push(this.checkError(entry));
     }
-    // A body is a record after aliases unfold, so the table must hold every definition first.
-    const infos = slots.map((slot) =>
-      "pending" in slot ? this.classifyNominal(slot) : slot
-    );
+    // A union alias may list a record that a later declaration defines, so the
+    // table must hold every definition first.
+    this.inferTags(infos);
     const guarded = this.checkCycles(infos);
     this.checkDepths(infos, guarded);
     this.checkDeferredFields();
-    this.checkNominalBodies();
     this.checkPrimitivePositions();
     for (const entry of entries) {
       if (entry.kind === "service") this.checkService(entry);
@@ -1422,8 +1412,6 @@ class ModuleChecker {
       if (!entry.exported) continue;
       const prefix = entry.kind === "const" || entry.kind === "provider"
         ? "value"
-        : entry.kind === "data"
-        ? "type"
         : entry.kind;
       this.exports.push(this.id(prefix, entry.name));
     }
@@ -1442,7 +1430,7 @@ class ModuleChecker {
   }
 
   /**
-   * Rule R1: a primitive type node can occur only inside a type, nominal, or error declaration.
+   * Rule R1: a primitive type node can occur only inside a type or error declaration.
    * The walk skips those declarations and the regions that the parser already reported.
    * A broken declaration is checked, because its annotations parsed.
    */
@@ -1451,15 +1439,15 @@ class ModuleChecker {
     walk(tree, tree.root, (node) => {
       const kind = kindOf(tree, node);
       if (
-        kind === SyntaxKind.TypeDecl || kind === SyntaxKind.DataDecl ||
-        kind === SyntaxKind.ErrorDecl || kind === SyntaxKind.Error
+        kind === SyntaxKind.TypeDecl || kind === SyntaxKind.ErrorDecl ||
+        kind === SyntaxKind.Error
       ) return false;
       if (kind === SyntaxKind.LiteralType || this.isPrimitiveName(node)) {
         this.lowerer.report(
           "declaration/013",
           `the primitive type \`${
             nodeText(tree, node)
-          }\` can occur only inside a type, nominal, or error declaration`,
+          }\` can occur only inside a type or error declaration`,
           nodeSpan(tree, node),
         );
       }
@@ -1516,6 +1504,8 @@ class ModuleChecker {
     );
     let definition: TypeDecl["definition"];
     let kind: "alias" | "brand" = "alias";
+    let literal: LoweredField[] | undefined;
+    let record = false;
     if (opaque) {
       this.table.defineBrand(id, this.table.unknown);
       this.table.markOpaque(id);
@@ -1525,19 +1515,37 @@ class ModuleChecker {
       };
       kind = "brand";
     } else {
+      // A literal record keeps its field spans, for the tag checks.
+      literal = body !== undefined &&
+          kindOf(this.tree, body) === SyntaxKind.RecordType
+        ? this.lowerer.fields(body, false)
+        : undefined;
       const lowered = body === undefined
         ? this.lowerer.errorLowered()
+        : literal !== undefined
+        ? this.lowerer.recordOf(literal)
         : this.lowerer.lower(body);
       this.table.defineAlias(id, lowered.ref);
       if (body !== undefined && this.hasIdentity(lowered.ref)) {
         this.table.markIdentity(id);
         if (entry.sealed) this.table.markSealed(id);
+        record = lowered.ir.kind === "record";
         definition = {
           kind: "nominal",
           base: lowered.ir,
           ...(entry.sealed ? { sealed: true } : {}),
         };
       } else {
+        if (
+          entry.sealed && body !== undefined &&
+          this.table.node(lowered.ref).kind !== "error"
+        ) {
+          this.lowerer.report(
+            "declaration/017",
+            `\`sealed\` needs a type with identity, and the body of \`${entry.name}\` is a union with a non-literal member or a bare name`,
+            entry.nameSpan,
+          );
+        }
         definition = { kind: "alias", type: lowered.ir };
       }
     }
@@ -1554,6 +1562,15 @@ class ModuleChecker {
       definition.kind === "alias" ? definition.type : definition.base,
       refs,
     );
+    if (record) {
+      this.recordIdentities.push({
+        entry,
+        id,
+        index: this.types.length - 1,
+        literal,
+        span: nodeSpan(this.tree, body ?? entry.node),
+      });
+    }
     return {
       id,
       name: entry.name,
@@ -1565,14 +1582,13 @@ class ModuleChecker {
   }
 
   /**
-   * A `type` body gives identity unless it is a record, a union with a
-   * non-literal member, a bare name, or the error type. A record stays a
-   * transparent alias for now.
+   * A `type` body gives identity unless it is a union with a non-literal
+   * member, a bare name, or the error type. A record gives identity, and a
+   * union alias of the module may tag it.
    */
   private hasIdentity(body: TypeRef): boolean {
     const node = this.table.node(body);
     switch (node.kind) {
-      case "record":
       case "named":
       case "error":
         return false;
@@ -1584,139 +1600,101 @@ class ModuleChecker {
   }
 
   /**
-   * Lowers the body of a nominal declaration. The table gets a provisional
-   * definition, and `classifyNominal` decides later whether the body is a record.
+   * A record identity of this module gets a tag when a transparent union alias
+   * of this module lists it, through transparent aliases. Every member of the
+   * union must be a record identity of this module, a tagged record of another
+   * module, or an error. Otherwise the union tags nothing. A tagged record gets
+   * the tagged IR, the `_tag` check, and the field rules of a tagged record.
    */
-  private checkNominal(entry: DeclEntry): PendingNominal {
-    const id = this.id("type", entry.name);
-    const body = this.bodyOf(entry);
-    // A literal record keeps its source field order and reports a `_tag` field at its name.
-    const literal = body !== undefined &&
-        kindOf(this.tree, body) === SyntaxKind.RecordType
-      ? this.lowerer.fields(body, true)
-      : undefined;
-    // A body that did not parse gets the error type, so its uses report nothing more.
-    const lowered = body === undefined
-      ? this.lowerer.errorLowered()
-      : literal !== undefined
-      ? this.lowerer.recordOf(literal)
-      : this.lowerer.lower(body);
-    this.table.defineBrand(id, lowered.ref, entry.sealed);
-    this.types.push({
-      kind: "type",
-      id,
-      name: entry.name,
-      definition: {
-        kind: "nominal",
-        base: lowered.ir,
-        ...(entry.sealed ? { sealed: true } : {}),
-      },
-      span: entry.span,
-    });
-    return {
-      pending: true,
-      entry,
-      id,
-      index: this.types.length - 1,
-      lowered,
-      literal,
-      span: nodeSpan(this.tree, body ?? entry.node),
-    };
+  private inferTags(infos: TypeNodeInfo[]): void {
+    const local = new Set(this.recordIdentities.map((r) => r.id));
+    const tagged = new Set<TypeId>();
+    for (const info of infos) {
+      if (info.kind !== "alias" || this.table.isIdentity(info.id)) continue;
+      const body = this.table.aliasOf(info.id);
+      if (body === undefined || this.table.node(body).kind !== "union") {
+        continue;
+      }
+      const members = flattenIdentityMembers(this.table, body).map((m) =>
+        this.table.node(m)
+      );
+      const ok = members.every((n) =>
+        n.kind === "named" &&
+        (isErrorId(n.id) ||
+          (isTypeId(n.id) &&
+            (local.has(n.id) || this.table.dataRecordOf(n.id) !== undefined)))
+      );
+      if (!ok) continue;
+      for (const n of members) {
+        if (n.kind === "named" && isTypeId(n.id) && local.has(n.id)) {
+          tagged.add(n.id);
+        }
+      }
+    }
+    for (const record of this.recordIdentities) {
+      if (!tagged.has(record.id)) continue;
+      const at = infos.findIndex((info) => info.id === record.id);
+      const { name, nameSpan, start, refs } = infos[at];
+      infos[at] = { name, nameSpan, start, refs, kind: "data", id: record.id };
+      this.tagRecord(record);
+    }
   }
 
-  /**
-   * A nominal body that is a record after aliases unfold is a tagged record at
-   * run time. The IR base of such a body is the unfolded
-   * record, so the validator and the emitter need no alias walk.
-   */
-  private classifyNominal(pending: PendingNominal): TypeNodeInfo {
-    const { entry, id, lowered, literal, span } = pending;
-    const unfolded = this.table.unfold(lowered.ref);
-    const node = this.table.node(unfolded);
-    let base = lowered.ir;
-    let kind: "brand" | "data" = "brand";
-    if (node.kind === "error") {
-      // A body that did not parse or resolve acts as a record, so its uses report nothing more.
-      kind = "data";
-      this.table.defineData(id, unfolded, entry.sealed);
-    } else if (node.kind === "record") {
-      kind = "data";
-      const hasTag = node.fields.some((f) => f.name === "_tag");
-      if (hasTag) {
-        this.lowerer.report(
-          "declaration/009",
-          "the field name `_tag` is reserved for generated tags",
-          span,
-        );
+  /** Marks a record identity as tagged, and applies the rules for the fields of a tagged record. */
+  private tagRecord(record: RecordIdentity): void {
+    const { entry, id, literal, span } = record;
+    const declaration = this.types[record.index];
+    const definition = declaration.definition;
+    if (definition.kind !== "nominal") return;
+    const aliased = this.table.aliasOf(id);
+    const node = aliased === undefined ? undefined : this.table.node(aliased);
+    let base = definition.base;
+    if (node?.kind === "record" && node.fields.some((f) => f.name === "_tag")) {
+      this.lowerer.report(
+        "declaration/009",
+        "the field name `_tag` is reserved for generated tags",
+        literal?.find((f) => f.name === "_tag")?.span ?? span,
+      );
+      // The record loses the reserved field, so its uses report nothing more.
+      this.table.defineAlias(
+        id,
+        this.table.record(node.fields.filter((f) => f.name !== "_tag")),
+      );
+      this.table.markIdentity(id);
+      if (entry.sealed) this.table.markSealed(id);
+      if (base.kind === "record") {
+        base = {
+          kind: "record",
+          fields: base.fields.filter((f) => f.name !== "_tag"),
+        };
       }
-      const fields = node.fields.filter((f) => f.name !== "_tag");
-      const record = hasTag ? this.table.record(fields) : unfolded;
-      this.table.defineData(id, record, entry.sealed);
-      base = literal !== undefined && !hasTag
-        ? lowered.ir
-        : (hasTag ? undefined : this.aliasRecordIr(lowered.ir)) ??
-          this.table.toIr(record);
-      if (literal !== undefined) {
-        for (const field of literal) {
-          this.nominalFields.push({
-            subject: `the field \`${field.name}\``,
-            ref: field.type.ref,
-            span: field.typeSpan,
-          });
-        }
-      } else {
+    }
+    this.table.markTagged(id);
+    if (literal !== undefined) {
+      for (const field of literal) {
+        if (field.name === "_tag") continue;
         this.nominalFields.push({
-          subject: `the body of \`${entry.name}\``,
-          ref: record,
-          span,
+          subject: `the field \`${field.name}\``,
+          ref: field.type.ref,
+          span: field.typeSpan,
         });
       }
     } else {
-      // A brand and a `type` identity share one meaning: an alias with identity.
-      this.nominalBodies.push({ id, span });
-      this.table.defineAlias(id, lowered.ref);
-      this.table.markIdentity(id);
-      if (entry.sealed) this.table.markSealed(id);
+      this.nominalFields.push({
+        subject: `the body of \`${entry.name}\``,
+        ref: this.table.aliasOf(id) ?? this.table.error,
+        span,
+      });
     }
-    this.types[pending.index] = {
-      ...this.types[pending.index],
+    this.types[record.index] = {
+      ...declaration,
       definition: {
         kind: "nominal",
         base,
-        ...(kind === "data" ? { tagged: true } : {}),
+        tagged: true,
         ...(entry.sealed ? { sealed: true } : {}),
       },
     };
-    const refs = new Set<string>();
-    referencedIds(base, refs);
-    return {
-      id,
-      name: entry.name,
-      nameSpan: entry.nameSpan,
-      start: entry.span.start,
-      kind,
-      refs,
-    };
-  }
-
-  /**
-   * The record at the end of an alias chain, as the alias declares it. The
-   * table sorts record fields by name, and the emitted struct keeps the source order.
-   */
-  private aliasRecordIr(ir: Type): Type | undefined {
-    const seen = new Set<string>();
-    let current = ir;
-    while (current.kind === "named" && !seen.has(current.id)) {
-      const id = current.id;
-      seen.add(id);
-      const local = this.types.find((d) => d.id === id);
-      const next = local?.definition.kind === "alias"
-        ? local.definition.type
-        : this.importedAliases.get(id);
-      if (next === undefined) return undefined;
-      current = next;
-    }
-    return current.kind === "record" ? current : undefined;
   }
 
   private checkError(entry: DeclEntry): TypeNodeInfo {
@@ -1794,10 +1772,17 @@ class ModuleChecker {
       if (component.length === 1 && first.kind === "alias") {
         const declaration = this.types.find((d) => d.id === first.id);
         const aliased = this.table.aliasOf(first.id);
+        const definition = declaration?.definition;
+        // An untagged record identity is a guarded alias like a record alias.
+        const body = definition?.kind === "alias"
+          ? definition.type
+          : definition?.kind === "nominal"
+          ? definition.base
+          : undefined;
         if (
-          declaration?.definition.kind === "alias" &&
+          body !== undefined &&
           guardedRecord(
-            declaration.definition.type,
+            body,
             first.id,
             (type) => this.literalTag(type),
           ) &&
@@ -1831,7 +1816,7 @@ class ModuleChecker {
   }
 
   /**
-   * Rule 11: a cycle that has a record nominal type, and only such types and aliases, is
+   * Rule 11: a cycle that has a tagged record, and only such types and aliases, is
    * legal when no cycle is made of aliases alone and every cycle passes through
    * an `Option`, an array, an optional field, or a union that has a member
    * outside the group.
@@ -1915,7 +1900,7 @@ class ModuleChecker {
   }
 
   /**
-   * A nominal or error field cannot hold a function, deferred, or opaque type, at
+   * A tagged record or error field cannot hold a function, deferred, or opaque type, at
    * any depth, after aliases unfold. The emitter has no schema for one. The
    * check runs after every alias is defined, so a field may name a later alias.
    */
@@ -1924,7 +1909,7 @@ class ModuleChecker {
       if (containsDeferredType(this.table, field.ref)) {
         this.lowerer.report(
           "declaration/015",
-          `${field.subject} has a function or deferred type, which a nominal type or error declaration cannot hold`,
+          `${field.subject} has a function or deferred type, which a tagged record or error declaration cannot hold`,
           field.span,
         );
       } else if (containsOpaqueType(this.table, field.ref)) {
@@ -1932,45 +1917,6 @@ class ModuleChecker {
           "declaration/016",
           `${field.subject} has an opaque type, which has no schema`,
           field.span,
-        );
-      }
-    }
-  }
-
-  /**
-   * Rule 12: the body of a nominal type that is not a record cannot be a record
-   * or a nominal record, or a union with such a member, after aliases unfold.
-   * The type becomes the error type so that its uses report nothing more. Any
-   * other body gets the deferred-type and opaque-type rules of the fields.
-   */
-  private checkNominalBodies(): void {
-    for (const nominal of this.nominalBodies) {
-      const base = this.table.brandBaseOf(nominal.id);
-      if (base === undefined) continue;
-      const hasRecord = flattenMembers(this.table, base).some((member) => {
-        const node = this.table.node(member);
-        return node.kind === "record" ||
-          (node.kind === "named" && !isErrorId(node.id) &&
-            this.table.dataRecordOf(node.id) !== undefined);
-      });
-      if (hasRecord) {
-        this.lowerer.report(
-          "declaration/014",
-          "a nominal body cannot hold a nominal record or a union with a record; declare each record alone",
-          nominal.span,
-        );
-        this.table.defineAlias(nominal.id, this.table.error);
-      } else if (containsDeferredType(this.table, base)) {
-        this.lowerer.report(
-          "declaration/015",
-          "the body has a function or deferred type, which a nominal type cannot hold",
-          nominal.span,
-        );
-      } else if (containsOpaqueType(this.table, base)) {
-        this.lowerer.report(
-          "declaration/016",
-          "the body has an opaque type, which has no schema",
-          nominal.span,
         );
       }
     }
@@ -2348,15 +2294,9 @@ export function checkModuleDeclarations(
     throw new Error(`module ${module} is not part of the analysis`);
   }
   const services = new Map<ServiceId, ServiceDecl>();
-  const aliases = new Map<string, Type>();
   for (const graph of imported.values()) {
     table.load(graph);
     for (const service of graph.services) services.set(service.id, service);
-    for (const type of graph.types) {
-      if (type.definition.kind === "alias") {
-        aliases.set(type.id, type.definition.type);
-      }
-    }
   }
   const env: TypeEnv = {
     module,
@@ -2365,5 +2305,5 @@ export function checkModuleDeclarations(
     table,
     services,
   };
-  return new ModuleChecker(info, env, aliases).run();
+  return new ModuleChecker(info, env).run();
 }

@@ -4,8 +4,8 @@
 // each arm and `checkCoverage` once after the last arm.
 
 import type { DiagnosticCode } from "./diagnostics.ts";
-import { isErrorId, shortName } from "./ids.ts";
-import type { LocalId } from "./ir.ts";
+import { isErrorId } from "./ids.ts";
+import type { ErrorId, LocalId, TypeId } from "./ir.ts";
 import {
   describeLiteral,
   type Domain,
@@ -41,7 +41,11 @@ export interface MatchState {
  * The values that a match still needs, or undefined when the domain has no
  * coverage rule (the error type and unsupported types).
  */
-function missingOf(domain: Domain, state: MatchState): string[] | undefined {
+function missingOf(
+  table: TypeTable,
+  domain: Domain,
+  state: MatchState,
+): string[] | undefined {
   const missing: string[] = [];
   switch (domain.kind) {
     case "option":
@@ -49,9 +53,9 @@ function missingOf(domain: Domain, state: MatchState): string[] | undefined {
       if (!state.covered.has("None")) missing.push("None");
       return missing;
     case "nominal":
-      for (const id of domain.ids) {
-        if (!state.covered.has(`N:${id}`)) {
-          missing.push(`${shortName(id)}(_)`);
+      for (const [i, name] of namesOf(table, domain.ids).entries()) {
+        if (!state.covered.has(`N:${domain.ids[i]}`)) {
+          missing.push(`${name}(_)`);
         }
       }
       return missing;
@@ -91,7 +95,7 @@ export function checkCoverage(
   state: MatchState,
   armCount: number,
 ): void {
-  const missing = missingOf(domain, state);
+  const missing = missingOf(c.table, domain, state);
   if (missing === undefined) return;
   if (missing.length === 0 && armCount > 0) return;
   c.report(
@@ -140,7 +144,9 @@ function foreign(
 ): void {
   c.report(
     "pattern/003",
-    `${what} does not belong to the subject (${describeDomain(domain)})`,
+    `${what} does not belong to the subject (${
+      describeDomain(c.table, domain)
+    })`,
     node,
   );
 }
@@ -178,7 +184,7 @@ export function pattern(
   switch (kind) {
     case SyntaxKind.WildcardPattern: {
       if (reach(c, node, state, undefined)) {
-        const needed = missingOf(domain, state);
+        const needed = missingOf(c.table, domain, state);
         if (needed !== undefined && needed.length === 0) {
           c.report(
             "pattern/002",
@@ -247,7 +253,7 @@ export function pattern(
           type = c.table.named(target.id);
           reach(c, node, state, `N:${target.id}`);
         } else if (!silent) {
-          foreign(c, node, `\`${shortName(target.id)}\``, domain);
+          foreign(c, node, `\`${namesOf(c.table, [target.id])[0]}\``, domain);
         }
         const binding = bindLocal(c, bindingNode, type);
         patternFact(
@@ -260,23 +266,7 @@ export function pattern(
       } else {
         // The resolver already reported a missing or wrong-kind name.
         if (target !== undefined && target.kind !== "unresolved") {
-          c.report(
-            "pattern/004",
-            target.kind === "type"
-              ? c.table.isOpaque(target.id)
-                ? `\`${
-                  shortName(target.id)
-                }\` is an opaque type, not a nominal type; a constructor pattern names a nominal type or an error`
-                : c.table.brandBaseOf(target.id) !== undefined
-                ? `\`${
-                  shortName(target.id)
-                }\` is a nominal type with a non-record body; a constructor pattern names a nominal record or an error`
-                : `\`${
-                  shortName(target.id)
-                }\` is a type alias, not a nominal type; a constructor pattern names a nominal type or an error`
-              : `\`${targetText(target)}\` cannot be a constructor pattern`,
-            node,
-          );
+          c.report("pattern/004", ctorMessage(c, target), node);
         }
         bindLocal(c, bindingNode, c.table.error);
         patternFact(c, node, { kind: "invalid" });
@@ -343,7 +333,7 @@ function recordPattern(
   if (domain.kind === "nominal") {
     return invalid(
       `a record pattern does not apply to ${
-        describeDomain(domain)
+        describeDomain(c.table, domain)
       }; match each by name, as in \`Name(x)\``,
     );
   }
@@ -407,13 +397,39 @@ function recordPattern(
   });
 }
 
-function describeDomain(domain: Domain): string {
+/** The names of types or errors, with module names where two share a short name. */
+function namesOf(
+  table: TypeTable,
+  ids: readonly (TypeId | ErrorId)[],
+): string[] {
+  return table.showAll(...ids.map((id) => table.named(id)));
+}
+
+/** Why a name that is not a tagged record or an error cannot be a constructor pattern. */
+function ctorMessage(c: PatternContext, target: Target): string {
+  if (target.kind !== "type") {
+    return `\`${targetText(target)}\` cannot be a constructor pattern`;
+  }
+  const name = namesOf(c.table, [target.id])[0];
+  if (c.table.isOpaque(target.id)) {
+    return `\`${name}\` is an opaque type, not a tagged record; a constructor pattern names a tagged record or an error`;
+  }
+  const base = c.table.brandBaseOf(target.id);
+  if (base === undefined) {
+    return `\`${name}\` is a type alias, not a tagged record; a constructor pattern names a tagged record or an error`;
+  }
+  return c.table.node(c.table.unfold(base)).kind === "record"
+    ? `\`${name}\` has no runtime tag; no union alias of its module lists it`
+    : `\`${name}\` is a type with a non-record body; a constructor pattern names a tagged record or an error`;
+}
+
+function describeDomain(table: TypeTable, domain: Domain): string {
   switch (domain.kind) {
     case "option":
       return "an option";
     case "nominal":
       return `${domain.ids.every(isErrorId) ? "the errors" : "the names"} ${
-        domain.ids.map(shortName).join(" | ")
+        namesOf(table, domain.ids).join(" | ")
       }`;
     case "tagged":
       return "a tagged record union";

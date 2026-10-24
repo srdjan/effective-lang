@@ -1296,9 +1296,20 @@ class BodyLowerer {
         ...this.annotation(node),
       };
     }
-    return {
+    const record: Expr = {
       kind: "record",
       fields: this.recordFields(fields),
+      ...this.annotation(node),
+    };
+    const fact = this.fact(node);
+    if (fact?.kind !== "data-construction") return record;
+    // A record literal at a tagged record is an implicit `Name({ ... })`: the
+    // literal itself has the unnamed record type.
+    const body = this.ctx.types.dataRecordOf(fact.data);
+    return {
+      kind: "nominal",
+      nominal: fact.data,
+      value: body === undefined ? record : { ...record, type: this.ir(body) },
       ...this.annotation(node),
     };
   }

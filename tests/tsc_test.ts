@@ -194,7 +194,7 @@ Deno.test("a diagnostic inside a companion declaration maps to its .effi span", 
   assert(module !== undefined);
   assertEquals(module.path, "host.effi.ts");
   const table = buildSpanTable(module, undefined);
-  const offset = module.text.indexOf("Schema.TaggedStruct");
+  const offset = module.text.indexOf("Schema.Struct");
   const position = positionOf(lineStarts(module.text), module.text, offset);
   const mapped = mapTscDiagnostic(
     diagnosticAt(module.path, position.line, position.column),
@@ -204,7 +204,7 @@ Deno.test("a diagnostic inside a companion declaration maps to its .effi span", 
   assertEquals(mapped.span.source, "host.effi");
   assertEquals(
     spanText(COMPANION_FILES["host.effi"], mapped.span),
-    "nominal Token = { id: Label, handle: Handle }",
+    "type Token = { id: Label, handle: Handle }",
   );
 });
 

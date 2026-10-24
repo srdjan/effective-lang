@@ -512,19 +512,35 @@ Deno.test("too deep a nesting does not hide the later declarations", () => {
   );
 });
 
-Deno.test("nominal declares a type of any body and stays a legal name elsewhere", () => {
+Deno.test("a type declares a type of any body, and sealed precedes type", () => {
   const tree = parseClean(
-    "nominal Id = string\nexport nominal Row = { id: Id }\nnominal Pair = [int, int]\nconst nominal = 1\nconst f = (nominal: int): int => nominal\n",
+    "type Id = string\nexport type Row = { id: Id }\nsealed type Pair = [int, int]\n",
   );
   assertEquals(
     declSummaries(tree).map((d) => [d.kind, d.name]),
     [
-      ["DataDecl", "Id"],
-      ["DataDecl", "Row"],
-      ["DataDecl", "Pair"],
-      ["ConstDecl", "nominal"],
-      ["ConstDecl", "f"],
+      ["TypeDecl", "Id"],
+      ["TypeDecl", "Row"],
+      ["TypeDecl", "Pair"],
     ],
+  );
+});
+
+Deno.test("nominal is an ordinary name and no declaration word", () => {
+  const tree = parseClean(
+    "const nominal = 1\nconst f = (nominal: int): int => nominal\n",
+  );
+  assertEquals(declSummaries(tree).map((d) => d.kind), [
+    "ConstDecl",
+    "ConstDecl",
+  ]);
+  assertEquals(
+    parseChecked("nominal Row = { id: int }\n").diagnostics.length > 0,
+    true,
+  );
+  assertEquals(
+    parseChecked("sealed nominal Row = { id: int }\n").diagnostics.length > 0,
+    true,
   );
 });
 

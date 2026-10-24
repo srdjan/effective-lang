@@ -40,8 +40,8 @@ Deno.test("nominal visibility blocks imports but updates keep the nominal type",
       ...CONFIG,
       "domain.eff": `
 type Int = int
-nominal PrivateScore = Int
-export nominal Score = { value: Int }
+type PrivateScore = Int
+export type Score = { value: Int }
 export const initial: Score = Score({ value: 1 })
 `,
       "main.eff": `
@@ -56,7 +56,7 @@ export const changed: Score = { ...initial, value: 2 }
     ...CONFIG,
     "domain.eff": `
 type Int = int
-export nominal Score = { value: Int }
+export type Score = { value: Int }
 export const initial: Score = Score({ value: 1 })
 `,
     "main.eff": `
@@ -80,7 +80,7 @@ Deno.test("public nominal values permit arithmetic, widening, and schema decodin
   const lowered = validated({
     ...CONFIG,
     "domain.eff": `
-export nominal Positive = Int
+export type Positive = int
 export type Int = int
 export const one: Positive = Positive(1)
 export const two: Positive = Positive(2)
@@ -89,7 +89,7 @@ export const two: Positive = Positive(2)
 import { Positive, Int, one, two } from "./domain.eff"
 const positiveSchema: Schema<Positive> = schema()
 export const arithmetic: Positive = one - two
-export const widened: Int = one
+export const widened: Int = Int(one)
 export const decoded = (input: unknown): Positive fails SchemaError =>
   schemaDecode(positiveSchema, input)
 `,
@@ -114,7 +114,7 @@ export const decoded = (input: unknown): Positive fails SchemaError =>
   assert(widened?.kind === "constant");
   assertEquals(widened.value.type, {
     kind: "named",
-    id: "type:domain#Positive",
+    id: "type:domain#Int",
   });
   const decoded = declarations.get("decoded");
   assert(decoded?.kind === "function" && decoded.body.kind === "schema-decode");
@@ -127,7 +127,7 @@ export const decoded = (input: unknown): Positive fails SchemaError =>
 Deno.test("an exported alias hides its nominal constructor but does not seal record updates", () => {
   const domain = `
 type Int = int
-nominal Internal = { value: Int }
+type Internal = { value: Int }
 export type Proof = Internal
 export const initial: Proof = Internal({ value: 1 })
 `;

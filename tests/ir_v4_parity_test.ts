@@ -5,26 +5,32 @@ import {
   TypeScriptOutputs,
 } from "../src/core/typescript.ts";
 
-/** True when a `type` body gives identity: not a record, a bare name, or a union with a non-literal member. */
+/** True when a `type` body gives identity: not a bare name or a union with a non-literal member. */
 function hasIdentity(type: unknown): boolean {
   const node = type as { kind?: unknown; members?: { kind?: unknown }[] };
   if (node.kind === "union") {
     return node.members?.every((m) => m.kind === "literal") === true;
   }
-  return node.kind !== "record" && node.kind !== "named";
+  return node.kind !== "named";
 }
 
-/** The accepted v3 wire changes, with the v5 version, the `tagged` flag, and identity on a `type`. Keep spans, annotations and identities intact. */
+/** The baseline sources use `nominal`, which is a name now. `type` plus spaces keeps every span. */
+function withoutNominal(files: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(files).map((
+      [path, text],
+    ) => [path, text.replace(/\bnominal (?=[A-Z])/g, "type    ")]),
+  );
+}
+
+/** The accepted v3 wire changes, with the v5 version and identity on a `type`. Keep spans, annotations and identities intact. */
 function v4(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(v4);
   if (value === null || typeof value !== "object") return value;
   const record = value as Record<string, unknown>;
-  const base = record.base as { kind?: unknown } | undefined;
   return Object.fromEntries(
     Object.entries(
-      record.kind === "nominal" && base?.kind === "record"
-        ? { ...record, tagged: true }
-        : record.kind === "alias" && hasIdentity(record.type)
+      record.kind === "alias" && hasIdentity(record.type)
         ? { kind: "nominal", base: record.type }
         : record,
     )
@@ -51,7 +57,7 @@ Deno.test("IR v4 changes only the wire version and duplicate scoped identities",
   for (const { files, modules } of corpus) {
     const program = new Program();
     const outputs = new TypeScriptOutputs();
-    const updated = program.update({ set: files });
+    const updated = program.update({ set: withoutNominal(files) });
     assert(updated.ok);
     assertEquals(updated.value.diagnostics, []);
     for (const expected of modules) {

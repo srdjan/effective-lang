@@ -92,6 +92,26 @@
       }
     },
     {
+      "area": "types",
+      "code": "validation/002",
+      "file": "types-record-into-tagged.json",
+      "mutation": "The record literal at Fixed in fixed has no construction: the nominal node is replaced by the record, which is recorded as Fixed.",
+      "path": "declarations[4].body.type",
+      "sources": {
+        "tagged.eff": "ir/tagged.eff"
+      }
+    },
+    {
+      "area": "types",
+      "code": "validation/002",
+      "file": "types-untagged-name-pattern.json",
+      "mutation": "Fixed loses its tagged flag, so the name pattern Fixed in amountOf has no tagged member to match.",
+      "path": "declarations[5].body.arms[0].pattern",
+      "sources": {
+        "tagged.eff": "ir/tagged.eff"
+      }
+    },
+    {
       "area": "contracts",
       "code": "validation/003",
       "file": "contracts-dropped-failure.json",

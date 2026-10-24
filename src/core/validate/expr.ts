@@ -52,6 +52,7 @@ import {
   fits,
   foreignSealedOf,
   identityBody,
+  identityMembers,
   INT,
   isBooleanLike,
   isNumericClass,
@@ -1419,7 +1420,7 @@ export class BodyValidator implements ValidatorCore {
       case "nominal": {
         // A name pattern needs a subject of data and error types only, and the name must be one of them.
         const id = p.kind === "error" ? p.error : p.nominal;
-        const ms = members(env, subject);
+        const ms = identityMembers(env, subject);
         const ok = ms.length > 0 &&
           ms.every((m) =>
             m.kind === "named" && (env.errors.has(m.id) || env.data.has(m.id))
@@ -1428,7 +1429,7 @@ export class BodyValidator implements ValidatorCore {
           (p.kind === "error" ? env.errors.has(id) : env.data.has(id));
         if (!ok) {
           foreign(
-            `the ${p.kind === "error" ? "error" : "nominal record"} ${id}`,
+            `the ${p.kind === "error" ? "error" : "tagged record"} ${id}`,
           );
         }
         bind(p.binding, ok ? { kind: "named", id } : undefined);

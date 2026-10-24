@@ -3,12 +3,12 @@ import { Conn, Text, Plain } from "host:x"
 type Conns = Conn[]
 
 // error: declaration/016
-nominal Direct = { conn: Conn }
+type Direct = { conn: Conn }
 
 // error: declaration/016
 error Failed = { conn: Conn }
 
-nominal Wrapped = {
+type Wrapped = {
   // error: declaration/016
   maybe: Option<Conn>,
   // error: declaration/016
@@ -20,7 +20,7 @@ nominal Wrapped = {
 }
 
 // error: declaration/016
-nominal ThroughAlias = { conns: Conns }
+type ThroughAlias = { conns: Conns }
 
 // The alias that the field names comes later in the file.
 // error: declaration/016
@@ -28,9 +28,9 @@ error Late = { later: LaterConns }
 
 type LaterConns = Conn[]
 
-// error: declaration/016
-nominal Handle = Conn
+type Fine = { label: Text, plain: Plain, direct: Direct, raw: unknown }
 
-nominal Fine = { label: Text, plain: Plain, direct: Direct, raw: unknown }
+// A union alias of the module tags each record that it lists.
+type Tagged = Direct | Wrapped | ThroughAlias | Fine
 
 export const main = (c: Conn): Conn => c

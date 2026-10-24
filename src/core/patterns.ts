@@ -3,7 +3,7 @@
 // match must cover. The functions here are pure. The body checker walks the
 // arms and reports the diagnostics.
 
-import type { DeclarationId } from "./ir.ts";
+import type { ErrorId, TypeId } from "./ir.ts";
 import type { TypeRef, TypeTable } from "./types.ts";
 import { isErrorId } from "./ids.ts";
 
@@ -19,7 +19,7 @@ export type Domain =
   /** `Option<T>`: arms `Some(x)` and `None`. */
   | { readonly kind: "option"; readonly element: TypeRef }
   /** One or more named errors or data types, and nothing else: arms `Name(x)`. */
-  | { readonly kind: "nominal"; readonly ids: readonly DeclarationId[] }
+  | { readonly kind: "nominal"; readonly ids: readonly (TypeId | ErrorId)[] }
   /** Named errors or data types together with other members. No arm applies. */
   | { readonly kind: "mixed" }
   /** Records with literal discriminator fields: arms `{ kind: "lit", ...name }`. */
@@ -115,15 +115,19 @@ export function domainOf(table: TypeTable, subject: TypeRef): Domain {
     return { kind: "option", element: nodes[0].element };
   }
 
-  const nominal: DeclarationId[] = [];
-  for (const n of nodes) {
+  // A tagged record is a name here, so the walk stops at each identity.
+  const named = flattenIdentityMembers(table, subject).map((m) =>
+    table.node(m)
+  );
+  const nominal: (TypeId | ErrorId)[] = [];
+  for (const n of named) {
     if (
       n.kind === "named" &&
       (isErrorId(n.id) || table.dataRecordOf(n.id) !== undefined)
     ) nominal.push(n.id);
   }
   if (nominal.length > 0) {
-    return nominal.length === nodes.length
+    return nominal.length === named.length
       ? { kind: "nominal", ids: [...new Set(nominal)].sort() }
       : { kind: "mixed" };
   }

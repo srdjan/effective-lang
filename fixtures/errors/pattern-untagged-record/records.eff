@@ -1,0 +1,5 @@
+export type Text = string
+
+export type Circle = { radius: Text }
+
+export type Square = { side: Text }

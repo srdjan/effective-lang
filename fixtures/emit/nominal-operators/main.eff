@@ -3,8 +3,8 @@ type Num = number
 type Text = string
 type Bool = boolean
 
-nominal UserId = string
-nominal Cents = int
+type UserId = string
+type Cents = int
 
 export const asText = (id: UserId): Text => Text(id)
 export const greet = (id: UserId): Text => id + "!"

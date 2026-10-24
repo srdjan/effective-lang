@@ -421,7 +421,7 @@ function checkDeferredFields(
       ctx.report.add(
         AREA.types,
         `${path}[${i}].type`,
-        `the field ${f.name} has a function or deferred type, which a nominal or error declaration cannot hold`,
+        `the field ${f.name} has a function or deferred type, which a tagged record or error declaration cannot hold`,
         span,
       );
     }
@@ -545,7 +545,7 @@ function checkTypeDecl(ctx: Ctx, d: TypeDecl, path: string): void {
     ctx.report.add(
       AREA.types,
       `${path}.definition.sealed`,
-      "sealed must be true and belongs only to a nominal definition",
+      "sealed must be true and belongs only to a type with identity",
       d.span,
     );
   }
@@ -564,7 +564,7 @@ function checkTypeDecl(ctx: Ctx, d: TypeDecl, path: string): void {
     ctx.report.add(
       AREA.types,
       `${path}.definition.sealed`,
-      "a sealed nominal type cannot be declared in a host interface",
+      "a sealed type cannot be declared in a host interface",
       d.span,
     );
   }
@@ -955,10 +955,16 @@ export function checkRecursion(ctx: Ctx, ir: ModuleIR): void {
     return undefined;
   };
   ir.declarations.forEach((d) => {
+    if (d.kind !== "type") return;
+    // An untagged record identity is a guarded alias like a record alias.
+    const body = d.definition.kind === "alias"
+      ? d.definition.type
+      : d.opaque !== true && d.definition.tagged !== true
+      ? d.definition.base
+      : undefined;
     if (
-      d.kind === "type" && d.definition.kind === "alias" &&
-      guardedRecord(d.definition.type, d.id, tagOf) &&
-      dataOnly(world.env, d.definition.type, "schema")
+      body !== undefined && guardedRecord(body, d.id, tagOf) &&
+      dataOnly(world.env, body, "schema")
     ) guarded.add(d.id);
   });
   const legal = guardedDataGroups(world, [...index.keys()]);

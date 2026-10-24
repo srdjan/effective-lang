@@ -2,15 +2,15 @@ type Text = string
 
 type Record = { kind: "c", radius: Text }
 
-nominal Id = Text
+type Id = Text
 
-nominal Circle = { radius: Text }
+type Circle = { radius: Text }
 
-nominal Square = { side: Text }
+type Square = { side: Text }
 
 type Shape = Circle | Square
 
-type Mixed = Circle | Record
+type Mixed = Circle | Text
 
 type Alias = Record
 

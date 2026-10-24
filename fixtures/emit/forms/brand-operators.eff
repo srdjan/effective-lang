@@ -1,5 +1,5 @@
-nominal Count = int
-nominal Price = number
+type Count = int
+type Price = number
 
 service Counter {
   read(): Count

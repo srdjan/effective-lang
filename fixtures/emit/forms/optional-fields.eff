@@ -3,7 +3,7 @@ type B = { kind: "b", nickname: string }
 type C = { kind: "c", nickname?: string }
 type AB = A | B
 type ABC = AB | C
-nominal U = { kind: "u", nickname?: string }
+type U = { kind: "u", nickname?: string }
 
 export error Oops = { detail?: string }
 

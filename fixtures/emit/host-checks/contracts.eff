@@ -2,8 +2,8 @@
 // them is wrapped, and a data result is checked when the host returns it.
 export type Text = string
 export type Count = int
-export nominal Row = { id: Text }
-export nominal Gap = { id: Text }
+export type Row = { id: Text }
+export type Gap = { id: Text }
 export type Entry = Row | Gap
 export error Boom = {}
 

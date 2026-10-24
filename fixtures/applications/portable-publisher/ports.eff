@@ -1,6 +1,6 @@
 import { Text, Bool, ArticleId, Instant, Article, PublishPlan } from "./domain.eff"
 
-export nominal SnapshotToken = string
+export type SnapshotToken = string
 export type ObservedArticle = { article: Article, token: SnapshotToken }
 
 export error Corrupt = { key: Text, reason: Text }

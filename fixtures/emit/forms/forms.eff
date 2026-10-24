@@ -14,7 +14,7 @@ type Profile = { name: string, nickname?: string, tags: string[], pair: Pair, ma
 type Shape = { kind: "circle", radius: number } | { kind: "square", side: number }
 type Callback = (n: int) => int
 type CbBox = { run: Callback, label: string }
-nominal Id = string
+type Id = string
 
 error NotFound = { id: Id }
 error Empty = {}

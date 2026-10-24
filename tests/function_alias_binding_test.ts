@@ -42,14 +42,12 @@ const g: G = (x: Count, y: Count) => x
   );
 });
 
-Deno.test("a nominal type over a function type is rejected", () => {
+Deno.test("a type over a function type has identity and holds a function", () => {
   assertEquals(
-    messages(`nominal G = (x: Count) => Count
+    messages(`type G = (x: Count) => Count
 export const g: G = (x: Count): Count => x
 `),
-    [
-      "declaration/015 the body has a function or deferred type, which a nominal type cannot hold",
-    ],
+    [],
   );
 });
 

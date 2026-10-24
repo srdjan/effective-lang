@@ -29,10 +29,10 @@ function checked(
   return result.value;
 }
 
-Deno.test("sealed nominal types lower their authority flag", () => {
+Deno.test("sealed type types lower their authority flag", () => {
   const project = checked({
     "main.eff": `
-export sealed nominal Positive = int
+export sealed type Positive = int
 export const positive = (): Positive => Positive(1)
 `,
   }, ["main.eff"]);
@@ -49,7 +49,7 @@ export const positive = (): Positive => Positive(1)
 
   const open = checked({
     "main.eff": `
-export nominal Positive = int
+export type Positive = int
 export const positive = (): Positive => Positive(1)
 `,
   }, ["main.eff"]);
@@ -64,10 +64,10 @@ export const positive = (): Positive => Positive(1)
   assertEquals(sealedOutput.value.text, openOutput.value.text);
 });
 
-Deno.test("a foreign module cannot construct a sealed nominal type", () => {
+Deno.test("a foreign module cannot construct a sealed type type", () => {
   const project = checked({
     "lib.eff": `
-export sealed nominal Positive = int
+export sealed type Positive = int
 `,
     "main.eff": `
 import { Positive } from "./lib.eff"
@@ -85,18 +85,18 @@ export type Decimal = number
 export type Text = string
 export type Flag = boolean
 export type Input = unknown
-export sealed nominal Positive = Int
-export sealed nominal Article = { id: Positive, title: Text }
-sealed nominal Secret = Int
+export sealed type Positive = int
+export sealed type Article = { id: Positive, title: Text }
+sealed type Secret = int
 export type Hidden = Secret
-sealed nominal SecretRecord = { title: Text }
+sealed type SecretRecord = { title: Text }
 export type HiddenRecord = SecretRecord
 export const positive = (value: Int): Positive => Positive(value)
 export const article = (id: Positive, title: Text): Article => Article({ id, title })
 export const update = (value: Article, title: Text): Article => ({ ...value, title })
 export const add = (left: Positive, right: Positive): Positive => left + right
-export const multiply = (left: Positive, right: Int): Int => left * right
-export const toInt = (value: Positive): Int => value
+export const multiply = (left: Positive, right: Int): Int => Int(left) * right
+export const toInt = (value: Positive): Int => Int(value)
 export const positiveSchema: Schema<Positive> = schema()
 export const decodePositive = (input: Input): Positive fails SchemaError => schemaDecode(positiveSchema, input)
 export const makePositive = (input: Positive): Positive fails SchemaIssue => schemaMake(positiveSchema, input)
@@ -159,7 +159,7 @@ Deno.test("foreign sealed operations report their dedicated diagnostics", () => 
     ],
     [
       "sealed/003",
-      "nominal Wrapper = Positive\nexport const bad = (value: Positive): Int => { const wrapped = Wrapper(value)\n wrapped + wrapped }",
+      "type Wrapper = Positive\nexport const bad = (value: Positive): Positive => { const wrapped: Wrapper = value\n wrapped + wrapped }",
     ],
     [
       "sealed/004",
@@ -207,7 +207,7 @@ Deno.test("foreign sealed widening fails through aliases and nested variance", (
   }
 });
 
-Deno.test("generic result joins cannot widen a foreign sealed nominal type", () => {
+Deno.test("generic result joins cannot widen a foreign sealed type type", () => {
   const project = consumer(
     "const bad = (value: Positive) => race(defer(() => value), defer(() => 1))",
   );
@@ -236,26 +236,26 @@ Deno.test("open nominal types keep their existing cross-module behavior", () => 
   const project = checked({
     "lib.eff": `
 export type Int = int
-export nominal Count = Int
-export nominal sealed = Int
-export nominal Row = { count: Count }
+export type Count = int
+export type sealed = int
+export type Row = { count: Count }
 export const countSchema: Schema<Count> = schema()
 `,
     "main.eff": `
 import { Int, Count, sealed, Row, countSchema } from "./lib.eff"
 export const make = (): Count => Count(1)
-export const widen = (value: Count): Int => value
+export const widen = (value: Count): Int => Int(value)
 export const add = (left: Count, right: Count): Count => left + right
-export const contextual = (): Int => sealed(1)
+export const contextual = (): sealed => sealed(1)
 export const update = (row: Row, count: Count): Row => ({ ...row, count })
-export const decoded = (input: Int): Count fails SchemaError => schemaDecode(countSchema, input)
+export const decoded = (input: Count): Count fails SchemaError => schemaDecode(countSchema, input)
 `,
   }, ["main.eff"]);
   assertEquals(project.diagnostics, []);
 });
 
-Deno.test("sealed nominal is rejected in a host interface file", () => {
-  const result = parse("host.effi", "sealed nominal Secret = int\n");
+Deno.test("sealed type is rejected in a host interface file", () => {
+  const result = parse("host.effi", "sealed type Secret = int\n");
   assertEquals(result.diagnostics.map((diagnostic) => diagnostic.code), [
     "syntax/008",
   ]);
@@ -266,7 +266,7 @@ Deno.test("Program resets sealing and changes the interface hash", () => {
   const open = program.update({
     set: {
       ...CONFIG,
-      "lib.eff": "export type Int = int\nexport nominal Count = Int\n",
+      "lib.eff": "export type Int = int\nexport type Count = Int\n",
       "main.eff":
         'import { Int, Count } from "./lib.eff"\nexport const widen = (value: Count): Int => value\n',
     },
@@ -275,7 +275,7 @@ Deno.test("Program resets sealing and changes the interface hash", () => {
   assertEquals(open.value.diagnostics, []);
   const sealed = program.update({
     set: {
-      "lib.eff": "export type Int = int\nexport sealed nominal Count = Int\n",
+      "lib.eff": "export type Int = int\nexport sealed type Count = int\n",
     },
   });
   assert(sealed.ok);
@@ -291,7 +291,7 @@ Deno.test("Program resets sealing and changes the interface hash", () => {
   ]);
   const reopened = program.update({
     set: {
-      "lib.eff": "export type Int = int\nexport nominal Count = Int\n",
+      "lib.eff": "export type Int = int\nexport type Count = Int\n",
     },
   });
   assert(reopened.ok);
@@ -303,8 +303,8 @@ Deno.test("Program resets sealing and changes the interface hash", () => {
   );
 });
 
-Deno.test("editor tooling classifies, completes, and describes sealed nominal types", () => {
-  const text = "export sealed nominal Positive = int\n";
+Deno.test("editor tooling classifies, completes, and describes sealed type types", () => {
+  const text = "export sealed type Positive = int\n";
   const loaded = new Program("").update({
     set: { ...CONFIG, "main.eff": text },
   });
@@ -319,7 +319,7 @@ Deno.test("editor tooling classifies, completes, and describes sealed nominal ty
   assertEquals(
     hoverAt(loaded.value, "main.eff", text.indexOf("Positive") + 1, outputs)
       ?.contract,
-    "sealed nominal Positive",
+    "sealed type Positive",
   );
 
   for (const prefix of ["sea", "export sea"]) {
@@ -361,6 +361,6 @@ export const keep = (value: Positive): Positive => value
   const use = importedText.lastIndexOf("Positive");
   assertEquals(
     hoverAt(imported.value, "main.eff", use + 1, outputs)?.contract,
-    "sealed nominal Positive",
+    "sealed type Positive",
   );
 });

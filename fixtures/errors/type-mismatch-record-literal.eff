@@ -1,0 +1,27 @@
+type Cents = int
+
+type Fixed = { amount: Cents }
+
+type Times = { factor: Cents }
+
+// A union alias of the module tags the records that it lists.
+type Rule = Fixed | Times
+
+const unnamed = { amount: 50 }
+
+// A record literal at exactly a tagged record is a construction.
+const fixed: Fixed = { amount: 50 }
+
+// A record literal at a union of tagged records does not pick a variant.
+// error: type-mismatch/003
+const rule: Rule = { amount: 50 }
+
+const chosen: Rule = Fixed({ amount: 50 })
+
+// A computed record does not become a tagged record without a constructor.
+// error: type-mismatch/003
+const computed: Fixed = unnamed
+
+const wrapped: Fixed = Fixed(unnamed)
+
+const updated = (value: Fixed): Fixed => ({ ...value, amount: 1 })

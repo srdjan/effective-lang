@@ -96,7 +96,7 @@ Deno.test("the medium project uses the language features of the examples", () =>
   const project = generateSize("medium");
   const text = [...project.sources.values()].join("\n");
   const features: [string, RegExp][] = [
-    ["nominal type", /^export nominal \w+ = string$/m],
+    ["identity type", /^export type \w+ = string$/m],
     ["error", /^export error /m],
     ["service", /^export service /m],
     ["provider", /^export provider /m],

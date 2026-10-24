@@ -2347,8 +2347,8 @@ Deno.test("types: the result type of an operator is recomputed", () => {
 
 Deno.test("types: two values of one numeric brand compare, add, and subtract", () => {
   const lowered = lowerText(`
-nominal Count = int
-nominal Price = number
+type Count = int
+type Price = number
 const sum = (a: Count, b: Count): Count => a + b
 const diff = (a: Price, b: Price): Price => a - b
 const below = (a: Count, b: Count): Bool => a < b
@@ -2367,13 +2367,12 @@ type Bool = boolean
 
 Deno.test("types: a nominal value fits its base and compares with it, and two nominal classes do not compare", () => {
   const lowered = lowerText(`
-nominal Cents = int
-nominal Meters = int
-nominal UserId = Text
-nominal Account = { id: UserId, name: Text }
-type Fields = { id: UserId, name: Text }
-const text = (id: UserId): Text => id
-const fields = (account: Account): Fields => account
+type Cents = int
+type Meters = int
+type UserId = string
+type Account = { id: UserId, name: Text }
+const text = (id: UserId): Text => Text(id)
+const fields = (account: Account): { id: UserId, name: Text } => account
 const same = (id: UserId): Bool => id === "u1"
 const positive = (cents: Cents): Bool => cents > 0
 const twice = (cents: Cents): Cents => cents * 2
@@ -2565,7 +2564,7 @@ Deno.test("types: a recursive type is rejected", () => {
     "type A = { n: int }\nexport const f = (a: A): Int => a.n\ntype Int = int",
   );
   const copyIr = copy(ir);
-  setAt(copyIr, "declarations[0].definition.type.fields[0].type", {
+  setAt(copyIr, "declarations[0].definition.base.fields[0].type", {
     kind: "named",
     id: "type:m#A",
   });
@@ -3049,8 +3048,8 @@ Deno.test("compatibility: the lift applies only at the top of a value position",
 
 Deno.test("a field read and a record update through a data type validate", () => {
   const lowered = lowerText(`
-nominal UserId = string
-nominal User = { id: UserId, name: string, active: boolean, nickname?: string }
+type UserId = string
+type User = { id: UserId, name: string, active: boolean, nickname?: string }
 const nameOf = (user: User): Text => user.name
 const nick = (user: User): Text =>
   match user.nickname {
@@ -3069,17 +3068,17 @@ type Text = string
 });
 
 const DATA_SOURCE = `
-nominal UserId = string
+type UserId = string
 type Text = string
-nominal User = { id: UserId, name: Text, nick?: Text }
-nominal Twin = { id: UserId, name: Text }
+type User = { id: UserId, name: Text, nick?: Text }
+type Twin = { id: UserId, name: Text }
 error Failed = { reason: Text }
-type Dog = { id: UserId, name: Text, nick?: Text }
+type Pets = User | Twin
 const userSchema: Schema<User> = schema()
 const make = (): User => User({ id: UserId("u"), name: "Ann" })
 const nameOf = (user: User): Text => user.name
 const rename = (user: User): User => ({ ...user, name: "Bo" })
-const base = (user: User): Dog => user
+const base = (user: User): { id: UserId, name: Text, nick?: Text } => user
 const twin = (user: User): Twin => Twin({ id: user.id, name: user.name })
 `;
 
@@ -3177,10 +3176,11 @@ Deno.test("data: a data type validates and each forged rule is rejected", () => 
 
 const NAME_MATCH_SOURCE = `
 type Text = string
-nominal Circle = { radius: Text }
-nominal Square = { side: Text }
+type Circle = { radius: Text }
+type Square = { side: Text }
 error Broken = { reason: Text }
-nominal Id = Text
+type Id = Text
+type Shape = Circle | Square
 const area = (shape: Circle | Square): Text =>
   match shape {
     Circle(c) => c.radius,
@@ -3259,8 +3259,9 @@ Deno.test("data: a data or error field cannot hold a function or deferred type",
   const lowered = lowerText(`
 type Count = int
 type Step = (n: Count) => Count
-nominal Box = { count: Count }
+type Box = { count: Count }
 error Failed = { count: Count }
+type Boxed = Box | Failed
 `);
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
   const step: Type = { kind: "named", id: "type:m#Step" };
@@ -3310,9 +3311,9 @@ Deno.test("data: an untagged base may be a record, a data type, or a union with 
   const lowered = lowerText(`
 type Text = string
 type Plain = { id: Text }
-nominal Row = { id: Text }
-nominal Id = Text
-nominal Ids = Text[]
+type Row = { id: Text }
+type Id = string
+type Ids = Text[]
 `);
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
   const forge = (base: Type, tagged = false): string[] => {
@@ -3344,12 +3345,13 @@ Deno.test("data: recursive data types validate and an unguarded cycle is rejecte
   const lowered = lowerText(`
 type Text = string
 type Count = int
-nominal Tree = { label: Text, children: Tree[] }
-nominal Forest = { first: Option<Node> }
-nominal Node = { rest: Forest }
-nominal Cons = { head: Count, tail: List }
-nominal Nil = {}
+type Tree = { label: Text, children: Tree[] }
+type Forest = { first: Option<Node> }
+type Node = { rest: Forest }
+type Cons = { head: Count, tail: List }
+type Nil = {}
 type List = Cons | Nil
+type Linked = Forest | Node
 `);
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
   const forge = (name: string, field: number, type: Type): string[] => {

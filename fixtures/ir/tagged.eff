@@ -1,0 +1,10 @@
+type Cents = int
+type Fixed = { amount: Cents }
+type Times = { factor: Cents }
+type Rule = Fixed | Times
+export const fixed = (): Fixed => ({ amount: 50 })
+export const amountOf = (rule: Rule): Cents =>
+  match rule {
+    Fixed(f) => f.amount,
+    Times(t) => t.factor
+  }

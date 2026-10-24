@@ -499,9 +499,9 @@ Deno.test("a recursive type with a function field gives an unsupported emission 
   );
   const forged = structuredClone(ir);
   const tree = declarationOf(forged, "Tree");
-  assert(tree.kind === "type" && tree.definition.kind === "alias");
-  assert(tree.definition.type.kind === "record");
-  Object.assign(tree.definition.type.fields[0], { type: FUNCTION });
+  assert(tree.kind === "type" && tree.definition.kind === "nominal");
+  assert(tree.definition.base.kind === "record");
+  Object.assign(tree.definition.base.fields[0], { type: FUNCTION });
   const error = emitError(forged);
   assert(error.tag === "unsupported");
   assertEquals(error.message, "a deferred or function type has no schema");

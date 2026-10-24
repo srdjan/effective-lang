@@ -3,6 +3,8 @@ export opaque type Conn
 export type Text = string
 
 // error: declaration/016
-export nominal Holder = { conn: Conn }
+export type Holder = { conn: Conn }
 
-export nominal Plain = { label: Text }
+export type Plain = { label: Text }
+
+export type Hosted = Holder | Plain

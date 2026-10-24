@@ -136,7 +136,6 @@ const SYMBOL_KINDS: Readonly<Record<EditorSymbolKind, number>> = {
   constant: SymbolKind.Constant,
   type: SymbolKind.Struct,
   error: SymbolKind.Class,
-  data: SymbolKind.Struct,
   service: SymbolKind.Interface,
   method: SymbolKind.Method,
   provider: SymbolKind.Variable,

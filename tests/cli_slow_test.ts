@@ -206,7 +206,7 @@ console.log(JSON.stringify({
 `,
     );
     assertEquals(result, {
-      made: { _tag: "h#Tok", id: "a" },
+      made: { id: "a" },
       read: 7,
       tag: "h#Boom",
       label: "x",

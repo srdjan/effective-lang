@@ -22,8 +22,7 @@ Deno.test("constructor metadata retains make input independently of D and E", ()
   const project = checked(
     prefix + `
 type SameD = { value: Int }
-const identity: Schema<SameD, SameD, never, never, SameM> = schema()
-type SameM = { value: Int }
+const identity: Schema<SameD, SameD, never, never, SameD> = schema()
 const unchanged = schemaDefaultKey(identity, (): SameD => ({ value: 4 }))
 const make = (): D fails SchemaIssue => schemaMake(child, {})
 const list: Schema<D[], D[], never, never, M[]> = schemaArray(child)

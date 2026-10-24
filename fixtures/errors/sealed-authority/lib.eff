@@ -1,6 +1,12 @@
 export type Int = int
 export type Text = string
-export sealed nominal Positive = Int
-export sealed nominal Article = { title: Text }
+export sealed type Positive = int
+export sealed type Article = { title: Text }
 export const positiveSchema: Schema<Positive> = schema()
-export sealed nominal Natural = int
+export sealed type Natural = int
+
+// error: declaration/017
+export sealed type Choice = Natural | Text
+
+// error: declaration/017
+export sealed type Same = Natural

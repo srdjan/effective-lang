@@ -10,7 +10,7 @@ import {
 
 const SEALED_LIBRARY = `
 export type Int = int
-export sealed nominal Positive = Int
+export sealed type Positive = int
 export const one: Positive = Positive(1)
 export const positiveSchema: Schema<Positive> = schema()
 export const positiveOptional: SchemaOptional<Positive> = schemaOptionalKey(positiveSchema)
@@ -134,7 +134,7 @@ function positiveDefinition(module: ModuleIR) {
 }
 
 Deno.test("validator reads sealed callback authority from the input Schema", () => {
-  const openLibrary = SEALED_LIBRARY.replace("sealed nominal", "nominal");
+  const openLibrary = SEALED_LIBRARY.replace("sealed type", "type");
   const checked = checkConsumer(
     openLibrary,
     `const ints: Schema<Int> = schema()

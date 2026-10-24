@@ -1,8 +1,8 @@
 type Text = string
 
-nominal Circle = { radius: Text }
+type Circle = { radius: Text }
 
-nominal Square = { side: Text }
+type Square = { side: Text }
 
 error Broken = { reason: Text }
 

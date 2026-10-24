@@ -63,7 +63,7 @@ for (const [name] of NOT_DATA) {
 Deno.test("the checker accepts a Schema over a data type with data-only fields", () => {
   assertEquals(
     check(
-      "type Int = int\nnominal Box = { n: Int }\nexport const s: Schema<Box> = schema()",
+      "type Int = int\ntype Box = { n: Int }\nexport const s: Schema<Box> = schema()",
     ),
     [],
   );
@@ -72,7 +72,7 @@ Deno.test("the checker accepts a Schema over a data type with data-only fields",
 Deno.test("the checker rejects a Schema over a data type with a reserved error field once", () => {
   assertEquals(
     check(
-      "nominal Bad = { e: SchemaError }\nexport const s: Schema<Bad> = schema()",
+      "type Bad = { e: SchemaError }\nexport const s: Schema<Bad> = schema()",
     ).map((d) => [d.code, d.message]),
     [["type-mismatch/010", DATA_ONLY]],
   );
@@ -81,8 +81,8 @@ Deno.test("the checker rejects a Schema over a data type with a reserved error f
 // ---------------------------------------------------------------- validator
 
 const BASE = `type Int = int
-nominal Box = { n: Int }
-nominal Bad = { e: SchemaError }
+type Box = { n: Int }
+type Bad = { e: SchemaError }
 export const ok: Schema<Int> = schema()
 `;
 

@@ -58,7 +58,7 @@ Create `library.eff`. Start with the types:
 export type Title = string
 export type Count = int
 
-export nominal BookId = string
+export type BookId = string
 
 export type Book = {
   id: BookId,
@@ -67,9 +67,9 @@ export type Book = {
 }
 ```
 
-A `type` declaration gives a name to a type. The names `string`, `int`, `number`, and `boolean` can occur only inside a `type`, `nominal`, or `error` declaration. A parameter or a field uses a declared name, such as `Title` or `Count`. Thus each value in a contract has a domain name.
+A `type` declaration gives a name to a type. The names `string`, `int`, `number`, and `boolean` can occur only inside a `type` or `error` declaration. A parameter or a field uses a declared name, such as `Title` or `Count`. Thus each value in a contract has a domain name.
 
-A `nominal` type is a new type with its own identity. A `string` does not fit `BookId`, and a `BookId` does not fit another nominal type over `string`. A `BookId` still fits where a `string` is necessary.
+A `type` over a primitive is a new type with its own identity. A `BookId` does not fit another type over `string`. A `BookId` still fits where a `string` is necessary.
 
 Next, declare the errors and the service:
 

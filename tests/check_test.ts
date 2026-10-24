@@ -433,8 +433,8 @@ type Pair = { left: Id, right: string }
   assert(table.isAssignable(table.string, id));
   const pair = project.modules.get("m")!.declarations.types[1];
   assertEquals(pair.definition, {
-    kind: "alias",
-    type: {
+    kind: "nominal",
+    base: {
       kind: "record",
       fields: [
         {
@@ -454,8 +454,8 @@ type Pair = { left: Id, right: string }
 
 Deno.test("brands are nominal in the table, widen to their base, and take unnamed values", () => {
   const project = checkText(`
-nominal A = string
-nominal B = string
+type A = string
+type B = string
 `);
   const table = project.table;
   const a = table.named("type:m#A");

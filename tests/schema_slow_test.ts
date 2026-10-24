@@ -93,7 +93,7 @@ if (!Exit.isFailure(interrupted) || !Cause.hasInterrupts(interrupted.cause)) thr
 });
 
 const identitySource = `type Int = int
-export nominal UserId = string
+export type UserId = string
 export error Stop = { reason: string }
 export type Wrapper = { stop: Stop, id: UserId }
 export type Tree =

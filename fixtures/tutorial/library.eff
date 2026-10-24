@@ -1,7 +1,7 @@
 export type Title = string
 export type Count = int
 
-export nominal BookId = string
+export type BookId = string
 
 export type Book = {
   id: BookId,

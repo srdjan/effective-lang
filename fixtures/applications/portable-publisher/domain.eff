@@ -1,18 +1,18 @@
 export type Text = string
 export type Bool = boolean
-export nominal ArticleId = string
-export nominal Revision = int
-export nominal NonBlankText = string
-export nominal Instant = int
+export type ArticleId = string
+export type Revision = int
+export type NonBlankText = string
+export type Instant = int
 
-export nominal Draft = {
+export type Draft = {
   id: ArticleId,
   revision: Revision,
   title: Text,
   body: Text
 }
 
-export nominal Published = {
+export type Published = {
   id: ArticleId,
   revision: Revision,
   title: NonBlankText,
@@ -21,19 +21,19 @@ export nominal Published = {
 }
 
 export type Article = Draft | Published
-export nominal ReadyDraft = {
+export type ReadyDraft = {
   id: ArticleId,
   revision: Revision,
   title: NonBlankText,
   body: NonBlankText
 }
-export nominal InvalidDraft = {
+export type InvalidDraft = {
   field: "revision" | "title" | "body",
   reason: Text
 }
-export nominal ExhaustedDraft = { id: ArticleId }
+export type ExhaustedDraft = { id: ArticleId }
 export type DraftAssessment = InvalidDraft | ExhaustedDraft | ReadyDraft
-export nominal PublishPlan = { expectedRevision: Revision, next: Published }
+export type PublishPlan = { expectedRevision: Revision, next: Published }
 
 export error InvalidArticle = {
   field: "id" | "revision" | "title" | "body",

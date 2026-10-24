@@ -18,9 +18,9 @@ export type Int = int
 export type Text = string
 export type Flag = boolean
 export type Input = unknown
-export nominal Positive = Int
-export nominal Article = { title: Text }
-nominal PrivateRecord = { title: Text }
+export type Positive = int
+export type Article = { title: Text }
+type PrivateRecord = { title: Text }
 export type HiddenRecord = PrivateRecord
 export const positiveSchema: Schema<Positive> = schema()
 `;
@@ -89,8 +89,8 @@ Deno.test("validator rejects forged sealed authority operations", () => {
     'export const bad = (value: Article): Article => ({ ...value, title: "changed" })',
     'export const bad = (value: HiddenRecord): HiddenRecord => ({ ...value, title: "changed" })',
     "export const bad = (value: Positive): Positive => value + value",
-    "nominal Wrapper = Positive\nexport const bad = (value: Positive): Int => { const wrapped = Wrapper(value)\n wrapped + wrapped }",
-    "export const bad = (value: Positive[]): Int[] => value",
+    "type Wrapper = Positive\nexport const bad = (value: Positive): Positive => { const wrapped: Wrapper = value\n wrapped + wrapped }",
+    "export const bad = (value: Positive): Int => Int(value)",
     "const bad = (value: Positive) => race(defer(() => value), defer(() => 1))",
     "export const bad: Schema<Positive> = schema()",
     "export const bad: Schema<Positive[]> = schemaArray(positiveSchema)",
@@ -139,15 +139,18 @@ Deno.test("validator rejects a sealed flag on an alias", () => {
   assertEquals(diagnostics.map((diagnostic) => diagnostic.code), [
     "validation/002",
   ]);
-  assertStringIncludes(diagnostics[0].message, "belongs only to a nominal");
+  assertStringIncludes(
+    diagnostics[0].message,
+    "belongs only to a type with identity",
+  );
 });
 
-Deno.test("validator rejects sealed nominal metadata from an effi source", () => {
+Deno.test("validator rejects sealed type metadata from an effi source", () => {
   const files = {
     "effektive.json": JSON.stringify({
       host: { x: { interface: "./host.effi", module: "./x.ts" } },
     }),
-    "host.effi": "export nominal Token = int\n",
+    "host.effi": "export type Token = int\n",
     "main.eff":
       'import { Token } from "host:x"\nexport const keep = (value: Token): Token => value\n',
   };

@@ -1,0 +1,11 @@
+import { Text, Circle, Square } from "./records.eff"
+
+// A union of this module does not tag records of another module.
+type Shape = Circle | Square
+
+const describe = (shape: Shape): Text =>
+  match shape {
+    // error: pattern/004
+    Circle(c) => c.radius,
+    _ => "other"
+  }

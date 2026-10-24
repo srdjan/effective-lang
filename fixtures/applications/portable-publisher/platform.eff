@@ -7,9 +7,9 @@ export type LexicalOps = {
 }
 export type TimeOps = { nowMillis: () => Int }
 
-export nominal Key = string
-export nominal Payload = string
-export nominal Version = string
+export type Key = string
+export type Payload = string
+export type Version = string
 
 export type Entry = { payload: Payload, version: Version }
 // Reads detach snapshots; conflicts write nothing; uncertain writes may have committed.

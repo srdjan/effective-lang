@@ -3212,16 +3212,16 @@ console.log(JSON.stringify({
 const WIDENED_RECORDS = [
   "type Int = int",
   "type Text = string",
-  "type Fields = { x: Int }",
-  "nominal A = Fields",
-  "nominal B = Fields",
-  "nominal C = { inner: Fields, label: Text }",
-  "const fieldsSchema: Schema<Fields> = schema()",
+  "type A = { x: Int }",
+  "type B = { x: Int }",
+  "type C = { inner: { x: Int }, label: Text }",
+  "type Variants = A | B | C",
+  "const fieldsSchema: Schema<{ x: Int }> = schema()",
   "export const make = (x: Int): A => A({ x })",
   "export const widen = (a: A): B => B(a)",
   "export const update = (a: A): B => B({ ...a, x: 9 })",
   'export const nested = (a: A): C => C({ inner: a, label: "n" })',
-  "export const encodeFields = (a: A): Fields fails SchemaError =>",
+  "export const encodeFields = (a: A): { x: Int } fails SchemaError =>",
   "  schemaEncode(fieldsSchema, a)",
   "",
 ].join("\n");
@@ -3299,9 +3299,10 @@ Deno.test("a data value with a missing optional prototype-named field nests in a
       `${dir}/main.eff`,
       [
         "type Text = string",
-        "export nominal Tok = { label: Text, toString?: Text }",
+        "export type Tok = { label: Text, toString?: Text }",
         "export type Toks = Tok[]",
-        "export nominal Box = { tok: Tok, all: Toks, maybe: Option<Tok> }",
+        "export type Box = { tok: Tok, all: Toks, maybe: Option<Tok> }",
+        "type Records = Tok | Box",
         "export const tok = (l: Text): Tok => Tok({ label: l })",
         'export const box = (): Box => Box({ tok: tok("a"), all: [tok("b")], maybe: Some(tok("c")) })',
         "",
@@ -3334,10 +3335,11 @@ Deno.test("a widened record value with a nested optional prototype-named field l
       `${dir}/main.eff`,
       [
         "type Text = string",
-        "export nominal Tok = { label: Text, toString?: Text }",
+        "export type Tok = { label: Text, toString?: Text }",
         "export type Toks = Tok[]",
-        "export nominal Box = { tok: Tok, all: Toks, maybe: Option<Tok> }",
-        "export nominal Boxed = { tok: Tok, all: Toks, maybe: Option<Tok> }",
+        "export type Box = { tok: Tok, all: Toks, maybe: Option<Tok> }",
+        "export type Boxed = { tok: Tok, all: Toks, maybe: Option<Tok> }",
+        "type Records = Tok | Box | Boxed",
         "export const tok = (l: Text): Tok => Tok({ label: l })",
         'export const box = (): Box => Box({ tok: tok("a"), all: [tok("b")], maybe: Some(tok("c")) })',
         "export const rebox = (b: Box): Boxed => Boxed(b)",
@@ -3428,16 +3430,9 @@ console.log(JSON.stringify({
         tail: nil,
       },
     };
-    const leaf = (label: string) => ({
-      _tag: "recursive-data#Tree",
-      label,
-      children: [],
-    });
-    const tree = {
-      _tag: "recursive-data#Tree",
-      label: "root",
-      children: [leaf("a"), leaf("b")],
-    };
+    // No union lists `Tree`, so it has no tag.
+    const leaf = (label: string) => ({ label, children: [] });
+    const tree = { label: "root", children: [leaf("a"), leaf("b")] };
     assertEquals(result, {
       tree,
       treeBack: tree,
@@ -3470,7 +3465,9 @@ Deno.test("a pure codec over a data type decodes into data and encodes back", as
       `${dir}/main.eff`,
       [
         "type Text = string",
-        "export nominal Name = { text: Text }",
+        "export type Name = { text: Text }",
+        "type Other = { count: Text }",
+        "type Records = Name | Other",
         "export const names: Codec<Name, Text> = codec((text: Text): Name => Name({ text }), (name: Name): Text => name.text)",
         "export const parse = (input: unknown): Option<Name> => decode(names, input)",
         "export const print = (name: Name): Option<Text> => encode(names, name)",
@@ -5240,7 +5237,9 @@ Deno.test("a host check accepts a data value with a missing optional prototype-n
         '{ "host": { "h": { "interface": "./h.effi", "module": "./h.ts" } } }',
       "h.effi": [
         "export type Text = string",
-        "export nominal Tok = { label: Text, toString?: Text }",
+        "export type Tok = { label: Text, toString?: Text }",
+        "export type Other = { label: Text }",
+        "export type Records = Tok | Other",
         "export service Auth { token(): Tok }",
         "export provider AuthLive provides Auth",
         "",

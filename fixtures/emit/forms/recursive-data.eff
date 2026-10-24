@@ -1,19 +1,21 @@
 type Text = string
 type Count = int
 
-export nominal Tree = { label: Text, children: Tree[] }
+export type Tree = { label: Text, children: Tree[] }
 
-export nominal Forest = { first: Option<Node> }
+export type Forest = { first: Option<Node> }
 
-export nominal Node = { rest: Forest }
+export type Node = { rest: Forest }
 
-export nominal Cons = { head: Count, tail: List }
+export type Cons = { head: Count, tail: List }
 
-export nominal Nil = {}
+export type Nil = {}
 
 export type List = Cons | Nil
 
-export nominal Chain = { value: Count, next?: Chain }
+export type Linked = Forest | Node
+
+export type Chain = { value: Count, next?: Chain }
 
 export const leaf = (label: Text): Tree =>
   Tree({ label, children: [] })

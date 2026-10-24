@@ -520,9 +520,10 @@ Deno.test("two ids with one short name show as module#Name", () => {
 Deno.test("a data type widens to its record, and the record does not fit back", () => {
   const t = fresh();
   const record = t.record([field("id", t.string)]);
-  t.defineData(ID_A, record);
-  t.defineData(ID_B, record);
-  const a = t.named(ID_A);
+  const a = identity(t, ID_A, record);
+  identity(t, ID_B, record);
+  t.markTagged(ID_A);
+  t.markTagged(ID_B);
   assert(t.isAssignable(a, record));
   assert(!t.isAssignable(record, a));
   assert(!t.isAssignable(a, t.named(ID_B)));
