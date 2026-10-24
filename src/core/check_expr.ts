@@ -1876,7 +1876,8 @@ class BodyChecker
   /**
    * The common type of branch results. With an expected type each branch must fit
    * it and the result is the expected type. Without one, literals widen and the
-   * result is the branch type that the others fit.
+   * result is the branch type that the others fit. Nominal records and errors
+   * that no branch type covers join to their union.
    */
   private joinResults(
     branches: readonly { readonly node: NodeId; readonly type: TypeRef }[],
@@ -1899,6 +1900,8 @@ class BodyChecker
         // The earlier type already covers this branch.
       } else if (this.assignable(joined, type)) {
         joined = type;
+      } else if (this.isNominalJoin(joined, type)) {
+        joined = this.table.union([joined, type]);
       } else {
         this.report(
           "type-mismatch/009",
@@ -1913,6 +1916,18 @@ class BodyChecker
       }
     }
     return joined ?? this.table.never;
+  }
+
+  /** True when every member of both types is a nominal record or an Effektive error, as in `domainOf`. */
+  private isNominalJoin(a: TypeRef, b: TypeRef): boolean {
+    return [a, b].every((type) =>
+      flattenMembers(this.table, type).every((member) => {
+        const node = this.table.node(member);
+        return node.kind === "named" &&
+          (isErrorId(node.id) ||
+            this.table.dataRecordOf(node.id) !== undefined);
+      })
+    );
   }
 
   private ifExpr(node: NodeId, expected: TypeRef | undefined): NodeInfo {

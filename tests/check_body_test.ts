@@ -6274,3 +6274,104 @@ ${use}
     );
   }
 });
+
+const SHAPES = `
+type Text = string
+type Bool = boolean
+type Int = int
+nominal Circle = { radius: Text }
+nominal Square = { side: Text }
+nominal Triangle = { base: Text }
+error Broken = { reason: Text }
+`;
+
+Deno.test("an if without an expected type joins nominal records to their union", () => {
+  const source = `${SHAPES}
+const pick = (flag: Bool) => if (flag) { Circle({ radius: "r" }) } else { Square({ side: "s" }) }
+const area = (flag: Bool): Text =>
+  match pick(flag) {
+    Circle(c) => c.radius,
+    Square(s) => s.side
+  }
+`;
+  assertEquals(messages(checkText(source)), []);
+  const offset = source.indexOf("if (flag)");
+  assertEquals(hoverContract(source, offset), "Circle | Square");
+});
+
+Deno.test("a match joins three nominal records and a match over the union reports a missing arm", () => {
+  const head = `${SHAPES}
+const pick = (n: Int) =>
+  match n {
+    0 => Circle({ radius: "r" }),
+    1 => Square({ side: "s" }),
+    _ => Triangle({ base: "b" })
+  }
+`;
+  const complete = `${head}
+const name = (n: Int): Text =>
+  match pick(n) {
+    Circle(c) => c.radius,
+    Square(s) => s.side,
+    Triangle(t) => t.base
+  }
+`;
+  assertEquals(messages(checkText(complete)), []);
+  const missing = `${head}
+const name = (n: Int): Text =>
+  match pick(n) {
+    Circle(c) => c.radius,
+    Square(s) => s.side
+  }
+`;
+  assertEquals(codes(checkText(missing)), ["pattern/001"]);
+});
+
+Deno.test("an if joins a nominal record with an error", () => {
+  const source = `${SHAPES}
+const pick = (flag: Bool) => if (flag) { Circle({ radius: "r" }) } else { Broken({ reason: "x" }) }
+const name = (flag: Bool): Text =>
+  match pick(flag) {
+    Circle(c) => c.radius,
+    Broken(b) => b.reason
+  }
+`;
+  assertEquals(messages(checkText(source)), []);
+});
+
+Deno.test("a branch that is already a union joins with a nominal record", () => {
+  const source = `${SHAPES}
+type Two = Circle | Square
+const pick = (two: Two, flag: Bool) => if (flag) { two } else { Triangle({ base: "b" }) }
+const name = (two: Two, flag: Bool): Text =>
+  match pick(two, flag) {
+    Circle(c) => c.radius,
+    Square(s) => s.side,
+    Triangle(t) => t.base
+  }
+`;
+  assertEquals(messages(checkText(source)), []);
+});
+
+Deno.test("an if of structural records without a common type still reports type-mismatch/009", () => {
+  const source = `${SHAPES}
+const pick = (flag: Bool) => if (flag) { { a: "x" } } else { { b: "y" } }
+`;
+  assertEquals(codes(checkText(source)), ["type-mismatch/009"]);
+  const mixed = `${SHAPES}
+const pick = (flag: Bool) => if (flag) { Circle({ radius: "r" }) } else { { side: "s" } }
+`;
+  assertEquals(codes(checkText(mixed)), ["type-mismatch/009"]);
+});
+
+Deno.test("an expected type still decides the join of nominal records", () => {
+  const fits = `${SHAPES}
+type Shape = Circle | Square
+const pick = (flag: Bool): Shape => if (flag) { Circle({ radius: "r" }) } else { Square({ side: "s" }) }
+`;
+  assertEquals(messages(checkText(fits)), []);
+  const misses = `${SHAPES}
+const pick = (flag: Bool): Circle => if (flag) { Circle({ radius: "r" }) } else { Square({ side: "s" }) }
+`;
+  assertEquals(codes(checkText(misses)), ["type-mismatch/003"]);
+});
