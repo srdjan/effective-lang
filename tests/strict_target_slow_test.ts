@@ -76,6 +76,46 @@ console.log(JSON.stringify(taken));
   },
   {
     name:
+      "runStream with an inline sinkForEach callback of inferred input compiles and drains the stream",
+    files: {
+      "main.eff": `type Int = int
+export const drain = (s: Stream<Int>): void => runStream(s, sinkForEach((item) => {}))
+`,
+    },
+    entries: ["main.eff"],
+    run: `import { Effect, Stream } from "effect";
+import { drain } from "./main.ts";
+await Effect.runPromise(drain(Stream.fromIterable([1, 2, 3])));
+console.log("drained");
+`,
+    prefix: "effektive-sink-for-each-hint-",
+    verify: (output) =>
+      assertEquals(output.trim().split("\n").pop(), "drained"),
+  },
+  {
+    name:
+      "a layer with method lambdas of inferred parameters validates and passes strict tsc",
+    files: {
+      "main.eff": `type Int = int
+type Text = string
+export service Store {
+  save(value: Int, label: Text): Text
+  size(): Int
+}
+export const storeLive: Layer<Store> = layer(Store, () => ({
+  save: (value, label) => label,
+  size: () => 1
+}))
+`,
+    },
+    entries: ["main.eff"],
+    run: `import { storeLive } from "./main.ts";
+void storeLive;
+`,
+    prefix: "effektive-layer-method-hint-",
+  },
+  {
+    name:
       "a Schedule annotated wider than its decision output validates and passes strict tsc",
     files: {
       "main.eff": `type Int = int

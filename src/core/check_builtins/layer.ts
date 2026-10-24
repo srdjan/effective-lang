@@ -109,11 +109,25 @@ export function layerCall(
       args[1].node,
     );
   }
-  const acquire = c.argInfo(args[1]);
-  const fn = c.jobFunction("layer", args[1], acquire);
   const declaration = service === undefined
     ? undefined
     : c.services.get(service);
+  // The method shapes of the service give the final record its field types.
+  const acquire = c.argInfo(
+    args[1],
+    declaration === undefined ? undefined : c.table.function({
+      execution: "effect",
+      parameters: [],
+      result: c.table.record(declaration.methods.map((m) => ({
+        name: m.name,
+        type: c.table.fromIr(m.type),
+        optional: false,
+      }))),
+      failures: [],
+      requirements: [],
+    }),
+  );
+  const fn = c.jobFunction("layer", args[1], acquire);
   const implementation = fn === undefined
     ? undefined
     : c.table.node(c.table.unfold(fn.result));

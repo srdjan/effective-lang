@@ -318,8 +318,8 @@ const ROWS: readonly SiteRow[] = [
     valid: `${LAYER_SERVICE}const a = layer(First, () => ({ one: () => 1 }))\n`,
     invalid:
       `${LAYER_SERVICE}const a = layer(First, () => ({ one: () => 1, two: () => 2 }))\n`,
-    code: "type-mismatch/010",
-    fragment: "`layer` must implement exactly the service methods",
+    code: "type-mismatch/005",
+    fragment: "has no field `two`",
   },
   {
     builtin: "layer",
@@ -327,8 +327,8 @@ const ROWS: readonly SiteRow[] = [
     valid: `${LAYER_SERVICE}const a = layer(First, () => ({ one: () => 1 }))\n`,
     invalid:
       `${LAYER_SERVICE}const a = layer(First, () => ({ one: () => "x" }))\n`,
-    code: "type-mismatch/010",
-    fragment: "`layer` method one does not fit its service contract",
+    code: "type-mismatch/003",
+    fragment: "the field `one` has type",
   },
   {
     builtin: "layer",

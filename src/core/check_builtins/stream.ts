@@ -619,9 +619,26 @@ export function sinkForEachCall(
   c: StreamContext,
   node: NodeId,
   args: readonly Arg[],
+  expected: TypeRef | undefined,
 ): NodeInfo {
   c.inlineStreamCallback("sinkForEach", args[0]);
-  const consume = c.argInfo(args[0]);
+  // A sink hint gives the callback its input type. A sink with no hint
+  // keeps the annotated input.
+  const hint = expected === undefined
+    ? undefined
+    : c.table.node(c.table.unfold(expected));
+  const consume = c.argInfo(
+    args[0],
+    hint?.kind === "sink"
+      ? c.table.function({
+        execution: "pure",
+        parameters: [hint.input],
+        result: c.table.unit,
+        failures: [],
+        requirements: [],
+      })
+      : undefined,
+  );
   const fn = c.functionOf(consume.type);
   if (fn === undefined || fn.parameters.length !== 1) {
     if (!c.isError(consume.type)) {
@@ -693,7 +710,7 @@ export function aggregateWithinStreamCall(
 ): NodeInfo {
   const stream = c.argInfo(args[0]);
   const producer = c.table.node(c.table.unfold(stream.type));
-  const sink = c.argInfo(args[1], takeSinkHint(c, stream.type, args[1]));
+  const sink = c.argInfo(args[1], sinkHint(c, stream.type, args[1]));
   const schedule = c.argInfo(args[2]);
   const consumer = c.table.node(c.table.unfold(sink.type));
   const policy = c.table.node(c.table.unfold(schedule.type));
@@ -746,7 +763,7 @@ export function sinkTransformStreamCall(
 ): NodeInfo {
   const stream = c.argInfo(args[0]);
   const producer = c.table.node(c.table.unfold(stream.type));
-  const sink = c.argInfo(args[1], takeSinkHint(c, stream.type, args[1]));
+  const sink = c.argInfo(args[1], sinkHint(c, stream.type, args[1]));
   const consumer = c.table.node(c.table.unfold(sink.type));
   if (producer.kind !== "stream" || consumer.kind !== "sink") {
     c.report(
@@ -780,7 +797,7 @@ export function runStreamCall(
 ): NodeInfo {
   const stream = c.argInfo(args[0]);
   const producer = c.table.node(c.table.unfold(stream.type));
-  const sink = c.argInfo(args[1], takeSinkHint(c, stream.type, args[1]));
+  const sink = c.argInfo(args[1], sinkHint(c, stream.type, args[1]));
   const consumer = c.table.node(c.table.unfold(sink.type));
   if (producer.kind !== "stream" && !c.isError(stream.type)) {
     c.report(
@@ -1086,65 +1103,77 @@ function streamThrottleOptions(c: StreamContext, arg: Arg): {
 }
 
 /**
- * The expected Sink type for a sink argument of a stream: the stream element
- * as input, an array of it as result, and no channels. `takeSink` needs the
- * element to find its input, so the argument gets this type when a direct
- * `takeSink` call is one of its results. An expected type also constrains
- * each `if` and `match` branch, so a sink with no `takeSink` result, such as
- * a branch between named sinks, gets no expected type.
+ * The expected Sink type for a sink argument of a stream. The input is the
+ * stream element, and no channels are allowed. `takeSink` needs the element
+ * to find its input and has an array of it as result. `sinkForEach` gets the
+ * element as the type of its callback parameter and has the unit result.
+ * An expected type also constrains each `if` and `match` branch, so a sink
+ * with no `takeSink` result, such as a branch between named sinks, gets no
+ * expected type. A `sinkForEach` only gets one when it is the whole argument,
+ * because a branch could add failures that the hint does not allow.
  */
-function takeSinkHint(
+function sinkHint(
   c: StreamContext,
   stream: TypeRef,
   sink: Arg,
 ): TypeRef | undefined {
   const producer = c.table.node(c.table.unfold(stream));
-  if (
-    producer.kind !== "stream" || sink.pre !== undefined ||
-    !resultsInTakeSink(c, sink.node)
-  ) {
+  if (producer.kind !== "stream" || sink.pre !== undefined) {
     return undefined;
   }
-  return c.table.sink(
-    producer.element,
-    c.table.array(producer.element),
-    [],
-    [],
-    producer.element,
-  );
+  if (resultsInSink(c, sink.node, "takeSink", true)) {
+    return c.table.sink(
+      producer.element,
+      c.table.array(producer.element),
+      [],
+      [],
+      producer.element,
+    );
+  }
+  return resultsInSink(c, sink.node, "sinkForEach", false)
+    ? c.table.sink(producer.element, c.table.unit, [], [])
+    : undefined;
 }
 
 /**
- * Whether a direct call of the `takeSink` builtin is a result of the
- * expression: the expression itself, or the result of a block, a branch of
- * an `if`, or an arm of a `match` inside it.
+ * Whether a direct call of the named sink builtin is a result of the
+ * expression: the expression itself, or the result of a block inside it.
+ * With `branches`, also a branch of an `if` or an arm of a `match`.
  */
-function resultsInTakeSink(c: StreamContext, node: NodeId): boolean {
+function resultsInSink(
+  c: StreamContext,
+  node: NodeId,
+  name: "takeSink" | "sinkForEach",
+  branches: boolean,
+): boolean {
   const kids = c.kids(node);
   switch (kindOf(c.tree, node)) {
     case SyntaxKind.CallExpr: {
       const target = kids[0] === undefined ? undefined : c.targets.get(kids[0]);
-      return target?.kind === "builtin" && target.name === "takeSink";
+      return target?.kind === "builtin" && target.name === name;
     }
     case SyntaxKind.ParenExpr:
-      return kids[0] !== undefined && resultsInTakeSink(c, kids[0]);
+      return kids[0] !== undefined && resultsInSink(c, kids[0], name, branches);
     case SyntaxKind.Block: {
       const last = kids.at(-1);
       return last !== undefined &&
         kindOf(c.tree, last) !== SyntaxKind.ConstDecl &&
-        resultsInTakeSink(c, last);
+        resultsInSink(c, last, name, branches);
     }
     case SyntaxKind.IfExpr:
-      return kids.slice(1, 3).some((branch) => resultsInTakeSink(c, branch));
+      return branches &&
+        kids.slice(1, 3).some((branch) =>
+          resultsInSink(c, branch, name, branches)
+        );
     case SyntaxKind.MatchExpr:
-      return kids.slice(1).some((arm) => {
+      return branches && kids.slice(1).some((arm) => {
         if (kindOf(c.tree, arm) !== SyntaxKind.MatchArm) {
           return false;
         }
         const parts = c.kids(arm);
         const pattern = parts.find((k) => isPatternKind(kindOf(c.tree, k)));
         const body = parts.filter((k) => k !== pattern).pop();
-        return body !== undefined && resultsInTakeSink(c, body);
+        return body !== undefined && resultsInSink(c, body, name, branches);
       });
     default:
       return false;
@@ -1315,7 +1344,8 @@ export const STREAM_ROWS = {
   },
   sinkForEach: {
     prologue: direct(1, "pure", { fact: { kind: "sink-for-each" } }),
-    handle: (c, node, _name, args) => sinkForEachCall(c, node, args),
+    handle: (c, node, _name, args, expected) =>
+      sinkForEachCall(c, node, args, expected),
   },
   takeSink: {
     prologue: direct(1, "pure", {

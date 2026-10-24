@@ -184,3 +184,84 @@ export const transduced = (s: Stream<Int>, flag: Flag): Stream<Int[]> =>
     }, name);
   }
 });
+
+/** The shown parameter types of every arrow in a checked function body. */
+function arrowParameters(project: CheckedProject, name: string): string[][] {
+  const body = project.modules.get("main")?.functions.get(
+    `value:main#${name}` as ValueId,
+  );
+  assert(body !== undefined, name);
+  return [...body.table.facts.values()].flatMap((fact) =>
+    fact.kind === "arrow"
+      ? [fact.parameters.map((p) => project.table.show(p.type))]
+      : []
+  );
+}
+
+Deno.test("an inline sinkForEach gets its callback input from the stream element", () => {
+  const project = clean(
+    `${PRELUDE}export const direct = (s: Stream<Int>): void fails Stop uses Count.tick =>
+  runStream(s, sinkForEach((item) => if (Count.tick(item) > 0) {} else {}))
+export const wrapped = (s: Stream<Int[]>): void =>
+  runStream(s, (sinkForEach((batch) => {})))
+export const batches = (s: Stream<Int>): void =>
+  runStream(transduceStream(s, takeSink(2)), sinkForEach((batch) => {}))
+export const aggregated = (s: Stream<Int>): Stream<void> =>
+  aggregateStream(s, sinkForEach((item) => {}))
+`,
+  );
+  assertEquals(arrowParameters(project, "direct"), [["Int"]]);
+  assertEquals(arrowParameters(project, "wrapped"), [["Int[]"]]);
+  assertEquals(arrowParameters(project, "batches"), [["Int[]"]]);
+  assertEquals(arrowParameters(project, "aggregated"), [["Int"]]);
+});
+
+Deno.test("an annotated sinkForEach behaves as before, also inline", () => {
+  clean(
+    `${PRELUDE}export const inline = (s: Stream<Int>): void =>
+  runStream(s, sinkForEach((item: Int) => {}))
+export const bound = (s: Stream<Int>): void => {
+  const sink = sinkForEach((item: Int) => {})
+  runStream(s, sink)
+}
+`,
+  );
+  const source = `${PRELUDE}export const wrong = (s: Stream<Text>): void =>
+  runStream(s, sinkForEach((item: Int) => {}))
+`;
+  assertDiagnostics(
+    source,
+    checked(source).diagnostics,
+    [["type-mismatch/003", "the sink input", "sinkForEach((item: Int) => {})"]],
+    "annotated inline sink with the wrong input",
+  );
+});
+
+Deno.test("a sinkForEach bound to a name still needs an annotated input", () => {
+  const source = `${PRELUDE}export const bound = (s: Stream<Int>): void => {
+  const sink = sinkForEach((item) => {})
+  runStream(s, sink)
+}
+`;
+  assertDiagnostics(
+    source,
+    checked(source).diagnostics,
+    [[
+      "type-mismatch/011",
+      "the parameter `item` needs a type annotation, because the context gives no function type",
+      "item",
+    ]],
+    "bound sinkForEach without annotation",
+  );
+});
+
+Deno.test("a sinkForEach in a branch keeps its callback input annotated", () => {
+  const source =
+    `${PRELUDE}export const branched = (s: Stream<Int>, flag: Flag): void =>
+  runStream(s, if (flag) { sinkForEach((item) => {}) } else { sinkForEach((item) => {}) })
+`;
+  assertEquals(
+    checked(source).diagnostics.map((d) => d.code),
+    ["type-mismatch/011", "type-mismatch/011"],
+  );
+});

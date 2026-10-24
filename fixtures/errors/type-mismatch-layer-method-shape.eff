@@ -1,0 +1,18 @@
+type Int = int
+type Text = string
+
+service Store {
+  save(value: Int, label: Text): Text
+  size(): Int
+}
+
+const make = () =>
+  layer(Store, () => ({
+    // error: type-mismatch/003
+    save: (value, label) => value,
+    size: () => 1
+  }))
+
+const missing = () =>
+  // error: type-mismatch/005
+  layer(Store, () => ({ size: () => 1 }))
