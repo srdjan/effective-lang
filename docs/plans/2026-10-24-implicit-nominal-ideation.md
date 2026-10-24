@@ -337,3 +337,116 @@ The prototype run in section 8 gives the breakage count. A `--tsc` build after N
 - TypeScript brands overview: <https://dev.to/jsmanifest/typescript-branded-types-vs-nominal-types-which-pattern-should-you-use-in-2026-13d1>
 - Effect Schema advanced usage: <https://effect.website/docs/schema/advanced-usage/>
 - Effect 4.0.5 typings: `~/Library/Caches/deno/npm/registry.npmjs.org/effect/4.0.5/dist/Schema.d.ts` lines 177, 4381, 5092
+
+## Validation of NI4 (2026-10-24)
+
+Base: `43a0bf7` on local `main`. Validator: Fable 5.1, adversarial. No compiler code, test, fixture, or website file changed on `main`. The findings continue the NI prefix at NI22. Each finding separates observations (what the code or the probe shows) from inferences (what follows). A finding marked "blocker" needs a decision before a plan. A finding marked "must-fix in plan" needs a plan item. A finding marked "minor" needs a text change.
+
+### Method
+
+The validator read every cited file and line and re-ran the counts of section 3. The validator then built a throwaway worktree (`git worktree add --detach /tmp/ni4-probe main`) and changed the checker there. The probe (193 inserted lines in five files, patch kept at `/tmp/ni4-probe.patch`, temporary) does this:
+
+- `types.ts`: a `type` whose body is a shape is an identity. Two different identities never mix. A widened value adopts no other name at the same level. An unnamed value fits an identity whose body it fits. A union body with a non-literal member and a bare-name body stay transparent.
+- `check.ts`: a record identity gets a tag when a transparent union alias of the same module lists it. Every member of that union must be a record identity or an error.
+- `check_binary.ts` and `check_builtins/stream.ts`: an identity alias has a comparison class and a group key class, as a brand has.
+
+The probe keeps every identity alias in the alias table, so `unfold` still reaches the shape. This has two limits. The pattern domain of a union of identity records stays "tagged record union", so the probe did not measure match-by-name effects. The emitter was not changed, so emitted text differs where a `+` result is now a named type. The validator in `src/core/validate/` was not changed; `--validate` reported nothing, because the probe only rejects more.
+
+Probe runs: `effektive check` on `fixtures/examples`, `fixtures/tutorial`, `fixtures/host-adapter-files`, and the five applications. Then `effektive build --validate --tsc` on the three gate applications. Then `deno task test`. Then `effektive check` on each file and each project under `fixtures/emit`.
+
+### Claims checked
+
+Observations. Every file and line citation in sections 2 to 7 points at the code it describes, with four small errors. `workflow.eff:21` holds the `provide` call; the multiplication `unitPrice * request.quantity` is on line 20. `highlight.ts` is `playground/src/highlight.ts`, not a `src/core` file. `parse.ts:71-79` also lists `provider` as a declaration word. The claim "`Order` and `Receipt` stop mixing, which is the protection the user wants" is addressed in NI31.
+
+These counts of section 3 reproduce exactly with the stated patterns: 181 and 173 files, 126 `nominal` declarations in 40 files, and 2 `sealed nominal`. So do 513 `type` declarations in 134 files, 83 `error` declarations, and 42 and 24 application declarations. So do 5 `.effi` nominal records, 15 host files with `.make(`, and 77 primitive and 19 record `.make(` calls. Five counts differ, and section 3 does not record their patterns:
+
+- test occurrences: 179 in 30 files with `nominal [A-Z]`, against 173 in 29
+- `sealed nominal` in tests: 27, against 18
+- `Name({` in the applications: 51, against 55
+- the word `nominal` on the website: 175, against 173
+- website `type` declarations: 88, against 90
+
+The count "29 match arms by name in 2 files" is not reproducible. `storage.eff` also has name arms, such as `InvalidKey(error)`.
+
+`Schema.d.ts:177` declares `make` on `BottomWithoutNew`, which every schema extends, so the `make` claim holds. A type-only alias emits no schema (`emit/scope.ts:625-640`), and only an alias that contains a function is type-only. So `Key.make("k")` on an erased `type Key = string` compiles, because `Key` emits as `Schema.String`.
+
+### NI17 measurement
+
+Observations from the probe. The three gate applications check and build with `--validate --tsc` and 0 diagnostics. `fixtures/examples` and `fixtures/host-adapter-files` give 0 diagnostics. `order-lifecycle` gives 1 diagnostic, `portable-publisher` 26, and `fixtures/tutorial` 1. The `fixtures/emit` corpus gives 3 diagnostics in `.eff` files plus 1 in `schedules/composition.eff` through a unit test. Four error fixtures change (5 new diagnostics). `deno task test` gives 85 failures among 1,933 fast tests; most of them assert the current rule or compare emitted text.
+
+The 37 source sites in the corpus fall into five classes. Table columns: class, count, example.
+
+| Class | Sites | Example |
+| --- | --- | --- |
+| C1: one primitive name declared in two modules | 8 in the applications, 1 error fixture, the bench generator, 4 unit tests | `domain.eff:1` and `platform.eff:1` both declare `export type Text = string`; `publisher.eff:15` passes one `Text` where the other is expected |
+| C2: a nominal value into a naming alias | 17 in the applications, 3 in `fixtures/emit`, 2 in error fixtures, 1 in the tutorial | `Corrupt({ key, ... })` with `key: Key` into `key: Text` (13 sites in `storage.eff`); `UserId` into `Text`; `Title` into `Line` (`loans.eff:16`) |
+| C3: an operator between two names | 2 in the applications, 1 unit test | `base * t.factor` is `Cents * Count` (`orders.eff:67`); `id !== expectedId` is `Text` against `ArticleId` (`storage.eff:48`) |
+| C4: a named `int` into a named `number` | 0 in the applications, 1 error fixture, 1 emit fixture, 2 unit tests | `(n: Int): Num => n` (`type-mismatch-binding-arrow.eff:12`); `Schedule<Int, Int>` with `Schedule<Int, Millis>` (`composition.eff:35`) |
+| C5: a nominal record into a named record of equal shape | 0 in the applications, 1 emit fixture, 1 error fixture | `User` into `Dog` (`nominal-records.eff:31`) |
+
+Inference. Real bugs caught: 0. Every site is a deliberate widening or a deliberate comparison that the author wrote on purpose. The protection that the corpus gains is the one the error fixtures already test with `nominal`.
+
+### Findings
+
+NI22 (blocker). R1 and NI4 collide on primitive names. Observation: R1 forces a name for every primitive position, and the corpus declares that name in each module. `Text` is declared in 5 modules, `Int` in 4, `Bool` in 4, and `Count` in 2 (applications, examples, tutorial). Under NI4 each declaration is a distinct identity, so a `Text` of `domain.eff` does not fit a `Text` of `platform.eff` (class C1). Section 8 claims that "the 172 primitive naming aliases cost nothing". The probe shows that they cost cross-module compatibility and widening (C1 and C2). Inference: the request has no syntax to tell a naming alias from a domain identity. So NI4 must choose one meaning for `type Text = string`. Options:
+
+- (a) Keep NI4. Each project moves its primitive names into one shared contracts module. The cost is one import line per module and the `Text(value)` calls of NI23. Recommended.
+- (b) Amend NI4 so that a bare primitive body stays a transparent alias. Only a record, literal set, array, tuple, option, or function body has identity. `UserId` and `Email` then get no protection, which contradicts the request.
+- (c) Keep `nominal` for primitive bodies only.
+
+The user must decide, because the option changes the migration shape of every project.
+
+NI23 (must-fix in plan). Nominal values stop fitting naming aliases. Observation: today a `Key` widens to `string`, and `string` fits the alias `Text`, so `Corrupt({ key, reason })` with `key: Key` checks (`storage.eff:36-113`, 13 sites). Under NI4 `Key` and `Text` are two identities, so each site needs `Text(key)`. The same holds for `ArticleId`, `NonBlankText`, `UserId`, `Id`, and `Title` (class C2, 23 sites). Inference: this is the Go rule working as the request asks. The plan must count and migrate these sites. Section 7 of this document must list this cost next to the 4 decodes and 6 host results.
+
+NI24 (blocker, soundness). The assignability rule lets an untagged value take a tagged type. Observation: the probe accepts `const r: Rule = { amount: 50 }` and `const f: Fixed = computed`. Here `computed` is an unnamed record binding and `Fixed` is a tagged record. The rule "an unnamed value fits a name whose body it fits" has no exception for tagged records. No construction fact exists at those sites, so the emitter would print no `Fixed.make`. Inference: the value has type `Fixed` and no `_tag` at run time. A `match` by name sends it to `$unmatched` or to the last arm, and a host check with `Schema.is` fails. This contradicts NI11 (a) and NI12 (a). Resolution, no syntax: an unnamed value fits a tagged record only as a record literal written at exactly that expected type. The checker records a `data-construction` fact there, and the emitter prints `Name.make(...)`. At a union target, and for every computed value, a tagged record needs `Name(value)`, and the message says so.
+
+NI25 (must-fix in plan). Arithmetic erases identity and the result adopts any name. Observation: the probe accepts `(c: Cents): Count => c * 2` and `(c: Cents): Count => c + 1`. Under NM7, `*`, `/`, and a mixed `+` give the base `int`, which is unnamed, so it fits `Count`. The table row "Equality and arithmetic" in section 7 states this for `Int * Int` but presents it as harmless. Inference: the numeric protection of NI4 holds for direct assignment and comparison only. Any arithmetic step launders a `Cents` into a `Meters`. Resolution options, no syntax:
+
+- (a) A binary operator with one named numeric operand and one literal or unnamed operand gives the class of the named operand. This holds for `+`, `-`, and `*`. `/` gives `number`. `Named * Named` keeps NM7 and gives `int`. Recommended, because it matches the row "A literal operand adopts the class of the named operand".
+- (b) Keep NM7 and document the hole.
+
+The plan must decide the string case of NI18 at the same time.
+
+NI26 (must-fix in plan). A named `int` stops fitting a named `number`. Observation: `(n: Int): Num => n` fails in the probe (`type-mismatch-binding-arrow.eff:12`, `check_body_test.ts:2180`, the 300-level record test, and `composition.eff:35`). `Int + Num` becomes `type-mismatch/007`. Inference: the `int` to `number` subtyping survives only between unnamed values and between a name and its own base. This follows from "two different names never mix" and is correct under the Go rule, but section 7 does not list it. The plan must add a fixture and update the tests; the applications have no such site.
+
+NI27 (must-fix in plan). Two names in one operator stop checking in the applications. Observation: `Cents * Count` (`orders.eff:67`) and `Text !== ArticleId` (`storage.eff:48`) fail in the probe, because `Count` and `Text` gain comparison classes. Section 7 rewrites `orders.eff:76` but keeps `price` unchanged. Inference: the author writes `base * Cents(t.factor)` and `ArticleId(id) !== expectedId`, or converts the other operand. The plan must count these sites with the probe and migrate them. No new rule is needed; NM7 already rejects two classes.
+
+NI28 (must-fix in plan). The IR must carry identity and the tag, and the emitter must stop printing `make` for erased identities. Observation: the validator builds its `aliases`, `brands`, and `data` maps from the IR definition kind (`world.ts:130-139`), and treats every `nominal` record base as tagged. The opaque rule needs the `nominal` kind with an `unknown` base (`world.ts:558-567`). Section 10 leaves the IR shape open. The probe golden diff shows a `$int` helper in `collections.ts`. A `+` on two `Amount` values now has a named result, and the emitter prints `Amount.make($int(...))` for a brand result. Inference: parity (NI20) needs an IR that says "identity" and "tagged" for each `type`. The smallest form: every identity lowers to `{ kind: "nominal", base, tagged?: true, sealed?: true }`. A union or bare-name body lowers to `alias`. The IR version becomes 5. The emitter selects `TaggedStruct` only when `tagged` is set. It prints `Schema.Struct` with a type for an untagged record. It prints the base schema with a plain type for an untagged primitive (NI10 a). It prints plain arithmetic for an erased identity. The sealed rules (`ownsSealed`, `foreignSealedOf`, `sealedRootOf`) must read the identity set, not only the brand map.
+
+NI29 (must-fix in plan). Diagnostics print short names. Observation: the probe prints "the field `title` has type Text, but Text is expected" (`storage.eff:59`). It also prints "the function body has type Int, but Int is expected" (`unknown-name-import-export/main.eff:5`). `show()` uses `shortName` (`check_expr.ts:234`, `types.ts:1545`). Inference: under NI4 two identities with one short name are common (NI22). The message must print `module#Name` when the two names collide, or always for a name from another module.
+
+NI30 (must-fix in plan). Same-module unions over plain `type` records exist and change under NI4. Observation: these fixtures list plain records in a same-module union:
+
+- `schema-general-union.eff`: `Shape = Short | Long`
+- `schema-optional-union.eff`: `Choice = Left | Right`
+- `forms/optional-fields.eff`: `AB = A | B` and `ABC = AB | C`
+- `pattern-nominal-subject.eff`: `Mixed = Circle | Record`
+- `schema-constructor-metadata.eff`: three unions with a `Text` member, so no tag
+
+The applications and the website examples have none. Inference: under NI4 `Short`, `Long`, `Left`, `Right`, `A`, `B`, `C`, and `Record` gain `_tag`. The two schema fixtures decode JSON of these unions, so their inputs need `_tag` (NI15 at migration time). A record pattern over such a union gives `pattern/004`. The plan must list these fixtures and state the rule: a union of named records in one module is a variant set and takes name patterns.
+
+NI31 (minor). The `Order` and `Receipt` claim catches nothing in the corpus. Observation: the probe reports 0 diagnostics in `service-workflow`. The only site that returns an `Order` row as a `Receipt` is the host adapter (`adapter.ts:40-45`). Under NI10 (a) the TypeScript type of `Receipt` stays structural, so `--tsc` accepts the adapter. Inference: the protection in section 7 holds for `.eff` code only. Section 7 must say so, or NI10 (c) must brand exported identities in TypeScript.
+
+NI32 (minor). The rule text has open points. Observations and proposed answers, no syntax:
+
+- Bodies `void`, `never`, `unknown`, and `null` (17 declarations) are not in the shape list. Proposal: every body except a union with a non-literal member and a bare name gives identity. A `never` body fits everything through `never`. An `unknown` body then behaves like an opaque type without a host.
+- A spread update keeps the name of its base (`recordUpdate` returns `base.type`, `check_expr.ts:1654-1714`), so `{ ...order, total }` is not an unnamed value. State it.
+- A field read, a call result, and a branch join keep their declared or joined names. "Unnamed" means a literal, an operator result, an inline record, array, or tuple literal without an expected type, and a builtin result typed by a primitive. State it.
+- A record literal at an expected tagged record must still get field-by-field checks. `recordTarget` returns no target when the expected type unfolds to a `named` node (`check_expr.ts:1489-1532`). The plan must unfold an identity to its body there, and in the six other `unfold(expected)` sites of the builtin checkers.
+- `Ref`, `Codec`, and `Schema` invariance is two-way assignability (`types.ts:1443-1475`). Under the unnamed-to-named rule `Ref<int>` and `Ref<Cents>` become interchangeable, and `Ref<Cents>` and `Ref<Meters>` stay apart. Acceptable; state it.
+- A nested union (`type All = Order | Rule`) must flatten through transparent aliases before the tag test. A foreign member counts as tagged only when its own module tagged it (NI19).
+- `sealed type X = A | B` and `sealed type X = Y` have alias bodies and no identity. The validator rule at `world.ts:531-541` becomes "sealed needs identity", and the checker needs a diagnostic with a fixture (`fixtures_test.ts:128`).
+- The parser form `sealed nominal` (`parse.ts:839`) becomes `sealed type`; `fixtures/errors/sealed-authority/lib.eff` has the 2 sites.
+- Two literal-set names (NI9 a) have different classes, so `status === otherStatus` across them is `type-mismatch/007`. `status === "pending"` stays legal through the class chain. State it.
+
+NI33 (minor). Fit with AGENTS.md and `docs/rejected.md`. Observation: `docs/rejected.md` holds performance entries only, so nothing there conflicts. The acceptance exception asks for source that is easy to read, closed contracts, and explicit exported contracts. Inference: NI4 removes 126 words and keeps contracts closed. The wire form of an exported record now depends on a union line elsewhere in the module, so the declaration line alone does not show it. Hover text (section 7) mitigates this in an editor, not in a diff. The user accepted this trade in NI14 (a); the plan should name it in the language rules.
+
+### Verdict
+
+NI4 does not hold as written. It holds with the amendments NI24, NI25, and NI28 after the user decides NI22. NI23, NI26, NI27, NI29, and NI30 are costs and plan items, not rule defects. The NI17 measurement on this corpus gives 37 friction sites and 0 bugs caught, with 27 of the 37 in `portable-publisher`.
+
+Amended rule text for NI4:
+
+Every `type` whose body is not a union with a non-literal member and not a bare name has identity by name. A union body with a non-literal member and a bare-name body give a transparent alias. A literal-only union body gives identity. Two different identities never mix, in any position, with equal bodies, and across modules. A named value fits its own body and nothing named beyond it: after it widens to its body, it adopts no other name at that level. An unnamed value is a literal, an operator result, or an inline record, array, or tuple literal with no expected type. A builtin result typed by a primitive is also unnamed. An unnamed value fits an untagged identity whose body it fits. An unnamed record fits a tagged record only as a record literal written at exactly that expected type. The checker records a construction there, and the emitter prints `Name.make(...)`. At a union target, and for every computed value, a tagged record needs `Name(value)`. A spread update keeps the name of its base. A field read, a call result, and a branch join keep their declared or joined names. A named record is tagged when a union alias of its own module lists it, through transparent aliases. Every member of that union must be a tagged record, an identity record of the same module, or an error. A binary operator with one named numeric operand and one literal or unnamed operand gives the class of the named operand for `+`, `-`, and `*`. `/` gives `number`. Two named operands follow NM7 (decision NI25). The IR lowers an identity to `nominal` with a `tagged` flag and lowers a transparent alias to `alias` (NI28).
+
+Next action: the user decides NI22 (a, b, or c) and NI25 (a or b). Then Opus writes the plan with the items NI23 to NI30 and NI32.
