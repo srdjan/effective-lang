@@ -35,6 +35,9 @@ To install the standalone command-line tool and the VS Code extension, read
 
 ## Usage
 
+To learn the language, read [docs/tutorial.md](docs/tutorial.md). It builds and
+runs a small application step by step.
+
 Run each command from the repository root. Give the project directory that holds
 `effektive.json`:
 

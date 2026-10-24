@@ -1,0 +1,53 @@
+export type Title = string
+export type Count = int
+
+export nominal BookId = string
+
+export type Book = {
+  id: BookId,
+  title: Title,
+  copies: Count
+}
+
+export error BookMissing = { id: BookId }
+export error NoCopies = { id: BookId }
+export error StoreDown = { message: string }
+
+export service Shelf {
+  find(id: BookId): Option<Book> fails StoreDown
+  all(): Book[] fails StoreDown
+  save(book: Book): void fails StoreDown
+}
+
+export const inStock = (books: Book[]): Title[] =>
+  books
+    |> filter(book => book.copies > 0)
+    |> map(book => book.title)
+
+export const findBook = (id: BookId): Book
+  fails BookMissing | StoreDown
+  uses Shelf.find =>
+  Shelf.find(id) ?? fail(BookMissing({ id }))
+
+export const titleOf = (id: BookId): Title
+  fails StoreDown
+  uses Shelf.find =>
+  try {
+    findBook(id).title
+  } catch {
+    BookMissing(missing) => "Unknown"
+  }
+
+const takeCopy = (book: Book) => {
+  const { id, copies } = book
+  if (copies === 0) { fail(NoCopies({ id })) } else {}
+  { ...book, copies: copies - 1 }
+}
+
+export const lend = (id: BookId): Book
+  fails BookMissing | NoCopies | StoreDown
+  uses Shelf.find | Shelf.save => {
+  const lent = findBook(id) |> takeCopy
+  Shelf.save(lent)
+  lent
+}

@@ -4,6 +4,7 @@ fixtures/**/*.ts
 fixtures/**/*.ts.map
 !fixtures/golden/**
 !fixtures/examples/users-live.ts
+!fixtures/tutorial/main.ts
 !fixtures/emit/scopes/host.ts
 !fixtures/emit/sinks/host.ts
 !fixtures/emit/host-checks/host.ts

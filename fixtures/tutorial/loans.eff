@@ -1,0 +1,31 @@
+import { Book, BookId, BookMissing, NoCopies, StoreDown, Shelf, lend } from "./library.eff"
+
+export type Line = string
+export type LedgerId = int
+
+export service Ledger {
+  open(): LedgerId
+  write(id: LedgerId, line: Line): void
+  close(id: LedgerId): void
+}
+
+const record = (book: Book) =>
+  using (ledger = {
+      const id = Ledger.open()
+      {
+        write: () => Ledger.write(id, book.title),
+        close: () => Ledger.close(id)
+      }
+    }) {
+    ledger.write()
+  } finally {
+    ledger.close()
+  }
+
+export const checkout = (id: BookId): Book
+  fails BookMissing | NoCopies | StoreDown
+  uses Shelf.find | Shelf.save | Ledger => {
+  const book = lend(id)
+  record(book)
+  book
+}

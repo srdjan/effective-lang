@@ -1,0 +1,10 @@
+{
+  "imports": {
+    "effect": "npm:effect@4.0.5"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true
+  }
+}
