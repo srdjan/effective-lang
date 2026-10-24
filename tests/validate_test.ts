@@ -1535,7 +1535,7 @@ function codesOf(ir: unknown, sources: ReadonlyMap<string, string>): string[] {
   ].sort();
 }
 
-for (const version of [1, 2, 3]) {
+for (const version of [1, 2, 3, 4]) {
   Deno.test(`version ${version} IR is rejected with the required wire version`, () => {
     const lowered = lowerText("type Count = int\nconst one = (): Count => 1");
     const previous = copy(lowered.ir) as unknown as { version: number };
@@ -1547,7 +1547,7 @@ for (const version of [1, 2, 3]) {
     assert(
       diagnostics.some((diagnostic) =>
         diagnostic.code === "validation/008" &&
-        diagnostic.message.includes("light-functional-ir version 4") &&
+        diagnostic.message.includes("light-functional-ir version 5") &&
         diagnostic.message.includes(`version ${version}`)
       ),
     );
@@ -3314,17 +3314,22 @@ nominal Id = Text
 nominal Ids = Text[]
 `);
   assertEquals(codesOf(lowered.ir, lowered.sources), []);
-  const forge = (base: Type): string[] => {
+  const forge = (base: Type, tagged = false): string[] => {
     const ir = copy(lowered.ir);
     const id = ir.declarations.find((d) => d.name === "Id");
     assert(id?.kind === "type" && id.definition.kind === "nominal");
-    Object.assign(id.definition, { base });
+    Object.assign(id.definition, { base, ...(tagged ? { tagged: true } : {}) });
     return codesOf(ir, lowered.sources);
   };
   const row: Type = { kind: "named", id: "type:m#Row" };
   const text: Type = { kind: "named", id: "type:m#Text" };
-  // A record base is a data type in the IR, so it is legal.
-  assertEquals(forge({ kind: "record", fields: [] }), []);
+  // A tagged record base is a data type in the IR, so it is legal.
+  assertEquals(forge({ kind: "record", fields: [] }, true), []);
+  assertEquals(forge({ kind: "record", fields: [] }), ["validation/002"]);
+  // The flag `tagged` needs a record base.
+  assertEquals(forge({ kind: "primitive", name: "string" }, true), [
+    "validation/002",
+  ]);
   assertEquals(forge(row), ["validation/002"]);
   assertEquals(forge({ kind: "named", id: "type:m#Plain" }), [
     "validation/002",

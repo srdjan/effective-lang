@@ -312,6 +312,7 @@ interface DefinitionSource {
       | {
         readonly kind: "nominal";
         readonly base: Type;
+        readonly tagged?: true;
         readonly sealed?: true;
       };
   }[];
@@ -948,7 +949,10 @@ export class TypeTable {
         if (guardedRecord(decl.definition.type, decl.id, tagOf)) {
           this.markGuardedAlias(decl.id);
         }
-      } else if (decl.definition.base.kind === "record") {
+      } else if (
+        decl.definition.tagged === true &&
+        decl.definition.base.kind === "record"
+      ) {
         // A nominal type over a record is a tagged record at run time.
         this.defineData(
           decl.id,

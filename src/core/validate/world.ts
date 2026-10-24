@@ -132,7 +132,9 @@ export function buildWorld(ir: ModuleIR): World {
         aliases.set(t.id, t.definition.type);
         break;
       case "nominal":
-        if (t.definition.base.kind === "record") {
+        if (
+          t.definition.tagged === true && t.definition.base.kind === "record"
+        ) {
           data.set(t.id, t.definition.base);
         } else brands.set(t.id, t.definition.base);
         break;
@@ -541,6 +543,17 @@ function checkTypeDecl(ctx: Ctx, d: TypeDecl, path: string): void {
       d.span,
     );
   }
+  if (
+    "tagged" in d.definition &&
+    (d.definition.tagged !== true || d.definition.base.kind !== "record")
+  ) {
+    ctx.report.add(
+      AREA.types,
+      `${path}.definition.tagged`,
+      "tagged must be true and belongs only to a nominal definition over a record",
+      d.span,
+    );
+  }
   if (sealed === true && d.span.source.endsWith(".effi")) {
     ctx.report.add(
       AREA.types,
@@ -570,7 +583,10 @@ function checkTypeDecl(ctx: Ctx, d: TypeDecl, path: string): void {
       d.span,
     );
   }
-  if (d.definition.kind === "nominal" && d.definition.base.kind === "record") {
+  if (
+    d.definition.kind === "nominal" && d.definition.tagged === true &&
+    d.definition.base.kind === "record"
+  ) {
     const { fields } = d.definition.base;
     const at = `${path}.definition.base.fields`;
     checkFieldNames(ctx, fields, at, d.span, true);

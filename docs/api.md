@@ -286,12 +286,13 @@ declarations, and its IR exports each of them. Its providers are not lowered.
 `lowerProject(checked)` does this for every `.eff` and `.effi` module. Pass the
 result to `emitProject` to get each generated module and each companion module.
 
-The IR has the `version` 4. A type declaration has the definition kind `alias`
-or `nominal`. A `nominal` definition has a `base` type, and a record base is a
-nominal record. An expression has the node `nominal` for a construction of a
-nominal type, and a match arm has the pattern kind `nominal`. The IR has no
-`unbrand` node, because a nominal value fits its base type. The emitter prints
-a `TaggedStruct` for a record base and an Effect brand for any other base.
+The IR has the `version` 5. A type declaration has the definition kind `alias`
+or `nominal`. A `nominal` definition has a `base` type. The flag `tagged` marks
+a nominal record, and its base is a record. An expression has the node
+`nominal` for a construction of a nominal type, and a match arm has the pattern
+kind `nominal`. The IR has no `unbrand` node, because a nominal value fits its
+base type. The emitter prints a `TaggedStruct` for a tagged definition and an
+Effect brand for any other base.
 
 The IR holds the declarations in source order, the sorted export identities, and
 one `Import` for each import declaration. The `module` of an `Import` is the
@@ -890,8 +891,9 @@ IR v4 removes `with-resource.useBinding`, `with-resource.releaseBinding`,
 `use.parameters[1].id`. These slots use the exported `ClosureExpr` type; runtime
 validation still checks closure shape, arity, parameter types, references and
 borrowed uses. Older wire versions receive `validation/008`; there is no automatic
-conversion. Schedule compositions and schema decode/encode/make now discriminate
-as individual TypeScript union members, with the same serialized node shapes.
+conversion. IR v5 adds the flag `tagged` on a `nominal` definition. Schedule
+compositions and schema decode/encode/make now discriminate as individual
+TypeScript union members, with the same serialized node shapes.
 
 Bare single-parameter lambdas use the existing `ArrowExpr`, `ParamList`, and
 `Param` source nodes. Their lossless tree contains only the tokens that were

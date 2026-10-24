@@ -146,7 +146,7 @@ union with a record (`declaration/014`). A function, deferred, or opaque type in
 a body or field gives `declaration/015` or `declaration/016`.
 
 A `match` selects nominal records and errors by name. A nominal record can be
-recursive when every cycle has a base case. The IR has the version 4, with one
+recursive when every cycle has a base case. The IR has the version 5, with one
 definition kind and one construction node `nominal`. The editor, the TextMate
 grammar, and the playground highlighter know the word `nominal`. The website and
 the canonical specification describe nominal types from draft 0.60.

@@ -19,7 +19,8 @@ export function sensitiveField(name: string): boolean {
 
 /** The fields of a nominal type over a record, which lowers to a tagged record. Other declarations give undefined. */
 export function dataFields(d: TypeDecl): readonly Field[] | undefined {
-  return d.definition.kind === "nominal" && d.definition.base.kind === "record"
+  return d.definition.kind === "nominal" && d.definition.tagged === true &&
+      d.definition.base.kind === "record"
     ? d.definition.base.fields
     : undefined;
 }

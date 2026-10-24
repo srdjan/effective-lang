@@ -1650,6 +1650,7 @@ class ModuleChecker {
       definition: {
         kind: "nominal",
         base,
+        ...(kind === "data" ? { tagged: true } : {}),
         ...(entry.sealed ? { sealed: true } : {}),
       },
     };
@@ -1813,7 +1814,10 @@ class ModuleChecker {
       const declaration = this.types.find((d) => d.id === m.id);
       const definition = declaration?.definition;
       // The record keeps the optional flag of each field.
-      if (definition?.kind === "nominal" && definition.base.kind === "record") {
+      if (
+        definition?.kind === "nominal" && definition.tagged === true &&
+        definition.base.kind === "record"
+      ) {
         return [definition.base];
       }
       return definition?.kind === "alias" ? [definition.type] : [];

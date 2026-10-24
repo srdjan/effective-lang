@@ -233,7 +233,12 @@ export interface TypeDecl {
   readonly name: string;
   readonly definition:
     | { readonly kind: "alias"; readonly type: Type }
-    | { readonly kind: "nominal"; readonly base: Type; readonly sealed?: true };
+    | {
+      readonly kind: "nominal";
+      readonly base: Type;
+      readonly tagged?: true;
+      readonly sealed?: true;
+    };
   readonly opaque?: boolean;
   readonly span: Span;
 }
@@ -307,7 +312,7 @@ export interface Import {
 
 export interface ModuleIR {
   readonly format: "light-functional-ir";
-  readonly version: 4;
+  readonly version: 5;
   readonly module: string;
   /** A validator also receives immutable source texts keyed by these identifiers. */
   readonly sources: readonly string[];

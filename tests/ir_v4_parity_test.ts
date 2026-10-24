@@ -5,13 +5,18 @@ import {
   TypeScriptOutputs,
 } from "../src/core/typescript.ts";
 
-/** The only accepted v3 wire changes. Keep spans, annotations and identities intact. */
+/** The accepted v3 wire changes, with the v5 version and `tagged` flag. Keep spans, annotations and identities intact. */
 function v4(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(v4);
   if (value === null || typeof value !== "object") return value;
   const record = value as Record<string, unknown>;
+  const base = record.base as { kind?: unknown } | undefined;
   return Object.fromEntries(
-    Object.entries(record)
+    Object.entries(
+      record.kind === "nominal" && base?.kind === "record"
+        ? { ...record, tagged: true }
+        : record,
+    )
       .filter(([key]) =>
         !["useBinding", "releaseBinding", "groupBinding"].includes(key)
       )
@@ -20,7 +25,7 @@ function v4(value: unknown): unknown {
       ) => [
         key,
         key === "version" && record.format === "light-functional-ir"
-          ? 4
+          ? 5
           : v4(item),
       ]),
   );

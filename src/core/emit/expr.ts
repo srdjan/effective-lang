@@ -1092,7 +1092,7 @@ export class ExprEmitter implements ExprCore {
     if (
       declaration?.kind !== "type" ||
       declaration.definition.kind !== "nominal" ||
-      declaration.definition.base.kind === "record"
+      declaration.definition.tagged === true
     ) return undefined;
     const base = this.scope.resolve(declaration.definition.base);
     if (isIntType(base)) return { id: resolved.id, integral: true };
