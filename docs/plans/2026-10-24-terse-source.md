@@ -118,6 +118,14 @@ Update `docs/language-rules.md`, `CONCEPTS.md` if a term changes, `docs/status.m
 Measure the corpus again with the same method as the evidence section, and record the before and after numbers in this plan.
 Run focused tests before the full gate. Run `deno task check` before each implementation commit.
 
+### TE6 results
+
+Measured on 2026-10-24 with `cat fixtures/examples/*.eff fixtures/applications/*/*.eff | tr -d ' \n\t' | wc -c`.
+The corpus of 20 `.eff` files went from 23,949 to 21,278 non-whitespace characters (11.2% less).
+A regex count of `fails` and `uses` clauses (`grep -oE '(fails|uses) [A-Za-z.| ]+'`) went from 3,748 to 1,720 characters. The regex reads names only, so this count is approximate.
+The largest file changes: `stream-processor/processor.eff` 1,753 to 1,192, `portable-publisher/feature.eff` 3,174 to 2,447, `portable-publisher/grants.eff` 1,065 to 747, `portable-publisher/publisher.eff` 1,451 to 1,083, `scheduled-worker/worker.eff` 1,261 to 1,061, and `examples/pay.eff` 871 to 760.
+All five applications build with `--validate --tsc` and pass their runtime tests. `deno task check` passes: 2,073 fast and 203 slow tests.
+
 ## TE7: inlay hints for inferred contracts (D4)
 
 Show the inferred `fails` and `uses` of an unannotated local function as an inlay hint in the language server and the VS Code client.
