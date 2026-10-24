@@ -33,16 +33,20 @@ export const pay = (id: OrderId): Order
 Today this gives `unknown-name/004: PayFailure is a type, not an error`.
 An alias with a member that is not an error gets a diagnostic that names the member.
 The checker expands the alias to error identities. The failure sets in the IR stay sets of errors, so the IR and the independent validator do not change.
-A `catch` arm still names one error. Hover shows the expanded members. Contract quick fixes keep adding single errors.
-Check what the emitter writes for a union-of-errors alias today. The generated TypeScript must type-check.
+`errorRef` in `src/core/resolve.ts` has three callers: the `fails` clause, the `catch` handler, and `ctorRef` for patterns. Only the `fails` path accepts an alias. A `catch` arm and a pattern still name one error.
+`failures()` in `src/core/check.ts` flattens an alias of aliases through the type table. It reports a mixed member with a new code in `src/core/diagnostics.ts`.
+The emitter already writes `Schema.Union([...])` for such an alias, and the build passes `--validate --tsc`. Function types print the expanded identities. Hover, the contract quick fix, and the module interface read the expanded sets. None of them changes.
 
-Files: `src/core/resolve.ts` (`errorRef`), `src/core/check.ts` (`failures`), the function-type and service-method paths, diagnostics, editor hover, and tests.
+Files: `src/core/resolve.ts` (the `fails` path of `errorRef`), `src/core/check.ts` (`failures`), the function-type and service-method paths, diagnostics, and tests.
 Verification: local and imported aliases, nested aliases, a mixed alias, an alias in a function type and a service method, hover text, and strict generated TypeScript.
 
 ## TE2: open contracts on local functions, and recursive effect inference (D5)
 
-On a non-exported function, each omitted `fails` or `uses` clause is inferred. A written clause closes its own set. A result annotation alone no longer closes the effect sets.
+On every non-exported function, each omitted `fails` or `uses` clause is inferred. A written clause closes its own set. A result annotation alone no longer closes the effect sets.
+The rule covers module-level local functions and inline arrows. `checkBody` in `src/core/check_expr.ts` serves both.
 Exported functions do not change: an omitted clause means an empty set.
+A function type in a binding annotation, such as `const f: (x: T) => U = ...`, stays closed. It is a type, and a type states its sets.
+This changes the specification sentence "A result annotation creates a closed failure and requirement contract". TE6 updates it.
 A recursive local function still needs parameter and result annotations. Its effect sets come from a fixed-point pass over its strongly connected component. Reuse the structure of the existing mode solver (`solveModeGroup` in `src/core/check_project.ts`).
 
 ```
@@ -51,11 +55,18 @@ const cycle = (policy: Policy, completed: Int, last: Option<Int>): Report =>
 ```
 
 Today this gives `failure-contract/001` and `requirement-contract/001`, because the result annotation closes the contract.
-Effect sets only grow, so the fixed point exists. Bound the iterations like the mode solver does, and report a diagnostic if the bound is reached.
-Decide how the IR records a partly inferred contract. The `contract` field is `"explicit" | "inferred"` in `ir.ts` and `tables.ts`, and `lower.ts` and the validator read it. Prefer one recorded state for each set over a third contract kind, if the validator stays simple.
+Effect sets only grow, so the fixed point exists. The bound and its diagnostic reuse `execution-mode/004`, the round cap of the mode solver.
 
-Files: `src/core/check.ts`, `src/core/check_project.ts`, `src/core/check_expr.ts`, `src/core/ir.ts`, `src/core/tables.ts`, `src/core/lower.ts`, the independent validator, diagnostics, and tests.
-Verification: a local with a result annotation and inferred effects, a local with one written clause, mutual recursion, recursion through a callback, the iteration bound, exports unchanged, validator mutations, and the three application gates.
+The solver must carry effect sets, not only modes. Today `values(view)` in `src/core/check_project.ts` returns `signatureType()` for an explicit contract, and that reads the static `signature.failures`. `environment(view)` takes only a `ModeLookup`. Replace that lookup with one that gives the mode and the solved failure and requirement sets of each open signature. Solve modes and sets together in one loop. A non-recursive open local publishes its solved sets, as an inferred local does today. Callers read the solved sets. `isPendingMode` and `executionOf` in `src/core/check.ts` use the same state.
+
+Replace the `contract: "explicit" | "inferred"` field in `src/core/check.ts`, `src/core/tables.ts`, and `src/core/ir.ts` with one written flag for each part: `{ result: boolean, fails: boolean, uses: boolean }`. The serializer, the IR goldens (`fixtures/ir/`), and the validator follow. The validator checks a written set as a closed bound and an inferred set as equal to the body set.
+`src/core/lower.ts` combines the written result IR (`signature.result.ir`) with the solved sets. `toIrFunction` loses source order and schema make inputs, so it is used only when the result is not written. `src/core/emit/decls.ts` writes the TypeScript return annotation whenever the result is written, with the sets from the function type.
+`execution-mode/003` fires only when a recursive local has no written result or parameter types. Update the diagnostic descriptions that say "with a result annotation" in `src/core/diagnostics.ts`.
+
+Existing error fixtures encode the old rule. `fixtures/errors/failure-contract-extra-failure.eff` (`broken`) and `requirement-contract-extra-requirement.eff` (`bad`) stop failing. Export those functions to keep their purpose. `execution-mode-round-cap.eff` becomes a chain of open sets; keep it as the bound test.
+
+Files: `src/core/check.ts`, `src/core/check_project.ts`, `src/core/check_expr.ts`, `src/core/ir.ts`, `src/core/tables.ts`, `src/core/serialize.ts`, `src/core/lower.ts`, `src/core/emit/decls.ts`, `src/core/validate/`, diagnostics, fixtures, and tests.
+Verification: a local with a result annotation and inferred effects, a local with one written clause, an inline arrow with a result annotation, a `catch` inside an open local (the inferred set shrinks), a short mutual recursion where the effect enters at the far end (assert both solved sets and the emitted header), recursion through a callback, the iteration bound, exports unchanged, validator mutations for a too-small inferred set and a too-large written set, and the three application gates.
 
 ## TE3: union join of nominal records (D5)
 
@@ -68,10 +79,12 @@ const toArticle = (stored: StoredArticle) =>
 ```
 
 Today this gives `type-mismatch/009: this branch has type Published, which has no common type with Draft from the earlier branches`.
-The joined type is the same union that `match` uses for its nominal domain. Hover shows the union. An export boundary still checks the declared result.
+The joined type is the same union that `match` uses for its nominal domain. Use the predicate of `domainOf` in `src/core/patterns.ts` (`table.dataRecordOf(id) !== undefined || isErrorId(id)`), so that the join and `match` agree. Build the union with `table.union` in `src/core/types.ts`.
+Do not confuse an Effektive error type with the poison type that `this.isError` tests. A poison branch keeps today's behavior.
+`joinResults` serves `if`, `match`, and `try`. The rule covers all three. Hover shows the union. An export boundary still checks the declared result.
 
-Files: `src/core/check_expr.ts` (`joinResults`), the type table if a union constructor is needed, and tests.
-Verification: two and three nominal records, a nominal record with an error, a structural record that still fails, a join that meets an expected type, and `match` over the inferred union.
+Files: `src/core/check_expr.ts` (`joinResults`) and tests.
+Verification: two and three nominal records, a nominal record with an error, a structural record that still fails, a join that meets an expected type, `match` over the inferred union, and a type-checked emitted file with an inferred union result.
 
 ## TE4: expected types into builtin callbacks (D3)
 
@@ -81,8 +94,12 @@ Two cases are in scope:
 - `runStream(stream, sinkForEach((batch) => ...))`: the sink callback gets the element type of the stream. Today this gives `type-mismatch/011`. The `sinkForEach` message says that it needs an annotated input, so this changes a chosen rule. A sink that is bound to a name before its use keeps the annotation.
 - `layer(Service, () => ({ method: (value) => ... }))`: the final record of the acquire body gets the method shapes of the service. Today this gives `type-mismatch/011` five times in the portable publisher.
 
+The mechanism exists. `runStreamCall` in `src/core/check_builtins/stream.ts` passes `takeSinkHint` as an expected type, and the `takeSink` row reads it. Give the `sinkForEach` row the expected type too. Define one hint shape: the input is the stream element, and the result follows each sink builtin. Add a guard like `resultsInTakeSink`.
+`layerCall` in `src/core/check_builtins/layer.ts` calls `argInfo(args[1])` without an expected type. Pass a zero-parameter function type whose result is the method record of the service. It flows through `contextOf`, `block`, and `recordConstruction` to the field lambdas.
+Keep the layer-specific message "`layer` method X does not fit its service contract" for a wrong shape if the change allows it. Otherwise accept the record-field code. Add an error fixture for a wrong-shape layer, because none exists today.
+
 Files: `src/core/check_builtins/stream.ts`, `src/core/check_builtins/layer.ts`, the shared callback helpers, diagnostics, and tests.
-Verification: inline and bound sinks, sink transforms, a layer with inferred method parameters, a layer method with a wrong shape, and the annotated forms unchanged.
+Verification: inline and bound sinks, sink transforms, a layer with inferred method parameters, a wrong-shape layer fixture, and the annotated forms unchanged.
 
 ## TE5: annotate exports, infer locals (D1)
 
@@ -108,8 +125,10 @@ The hint text uses the same contract printer as hover. TE7 comes after TE2, beca
 
 ## Order
 
-TE1 and TE4 are independent. TE2 comes before TE3, because both change the checker's function and branch paths.
-TE5 comes after TE1 to TE4, so that the cleanup can use the new forms. TE6 comes last.
+TE2 comes first and alone, because it changes the IR shape, the serializer, and the IR goldens.
+After TE2, TE1, TE3, and TE4 can run in parallel worktrees. They share `src/core/check.ts`, `src/core/check_expr.ts`, `src/core/diagnostics.ts`, and `fixtures/errors/`, but in different regions. Merge them one at a time with a rebase.
+TE7 follows TE2. TE5 comes after TE1 to TE4 and after the TE2 application gates pass. TE6 comes last.
+The plan was validated on 2026-10-24. The validation found two blocking items in TE2 (the scope of open contracts, and sets in the solver). This text resolves both.
 
 ## Limits
 
