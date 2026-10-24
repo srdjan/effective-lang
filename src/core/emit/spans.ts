@@ -13,7 +13,7 @@ import type { Project } from "../project.ts";
 import type { SpanRecord } from "./doc.ts";
 import type { EmittedModule, HostAssertionRecord } from "./emit.ts";
 
-/** A host assertion with the span of the Effective import that binds the provider. */
+/** A host assertion with the span of the Effektive import that binds the provider. */
 interface HostAssertionEntry extends HostAssertionRecord {
   /**
    * The span of the imported name in the `.eff` import declaration, for

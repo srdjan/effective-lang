@@ -248,10 +248,10 @@ async function run(
 async function captureRevision(
   revision: string,
 ): Promise<Result<readonly string[], string>> {
-  const tree = Deno.makeTempDirSync({ prefix: "effective-capture-" });
+  const tree = Deno.makeTempDirSync({ prefix: "effektive-capture-" });
   // Deno keeps compile cache entries for each tree path, so each capture uses
   // its own DENO_DIR and removes it after, as `scripts/test_slow.ts` does.
-  const denoDir = Deno.makeTempDirSync({ prefix: "effective-capture-deno-" });
+  const denoDir = Deno.makeTempDirSync({ prefix: "effektive-capture-deno-" });
   try {
     const archive = `${tree}.tar`;
     if (

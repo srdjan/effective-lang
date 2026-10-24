@@ -36,7 +36,7 @@ Deno.test("portable publisher passes one KV contract on memory and file-backed S
     ).values()
   ) assertEquals(diagnostics, []);
 
-  await withTemporaryDirectory("effective-publisher-sqlite-", async (dir) => {
+  await withTemporaryDirectory("effektive-publisher-sqlite-", async (dir) => {
     for (
       const name of [
         "deno.json",

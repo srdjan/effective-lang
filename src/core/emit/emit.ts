@@ -38,7 +38,7 @@ export interface EmitContext {
 export interface HostAssertionRecord {
   /** The name of the assertion constant: `UsersLive$host`. */
   readonly name: string;
-  /** The name that the Effective source binds in its import: `UsersLive`. */
+  /** The name that the Effektive source binds in its import: `UsersLive`. */
   readonly local: string;
   /** The name that the host module exports. */
   readonly exported: string;
@@ -156,7 +156,7 @@ function build(ir: ModuleIR, context: EmitContext): EmittedModule {
   for (const group of scope.hostImports()) imports.push(importLine(group));
 
   const header: Doc =
-    `// Generated from ${scope.source} by the Effective compiler. Do not edit.`;
+    `// Generated from ${scope.source} by the Effektive compiler. Do not edit.`;
   const declarationDocs = [...typeDocs, ...functionDocs, ...constantDocs];
   // A companion module without a declaration would not be a module without this line.
   const moduleMarker: Doc[] =

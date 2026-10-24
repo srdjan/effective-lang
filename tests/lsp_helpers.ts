@@ -256,7 +256,7 @@ export function notification(method: string, params?: unknown): unknown {
 
 export function didOpen(uri: string, version: number, text: string): unknown {
   return notification("textDocument/didOpen", {
-    textDocument: { uri, languageId: "effective", version, text },
+    textDocument: { uri, languageId: "effektive", version, text },
   });
 }
 

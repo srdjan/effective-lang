@@ -1,6 +1,6 @@
 "use strict";
 
-// VS Code client of the Effective language server. The VSIX includes its runtime dependencies.
+// VS Code client of the Effektive language server. The VSIX includes its runtime dependencies.
 
 const fs = require("fs");
 const path = require("path");
@@ -10,17 +10,17 @@ const vscode = require("vscode");
 const { LanguageClient } = require("vscode-languageclient/node");
 
 // These values must equal the exports of src/lsp/methods.ts.
-const GENERATED_TYPESCRIPT_METHOD = "effective/generatedTypeScript";
-const GENERATED_CHANGED_METHOD = "effective/generatedChanged";
-const GENERATED_SCHEME = "effective-generated";
+const GENERATED_TYPESCRIPT_METHOD = "effektive/generatedTypeScript";
+const GENERATED_CHANGED_METHOD = "effektive/generatedChanged";
+const GENERATED_SCHEME = "effektive-generated";
 
-const LANGUAGE_ID = "effective";
-const SHOW_COMMAND = "effective.showGeneratedTypeScript";
+const LANGUAGE_ID = "effektive";
+const SHOW_COMMAND = "effektive.showGeneratedTypeScript";
 const SERVER_SETTINGS = [
-  "effective.server.deno",
-  "effective.server.repository",
-  "effective.writeOnSave",
-  "effective.debounceMs",
+  "effektive.server.deno",
+  "effektive.server.repository",
+  "effektive.writeOnSave",
+  "effektive.debounceMs",
 ];
 
 const NO_RESULT_TEXT =
@@ -33,7 +33,7 @@ let client;
 /** @type {Promise<void> | undefined} */
 let started;
 
-/** The virtual URI of a source `foo/users.eff` is `effective-generated:foo/users.ts?<source URI>`. */
+/** The virtual URI of a source `foo/users.eff` is `effektive-generated:foo/users.ts?<source URI>`. */
 function virtualUriOf(sourceUri) {
   return vscode.Uri.from({
     scheme: GENERATED_SCHEME,
@@ -65,12 +65,12 @@ class GeneratedContentProvider {
   async provideTextDocumentContent(virtualUri) {
     const running = this.getClient();
     if (running === undefined || started === undefined) {
-      return "// The Effective language server is not running.";
+      return "// The Effektive language server is not running.";
     }
     try {
       await started;
     } catch (_error) {
-      return "// The Effective language server did not start. See the Effective output channel.";
+      return "// The Effektive language server did not start. See the Effektive output channel.";
     }
     try {
       const result = await running.sendRequest(GENERATED_TYPESCRIPT_METHOD, {
@@ -86,12 +86,12 @@ class GeneratedContentProvider {
 }
 
 function serverOptions() {
-  const config = vscode.workspace.getConfiguration("effective");
+  const config = vscode.workspace.getConfiguration("effektive");
   const deno = config.get("server.deno", "deno") || "deno";
   const setting = config.get("server.repository", "");
   const entry = setting
     ? path.join(setting, "src", "lsp", "main.ts")
-    : path.join(__dirname, "server", "effective-lsp.js");
+    : path.join(__dirname, "server", "effektive-lsp.js");
   return {
     entry,
     options: {
@@ -130,14 +130,14 @@ function checkDeno(executable) {
     version = /^deno (\S+)/m.exec(output)?.[1];
   } catch (error) {
     throw new Error(
-      `Cannot run Deno at "${executable}": ${error.message}. Install Deno ${REQUIRED_DENO_VERSION} and set effective.server.deno to its executable.`,
+      `Cannot run Deno at "${executable}": ${error.message}. Install Deno ${REQUIRED_DENO_VERSION} and set effektive.server.deno to its executable.`,
     );
   }
   if (version !== REQUIRED_DENO_VERSION) {
     throw new Error(
       `Deno ${REQUIRED_DENO_VERSION} is required; "${executable}" reports ${
         version || "an unknown version"
-      }. Set effective.server.deno to Deno ${REQUIRED_DENO_VERSION}.`,
+      }. Set effektive.server.deno to Deno ${REQUIRED_DENO_VERSION}.`,
     );
   }
 }
@@ -150,7 +150,7 @@ async function showGeneratedTypeScript() {
     !document.uri.path.endsWith(".eff")
   ) {
     await vscode.window.showInformationMessage(
-      "Open an Effective .eff file to show its generated TypeScript.",
+      "Open an Effektive .eff file to show its generated TypeScript.",
     );
     return;
   }
@@ -167,28 +167,28 @@ async function showGeneratedTypeScript() {
 }
 
 function activate(context) {
-  const config = vscode.workspace.getConfiguration("effective");
+  const config = vscode.workspace.getConfiguration("effektive");
   const { entry, options } = serverOptions();
   if (!fs.existsSync(entry)) {
     vscode.window.showErrorMessage(
-      `Effective: the language server was not found at ${entry}. ` +
-        "Reinstall the Effective VSIX, or set effective.server.repository for checkout development.",
+      `Effektive: the language server was not found at ${entry}. ` +
+        "Reinstall the Effektive VSIX, or set effektive.server.repository for checkout development.",
     );
     return;
   }
   try {
     checkDeno(options.command);
   } catch (error) {
-    vscode.window.showErrorMessage(`Effective: ${error.message}`);
+    vscode.window.showErrorMessage(`Effektive: ${error.message}`);
     return;
   }
 
-  const outputChannel = vscode.window.createOutputChannel("Effective", {
+  const outputChannel = vscode.window.createOutputChannel("Effektive", {
     log: true,
   });
   client = new LanguageClient(
-    "effective",
-    "Effective",
+    "effektive",
+    "Effektive",
     options,
     {
       documentSelector: [{ scheme: "file", language: LANGUAGE_ID }],
@@ -226,7 +226,7 @@ function activate(context) {
       if (SERVER_SETTINGS.some((name) => event.affectsConfiguration(name))) {
         vscode.window
           .showInformationMessage(
-            "Effective: a server setting changed. Reload the window to apply it.",
+            "Effektive: a server setting changed. Reload the window to apply it.",
             "Reload Window",
           )
           .then((choice) => {

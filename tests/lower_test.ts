@@ -101,7 +101,7 @@ function assertSetsSorted(value: unknown, path = "$"): void {
 }
 
 function preludeExports(ir: ModuleIR): readonly string[] {
-  const prelude = ir.imports.find((i) => i.module === "effective:prelude");
+  const prelude = ir.imports.find((i) => i.module === "effektive:prelude");
   return prelude === undefined ? [] : prelude.exports;
 }
 
@@ -302,7 +302,7 @@ Deno.test("the activeNames pipeline of users lowers to bindings and calls", () =
   assertEquals(second.value.execution, "pure");
   assertEquals(second.value.effects, { failures: [], requirements: [] });
   assertEquals(body.result.execution, "pure");
-  const prelude = ir.imports.find((i) => i.module === "effective:prelude");
+  const prelude = ir.imports.find((i) => i.module === "effektive:prelude");
   assertEquals(prelude?.bindings, []);
   assertEquals(
     prelude?.values.map((v) => v.id),

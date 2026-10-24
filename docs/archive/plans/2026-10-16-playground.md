@@ -1,4 +1,4 @@
-# Playground plan: the Effective core in the browser
+# Playground plan: the Effektive core in the browser
 
 Status: validated, 2026-10-16. Design source: `docs/transpiler-design.md`,
 sections 3.1 and 3.3 (the playground is step 3). Fable validated the first
@@ -17,7 +17,7 @@ The user settled four decisions on 2026-10-16. Each took the recommended option.
 
 | Decision | Choice |
 | --- | --- |
-| P1 Location | The page and its build live in `playground/` in this repository. Publication to the `effective` site is a later step that the user approves. |
+| P1 Location | The page and its build live in `playground/` in this repository. Publication to the `effektive` site is a later step that the user approves. |
 | P2 Editor | CodeMirror 6, bundled from npm with `deno bundle`. |
 | P3 Run | The page shows diagnostics, hover, and generated TypeScript. It does not run the generated code. |
 | P4 Project | The five examples and the host interface file are editable tabs. The page cannot add or remove files. |
@@ -61,7 +61,7 @@ of the core on each change. The phase is complete when these checks pass:
 
 Out of scope: running the generated code and adding or removing files. Saving
 edits across visits, sharing a link to edited source, and a Web Worker are also
-out of scope. So is the publication to the `effective` site.
+out of scope. So is the publication to the `effektive` site.
 
 ## 4. Layout
 
@@ -204,7 +204,7 @@ give no range. The diagnostic underline marks an `Unknown` token. The word
 
 ### 6.1 Visual direction and contrast
 
-The page uses the tokens of the `effective` site (`public/site.css` in the
+The page uses the tokens of the `effektive` site (`public/site.css` in the
 sibling repository). The page is white with navy ink `#1f2b4d`. The accent is
 orange `#f7941d`, and the code panes are `#141d34`. Display type is Bricolage
 Grotesque. Code uses `ui-monospace`.
@@ -230,7 +230,7 @@ overflow, so the editor scrolls and the page does not. The theme also covers
 
 ### 6.2 Structure
 
-- `header`: the name "Effective playground", a link to the book, and the status
+- `header`: the name "Effektive playground", a link to the book, and the status
   line with the compile time. The status line has no `aria-live`.
 - `nav` with the file tabs: a `tablist` of `button` elements with `role="tab"`,
   arrow-key movement, and `aria-selected`. Each tab shows the error count of its

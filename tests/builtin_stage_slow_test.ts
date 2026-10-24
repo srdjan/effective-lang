@@ -21,7 +21,7 @@ async function stage(
       { "main.eff": source },
       ["main.eff"],
       run,
-      `effective-stage-${name}-`,
+      `effektive-stage-${name}-`,
     ),
   );
 }

@@ -15,7 +15,7 @@ import {
 // project of its document first, through `ProjectSet.forRequest`.
 //
 // The feature handlers are in `features.ts`. This file wires them to the method
-// names and sends `effective/generatedChanged` after a flush.
+// names and sends `effektive/generatedChanged` after a flush.
 
 import type { CliFs } from "../host/io.ts";
 import { errorMessage, type Result, type Revision } from "../core/mod.ts";
@@ -393,7 +393,7 @@ export class LanguageServer {
     this.#phase = "running";
     this.ports.send(successResponse(request.id, {
       capabilities: SERVER_CAPABILITIES,
-      serverInfo: { name: "effective" },
+      serverInfo: { name: "effektive" },
     }));
     for (const warning of narrowed.value.warnings) this.#log(2, warning);
   }
@@ -434,7 +434,7 @@ export class LanguageServer {
     this.#cancelFlush = undefined;
   }
 
-  /** Sends `effective/generatedChanged` for the subscribed modules that changed. */
+  /** Sends `effektive/generatedChanged` for the subscribed modules that changed. */
   #flushed(project: ProjectState, revision: Revision): void {
     this.#generated.afterFlush(
       project,

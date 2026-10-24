@@ -3,8 +3,8 @@
 // The server runs with `writeOnSave` true on a generated project in a
 // temporary directory. The server handles one message at a time, so a request
 // that follows `didSave` is answered only after the save round has finished.
-// M7 uses `effective/stats` as that request. The time runs from just before
-// the write of `didSave` to the receipt of the `effective/stats` reply. The
+// M7 uses `effektive/stats` as that request. The time runs from just before
+// the write of `didSave` to the receipt of the `effektive/stats` reply. The
 // reply also comes after the flush that follows a round, because the server
 // flushes a dirty project before it answers a request for it. So the time
 // holds the round and that flush, and one stats round trip. The control row
@@ -12,7 +12,7 @@
 //
 // Scenarios, for each preset:
 //   cold       the first round after the open. A fresh server for each sample.
-//   stats only the control: `effective/stats` with no save.
+//   stats only the control: `effektive/stats` with no save.
 //   repeat     a save with no change on disk.
 //   body       the body edit is on disk, then didChange, then the timed save.
 //   interface  the same with an interface edit.
@@ -345,7 +345,7 @@ export function formatM7(result: M7Result): string {
     "M7: save round latency through the language server (ms), two server processes A and B",
   );
   out.push(
-    "Time: from just before the write of didSave to the receipt of the effective/stats reply that follows it. The server handles one message at a time, so the reply comes after the round and after the flush that follows it. The row `stats only` is that round trip with no save.",
+    "Time: from just before the write of didSave to the receipt of the effektive/stats reply that follows it. The server handles one message at a time, so the reply comes after the round and after the flush that follows it. The row `stats only` is that round trip with no save.",
   );
   out.push(
     "Scenarios: cold is the first round after the open (a fresh server for each sample). repeat saves with no change on disk. body and interface write the edit to disk, send didChange, wait for its diagnostics, and then time the save. save all writes a body edit for every module, with every module open, sends didSave for each in one batch, and times until the last round ends. `saves` is the number of didSave messages of one sample.",

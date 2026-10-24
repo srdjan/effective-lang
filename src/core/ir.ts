@@ -1,4 +1,4 @@
-// Copied from /Users/srdjans/Code/effective/public/typed-ir.ts (Phase A, part A1). Otherwise unchanged.
+// Copied from /Users/srdjans/Code/effektive/public/typed-ir.ts (Phase A, part A1). Otherwise unchanged.
 /** Proposed IR for the syntax port. */
 export type TypeId = `type:${string}`;
 export type ErrorId = `error:${string}`;

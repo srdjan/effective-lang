@@ -179,8 +179,8 @@ export function applyEdit(
 
 /** One marker per document makes every submitted revision distinct without growing its text. */
 function markRevision(text: string, revision: number): string {
-  const body = text.replace(/\n\/\/ effective-bench revision \d+\n?$/, "");
-  return `${body}\n// effective-bench revision ${revision}\n`;
+  const body = text.replace(/\n\/\/ effektive-bench revision \d+\n?$/, "");
+  return `${body}\n// effektive-bench revision ${revision}\n`;
 }
 
 /** Companion feature modules have a fixed, annotated `link` body we can edit. */
@@ -196,7 +196,7 @@ export function applyCompanionEdit(text: string, revision: number): string {
 // ------------------------------------------------------------------ temporary projects
 
 /** The prefix of this process's harness directories, so cleanup checks ignore other runs. */
-export const TEMP_PREFIX = `effective-bench-lsp-${Deno.pid}-`;
+export const TEMP_PREFIX = `effektive-bench-lsp-${Deno.pid}-`;
 
 function writeProject(
   files: ReadonlyMap<string, string>,
@@ -232,7 +232,7 @@ export interface SessionOptions {
   readonly saveOnStep?: boolean;
 }
 
-/** The numbers of one `effective/stats` reply that the measurements use. */
+/** The numbers of one `effektive/stats` reply that the measurements use. */
 export interface StepStats {
   readonly parses: number;
   readonly checks: number;
@@ -397,7 +397,7 @@ export class Session {
         await client.notify("textDocument/didOpen", {
           textDocument: {
             uri: documentUri,
-            languageId: "effective",
+            languageId: "effektive",
             version: 1,
             text,
           },
@@ -615,7 +615,7 @@ export class Session {
 
   /**
    * One save round, timed. Sends `didSave` for the edited module and then
-   * `effective/stats` for it. The server handles one message at a time, so the
+   * `effektive/stats` for it. The server handles one message at a time, so the
    * stats reply comes after the round and after any flush that follows it.
    */
   async save(): Promise<Result<number, LspBenchError>> {
@@ -624,7 +624,7 @@ export class Session {
 
   /**
    * "Save All", timed. Sends `didSave` for every open document in one batch,
-   * then `effective/stats`. Call `editAllOnDisk` first.
+   * then `effektive/stats`. Call `editAllOnDisk` first.
    */
   async saveAll(): Promise<Result<number, LspBenchError>> {
     return await this.#timedSave([
@@ -633,7 +633,7 @@ export class Session {
     ]);
   }
 
-  /** The time of one `effective/stats` round trip with no save. A control. */
+  /** The time of one `effektive/stats` round trip with no save. A control. */
   async statsOnly(): Promise<Result<number, LspBenchError>> {
     return await this.#timedSave([]);
   }

@@ -1560,7 +1560,7 @@
         "value:users#$builtin/filter/226f72cb20f0",
         "value:users#$builtin/map/ddf01438b97c"
       ],
-      "module": "effective:prelude",
+      "module": "effektive:prelude",
       "services": [],
       "types": [],
       "values": [

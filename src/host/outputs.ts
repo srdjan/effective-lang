@@ -147,7 +147,7 @@ export function writeGenerated(
 
 /** The first line that the emitter writes for a source file. Keep it equal to `emit.ts`. */
 function generatedHeader(source: string): string {
-  return `// Generated from ${source} by the Effective compiler. Do not edit.`;
+  return `// Generated from ${source} by the Effektive compiler. Do not edit.`;
 }
 
 /**

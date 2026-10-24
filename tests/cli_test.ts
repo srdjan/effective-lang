@@ -194,20 +194,20 @@ Deno.test("usage and configuration errors exit 2", async () => {
 Deno.test("a configuration error names the file and the reason", async () => {
   const r = await run(["check", ROOT], { [`${ROOT}/effektive.json`]: "{" });
   assert(
-    r.stderr.startsWith("effective: effektive.json is not valid JSON"),
+    r.stderr.startsWith("effektive: effektive.json is not valid JSON"),
     r.stderr,
   );
   const missing = await run(["check", ROOT], { [`${ROOT}/a.eff`]: "" });
   assertEquals(
     missing.stderr,
-    "effective: /proj/effektive.json does not exist\n",
+    "effektive: /proj/effektive.json does not exist\n",
   );
 });
 
 Deno.test("help prints the usage and exits 0", async () => {
   const r = await run(["--help"], NO_FILES);
   assertEquals(r.code, 0);
-  assert(r.stdout.startsWith("usage: effective"));
+  assert(r.stdout.startsWith("usage: effektive"));
 });
 
 // ------------------------------------------------------------------ build
@@ -562,7 +562,7 @@ Deno.test("an unexpected throw is an internal error with exit code 3", async () 
   };
   const code = await main(["check", ROOT], io);
   assertEquals(code, 3);
-  assertEquals(m.err, ["effective: internal error: boom\n"]);
+  assertEquals(m.err, ["effektive: internal error: boom\n"]);
   assertEquals(m.out, []);
 });
 

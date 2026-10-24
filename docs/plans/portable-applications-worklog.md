@@ -4,7 +4,7 @@
 
 Complete the six phases of [the accepted plan](2026-10-23-portable-applications.md), with evidence for each phase.
 
-Keep orchestration in Effective. Use existing forms. Retain the language stopping rule and the package-interoperability deferral.
+Keep orchestration in Effektive. Use existing forms. Retain the language stopping rule and the package-interoperability deferral.
 
 Work on local main, commit complete units after the full gate, and never push. Preserve concurrent edits.
 

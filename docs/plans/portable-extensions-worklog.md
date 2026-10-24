@@ -57,7 +57,7 @@ Checking, lowering, and independent validation all accept that composition.
 The user-prioritized website example builds as two modules with zero diagnostics under `--validate --tsc`. All three runtime cases pass.
 The main agent also checked all four existing website application projects; each reports zero diagnostics.
 
-Both new Effective panels pass checking, lowering, and independent validation. Three mutations of the runnable example reject foreign construction, an effect callback, and a forbidden import.
+Both new Effektive panels pass checking, lowering, and independent validation. Three mutations of the runnable example reject foreign construction, an effect callback, and a forbidden import.
 
 The first sealing full gate found one outdated category whitelist. The main agent added the new sealed category; all five diagnostic tests now pass.
 The main agent then restarted the full gate. No production behavior changed for this expectation fix.

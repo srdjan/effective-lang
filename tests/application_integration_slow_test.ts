@@ -36,7 +36,7 @@ Deno.test("service workflow passes real loopback HTTP and file-backed SQLite acc
   ) {
     assertEquals(diagnostics, []);
   }
-  await withTemporaryDirectory("effective-http-sqlite-", async (dir) => {
+  await withTemporaryDirectory("effektive-http-sqlite-", async (dir) => {
     for (
       const name of [
         "deno.json",

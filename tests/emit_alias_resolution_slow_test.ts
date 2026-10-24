@@ -45,7 +45,7 @@ const values = await Promise.all([${
       )
     }]);
 console.log(JSON.stringify(values));`,
-    "effective-alias-resolution-",
+    "effektive-alias-resolution-",
   );
   assertEquals(JSON.parse(output), depths);
 });

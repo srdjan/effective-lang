@@ -58,7 +58,7 @@ const APPLICATIONS: readonly Application[] = [
       "grants.eff",
     ],
     entry: ["publisher.eff", "grants.eff"],
-    prefix: "effective-application-publisher-",
+    prefix: "effektive-application-publisher-",
     hostFiles: [
       "backend.ts",
       "memory.ts",
@@ -85,7 +85,7 @@ const APPLICATIONS: readonly Application[] = [
     directory: "scheduled-worker",
     sources: ["effektive.json", "contracts.eff", "worker.eff"],
     entry: "worker.eff",
-    prefix: "effective-application-worker-",
+    prefix: "effektive-application-worker-",
     hostFiles: ["driver.ts", "reference.ts", "runtime_test.ts", "main.ts"],
     verify: (report) => {
       assertEquals(report.completed, 3);
@@ -98,7 +98,7 @@ const APPLICATIONS: readonly Application[] = [
     directory: "service-workflow",
     sources: ["effektive.json", "contracts.eff", "host.effi", "workflow.eff"],
     entry: "workflow.eff",
-    prefix: "effective-application-service-",
+    prefix: "effektive-application-service-",
     hostFiles: ["adapter.ts", "driver.ts", "runtime_test.ts", "main.ts"],
     verify: (report) => {
       assertEquals(report.receipt, { sku: "book", quantity: 2, total: 24 });
@@ -112,7 +112,7 @@ const APPLICATIONS: readonly Application[] = [
     directory: "stream-processor",
     sources: ["effektive.json", "contracts.eff", "processor.eff"],
     entry: "processor.eff",
-    prefix: "effective-application-stream-",
+    prefix: "effektive-application-stream-",
     hostFiles: ["driver.ts", "runtime_test.ts", "main.ts"],
     verify: (report) => {
       assertEquals(
@@ -127,7 +127,7 @@ const APPLICATIONS: readonly Application[] = [
     directory: "order-lifecycle",
     sources: ["effektive.json", "contracts.eff", "orders.eff"],
     entry: "orders.eff",
-    prefix: "effective-application-orders-",
+    prefix: "effektive-application-orders-",
     hostFiles: ["runtime_test.ts", "main.ts"],
     verify: (report) => {
       assertEquals(report.tags, [

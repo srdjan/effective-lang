@@ -28,7 +28,7 @@ against the project's pinned target version.
 
 ## Required source rule
 
-A candidate Effective form is `withResource(acquire, use, release)`, where the
+A candidate Effektive form is `withResource(acquire, use, release)`, where the
 three arguments are deferred callbacks. `acquire` produces a handle; `use`
 receives that handle and produces the result; `release` receives the handle
 and runs after use exits. The handle's lifetime is bounded by this expression.
@@ -55,10 +55,10 @@ operation-record form below.
 
 Use an operation record as the scoped handle. Each field is a function that
 performs one operation on the underlying resource. The host adapter creates
-the record, and Effective source decides when to acquire it, what to do with
+the record, and Effektive source decides when to acquire it, what to do with
 it, and when to release it:
 
-```effective
+```effektive
 service Files {
   open(): { read: () => string, close: () => void }
 }

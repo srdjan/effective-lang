@@ -19,7 +19,7 @@ Run every command from the repository root.
 | `deno task behavior:capture`  | Compares two revisions using instrumented compiler entry points during tests, including subprocesses. See the capture note below. Use it for refactors. |
 | `deno task measure`           | Prints the lines, branches, and cyclomatic numbers of the files that you name, as JSON.                                                                 |
 | `deno task measure:functions` | Prints the branches and cyclomatic number of each function in the files that you name, as TSV.                                                          |
-| `deno task effective`         | Runs the command-line tool. See [Using the command line](api.md#using-the-command-line).                                                                |
+| `deno task effektive`         | Runs the command-line tool. See [Using the command line](api.md#using-the-command-line).                                                                |
 | `deno task lsp`               | Runs the language server over standard input and output. See [Language server](api.md#language-server).                                                 |
 | `deno task bench`             | Runs the measurement harnesses. See [Measurements](measurements.md).                                                                                    |
 | `deno task playground:build`  | Writes the playground page to `playground/dist/`. See [Playground](api.md#playground).                                                                  |

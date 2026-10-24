@@ -19,7 +19,7 @@ tags: [emitter, literal-types, literal-widening, as-const, contextual-typing, ma
 
 ## Problem
 
-The Effective checker accepts a literal result for a literal-union result type. The emitter wraps many results in generated functions: match-arm wrappers, block wrappers, `Effect.succeed`, and `Effect.gen` bodies. TypeScript infers the return type of such a function without a contextual return type, and it widens a fresh literal such as `"a"` to `string`. The emitted module then fails `deno check`, although the source is correct.
+The Effektive checker accepts a literal result for a literal-union result type. The emitter wraps many results in generated functions: match-arm wrappers, block wrappers, `Effect.succeed`, and `Effect.gen` bodies. TypeScript infers the return type of such a function without a contextual return type, and it widens a fresh literal such as `"a"` to `string`. The emitted module then fails `deno check`, although the source is correct.
 
 ## Symptoms
 

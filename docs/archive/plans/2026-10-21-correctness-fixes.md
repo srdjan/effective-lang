@@ -49,8 +49,8 @@ changes, configuration errors and source errors. Generated writes, hidden
 folders and dependencies under `node_modules` remain excluded. JSON/JSONC
 inputs include arbitrarily named local configuration extensions and import maps.
 `tests/watch_host_slow_test.ts` runs actual `watch --tsc`: introducing and fixing
-an imported helper's TypeScript error updates diagnostics without an Effective
-edit, an Effective recheck, or a generated-output change. The combined Plan A
+an imported helper's TypeScript error updates diagnostics without an Effektive
+edit, an Effektive recheck, or a generated-output change. The combined Plan A
 gate passed 1,763 fast and 171 slow tests before the final configuration-name
 coverage addition; the commit gate repeats the full suite with that addition.
 

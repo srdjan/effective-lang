@@ -11,7 +11,7 @@
     "check": "deno fmt --check && deno lint && deno check 'src/**/*.ts' 'playground/**/*.ts' 'tests/**/*.ts' 'scripts/**/*.ts' 'bench/**/*.ts' && deno task test && deno task test:slow",
     "test": "deno test --allow-read --ignore='**/*_slow_test.ts' tests/",
     "test:slow": "deno run --allow-run --allow-read --allow-write scripts/test_slow.ts",
-    "effective": "deno run --allow-read --allow-write --allow-run=deno src/cli/main.ts",
+    "effektive": "deno run --allow-read --allow-write --allow-run=deno src/cli/main.ts",
     "lsp": "deno run --allow-read --allow-write src/lsp/main.ts",
     "bench": "deno run --no-lock --allow-read --allow-write --allow-run=deno --allow-env bench/main.ts",
     "golden:update": "deno run --allow-read --allow-write scripts/golden_update.ts",

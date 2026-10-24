@@ -1,4 +1,4 @@
-// The command line: `effective check|build|watch [root] [flags]`.
+// The command line: `effektive check|build|watch [root] [flags]`.
 
 import type { Result } from "../core/mod.ts";
 
@@ -16,7 +16,7 @@ export type ProjectCommand =
 export type Command = { readonly kind: "help" } | ProjectCommand;
 
 export const USAGE = [
-  "usage: effective <command> [root] [flags]",
+  "usage: effektive <command> [root] [flags]",
   "",
   "commands:",
   "  check [root]                          print diagnostics",

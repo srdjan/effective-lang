@@ -2,13 +2,13 @@
 // virtual document scheme are part of the protocol between them.
 
 /** Request: the generated TypeScript text of one `.eff` module. */
-export const GENERATED_TYPESCRIPT_METHOD = "effective/generatedTypeScript";
+export const GENERATED_TYPESCRIPT_METHOD = "effektive/generatedTypeScript";
 
 /** Notification: the generated text or the stale flag of a subscribed module changed. */
-export const GENERATED_CHANGED_METHOD = "effective/generatedChanged";
+export const GENERATED_CHANGED_METHOD = "effektive/generatedChanged";
 
 /** Request: revision, query counts, and memory use for the measurements. */
-export const STATS_METHOD = "effective/stats";
+export const STATS_METHOD = "effektive/stats";
 
 /** The URI scheme of the virtual document that shows generated TypeScript. */
-export const GENERATED_SCHEME = "effective-generated";
+export const GENERATED_SCHEME = "effektive-generated";

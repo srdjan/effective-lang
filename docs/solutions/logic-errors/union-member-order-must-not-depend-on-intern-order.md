@@ -24,7 +24,7 @@ tags: [union, type-table, typeref, intern-order, determinism, incremental, recor
 
 This program gave type-mismatch/003, "the field `v` has type N, but S is expected":
 
-```effective
+```effektive
 type N = int; type S = string
 type U = { k: S[], v: S } | { k: N[], v: N }
 export const f = (x: N): U => ({ k: [], v: x })
@@ -82,7 +82,7 @@ A fixed order is not enough. With a fixed order, `recordTarget` still picks the 
 
 `Lowered.ir` keeps source order and schema `makeInput`. `toIr(ref)` does not. Commit 8a0abf2 (function-type alias on module constants) read the type of every function-typed binding, inline or alias, through `toIr`. A probe then showed the defect:
 
-```effective
+```effektive
 export const g: (x: B | A) => A = (x) => 2
 ```
 

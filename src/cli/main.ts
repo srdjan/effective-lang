@@ -1,4 +1,4 @@
-// The command-line tool `effective`: `check`, `build`, and `watch`. The watch
+// The command-line tool `effektive`: `check`, `build`, and `watch`. The watch
 // loop takes its event source as a parameter, so that a test drives it with a fake.
 //
 // `main(args, io)` returns the exit code and does everything else through `io`,
@@ -119,7 +119,7 @@ export async function main(
   try {
     return await execute(args, io);
   } catch (error) {
-    io.stderr(`effective: internal error: ${errorMessage(error)}\n`);
+    io.stderr(`effektive: internal error: ${errorMessage(error)}\n`);
     return EXIT_INTERNAL;
   }
 }
@@ -130,7 +130,7 @@ async function execute(
 ): Promise<number> {
   const parsed = parseArgs(args);
   if (!parsed.ok) {
-    io.stderr(`effective: ${parsed.error}\n${USAGE}`);
+    io.stderr(`effektive: ${parsed.error}\n${USAGE}`);
     return EXIT_USAGE;
   }
   const command = parsed.value;
@@ -140,7 +140,7 @@ async function execute(
   }
   const root = command.root;
   if (io.fs.kind(root) !== "directory") {
-    io.stderr(`effective: the root directory ${root} does not exist\n`);
+    io.stderr(`effektive: the root directory ${root} does not exist\n`);
     return EXIT_USAGE;
   }
 
@@ -153,7 +153,7 @@ async function execute(
   // A project that cannot start is a configuration error. A later break in watch mode only prints.
   const synced = session.sync();
   if (isSyncFailure(synced)) {
-    io.stderr(`effective: ${synced.message}\n`);
+    io.stderr(`effektive: ${synced.message}\n`);
     return EXIT_USAGE;
   }
   if (command.kind === "watch") {

@@ -26,7 +26,7 @@ Each ledger or plan uses its own ID prefix. A new document must not reuse a pref
 
 Follow the accepted [application acceptance rule](docs/plans/2026-10-19-application-acceptance-rule.md) when selecting gap work. The stopping rule, the application dispositions, and the open items are in [docs/status.md](docs/status.md). Keep application orchestration in `.eff`. Add features only for demonstrated application blockers after checking existing source compositions.
 
-The website and canonical spec are in the sibling repository `../effective/public/`.
+The website and canonical spec are in the sibling repository `../effektive/public/`.
 When a change affects source forms or project status, keep the website specification and its examples current.
-Verify changed Effective examples with the compiler. Run the site's strict checks for TypeScript panels.
+Verify changed Effektive examples with the compiler. Run the site's strict checks for TypeScript panels.
 Commit website edits separately in that repository.

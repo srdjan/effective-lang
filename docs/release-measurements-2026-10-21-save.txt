@@ -76,7 +76,7 @@ N steps  RSS peak A/B MiB  RSS last A/B MiB  heap last A/B MiB  types start A/B 
 elapsed 260.3 s
 
 M7: save round latency through the language server (ms), two server processes A and B
-Time: from just before the write of didSave to the receipt of the effective/stats reply that follows it. The server handles one message at a time, so the reply comes after the round and after the flush that follows it. The row `stats only` is that round trip with no save.
+Time: from just before the write of didSave to the receipt of the effektive/stats reply that follows it. The server handles one message at a time, so the reply comes after the round and after the flush that follows it. The row `stats only` is that round trip with no save.
 Scenarios: cold is the first round after the open (a fresh server for each sample). repeat saves with no change on disk. body and interface write the edit to disk, send didChange, wait for its diagnostics, and then time the save. save all writes a body edit for every module, with every module open, sends didSave for each in one batch, and times until the last round ends. `saves` is the number of didSave messages of one sample.
 n counts the runs of both sides. The floor is the p90 of |A/B - 1| in percent over the A/B pairs of the row. Call a later A/B difference below the floor null.
 Server options: writeOnSave true, debounceMs 0. Warm-up rounds are dropped. small: 15 cold pairs, 5 warm-up and 100 timed steps per warm scenario, 1 warm-up and 30 timed save all steps; medium: 15 cold pairs, 5 warm-up and 100 timed steps per warm scenario, 1 warm-up and 30 timed save all steps; large: 15 cold pairs, 5 warm-up and 100 timed steps per warm scenario, 1 warm-up and 15 timed save all steps.

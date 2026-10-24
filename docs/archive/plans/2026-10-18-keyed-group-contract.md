@@ -71,7 +71,7 @@ prelude-name shadowing, and adds no pipeline stage.
 
 Illustrative source:
 
-```effective
+```effektive
 type Event = { kind: string, value: int }
 type Batch = { key: string, items: Event[] }
 

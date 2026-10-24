@@ -446,7 +446,7 @@ D1. Codec over a reserved Schema error.
 - Command. In an empty directory with `effektive.json` containing `{}` and the `.eff` file as `m.eff`, run `deno run --allow-read --allow-write --allow-run=deno src/cli/main.ts build <dir> --validate --tsc` from the repository root.
 - Option (a). Reject `SchemaIssue` and `SchemaError` as codec types in the checker and in the validator, each in its own code. Keep `void` valid for codec, although `schemaData` rejects `unit` for `Schema<...>`. No fixture or test in `fixtures/` or `tests/` uses a codec over a reserved error.
 - Option (b). Teach the emitter to derive a schema for them.
-- Recommendation: (a). It removes a class of programs that pass every Effective gate but fail `deno check`, and it changes no output for valid programs.
+- Recommendation: (a). It removes a class of programs that pass every Effektive gate but fail `deno check`, and it changes no output for valid programs.
 
 D2. Export rule through Ref, Fiber, Codec, RetrySchedule, and Schema `makeInput`.
 

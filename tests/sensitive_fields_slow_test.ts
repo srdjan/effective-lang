@@ -11,7 +11,7 @@ Deno.test("optional error presence survives imports", async () => {
     },
     ["m.eff"],
     'import { Option } from "effect";\nimport { read } from "./m.ts";\nconsole.log(JSON.stringify(read().map(Option.getOrNull)));',
-    "effective-sensitive-import-",
+    "effektive-sensitive-import-",
   );
   assertEquals(JSON.parse(result), [null, null, null]);
 });
@@ -49,7 +49,7 @@ const made = await Effect.runPromise(makeValue());
 const encoded = await Effect.runPromise(writeValue(present).pipe(Effect.provide(write)));
 console.log(JSON.stringify({missing, present, made, encoded, calls}));
 `,
-    "effective-sensitive-direction-",
+    "effektive-sensitive-direction-",
   );
   assertEquals(JSON.parse(output), {
     missing: { toString: 7 },
@@ -78,7 +78,7 @@ import { Stop, makeStop, emptyStop, read } from "./m.ts";
 const present = makeStop(), absent = emptyStop();
 console.log(JSON.stringify({nominal: [present, absent].every(e => e instanceof Stop), proto: present.__proto__.value, present: read(present).map(Option.getOrNull), absent: read(absent).map(Option.getOrNull)}));
 `,
-    "effective-sensitive-error-prototype-",
+    "effektive-sensitive-error-prototype-",
   );
   assertEquals(JSON.parse(result), {
     nominal: true,
@@ -114,7 +114,7 @@ let calls = 0;
 const one = await Effect.runPromise(once(() => Effect.sync(() => { calls++; return full(); })));
 console.log(JSON.stringify({ absent: read(empty()).map(Option.getOrNull), present: read(full()).map(Option.getOrNull), changed: read(changed()).map(Option.getOrNull), one: Option.getOrNull(one), calls, nested: read(nested().inner).map(Option.getOrNull) }));
 `,
-    "effective-sensitive-records-",
+    "effektive-sensitive-records-",
   );
   assertEquals(JSON.parse(output), {
     absent: [null, null, null, null, null],
@@ -156,7 +156,7 @@ const value = await Effect.runPromise(readSchema(present));
 const tree = await Effect.runPromise(decodeTree(Object.freeze({data: Object.freeze({}), kids: Object.freeze([{data: Object.freeze(present), kids: []}])})));
 console.log(JSON.stringify([absent, value, await Effect.runPromise(writeSchema(value)), await Effect.runPromise(make()), await Effect.runPromise(encodeTree(tree))]));
 `,
-    "effective-sensitive-schema-",
+    "effektive-sensitive-schema-",
   );
   const present = JSON.parse(
     '{"__proto__":"p","constructor":"c","toString":"t"}',
@@ -191,7 +191,7 @@ const present = full();
 const decoded = await Effect.runPromise(readSchema(empty()));
 console.log(JSON.stringify({missing: read(missing).map(Option.getOrNull), present: read(present).map(Option.getOrNull), decoded: read(decoded).map(Option.getOrNull), nominal: [missing, present, decoded].every(e => e instanceof Stop), encoded: read(await Effect.runPromise(writeSchema(decoded))).map(Option.getOrNull), recovered: await Effect.runPromise(recover()).then(xs => xs.map(Option.getOrNull))}));
 `,
-    "effective-sensitive-errors-",
+    "effektive-sensitive-errors-",
   );
   assertEquals(JSON.parse(output), {
     missing: [null, null, null],
@@ -218,7 +218,7 @@ Deno.test("present optional sensitive unknown fields retain undefined", async ()
  import { empty, full, read } from "./m.ts";
  console.log(JSON.stringify([Option.isNone(read(empty())), Option.isSome(read(full(undefined)))]));
  `,
-    "effective-sensitive-undefined-",
+    "effektive-sensitive-undefined-",
   );
   assertEquals(JSON.parse(result), [true, true]);
 });

@@ -13,7 +13,7 @@ ecosystem package builders remain outside this adapter audit.
 
 Use current typed adapters for concrete package operations. The selected HTTP,
 SQL, RPC, AI, metric, and recursive-decoder operations all run through checked
-Effective source. At the time of this adapter probe, first-class Schema values
+Effektive source. At the time of this adapter probe, first-class Schema values
 and recursive source types were gaps; the follow-up contract now implements a
 bounded form of each. Direct ecosystem builders remain a gap. A pure validation step followed by an
 effectful source service call already expresses a useful concrete decoder;
@@ -107,7 +107,7 @@ source type contract, though a flat representation may serve an application.
 
 A host adapter can retain the richer type. The fixture's `Operations.tree`
 parses a JSON string using a recursive Schema and returns the validated node
-count as an Int. Effective source obtains count `2` for the selected nested
+count as an Int. Effektive source obtains count `2` for the selected nested
 tree and a nominal `AdapterError` for a bad descendant. It does not receive a
 native recursively typed tree or author its Schema.
 
@@ -133,7 +133,7 @@ bounded outcomes:
 | HTTP | `HttpApi`, group and endpoint builders; `HttpClientResponse.fromWeb` and `schemaJson` | Valid JSON body returns `7`; wrong body type becomes `AdapterError("http")`. | Server routing, a client request, middleware, streaming bodies, and connection cancellation. |
 | SQL | `SqlClient.make`, tagged statements, and `withTransaction` over a recording scoped connection | Parameter `[7]` stays separate from SQL text; result `7`; success commits; failure and interruption roll back; all paths release the connection. | A real database dialect/driver, nested transactions, commit failure, transaction callbacks authored in source, and row streaming. |
 | RPC | `Rpc.make`, payload/success schemas, NDJSON parser | A valid framed payload becomes `8`; invalid payload type becomes `AdapterError("rpc")`; a borrowed parser retains an incomplete frame across two pushes. | A client/server transport, middleware, cancellation protocol, request multiplexing, or streaming RPCs. |
-| AI | `LanguageModel.make` and `generateText` with a deterministic provider | Effective passes a prompt and gets `"local model"`. | A real model, tool execution, structured output, token streaming, retries, and provider failure behavior. |
+| AI | `LanguageModel.make` and `generateText` with a deterministic provider | Effektive passes a prompt and gets `"local model"`. | A real model, tool execution, structured output, token streaming, retries, and provider failure behavior. |
 | Observability | `Metric.counter`, `Metric.update`, and `Metric.value` | Two source calls observe counts `1,2`. | Exporters, tracing, attribute cardinality, aggregation across processes, or a telemetry backend. |
 
 These are concrete adapter successes. The HTTP API and RPC descriptors are
@@ -173,7 +173,7 @@ interruption:  lease, BEGIN, select ? as n, ROLLBACK, release
 ```
 
 The connection finalizer yields before recording release. The database operation
-is atomic from Effective's perspective; the adapter owns the transaction scope.
+is atomic from Effektive's perspective; the adapter owns the transaction scope.
 An acquisition/use/release bracket with a release callback that receives no
 Exit should not be advertised as a general commit/rollback transaction API
 without a separate rule.

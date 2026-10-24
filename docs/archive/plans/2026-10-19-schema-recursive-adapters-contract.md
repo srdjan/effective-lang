@@ -41,7 +41,7 @@ union still needs the existing distinct literal tags and a self-free terminal
 branch. The change does not admit bare nullable recursive aliases, mutual
 recursion, recursive Option data, or callbacks as recursive guards.
 
-```effective
+```effektive
 type Int = int
 type Tree = { score: Int, children: Tree[] }
 type Wire = { score: Int, children?: Wire[] }

@@ -32,7 +32,7 @@ export interface BuildOutcome {
   readonly lines: readonly string[];
   /** Other messages, for stderr. */
   readonly notes: readonly string[];
-  /** The number of diagnostics: Effective, validation, and `deno check`. */
+  /** The number of diagnostics: Effektive, validation, and `deno check`. */
   readonly diagnosticCount: number;
   /** True when anything went wrong: a diagnostic, or a failure to emit or to write. */
   readonly failed: boolean;

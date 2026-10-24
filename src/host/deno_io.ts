@@ -90,7 +90,7 @@ async function denoCheck(
 ): Promise<Result<DenoCheckRun, FileFailure>> {
   let directory: string | undefined;
   try {
-    directory = Deno.makeTempDirSync({ prefix: "effective-tsc-" });
+    directory = Deno.makeTempDirSync({ prefix: "effektive-tsc-" });
     const config = `${directory}/deno.json`;
     Deno.writeTextFileSync(config, request.config);
     const output = await new Deno.Command("deno", {

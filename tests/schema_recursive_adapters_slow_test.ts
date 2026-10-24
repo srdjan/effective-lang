@@ -137,6 +137,6 @@ await Effect.runPromise(Effect.gen(function*() {
   if (!released) throw new Error("recursive wire default cleanup outlived interruption");
 }));
 `,
-    "effective-recursive-adapters-",
+    "effektive-recursive-adapters-",
   );
 });

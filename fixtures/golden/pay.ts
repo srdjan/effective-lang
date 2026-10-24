@@ -1,4 +1,4 @@
-// Generated from pay.eff by the Effective compiler. Do not edit.
+// Generated from pay.eff by the Effektive compiler. Do not edit.
 
 import { Context, Effect, Option, Schema } from "effect";
 

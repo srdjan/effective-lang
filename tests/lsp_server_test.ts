@@ -97,7 +97,7 @@ Deno.test("initialize returns the capabilities and the server name", () => {
   h.deliver(request(1, "initialize", { capabilities: {} }));
   assertEquals(result(h.responses(1)[0]), {
     capabilities: SERVER_CAPABILITIES,
-    serverInfo: { name: "effective" },
+    serverInfo: { name: "effektive" },
   });
   assertEquals(h.logs(), []);
 });
@@ -155,8 +155,8 @@ Deno.test("the feature requests are known and check their params", () => {
     "textDocument/hover",
     "textDocument/definition",
     "textDocument/documentSymbol",
-    "effective/generatedTypeScript",
-    "effective/stats",
+    "effektive/generatedTypeScript",
+    "effektive/stats",
   ];
   methods.forEach((method, i) => h.deliver(request(i + 1, method, {})));
   methods.forEach((_, i) =>
@@ -289,7 +289,7 @@ Deno.test("a didChange that adds an error publishes the open document with the n
   const [diagnostic] = published[0].diagnostics;
   assertEquals(published[0].diagnostics.length, 1);
   assertEquals(diagnostic.severity, 1);
-  assertEquals(diagnostic.source, "effective");
+  assertEquals(diagnostic.source, "effektive");
   assertStringIncludes(diagnostic.code, "/");
   assertEquals(
     diagnostic.range.start.line,

@@ -1,4 +1,4 @@
-// Generated from collections.eff by the Effective compiler. Do not edit.
+// Generated from collections.eff by the Effektive compiler. Do not edit.
 
 import { Schema } from "effect";
 

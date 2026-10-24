@@ -83,7 +83,7 @@ console.log(JSON.stringify({
   unknownTag: [unknownTag({ kind: "a", value: "unknown" }), unknownTag({ kind: "other", value: "unknown" })],
   a, b, made, calls, pair: pair(one),
 }));`,
-    "effective-record-union-",
+    "effektive-record-union-",
   );
   assertEquals(JSON.parse(stdout), {
     missing: [1, 0],

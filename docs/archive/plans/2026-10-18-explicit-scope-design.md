@@ -57,7 +57,7 @@ in reverse registration order.
 For a child whose lifetime ends at one lexical boundary, the existing source
 [lexical.eff](scope-probes/lexical.eff) suffices:
 
-```effective
+```effektive
 export service Child { run(): void; wait(): void }
 export service Trace { record(value: Text): void }
 type Text = string

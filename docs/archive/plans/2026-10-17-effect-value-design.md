@@ -6,7 +6,7 @@ constructs without service calls and runs twice.
 
 ## Source form
 
-```effective
+```effektive
 error Stop = {}
 service Counter { next(): int fails Stop }
 
@@ -72,6 +72,6 @@ preserves all three channels; mutation of either deferred set is rejected by
 IR validation. Parser, checker, lowerer, validator, emitter, and
 `build --validate --tsc` must agree before the phase is complete.
 
-The canonical spec at `/Users/srdjans/Code/effective/public/effective-spec.html`
+The canonical spec at `/Users/srdjans/Code/effektive/public/effektive-spec.html`
 includes the accepted source and lifetime rules. The compiler permits an
 existing binding named `run` to shadow the new prelude operation.

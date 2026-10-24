@@ -14,16 +14,16 @@ full Effect API parity.
 
 ## Goal and boundary
 
-Make valid Effective programs pass the compiler's own validation, then add
+Make valid Effektive programs pass the compiler's own validation, then add
 small native source features that fit its sequential execution model. Introduce
 first-class effect values, scopes, concurrency, and streams only behind explicit
 language-design gates. Platform, HTTP, SQL, RPC, AI, and observability packages
-remain TypeScript host implementations exposed through typed Effective services;
+remain TypeScript host implementations exposed through typed Effektive services;
 this plan does not add arbitrary package imports to `.eff`.
 
 The [gap audit](../effect-4-gap-audit.md) supplies reproducible `.eff` and
 Effect 4 witnesses. The current language spec in
-`../effective/public/effective-spec.html` (relative to this repository root)
+`../effektive/public/effektive-spec.html` (relative to this repository root)
 explicitly defers general concurrency, general resource scopes, and broader streams. A phase that
 changes those rules must first update the canonical spec in a workspace where
 it is writable, then align `docs/phase-a-rules.md` and `README.md`. Do not treat
@@ -278,7 +278,7 @@ application needs it. The adapter must state source-visible failures and
 requirements and keep package-specific objects in TypeScript unless a native
 type milestone explicitly admits them. Review streaming, transactions,
 scoped handles, and codec-bearing APIs against phases 4–7 before promising an
-equivalent Effective interface.
+equivalent Effektive interface.
 
 ## Completion and stop conditions
 

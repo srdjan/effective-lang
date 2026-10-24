@@ -10,7 +10,7 @@ Demonstrate one source-owned publication application on memory and file-backed S
 
 The user selected a gated roadmap. A demonstrated language gap produces a concrete design for user review before extension implementation.
 
-The user selected a host lexical primitive. Its blankness rule is `value.trim() === ""`. Pure Effective code decides publication validity and retains original text.
+The user selected a host lexical primitive. Its blankness rule is `value.trim() === ""`. Pure Effektive code decides publication validity and retains original text.
 
 Application orchestration remains in `.eff`. Existing language forms remain the baseline. Broader package interoperability stays deferred.
 
@@ -24,7 +24,7 @@ The platform contract owns generic textual KV operations, versions, time, and le
 
 The typed serialization bridge converts textual payloads to a source-defined storage record. It performs serialization and shape parsing only.
 
-Effective code owns domain validation, article keys, conditional publication, and conflict policy. Generic platform implementations own authoritative compare-and-set operations.
+Effektive code owns domain validation, article keys, conditional publication, and conflict policy. Generic platform implementations own authoritative compare-and-set operations.
 
 The public workflow publishes one article. The source batch workflow runs sequentially. Terminal failure starts no later command.
 
@@ -34,7 +34,7 @@ Define separate domain, feature, platform, storage, and adapter contracts under 
 
 Draft and Published are distinct states. Revisions are nonnegative safe integers. Publication refuses advancement at the safe-integer maximum.
 
-The platform uses textual payloads because Effective does not treat `unknown` as a universal value type. Keys are nonempty, well-formed Unicode strings.
+The platform uses textual payloads because Effektive does not treat `unknown` as a universal value type. Keys are nonempty, well-formed Unicode strings.
 
 Key comparison is exact, without normalization. Invalid keys fail before writing. Reads return detached entry records.
 

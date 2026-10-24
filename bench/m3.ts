@@ -1,7 +1,7 @@
 // Measurement M3: the work that one edit makes the server do.
 //
 // One server process per input runs the edit script with no hover. After each
-// step the client sends `effective/stats`. The per-step delta of the
+// step the client sends `effektive/stats`. The per-step delta of the
 // cumulative query counts `parses`, `checks`, `lowerings`, and `emits` shows
 // the work of the flush alone. The stats also give the interface delta and the
 // mode delta of the last flush. Counts are exact, so M3 has no noise floor and
@@ -116,7 +116,7 @@ const COUNTS = ["parses", "checks", "lowerings", "emits"] as const;
 
 export function formatM3(result: M3Result): string {
   const out: string[] = [];
-  out.push("M3: work per edit in the language server, from effective/stats");
+  out.push("M3: work per edit in the language server, from effektive/stats");
   out.push(
     "Counts are exact and have no noise floor. Each cell is the median or the maximum of the per-step delta of the cumulative count. The last two columns are the fraction of steps with a module in the interface delta and in the mode delta.",
   );

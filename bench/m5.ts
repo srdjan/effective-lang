@@ -2,7 +2,7 @@
 // code, against Effect 4.0.5.
 //
 // The baseline is a cold `deno check` subprocess with the configuration that
-// `effective build --tsc` generates (`tscConfig` in src/cli/tsc.ts, with
+// `effektive build --tsc` generates (`tscConfig` in src/cli/tsc.ts, with
 // `effect` mapped to `npm:effect@4.0.5`). The harness runs it through the same
 // port that the CLI uses (`denoIo().denoCheck`) and times the whole call:
 // the write of the configuration, the process, and its exit.
@@ -108,7 +108,7 @@ async function measureTarget(
   target: Target,
   config: M5Config,
 ): Promise<Result<TargetResult, M5Error>> {
-  const directory = Deno.makeTempDirSync({ prefix: "effective-bench-" });
+  const directory = Deno.makeTempDirSync({ prefix: "effektive-bench-" });
   try {
     const stamp = `${Date.now()}-${Deno.pid}`;
     const cold = async (): Promise<Result<number, M5Error>> => {
@@ -191,7 +191,7 @@ export function formatM5(result: M5Result, config: M5Config): string {
     "M5: cold `deno check` over the emitted code (milliseconds, whole process)",
   );
   out.push(
-    "Configuration: the one that `effective build --tsc` generates, with effect mapped to npm:effect@4.0.5.",
+    "Configuration: the one that `effektive build --tsc` generates, with effect mapped to npm:effect@4.0.5.",
   );
   out.push(
     `Each target has ${config.warmups} discarded warm-up run and ${config.pairs} timed A/A pairs of two cold runs. Rows pool both sides.`,

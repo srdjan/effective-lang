@@ -186,18 +186,18 @@ export interface LogMessageParams {
   readonly message: string;
 }
 
-/** The result of `effective/generatedTypeScript`. */
+/** The result of `effektive/generatedTypeScript`. */
 export interface GeneratedTypeScriptResult {
   readonly text: string;
   readonly stale: boolean;
 }
 
-/** The params of `effective/generatedChanged`. */
+/** The params of `effektive/generatedChanged`. */
 export interface GeneratedChangedParams {
   readonly uri: string;
 }
 
-/** The result of `effective/stats` (plan 5.11). */
+/** The result of `effektive/stats` (plan 5.11). */
 export interface StatsResult {
   /** The number of the newest good revision, or 0 before the first one. */
   readonly revision: number;
@@ -434,7 +434,7 @@ export interface TextDocumentParams {
 
 /**
  * `{ textDocument: { uri } }`. It serves `didSave`, `didClose`, `documentSymbol`,
- * `effective/generatedTypeScript`, and `effective/stats`. Other fields are
+ * `effektive/generatedTypeScript`, and `effektive/stats`. Other fields are
  * ignored, so `didSave` with `text` passes.
  */
 export function narrowTextDocumentParams(

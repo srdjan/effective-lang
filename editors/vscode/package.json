@@ -1,7 +1,7 @@
 {
-  "name": "effective-vscode",
-  "displayName": "Effective",
-  "description": "Language support for Effective, including diagnostics, navigation, refactoring, completion, and generated TypeScript.",
+  "name": "effektive-vscode",
+  "displayName": "Effektive",
+  "description": "Language support for Effektive, including diagnostics, navigation, refactoring, completion, and generated TypeScript.",
   "version": "0.5.2",
   "publisher": "local",
   "private": true,
@@ -11,8 +11,8 @@
   },
   "main": "./extension.js",
   "activationEvents": [
-    "onLanguage:effective",
-    "onCommand:effective.showGeneratedTypeScript"
+    "onLanguage:effektive",
+    "onCommand:effektive.showGeneratedTypeScript"
   ],
   "categories": [
     "Programming Languages"
@@ -20,9 +20,9 @@
   "contributes": {
     "languages": [
       {
-        "id": "effective",
+        "id": "effektive",
         "aliases": [
-          "Effective"
+          "Effektive"
         ],
         "extensions": [
           ".eff",
@@ -33,51 +33,51 @@
     ],
     "grammars": [
       {
-        "language": "effective",
-        "scopeName": "source.effective",
-        "path": "./syntaxes/effective.tmLanguage.json"
+        "language": "effektive",
+        "scopeName": "source.effektive",
+        "path": "./syntaxes/effektive.tmLanguage.json"
       }
     ],
     "commands": [
       {
-        "command": "effective.showGeneratedTypeScript",
-        "title": "Effective: Show Generated TypeScript"
+        "command": "effektive.showGeneratedTypeScript",
+        "title": "Effektive: Show Generated TypeScript"
       }
     ],
     "menus": {
       "editor/title": [
         {
-          "command": "effective.showGeneratedTypeScript",
-          "when": "editorLangId == effective",
+          "command": "effektive.showGeneratedTypeScript",
+          "when": "editorLangId == effektive",
           "group": "navigation"
         }
       ],
       "commandPalette": [
         {
-          "command": "effective.showGeneratedTypeScript",
-          "when": "editorLangId == effective"
+          "command": "effektive.showGeneratedTypeScript",
+          "when": "editorLangId == effektive"
         }
       ]
     },
     "configuration": {
-      "title": "Effective",
+      "title": "Effektive",
       "properties": {
-        "effective.server.deno": {
+        "effektive.server.deno": {
           "type": "string",
           "default": "deno",
           "description": "The Deno 2.9.8 executable that starts the language server."
         },
-        "effective.server.repository": {
+        "effektive.server.repository": {
           "type": "string",
           "default": "",
           "description": "Development override: path of an effektive-lang checkout. Empty uses the language server bundled in the extension."
         },
-        "effective.writeOnSave": {
+        "effektive.writeOnSave": {
           "type": "boolean",
           "default": true,
           "description": "When the user saves a source file, write every generated .ts and .ts.map file that changed, from the saved files on disk."
         },
-        "effective.debounceMs": {
+        "effektive.debounceMs": {
           "type": "number",
           "default": 0,
           "minimum": 0,

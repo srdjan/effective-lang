@@ -26,13 +26,13 @@ annotation, such as `Schedule<number>` with an `int` decision, therefore passed
 
 ## Symptoms
 
-- `deno task effective check <dir>` reports `1 module, 0 diagnostics`.
-- `deno task effective build <dir> --validate` reports
+- `deno task effektive check <dir>` reports `1 module, 0 diagnostics`.
+- `deno task effektive build <dir> --validate` reports
   `validation/002: declarations[2].value.type: expected Schedule<type:main#Int, unknown, never, never>, recorded Schedule<type:main#Millis, unknown, never, never>`.
 
 The source that showed the defect:
 
-```effective
+```effektive
 type Int = int
 type Millis = number
 export const wide: Schedule<Millis> = scheduleFromStep(

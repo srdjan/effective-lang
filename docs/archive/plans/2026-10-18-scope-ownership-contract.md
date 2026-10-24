@@ -64,7 +64,7 @@ cast from an ordinary/borrowed handle to a `CloseableScope`.
 
 This program illustrates the ownership boundary:
 
-```effective
+```effektive
 service Worker { run(): void; ready(): void }
 
 export const open = (): CloseableScope uses Worker.run | Worker.ready => {

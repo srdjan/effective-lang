@@ -1,6 +1,6 @@
 # Service workflow application
 
-This application uses existing Effective forms. Source code validates input,
+This application uses existing Effektive forms. Source code validates input,
 checks business rules, obtains a catalog price and selects transient storage
 retries. The registered StoreLive adapter supplies one atomic save operation.
 The adapter uses the pinned native SqlClient transaction wrapper and validates
@@ -9,7 +9,7 @@ receipt rows before commit.
 From the effektive-lang repository root:
 
 ```sh
-deno task effective build fixtures/applications/service-workflow --validate --tsc
+deno task effektive build fixtures/applications/service-workflow --validate --tsc
 deno run --config fixtures/applications/service-workflow/deno.json fixtures/applications/service-workflow/main.ts
 deno test --config fixtures/applications/service-workflow/deno.json fixtures/applications/service-workflow/runtime_test.ts
 ```
@@ -61,7 +61,7 @@ The recording driver and its deterministic tests remain in place.
 deno test --allow-all tests/application_integration_slow_test.ts
 ```
 
-This command compiles and independently validates the Effective program, checks
+This command compiles and independently validates the Effektive program, checks
 the emitted TypeScript and adapter, then runs seven integration cases outside
 the checkout. The child process can read and write only its temporary directory
 and use the loopback network. No external service or database installation is

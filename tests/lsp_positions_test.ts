@@ -204,7 +204,7 @@ Deno.test("uri: round trip with a space and a non-ASCII character", () => {
 
 Deno.test("uri: a non-file or malformed URI gives undefined", () => {
   assertEquals(uriToPath("untitled:Untitled-1"), undefined);
-  assertEquals(uriToPath("effective-generated:///a/b.ts"), undefined);
+  assertEquals(uriToPath("effektive-generated:///a/b.ts"), undefined);
   assertEquals(uriToPath("https://example.com/a"), undefined);
   assertEquals(uriToPath("not a uri"), undefined);
   assertEquals(uriToPath(""), undefined);

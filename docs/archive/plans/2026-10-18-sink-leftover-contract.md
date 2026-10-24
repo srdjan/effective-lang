@@ -77,7 +77,7 @@ is added.
 
 This source program retains the leftover type:
 
-```effective
+```effektive
 type Int = int
 type Pairs = Sink<Int, Int[], never, never, Int>
 const pairs: Pairs = takeSink(2)

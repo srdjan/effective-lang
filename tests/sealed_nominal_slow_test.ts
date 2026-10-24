@@ -38,7 +38,7 @@ console.log(JSON.stringify({
   equal: equal(decoded, 3),
   title: title(article(constructed, "sealed")),
 }));`,
-    "effective-sealed-nominal-",
+    "effektive-sealed-nominal-",
   );
   assertEquals(JSON.parse(stdout), {
     constructed: 2,

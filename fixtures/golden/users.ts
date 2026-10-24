@@ -1,4 +1,4 @@
-// Generated from users.eff by the Effective compiler. Do not edit.
+// Generated from users.eff by the Effektive compiler. Do not edit.
 
 import { Context, Effect, Option, Schema } from "effect";
 

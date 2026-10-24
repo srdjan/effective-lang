@@ -1513,7 +1513,7 @@ function preludeImport(
   if (builtins.size === 0) return undefined;
   const entries = [...builtins].sort(([a], [b]) => compareText(a, b));
   return {
-    module: "effective:prelude",
+    module: "effektive:prelude",
     bindings: [],
     exports: entries.map(([id]) => id),
     values: entries.map(([id, builtin]) => ({

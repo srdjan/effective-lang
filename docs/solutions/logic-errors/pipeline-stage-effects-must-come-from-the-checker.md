@@ -24,7 +24,7 @@ Lowering rewrites `x |> s(a)` into a block that binds `x` first. Then the block 
 
 The reproduction, on revision `98df0ef`:
 
-```effective
+```effektive
 export service Child { run(): void; wait(): void; alive(): Bool }
 type Bool = boolean
 const makeJob = (): Effect<Bool, never, Child.alive> uses Child.run => {

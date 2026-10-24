@@ -1,5 +1,5 @@
 // A throttleStream "shape" window delays the next element instead of dropping
-// it. The test compiles an Effective program, runs it under TestClock, and uses
+// it. The test compiles an Effektive program, runs it under TestClock, and uses
 // Deferred handshakes. No wall-clock time passes.
 
 import { assertEquals } from "@std/assert";
@@ -89,7 +89,7 @@ Deno.test("throttleStream shape delays the next element until the window elapses
   );
   if (!checked.ok) throw new Error(JSON.stringify(checked));
   assertEquals(checked.value.diagnostics, []);
-  const dir = Deno.makeTempDirSync({ prefix: "effective-temporal-" });
+  const dir = Deno.makeTempDirSync({ prefix: "effektive-temporal-" });
   try {
     const emitted = emitProject(lowerProject(checked.value), {
       config: checked.value.analysis.project.config,

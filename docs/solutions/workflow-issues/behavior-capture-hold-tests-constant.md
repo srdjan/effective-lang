@@ -9,7 +9,7 @@ severity: medium
 applies_when:
   - "A refactor commit also moves, deletes, merges, or rewrites tests"
   - "behavior:capture reports missing or new records after a change that should keep behavior"
-  - "A change renames or removes a source form, so tests rewrite their own Effective sources"
+  - "A change renames or removes a source form, so tests rewrite their own Effektive sources"
   - "A capture shows one new or one missing program record and nothing else"
   - "A refactor changes the CLI or the language server output, which the capture does not record"
 tags: [behavior-capture, oracle, refactor, git-commit-tree, byte-identity, rederive, run-variance, characterization-test]
@@ -72,7 +72,7 @@ Two refinements:
   `git hash-object -w <edited copy>`, then
   `git update-index --cacheinfo 100644,<blob>,tests/<file>`.
 
-The method fails when the tests rewrite their own Effective sources, for
+The method fails when the tests rewrite their own Effektive sources, for
 example when a builtin is renamed or removed. Then the base compiler rejects
 the new sources, and the input hashes differ on both sides. For such a change,
 use a byte-identity proof: extract the base compiler with
@@ -167,7 +167,7 @@ tests compare all matching harness directories in the system temporary
 directory before and after each test. Concurrent verification runs can see
 each other's directories and fail those assertions on both the unchanged
 base and the candidate. During the Codec extraction, the failures named only
-changing `effective-bench-lsp-` directories; the concurrent logs were retained
+changing `effektive-bench-lsp-` directories; the concurrent logs were retained
 and both checks were rerun serially. On 2026-10-22, the harness prefix gained
 the creating process ID, so current cleanup checks detect their own leaks
 without observing directories from other runs. The regression also verifies

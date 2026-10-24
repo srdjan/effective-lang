@@ -239,7 +239,7 @@ interface HostBinding {
   readonly key: string;
   /** The name that the host module exports. */
   readonly exported: string;
-  /** The name that the Effective source binds. */
+  /** The name that the Effektive source binds. */
   readonly local: string;
   /** The name of the assertion constant: `UsersLive$host`. */
   readonly hostName: string;
@@ -324,7 +324,7 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
     DeclarationId,
     TypeDecl | ErrorDecl | ServiceDecl
   >();
-  /** Names that the Effective source binds in its imports. */
+  /** Names that the Effektive source binds in its imports. */
   private readonly bound = new Map<DeclarationId, string>();
   /** The import of each bound name that a companion module has not used yet. */
   private readonly unusedImports = new Map<DeclarationId, () => void>();
@@ -388,13 +388,13 @@ export class Scope implements EmitNames, Temporaries, TypeLookup, ImportLedger {
       for (const s of imported.services) this.foreignDecls.set(s.id, s);
     }
     for (const imported of ir.imports) {
-      if (imported.module === "effective:prelude") continue;
+      if (imported.module === "effektive:prelude") continue;
       for (const binding of imported.bindings) {
         this.taken.add(binding.name);
       }
     }
     for (const imported of ir.imports) {
-      if (imported.module === "effective:prelude") continue;
+      if (imported.module === "effektive:prelude") continue;
       if (imported.module.startsWith("host:")) {
         this.bindHost(imported.module, imported.bindings);
         continue;

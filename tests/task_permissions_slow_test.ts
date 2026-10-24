@@ -5,7 +5,7 @@ import { withTemporaryDirectory } from "./process_helpers.ts";
 const repository = new URL("../", import.meta.url).pathname;
 
 Deno.test("actual build task checks targets through canonical and symlinked Deno", async () => {
-  await withTemporaryDirectory("effective-path-", async (dir) => {
+  await withTemporaryDirectory("effektive-path-", async (dir) => {
     Deno.mkdirSync(`${dir}/bin`);
     Deno.symlinkSync(Deno.realPathSync(Deno.execPath()), `${dir}/bin/deno`);
     Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
@@ -20,7 +20,7 @@ Deno.test("actual build task checks targets through canonical and symlinked Deno
       ]
     ) {
       const run = await new Deno.Command(executable, {
-        args: ["task", "effective", "build", dir, "--tsc"],
+        args: ["task", "effektive", "build", dir, "--tsc"],
         cwd: repository,
         env: {
           PATH: `${dir}/bin:${Deno.env.get("PATH") ?? ""}`,
@@ -35,7 +35,7 @@ Deno.test("actual build task checks targets through canonical and symlinked Deno
 });
 
 Deno.test("target check reports missing PATH executable usefully", async () => {
-  await withTemporaryDirectory("effective-missing-deno-", async (dir) => {
+  await withTemporaryDirectory("effektive-missing-deno-", async (dir) => {
     Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,

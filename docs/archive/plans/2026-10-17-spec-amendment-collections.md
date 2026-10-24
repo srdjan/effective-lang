@@ -1,7 +1,7 @@
 # Canonical spec amendment for collection literals and traversal
 
 Status: implemented and applied to the canonical spec. The canonical file is
-`/Users/srdjans/Code/effective/public/effective-spec.html`.
+`/Users/srdjans/Code/effektive/public/effektive-spec.html`.
 
 The [unified patch](2026-10-17-spec-amendment-collections.patch) applies these
 rules to the canonical HTML. It was applied on 2026-10-17.

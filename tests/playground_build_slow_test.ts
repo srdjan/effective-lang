@@ -24,7 +24,7 @@ const EXAMPLE_PATHS: readonly string[] = [
 ];
 
 Deno.test("build writes the page files and the examples", async () => {
-  const dir = Deno.makeTempDirSync({ prefix: "effective-playground-" });
+  const dir = Deno.makeTempDirSync({ prefix: "effektive-playground-" });
   try {
     const out = `${dir}/dist`;
     const result = await build(out);

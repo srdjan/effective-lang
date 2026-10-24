@@ -9,7 +9,7 @@ import {
 import { runStrictTarget } from "./target_helpers.ts";
 
 /**
- * Compiles one Effective module with the validator, writes the emitted
+ * Compiles one Effektive module with the validator, writes the emitted
  * TypeScript beside `run.ts`, and runs `run.ts` after a strict type check.
  * Returns the JSON that `run.ts` prints to standard output.
  */
@@ -35,7 +35,7 @@ async function compileAndRun(source: string, run: string): Promise<unknown> {
     await runStrictTarget(
       emitProject(lowered, { config: project.value.analysis.project.config }),
       run,
-      "effective-schedule-emit-",
+      "effektive-schedule-emit-",
     ),
   );
 }

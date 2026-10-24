@@ -1,6 +1,6 @@
 # Stream processor application
 
-This application uses existing Effective forms. Source owns session brackets,
+This application uses existing Effektive forms. Source owns session brackets,
 live pulls, ordered concurrent transformation, selective fallback, buffering,
 batch selection and terminal consumption. The recording driver supplies only
 primitive operations. It performs no network or file I/O.
@@ -8,7 +8,7 @@ primitive operations. It performs no network or file I/O.
 From the effektive-lang repository root:
 
 ```sh
-deno task effective build fixtures/applications/stream-processor --validate --tsc
+deno task effektive build fixtures/applications/stream-processor --validate --tsc
 deno run --config fixtures/applications/stream-processor/deno.json fixtures/applications/stream-processor/main.ts
 deno test --config fixtures/applications/stream-processor/deno.json fixtures/applications/stream-processor/runtime_test.ts
 ```

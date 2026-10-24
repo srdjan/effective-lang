@@ -28,7 +28,7 @@ async function compileAndRun(source: string, run: string): Promise<unknown> {
     await runStrictTarget(
       emitProject(lowered, { config: project.analysis.project.config }),
       run,
-      "effective-schema-identity-",
+      "effektive-schema-identity-",
     ),
   );
 }
@@ -88,7 +88,7 @@ await Effect.runPromise(Fiber.interrupt(fiber));
 const interrupted = await Effect.runPromise(Fiber.await(fiber));
 if (!Exit.isFailure(interrupted) || !Cause.hasInterrupts(interrupted.cause)) throw new Error("interruption translated");
 `,
-    "effective-schema-source-",
+    "effektive-schema-source-",
   );
 });
 

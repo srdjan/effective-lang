@@ -6,7 +6,7 @@ import { assert, assertEquals } from "@std/assert";
 import { countKinds, writeInstrumentedTree } from "./behavior_capture_tree.ts";
 
 Deno.test("a CLI build subprocess without environment permission writes records", async () => {
-  const dir = Deno.makeTempDirSync({ prefix: "effective-capture-slow-" });
+  const dir = Deno.makeTempDirSync({ prefix: "effektive-capture-slow-" });
   try {
     const records = `${dir}/capture.records`;
     writeInstrumentedTree(dir, records);
@@ -17,9 +17,9 @@ Deno.test("a CLI build subprocess without environment permission writes records"
       `${project}/m.eff`,
       "export const f = (): Int => 1\ntype Int = int\n",
     );
-    // The task `effective` of the copied deno.json has no --allow-env.
+    // The task `effektive` of the copied deno.json has no --allow-env.
     const output = await new Deno.Command(Deno.execPath(), {
-      args: ["task", "effective", "build", project, "--validate"],
+      args: ["task", "effektive", "build", project, "--validate"],
       cwd: dir,
       env: { NO_COLOR: "1" },
       stdout: "piped",
@@ -84,7 +84,7 @@ function exercise(core: Core): void {
 }
 
 Deno.test("two captures of the same program give equal records of every kind", async () => {
-  const dir = Deno.makeTempDirSync({ prefix: "effective-capture-test-" });
+  const dir = Deno.makeTempDirSync({ prefix: "effektive-capture-test-" });
   try {
     const records = `${dir}/capture.records`;
     writeInstrumentedTree(dir, records);
@@ -120,7 +120,7 @@ Deno.test("two captures of the same program give equal records of every kind", a
 });
 
 Deno.test("two different clean programs give different check, program, and validate records", async () => {
-  const dir = Deno.makeTempDirSync({ prefix: "effective-capture-input-" });
+  const dir = Deno.makeTempDirSync({ prefix: "effektive-capture-input-" });
   try {
     const records = `${dir}/capture.records`;
     writeInstrumentedTree(dir, records);
@@ -158,7 +158,7 @@ Deno.test("two different clean programs give different check, program, and valid
 
 Deno.test("direct checkAnalysis and each incremental revision record completed diagnostics", async () => {
   const dir = Deno.makeTempDirSync({
-    prefix: "effective-capture-entrypoints-",
+    prefix: "effektive-capture-entrypoints-",
   });
   try {
     const records = `${dir}/capture.records`;
@@ -199,7 +199,7 @@ Deno.test("direct checkAnalysis and each incremental revision record completed d
 });
 
 Deno.test("behavior capture fails visibly when a child cannot write its records", async () => {
-  const dir = Deno.makeTempDirSync({ prefix: "effective-capture-denied-" });
+  const dir = Deno.makeTempDirSync({ prefix: "effektive-capture-denied-" });
   try {
     const records = `${dir}/capture.records`;
     writeInstrumentedTree(dir, records);

@@ -9,7 +9,7 @@ and the repository layout.
 
 ```
 src/core/      The core library. It is synchronous and does no I/O. Program memoizes its queries.
-  ir.ts          Typed IR model, copied from the sibling repository effective.
+  ir.ts          Typed IR model, copied from the sibling repository effektive.
   source.ts      SourceHost, line tables, positions, and span helpers.
   file_diff.ts   diffFiles: the set and remove lists that turn one file map into another, for Program.update.
   diagnostics.ts Diagnostic type, the registry of codes, sort and dedupe.
@@ -295,7 +295,7 @@ The IR holds the declarations in source order, the sorted export identities, and
 one `Import` for each import declaration. The `module` of an `Import` is the
 module name for a relative import. It is the import string, such as
 `host:providers`, for a host import. A module that uses `map`, `filter`, `fold`,
-`all`, or `traverse` has one more `Import` with the module `effective:prelude`.
+`all`, or `traverse` has one more `Import` with the module `effektive:prelude`.
 
 Each distinct closed instance of a builtin gets the identity
 `value:<module>#$builtin/<name>/<hash>`. The hash is the first 12 hex digits of
@@ -520,17 +520,17 @@ list too.
 
 ## Using the command line
 
-Run `deno task effective <command> [root] [flags]` from the repository root. The
+Run `deno task effektive <command> [root] [flags]` from the repository root. The
 task runs in the repository directory, so pass an explicit root, for example
 `fixtures/examples`. The default root is the current directory.
 
 | Command                                       | What it does                                                                                              |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `deno task effective check [root]`            | Prints the diagnostics of the project.                                                                    |
-| `deno task effective build [root]`            | Also writes `<module>.ts` and `<module>.ts.map` next to each source for each module that no error blocks, and `<name>.effi.ts` for each imported `.effi` file. |
-| `deno task effective build [root] --validate` | Also runs the IR validator and prints its diagnostics.                                                    |
-| `deno task effective build [root] --tsc`      | Also runs `deno check` over the written files and the host modules, and maps each error to the source.    |
-| `deno task effective watch [root] [--tsc]`    | Builds once, then builds again after each change of a source file. It prints the modules that it checked. |
+| `deno task effektive check [root]`            | Prints the diagnostics of the project.                                                                    |
+| `deno task effektive build [root]`            | Also writes `<module>.ts` and `<module>.ts.map` next to each source for each module that no error blocks, and `<name>.effi.ts` for each imported `.effi` file. |
+| `deno task effektive build [root] --validate` | Also runs the IR validator and prints its diagnostics.                                                    |
+| `deno task effektive build [root] --tsc`      | Also runs `deno check` over the written files and the host modules, and maps each error to the source.    |
+| `deno task effektive watch [root] [--tsc]`    | Builds once, then builds again after each change of a source file. It prints the modules that it checked. |
 
 The root is the project directory with `effektive.json`. The modules are the
 `.eff` files under the root, found by a recursive walk. The walk skips
@@ -569,7 +569,7 @@ stderr.
 The exit code is 0 when there is no diagnostic. It is 1 when there is at least
 one diagnostic or a build step fails. It is 2 for a usage or configuration
 error. It is 3 for an internal error, which is an unexpected throw. The tool
-prints one `effective: internal error: <message>` line to stderr for it. A
+prints one `effektive: internal error: <message>` line to stderr for it. A
 failed build step is a failed write, or a `deno check` that cannot run or that
 fails with no diagnostic. A usage error is a missing or unknown command, an
 unknown flag, an extra argument, or a missing root directory. A configuration
@@ -590,7 +590,7 @@ The `fixtures/host-adapter-files/` project shows a typed `host:` adapter for
 `effect/FileSystem`. `files.eff` declares the `Files.read` operation and nominal
 `FileReadError`. `files-live.ts` validates the path, maps package failures to
 that error, and supplies the Node file system layer.
-`deno task effective build fixtures/host-adapter-files --validate --tsc` checks
+`deno task effektive build fixtures/host-adapter-files --validate --tsc` checks
 the boundary. The slow CLI test runs a successful read and both missing and
 invalid paths. Other ecosystem packages still need adapters with their own
 declared contracts.
@@ -648,7 +648,7 @@ The server announces `positionEncoding: "utf-16"`. It supports these features.
 - Incremental text sync. A change event without a range replaces the whole text.
 - Diagnostics. The server publishes `textDocument/publishDiagnostics` after each
   compile. The `code` field holds the code of the diagnostic, for example
-  `failure-contract/001`. The `source` field is `effective`.
+  `failure-contract/001`. The `source` field is `effektive`.
 - Hover. The text has the source contract of the node. On the name of a function
   or constant, it also has the backend type, which is the TypeScript signature
   that the emitter prints. When the module has errors, the backend line says
@@ -689,11 +689,11 @@ request.
 
 | Method                          | Kind         | Result                                                                                                                                                                                                       |
 | ------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `effective/generatedTypeScript` | Request      | `{ text, stale }` or `null`. The text is the emitted module. When the module has errors, the text is the last good output and `stale` is true. The result is `null` if it never emitted.                     |
-| `effective/generatedChanged`    | Notification | The params are `{ uri }`, the URI of the `.eff` source. The first `effective/generatedTypeScript` request for a module subscribes it. The server sends this message when its text or its stale flag changes. |
-| `effective/stats`               | Request      | `{ revision, rechecked, counts, delta, typeTableSize, memory }`, or `null` for a document with no project. The measurements M3 and M4 use it.                                                                |
+| `effektive/generatedTypeScript` | Request      | `{ text, stale }` or `null`. The text is the emitted module. When the module has errors, the text is the last good output and `stale` is true. The result is `null` if it never emitted.                     |
+| `effektive/generatedChanged`    | Notification | The params are `{ uri }`, the URI of the `.eff` source. The first `effektive/generatedTypeScript` request for a module subscribes it. The server sends this message when its text or its stale flag changes. |
+| `effektive/stats`               | Request      | `{ revision, rechecked, counts, delta, typeTableSize, memory }`, or `null` for a document with no project. The measurements M3 and M4 use it.                                                                |
 
-In the `effective/stats` result, `rechecked` lists the modules that the last
+In the `effektive/stats` result, `rechecked` lists the modules that the last
 compile checked again. The `counts` value holds the cumulative query counts
 `parses`, `checks`, `lowerings`, and `emits`. The `delta` value holds
 `interfaceChanged` and `modeChanged`, the modules whose interface hash or mode
@@ -754,7 +754,7 @@ round removes its files, as `watch` does. A project writes and removes only the
 outputs of modules that have no nearer `effektive.json`. The round logs each
 written and removed path at type 4 and each module that it holds back, with the
 reason, once at type 3. A read, write, or configuration error goes to
-`window/logMessage` at type 1. A concurrent `effective watch` or `build` on the
+`window/logMessage` at type 1. A concurrent `effektive watch` or `build` on the
 same project can interleave its writes with the round.
 
 When `effektive.json` is missing or invalid, the server publishes one diagnostic
@@ -763,7 +763,7 @@ for hover, definition, symbols, and generated text. It keeps the published
 diagnostics of the other files. The next good update clears the configuration
 diagnostic. Before the first good revision, hover, definition, and generated
 text return `null`. Document symbols parse the file on its own, and
-`effective/stats` returns revision 0.
+`effektive/stats` returns revision 0.
 
 ### Known limits
 
@@ -778,7 +778,7 @@ text return `null`. Document symbols parse the file on its own, and
   such a file, the server gives document symbols only. Hover and definition
   return `null`.
 - A generated `.ts` file has no go-to-definition into the `.eff` source.
-- Rename edits Effective source/interface references only; it does not rename
+- Rename edits Effektive source/interface references only; it does not rename
   TypeScript host code. Completion does not add imports, semantic tokens have no
   delta mode, and quick fixes target reliable explicit inline function contracts
   only. See [editor queries](editor.md).
@@ -788,12 +788,12 @@ text return `null`. Document symbols parse the file on its own, and
 The client is in `editors/vscode/`. It is plain JavaScript. The packaged VSIX
 includes the bundled language server and client runtime dependencies, and
 requires Deno 2.9.8. It starts the bundled server by default, adds syntax
-highlighting, and adds the command `Effective: Show Generated TypeScript`. See
+highlighting, and adds the command `Effektive: Show Generated TypeScript`. See
 [local installation](installation.md) for artifact builds and installation; its
 README lists settings and development overrides.
 
 For development, run `npm ci` once in `editors/vscode`, set
-`effective.server.repository` to the checkout, and start VS Code with the
+`effektive.server.repository` to the checkout, and start VS Code with the
 extension and example files. Replace `<repo>` with the path of this repository.
 
 ```sh

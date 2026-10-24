@@ -35,7 +35,7 @@ import {
   rebuildContainer,
 } from "./builtins.ts";
 
-const PRELUDE_MODULE = "effective:prelude";
+const PRELUDE_MODULE = "effektive:prelude";
 
 interface World {
   readonly module: string;

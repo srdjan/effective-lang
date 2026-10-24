@@ -1,4 +1,4 @@
-# Effective transpiler: design for discussion
+# Effektive transpiler: design for discussion
 
 Status: design accepted, 2026-10-16. Phase A, the LSP phase, and the playground
 are implemented. Phase B is not started. The D9 budget does not require it
@@ -20,12 +20,12 @@ Decided by the user on 2026-10-16 and 2026-10-17. Each entry took the recommende
 | D7 Identity encoding | (b) Module-qualified strings such as `users#UserMissing`. The spec requires this: "A backend must encode resolved declaration identities in error tags, service keys, and brand tokens." |
 | D8 Mode firewall hole (I1) | (a) Source purity assertions stay deferred. The incremental model invalidates dependents on a mode change. M3 informs a later review. |
 | D9 Latency budget | (a) Set the budget after M1 and M6 give a baseline. Set on 2026-10-16: 100 ms at p90 from `didChange` to `publishDiagnostics` on the large synthetic size. Phase B is not needed while M1 meets this budget. Evidence below the table. |
-| D10 Host registry format | (a) Effective-syntax declaration file with a `provider` form, plus a `host:` map in `effektive.json`. |
+| D10 Host registry format | (a) Effektive-syntax declaration file with a `provider` form, plus a `host:` map in `effektive.json`. |
 | D11 IR validator | (a) Independent validator in the first version, used as a differential oracle for the checker. |
 | D12 Output formatting | (a) Own printer with one fixed style. A test confirms that `deno fmt --check` accepts the output unchanged. |
 | D13 Exported constants (Q4) | (a) Every exported constant requires a type annotation. This closes firewall hole I6. |
 | D14 `int` arithmetic (Q6) | (a) The emitter wraps `int` operations in a runtime helper that raises a defect outside the safe integer range. The cost needs to be measured. |
-| D15 Repository | (a) The transpiler lives in `effektive-lang`, separate from the `effective` site and spec repository. |
+| D15 Repository | (a) The transpiler lives in `effektive-lang`, separate from the `effektive` site and spec repository. |
 | D16 Next phase (2026-10-16) | The LSP comes before Phase B. Phase B waits for the D9 budget, and D9 waits for M1, which needs the LSP (design 4.5 and D9). |
 | D17 JSON-RPC transport (2026-10-16) | Hand-written Content-Length framing over stdio. No npm dependency in the server. |
 | D18 Editor client (2026-10-16) | A thin VS Code client in `editors/vscode/`, plain JavaScript, with `vscode-languageclient`. npm is used only inside that directory. |
@@ -70,7 +70,7 @@ and Q10. Q2, Q3, Q4, Q6, and Q7 follow from D7, D10, D13, D14, and D6.
 | Q10 Providers in `provide` | Host-declared providers only. |
 
 D8, D13, D14, and the answers above interpret or extend the language spec. The
-spec in the `effective` repository does not record them yet.
+spec in the `effektive` repository does not record them yet.
 
 ## 0. Sources and conventions
 
@@ -78,13 +78,13 @@ I read these sources. They are the ground truth for this document.
 
 | Source | Path |
 | --- | --- |
-| Language specification, draft 0.1 | `/Users/srdjans/Code/effective/public/effective-spec.html` |
-| Mini book with eight Effect-TS targets | `/Users/srdjans/Code/effective/public/index.html` |
-| Proposed typed IR | `/Users/srdjans/Code/effective/public/typed-ir.ts` |
-| Manual IR fixture and its source | `/Users/srdjans/Code/effective/public/log.ir.json`, `log.lft` |
-| Validation report | `/Users/srdjans/Code/effective/public/effective-validation.txt` |
-| Five source examples | `/Users/srdjans/Code/effective/public/effective-examples/*.eff` |
-| Repository README | `/Users/srdjans/Code/effective/README.md` |
+| Language specification, draft 0.1 | `/Users/srdjans/Code/effektive/public/effektive-spec.html` |
+| Mini book with eight Effect-TS targets | `/Users/srdjans/Code/effektive/public/index.html` |
+| Proposed typed IR | `/Users/srdjans/Code/effektive/public/typed-ir.ts` |
+| Manual IR fixture and its source | `/Users/srdjans/Code/effektive/public/log.ir.json`, `log.lft` |
+| Validation report | `/Users/srdjans/Code/effektive/public/effektive-validation.txt` |
+| Five source examples | `/Users/srdjans/Code/effektive/public/effektive-examples/*.eff` |
+| Repository README | `/Users/srdjans/Code/effektive/README.md` |
 | Compiler skill from goose | `/Users/srdjans/Code/_skills/skills/zig-compiler/SKILL.md` and `references/` |
 
 Each claim in this document carries one of three labels. An **Observation**
@@ -215,8 +215,8 @@ that site and load a bundled core.
 
 ### 3.2 Minimal first deliverable
 
-Recommendation: the first deliverable is the core plus `effective check` and
-`effective build`, proven by three fixture sets.
+Recommendation: the first deliverable is the core plus `effektive check` and
+`effektive build`, proven by three fixture sets.
 
 1. The five `.eff` examples check without diagnostics.
 2. `log.eff` lowers to an IR equal to `log.ir.json`, apart from the source
@@ -246,7 +246,7 @@ symbols and semantic tokens are cheap additions. Completion is later.
 
 ### 4.1 Options
 
-| Model | Work per edit | Complexity | Fit for Effective |
+| Model | Work per edit | Complexity | Fit for Effektive |
 | --- | --- | --- | --- |
 | Whole-program rebuild | Everything | Lowest | Correct by construction; latency unknown until measured |
 | File-level rebuild | Changed module plus dependents; early cutoff on interface equality | Low | Good: modules form a DAG and exported contracts are explicit |
@@ -297,7 +297,7 @@ declaration headers, which the firewall does not promise to hide.
 | I7 | Whole-service expansion. "A whole service name expands to all methods in that service." Adding a method to `Orders` changes every contract that says `uses Orders`. | Services and contracts | Declaration edge |
 | I8 | Module interface carries private types. "Interfaces also carry the complete supporting type graph, without importing private names." A private type edit in `users.eff` changes the interface that `main.eff` sees. | Modules and boundaries | Declaration edge |
 | I9 | Type alias structure. "Type aliases use structural compatibility." Every use site depends on the alias definition. Recursive aliases are rejected, so the alias graph is a DAG. | Data and types | Declaration edge |
-| I10 | Provider types come from the host registry, which is not Effective source. | Retry and providers; Modules and boundaries | External input |
+| I10 | Provider types come from the host registry, which is not Effektive source. | Retry and providers; Modules and boundaries | External input |
 | I11 | Builtin specialization produces synthetic `ValueId`s, "unique" per distinct closed builtin type. The scope of uniqueness is not stated. | Pipelines and collections | Determinism question (Q1) |
 | I12 | Module initialization requires pure initializers, which depends on the inferred mode of each constant's expression. | Modules and boundaries; Execution order and mode | Consequence of I1 |
 
@@ -355,7 +355,7 @@ equations, and stops at a fixed point or at a round cap.
 
 The cap and the "unknown bottom" come from the goose skill ("Bounded fixpoints with an unknown
 bottom"). There, goose reports that cycles settle in two or three rounds on
-goose's inputs. That count is not a prediction for Effective.
+goose's inputs. That count is not a prediction for Effektive.
 
 ### 4.5 Granularity and phasing
 
@@ -415,7 +415,7 @@ on every edit above the declaration. A name changes only on rename.
 
 | Checker | Reports | When | Actionable by |
 | --- | --- | --- | --- |
-| Effective checker | Syntax, unknown-name, type-mismatch, failure-contract, requirement-contract, execution-mode, and pattern diagnostics on `.eff` spans | Per change, watch, build | The Effective author |
+| Effektive checker | Syntax, unknown-name, type-mismatch, failure-contract, requirement-contract, execution-mode, and pattern diagnostics on `.eff` spans | Per change, watch, build | The Effektive author |
 | IR validator | Disagreements between recomputed and recorded annotations in the IR | Tests, `build --validate`, CI | The transpiler maintainer |
 | `tsc` on generated code | Type errors in generated TypeScript | Emitter golden tests, `build --tsc`, CI; opt-in in watch | The transpiler maintainer, or the host-module author |
 
@@ -441,7 +441,7 @@ Recommendation: `tsc` runs in the emitter's golden tests, in `build --tsc`, and
 in CI. It does not run in the LSP. It is opt-in in `watch`.
 
 The reason is actionability. A `tsc` error on generated code is a transpiler defect or a host
-mismatch. The Effective author can fix only the second. The cost is
+mismatch. The Effektive author can fix only the second. The cost is
 measurement M5, because Effect's type declarations are large and the cold cost
 of a `tsc` run over them is unknown here.
 
@@ -454,7 +454,7 @@ Observation (validation report): the sibling
 repository checked with TypeScript 7.0.2. Observation (this machine): the `tsc`
 on `PATH` is 6.0.3 and `deno` is 2.9.7. The oracle must pin one version.
 
-### 5.3 Mapping TypeScript diagnostics back to Effective spans
+### 5.3 Mapping TypeScript diagnostics back to Effektive spans
 
 The emitter knows the source span of every IR node, because the IR records it.
 While it prints, the emitter records a table of `(generatedStart, generatedEnd,
@@ -718,7 +718,7 @@ shows a need. That escape hatch is a design property, not a plan.
 | --- | --- | --- | --- | --- |
 | Q1 | What is the scope and derivation of synthetic builtin `ValueId`s: per module or per program, counter or content? | Pipelines and collections | Output determinism and incremental emission | Per module, content hash of the closed type |
 | Q2 | How is the module name derived (`example/log` for `log.lft`), and what exact string goes into `_tag`, service keys, and brand tokens? | Typed IR and backends; fixture | Emitter, fixtures, and wire stability | Module path relative to a configured root; tag `users#UserMissing` |
-| Q3 | What is the host registry format and location, and how is a provider type written? The grammar has no provider syntax. | Retry and providers; Modules and boundaries | `provide` and `main.eff` cannot check | A declaration file in Effective syntax with a `provider` form, next to a `host:` name map in `effektive.json` |
+| Q3 | What is the host registry format and location, and how is a provider type written? The grammar has no provider syntax. | Retry and providers; Modules and boundaries | `provide` and `main.eff` cannot check | A declaration file in Effektive syntax with a `provider` form, next to a `host:` name map in `effektive.json` |
 | Q4 | Must an exported constant carry a type annotation? | Functions and blocks; Surface grammar | Closes firewall hole I6 | Yes |
 | Q5 | Are unannotated functions allowed at module level (not exported), as `const job = () => log("ready")` suggests? | Functions and blocks | Confirms I5 is module-local only | Yes, and never exported |
 | Q6 | Who inserts the safe-integer check for `int` arithmetic: the emitter, a runtime helper, or nobody? | Data and types; Surface grammar | Generated code shape and determinism | Emitter calls a small runtime helper for `int` operations |
@@ -779,7 +779,7 @@ decision record at the top of this document shows which ones the user settled.
 
 **D15. Repository.**
 (a) The transpiler lives in `effektive-lang`. Recommended.
-(b) The transpiler lives in the `effective` repository, beside the spec.
+(b) The transpiler lives in the `effektive` repository, beside the spec.
 
 **D1. Deliverable shape.**
 (a) The LSP server is the product.
@@ -837,7 +837,7 @@ callback parameters.
 (b) Set a budget now from the user's tolerance.
 
 **D10. Host registry format (Q3).**
-(a) A declaration file in Effective syntax with a `provider` form, plus a
+(a) A declaration file in Effektive syntax with a `provider` form, plus a
 `host:` name map in `effektive.json`. Recommended.
 (b) A JSON registry.
 (c) A TypeScript declaration file read through the `typescript` API.

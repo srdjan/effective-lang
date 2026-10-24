@@ -1,4 +1,4 @@
-// Exported signatures must remain usable when another Effective module infers
+// Exported signatures must remain usable when another Effektive module infers
 // their types, including supporting declarations nested inside built-in types.
 
 import { assert, assertEquals } from "@std/assert";
@@ -49,7 +49,7 @@ async function checkTwoModules(library: string, value: string): Promise<void> {
       emitProject(lowered, { config: project.value.analysis.project.config }),
       'import { alive } from "./consumer.ts";\n' +
         "console.log(alive() === undefined);\n",
-      "effective-audit-supporting-exports-",
+      "effektive-audit-supporting-exports-",
     )).trim(),
     "true",
   );

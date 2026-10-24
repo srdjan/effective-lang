@@ -40,7 +40,7 @@ D even though a successful missing-input constructor default supplies a value.
 A required decoded field with a decoding default remains required in D, while
 its encoded key and constructor input key can both be optional.
 
-```effective
+```effektive
 type Int = int
 const integer: Schema<Int> = schema()
 const field: SchemaEncodedOptionalConstructorDefault<Int> =

@@ -13,7 +13,7 @@ source maps on demand, and reuses them for a module with an unchanged key.
 
 Save already writes files. `didSave` in `src/lsp/features.ts` writes
 `<module>.ts` and `<module>.ts.map` for the saved `.eff` module. The setting
-`effective.writeOnSave` is true by default in the server and in the VS Code
+`effektive.writeOnSave` is true by default in the server and in the VS Code
 extension. Section 2.1 of `docs/transpiler-design.md` already selects save as
 the trigger for file output.
 
@@ -64,7 +64,7 @@ the round succeeds, and when no other process changes the sources during the
 round.
 
 Part 1 (current modules). After a save round, each generated file of a current
-module equals the file that `effective build` would write from the disk
+module equals the file that `effektive build` would write from the disk
 sources. A module that `build` would not write keeps its old files, as `build`
 does.
 
@@ -117,7 +117,7 @@ generated-TypeScript virtual document.
 ### 3.3 Triggers
 
 A `didSave` of a `.eff` or `.effi` document starts a round. The VS Code client
-sends `didSave` for both, because both belong to the `effective` language.
+sends `didSave` for both, because both belong to the `effektive` language.
 
 The client does not send `didSave` for `effektive.json`. It sends a watched-file
 event instead. So a watched-file event for the `effektive.json` of a project
@@ -140,7 +140,7 @@ removes only the outputs of modules whose source file has this project as its
 nearest root. This is the same "longest root wins" rule that `lookup` in
 `src/lsp/projects.ts` uses for documents.
 
-A concurrent `effective watch` or `build` on the same project is outside the
+A concurrent `effektive watch` or `build` on the same project is outside the
 invariant. Both writers use the same emitter and skip equal text, but their
 writes can interleave from different source texts.
 
@@ -172,7 +172,7 @@ write scope, and the log level.
 | SV3 | Add the disk program and the save round (section 3.2) to `src/lsp/projects.ts`, with the ownership rule (section 3.4). Tests over the in-memory file system compare each round with a fresh `Program` over the same disk texts. | SV1, SV2, decisions |
 | SV4 | Call the round from `didSave` and from the `effektive.json` watched-file event (section 3.3). Change the existing save tests so that each test sets the disk text before it sends `didSave`. Replace the test that asserts the dangling import. Add regression tests for gaps A to D. Add tests for: the first round, a no-change save, a `.effi` save, a configuration error and its recovery in both directions, a disk read error, a write failure, a partial write that the next save repairs, a deleted output that the next save repairs, an open document changed on disk, a rename, a close without save, nested roots, a failed map removal, and `writeOnSave` false (no disk program exists). | SV3 |
 | SV5 | Measure. Add bench row M7 on the small, medium, and large presets: a cold first round, a repeated save with no change, a body edit save, an interface edit save, and a "Save All" of every module. Extend M4 with the disk program enabled. Record the results in `docs/measurements.md`. If M7 misses the SV-D3 budget, stop and bring a narrowing proposal that keeps the repair of step 6. | SV4 |
-| SV6 | Update `docs/transpiler-design.md` section 2.1 (the per-save row), `docs/editor.md`, `docs/api.md`, `docs/installation.md` (the restart for `writeOnSave`), the `effective.writeOnSave` description in `editors/vscode/package.json`, and the README known limits. Add the term "disk program" to `CONCEPTS.md`. Update `docs/status.md` and, in a separate commit, the sibling site `../effective/public/` if the status changes. Run the installed VSIX check. | SV5 |
+| SV6 | Update `docs/transpiler-design.md` section 2.1 (the per-save row), `docs/editor.md`, `docs/api.md`, `docs/installation.md` (the restart for `writeOnSave`), the `effektive.writeOnSave` description in `editors/vscode/package.json`, and the README known limits. Add the term "disk program" to `CONCEPTS.md`. Update `docs/status.md` and, in a separate commit, the sibling site `../effektive/public/` if the status changes. Run the installed VSIX check. | SV5 |
 
 Each unit is one commit on local `main`. Run `deno task check` before each
 commit. SV5 also runs `deno task bench --full m1 m4 m7`.
@@ -185,7 +185,7 @@ commit. SV5 also runs `deno task bench --full m1 m4 m7`.
 | Each round reads the full workspace. | Save time grows with the project size. | SV5 measures it in M7. |
 | A second program per project. | More memory in a long session. | SV5 measures it with M4. `writeOnSave` false creates no disk program. |
 | A synchronous round blocks the message loop. | A late diagnostics publish after a save. | SV5 measures it with M7 against SV-D3. |
-| A concurrent `effective watch` or `build`. | Interleaved writes from different source texts. | Outside the invariant (section 3.4). SV6 documents it. |
+| A concurrent `effektive watch` or `build`. | Interleaved writes from different source texts. | Outside the invariant (section 3.4). SV6 documents it. |
 | A disk read sees a partial write from another tool. | One round emits from a broken text. | The broken module gets diagnostics and is held. The next round repairs the outputs. |
 
 ## 6. Decisions
@@ -202,7 +202,7 @@ it. Unrelated modules that were never built get no files.
 (a) Only an event for `effektive.json`, because the client sends no `didSave`
 for it. The next save catches up with changes from `git checkout` or other
 tools. Recommended, because the setting is named "write on save".
-(b) Every event for a source file, as `effective watch` does.
+(b) Every event for a source file, as `effektive watch` does.
 
 **SV-D3. What is the budget for one save round?**
 (a) 100 ms p90 for a body edit save on the large preset, measured by M7. This
@@ -210,7 +210,7 @@ reuses the value of the D9 diagnostics budget. Recommended.
 (b) No budget. Record M7 only.
 
 **SV-D4. Where does the server report held modules?**
-(a) `window/logMessage` at type 3 (info), in the Effective output channel.
+(a) `window/logMessage` at type 3 (info), in the Effektive output channel.
 Recommended.
 (b) A status bar item in the VS Code extension, in addition to (a).
 

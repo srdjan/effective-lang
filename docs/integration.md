@@ -15,7 +15,7 @@ From the repository root:
 deno test --allow-all tests/application_integration_slow_test.ts
 ```
 
-The outer slow test checks, lowers, and independently validates the Effective
+The outer slow test checks, lowers, and independently validates the Effektive
 project, emits its modules into a fresh temporary directory, copies the host
 files there, and runs strict TypeScript checking and seven runtime integration
 tests. The runtime subprocess receives read/write access to that directory and

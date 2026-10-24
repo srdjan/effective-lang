@@ -36,10 +36,10 @@ function assertRejected(
 }
 
 Deno.test("method names and capabilities", () => {
-  assertEquals(GENERATED_TYPESCRIPT_METHOD, "effective/generatedTypeScript");
-  assertEquals(GENERATED_CHANGED_METHOD, "effective/generatedChanged");
-  assertEquals(STATS_METHOD, "effective/stats");
-  assertEquals(GENERATED_SCHEME, "effective-generated");
+  assertEquals(GENERATED_TYPESCRIPT_METHOD, "effektive/generatedTypeScript");
+  assertEquals(GENERATED_CHANGED_METHOD, "effektive/generatedChanged");
+  assertEquals(STATS_METHOD, "effektive/stats");
+  assertEquals(GENERATED_SCHEME, "effektive-generated");
   assertEquals(TextDocumentSyncKind.Incremental, 2);
   assertEquals(SERVER_CAPABILITIES.positionEncoding, "utf-16");
   assertEquals(SERVER_CAPABILITIES.textDocumentSync.change, 2);
@@ -119,7 +119,7 @@ Deno.test("didOpen: valid and invalid", () => {
     narrowDidOpen({
       textDocument: {
         uri: URI,
-        languageId: "effective",
+        languageId: "effektive",
         version: 1,
         text: "x",
       },
@@ -129,14 +129,14 @@ Deno.test("didOpen: valid and invalid", () => {
       value: {
         textDocument: {
           uri: URI,
-          languageId: "effective",
+          languageId: "effektive",
           version: 1,
           text: "x",
         },
       },
     },
   );
-  const item = { uri: URI, languageId: "effective", version: 1, text: "" };
+  const item = { uri: URI, languageId: "effektive", version: 1, text: "" };
   assertRejected(narrowDidOpen(undefined), "params");
   assertRejected(narrowDidOpen({}), "textDocument");
   assertRejected(narrowDidOpen({ textDocument: { ...item, uri: "" } }), "uri");
@@ -358,7 +358,7 @@ function assertError(
 const item = (over: Record<string, unknown>) => ({
   textDocument: {
     uri: URI,
-    languageId: "effective",
+    languageId: "effektive",
     version: 1,
     text: "x",
     ...over,

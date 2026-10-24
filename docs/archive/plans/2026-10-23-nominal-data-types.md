@@ -1,6 +1,6 @@
 # Plan: nominal data types (`data` declarations)
 
-Status: done, 2026-10-23. NT5 to NT11 landed in commits 2a57d9c (NT5), 2404446 (NT6), 2285033 (NT7), 6b21dc2 (NT8), ac90799 (NT9), 8ab15c0 (NT10), and 24f3937 (NT11). NT12 landed as 91529b5 in the sibling repository `../effective/`. Fable validated the draft and reported 5 major and 8 minor findings. Opus accepted 12. The user decided finding 1 with NT13 (a). Section 8 maps each finding to its resolution.
+Status: done, 2026-10-23. NT5 to NT11 landed in commits 2a57d9c (NT5), 2404446 (NT6), 2285033 (NT7), 6b21dc2 (NT8), ac90799 (NT9), 8ab15c0 (NT10), and 24f3937 (NT11). NT12 landed as 91529b5 in the sibling repository `../effektive/`. Fable validated the draft and reported 5 major and 8 minor findings. Opus accepted 12. The user decided finding 1 with NT13 (a). Section 8 maps each finding to its resolution.
 
 This plan uses the ID prefix NT. NT1 to NT4 and NT13 are the user's decisions. NT5 to NT12 are work items.
 
@@ -114,7 +114,7 @@ Each commit must pass `deno task check`. Do the items in this order, because eac
 - `src/core/editor_tokens.ts`: add `data` to `contextualKeywords`. In `resolvedKind`, give a `data` type the `class` kind, like an error. Extend the fallback for a recovered declaration.
 - `src/core/editor.ts`: `targetSpan` and `symbolOf`. `src/lsp/features.ts` `SYMBOL_KINDS`: `data` maps to Struct.
 - `src/core/editor_completion.ts`: a type context offers `data` types. A `fails` context does not. Field completion reads `dataRecordOf`.
-- `editors/vscode/syntaxes/effective.tmLanguage.json`: add `data` to `declaration-words`. `playground/src/highlight.ts`: add `data` to `DECLARATION_WORDS`. Rebuild the playground output if the repository tracks it.
+- `editors/vscode/syntaxes/effektive.tmLanguage.json`: add `data` to `declaration-words`. `playground/src/highlight.ts`: add `data` to `DECLARATION_WORDS`. Rebuild the playground output if the repository tracks it.
 - Tests: token, completion, and rename tests for a `data` type and its constructor calls.
 
 ### NT11. Documentation (one commit in this repository)
@@ -124,11 +124,11 @@ Each commit must pass `deno task check`. Do the items in this order, because eac
 - `CONCEPTS.md`: add the term "data type". `docs/status.md`: add the change. Neither file mentions brands or R2 today. `docs/api.md:182` (rule R1) says "type, data, or error declaration". The `.effi` rules say that host code must build `data` values with `make`, and that a value with a wrong `_tag` takes the last `match` arm (section 4, item 8).
 - Archive this plan to `docs/archive/plans/` when every item is done.
 
-### NT12. Spec site (one commit in `../effective/public/`)
+### NT12. Spec site (one commit in `../effektive/public/`)
 
-- `effective-spec.html`: grammar (`dataDecl = "data" Name "=" recordType`, lines 498-503), the nominal records section (lines 88-105, with the `spec-account` example), lines 10, 46, 156, 456, and 533.
+- `effektive-spec.html`: grammar (`dataDecl = "data" Name "=" recordType`, lines 498-503), the nominal records section (lines 88-105, with the `spec-account` example), lines 10, 46, 156, 456, and 533.
 - `index.html` (lines 71-74), and `typed-ir.ts` (the `data` node near line 201, the `Pattern` type near line 140, and the `TypeDecl` definition near lines 417-430).
-- Add a dated entry to `effective-validation.txt`.
+- Add a dated entry to `effektive-validation.txt`.
 
 ## 6. Diagnostics
 

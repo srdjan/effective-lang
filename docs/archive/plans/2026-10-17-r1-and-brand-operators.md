@@ -87,7 +87,7 @@ Migration scope:
 
 - Every `.eff` and `.effi` file that the checker sees: `fixtures/examples/`, `fixtures/ir/`, `fixtures/emit/`, `fixtures/host-boundary/`, and `fixtures/errors/` except single files whose names start with `syntax-`. Do not change `fixtures/parse/` and the `syntax-` error files, because only the parser reads them (`tests/fixtures_test.ts`). In `recovery-*` inputs an appended alias would land inside an unclosed construct.
 - `fixtures/ir/example/log.eff` is a copy of `fixtures/examples/log.eff`. Migrate it identically. `tests/lower_test.ts` compares its lowering with `fixtures/ir/example/log.ir.json`, and no script writes that file. Write it again with a one-off run of `lowerModule` and `serializeModule`, with the source identifier replaced by `log.lft` as `tests/lower_test.ts` does it. Then run `deno task validate:update`, because `scripts/validate_fixtures.ts` derives the mutation fixtures from `examples/log.eff`.
-- Every Effective program in a string in `tests/`. With P2-C2 in place, a failing test with `declaration/013` marks each program that needs the change.
+- Every Effektive program in a string in `tests/`. With P2-C2 in place, a failing test with `declaration/013` marks each program that needs the change.
 - `bench/generate.ts`. The generator must write R1-valid modules: the base module (`charge(amount: int): string`), `link<n>`, `calc<n>`, `rec<n>`, `bump`, `flip`, and `extra`. The `header` edit toggles `export const extra: int = 1` and `number`. Change it to toggle between two aliases, `Int` and `Num`, declared in the generated module. Three edit functions match source text with a regular expression: the `header` edit, `applyBodyEdit`, and `applyModeFlipEdit` (both match `(n: int): int`). Change all three. Update the literal assertions in `tests/bench_generate_test.ts` and `tests/db_test.ts`, and the `header` row of the README table "The edit script". The interface hash still changes on each `header` edit, because the constant type is a different named type. `tests/bench_generate_test.ts` checks that the importer is checked again.
 - The playground examples come from `fixtures/examples/`, so they need no separate change. Its tests must pass.
 
@@ -116,7 +116,7 @@ P2-D2. `docs/phase-a-rules.md`, A3a table: one row "Primitive positions" with th
 
 ## Out of scope
 
-- The spec text in `/Users/srdjans/Code/effective`. The user owns it.
+- The spec text in `/Users/srdjans/Code/effektive`. The user owns it.
 - Brand operators for string brands, `*`, `/`, and a literal operand that takes the brand of the other operand. D32 rejects them.
 - Re-running the bench baseline for D9. The report names it as a user step.
 
@@ -128,7 +128,7 @@ Opus runs these commands after each part, from the repository root:
 2. `deno task golden:update`, then `git diff --stat fixtures/golden` (Part 2 changes all six golden files; Opus reads the diff).
 3. Part 2 only: `deno run -q --allow-read /tmp/rules-probe/count/count.ts "$PWD/fixtures"` prints a `FILE` line for each file with a use outside type definitions. Each listed file must be in `fixtures/parse/`, a `syntax-` error file, or the new fixtures of P2-T1 and P2-T2.
 5. Part 2 only: `deno task test` passes `tests/lower_test.ts` with the new `log.ir.json`, and `deno task validate:update` gives no further diff.
-4. Part 2 only: `deno task effective build fixtures/examples --validate --tsc` in a copy of the examples in `/tmp`, so that no generated file lands in the repository. It must give 0 diagnostics.
+4. Part 2 only: `deno task effektive build fixtures/examples --validate --tsc` in a copy of the examples in `/tmp`, so that no generated file lands in the repository. It must give 0 diagnostics.
 
 ## Validation findings
 

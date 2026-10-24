@@ -1,4 +1,4 @@
-// Generated from log.eff by the Effective compiler. Do not edit.
+// Generated from log.eff by the Effektive compiler. Do not edit.
 
 import { Context, Effect, Schema } from "effect";
 

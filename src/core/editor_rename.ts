@@ -113,7 +113,7 @@ export function renameAt(
   if (prepared === undefined || hit === undefined) {
     return {
       ok: false,
-      error: "This symbol cannot be renamed in Effective source.",
+      error: "This symbol cannot be renamed in Effektive source.",
     };
   }
   if (prepared.name === name) return { ok: true, value: [] };

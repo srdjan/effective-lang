@@ -30,21 +30,21 @@ async function replace(document, text) {
 }
 
 async function run() {
-  const root = process.env.EFFECTIVE_TEST_PROJECT;
+  const root = process.env.EFFEKTIVE_TEST_PROJECT;
   const document = await vscode.workspace.openTextDocument(
     vscode.Uri.file(path.join(root, "main.eff")),
   );
   const uri = document.uri;
   await vscode.window.showTextDocument(document);
-  const extension = vscode.extensions.getExtension("local.effective-vscode");
+  const extension = vscode.extensions.getExtension("local.effektive-vscode");
   assert(extension, "installed extension must be discovered");
   await extension.activate();
   assert(
-    extension.extensionPath.startsWith(process.env.EFFECTIVE_TEST_EXTENSIONS),
+    extension.extensionPath.startsWith(process.env.EFFEKTIVE_TEST_EXTENSIONS),
   );
   assert(
     fs.existsSync(
-      path.join(extension.extensionPath, "server", "effective-lsp.js"),
+      path.join(extension.extensionPath, "server", "effektive-lsp.js"),
     ),
   );
   const text = document.getText();
@@ -58,13 +58,13 @@ async function run() {
     );
     return hovers && hovers.length;
   }, "bundled server hover");
-  if (process.env.EFFECTIVE_TEST_PHASE === "restart") {
+  if (process.env.EFFEKTIVE_TEST_PHASE === "restart") {
     assert(
       fs.readFileSync(path.join(root, "main.ts"), "utf8").includes("twice"),
     );
     return;
   }
-  if (process.env.EFFECTIVE_TEST_FEATURES === "true") {
+  if (process.env.EFFEKTIVE_TEST_FEATURES === "true") {
     const references = await vscode.commands.executeCommand(
       "vscode.executeReferenceProvider",
       uri,
@@ -140,11 +140,11 @@ async function run() {
     "generated files after save",
   );
   await vscode.window.showTextDocument(document);
-  await vscode.commands.executeCommand("effective.showGeneratedTypeScript");
+  await vscode.commands.executeCommand("effektive.showGeneratedTypeScript");
   const generated = await until(
     () =>
       vscode.workspace.textDocuments.find((doc) =>
-        doc.uri.scheme === "effective-generated" &&
+        doc.uri.scheme === "effektive-generated" &&
         doc.getText().includes("twice")
       ),
     "generated virtual document",
@@ -167,16 +167,16 @@ module.exports.run = async () => {
   try {
     await run();
     fs.writeFileSync(
-      process.env.EFFECTIVE_TEST_RESULT,
+      process.env.EFFEKTIVE_TEST_RESULT,
       JSON.stringify({
         ok: true,
-        phase: process.env.EFFECTIVE_TEST_PHASE,
-        features: process.env.EFFECTIVE_TEST_FEATURES,
+        phase: process.env.EFFEKTIVE_TEST_PHASE,
+        features: process.env.EFFEKTIVE_TEST_FEATURES,
       }),
     );
   } catch (error) {
     fs.writeFileSync(
-      process.env.EFFECTIVE_TEST_RESULT,
+      process.env.EFFEKTIVE_TEST_RESULT,
       JSON.stringify({ ok: false, error: error.stack || String(error) }),
     );
     throw error;

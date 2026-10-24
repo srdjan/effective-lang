@@ -126,7 +126,7 @@ Deno.test("readWorkspace skips a directory that cannot be resolved", () => {
 
 Deno.test("readTargetInputs leaves out the generated modules of .eff and .effi files", () => {
   const header = (source: string) =>
-    `// Generated from ${source} by the Effective compiler. Do not edit.\n`;
+    `// Generated from ${source} by the Effektive compiler. Do not edit.\n`;
   const m = memoryIo({
     "/p/a.ts": `${header("a.eff")}export {};\n`,
     "/p/h.effi.ts": `${header("h.effi")}export {};\n`,

@@ -95,7 +95,7 @@ function memory(stats: StepStats): Result<MemorySample, LspBenchError> {
       error: {
         tag: "protocol",
         message:
-          "M4 requires memory.heapUsed and typeTableSize in effective/stats",
+          "M4 requires memory.heapUsed and typeTableSize in effektive/stats",
       },
     };
   }

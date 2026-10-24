@@ -19,7 +19,7 @@ describes `unfold`, the
 
 ## Implemented first slice
 
-```effective
+```effektive
 error Stop = {}
 service Source { next(state: int): Option<[int, int]> fails Stop }
 service Transform { double(value: int): int fails Stop }

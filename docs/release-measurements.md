@@ -35,7 +35,7 @@ M3 ran 100 steps per input/edit kind (**1,300 steps**) without hover. Every step
 
 M4 starts a fresh pair of servers for each row and keeps `m02.eff`, `m00.eff` and `m01.eff` open concurrently in the existing medium project. Edits rotate among them. The primary document cycles body, header, alias and mode-flip edits. Companion documents change the literal in their annotated `link` function bodies. Each submitted text has a unique global revision comment; the previous marker is replaced so comments do not accumulate. This keeps semantic toggles from revisiting identical text. M1/M3 use the same distinct-revision marker without changing their single-document work oracles.
 
-After initial document diagnostics, M4 records a baseline. After every edit it records RSS, heap used and the project type-table size through `effective/stats`. Both sides pass the empty-diagnostics gate before the next step. No hover runs in M4. Peaks are sampled at step ends and can miss shorter peaks inside a step. Garbage collection is not forced.
+After initial document diagnostics, M4 records a baseline. After every edit it records RSS, heap used and the project type-table size through `effektive/stats`. Both sides pass the empty-diagnostics gate before the next step. No hover runs in M4. Peaks are sampled at step ends and can miss shorter peaks inside a step. Garbage collection is not forced.
 
 | Edits per side | Side | RSS start / sampled peak / last MiB | Heap start / sampled peak / last MiB | Type table start → last |
 | ---: | --- | ---: | ---: | ---: |
@@ -74,7 +74,7 @@ deno task bench --full m1 m4 m7
 
 The [complete text report](release-measurements-2026-10-21-save.txt) holds every row of that run, including a new M1 run. No JSON file was written for it. [Measurements](measurements.md) describes the M7 completion signal and its scenarios.
 
-M7 times one save from the write of `didSave` to the reply of a following `effective/stats` request. Two server processes, A and B, run each warm row, so `n` counts both sides. The cold rows use a fresh server for each sample. The budget SV-D3 applies to the `body` row on the large preset.
+M7 times one save from the write of `didSave` to the reply of a following `effektive/stats` request. Two server processes, A and B, run each warm row, so `n` counts both sides. The cold rows use a fresh server for each sample. The budget SV-D3 applies to the `body` row on the large preset.
 
 | Preset and scenario | Saves | n | Median ms | p90 ms | Maximum ms | A/B floor % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |

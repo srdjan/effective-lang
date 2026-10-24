@@ -607,7 +607,7 @@ Decision 3 is (a). ED3 has two commits.
 ED3a (characterization tests first). Add tests for four behaviors that no test pins today:
 
 1. The CLI watch loop forgets a module after a failed removal (probe `/tmp/p4-ed/forget_probe.ts`).
-2. `effective build` writes the outputs of a module that a nested `effektive.json` owns (N1, probe `/tmp/p4-ed/nested_probe.ts`).
+2. `effektive build` writes the outputs of a module that a nested `effektive.json` owns (N1, probe `/tmp/p4-ed/nested_probe.ts`).
 3. The LSP logs each removed path and its notes in module order.
 4. The relative order of the LSP type-4, type-1, and type-3 logs in one save round.
 
@@ -639,7 +639,7 @@ export function runSaveRound(input: SaveRoundInput): SaveRound;
 
 The prototype is `/tmp/p4-ed/proto/save_round.ts`. `runSaveRound` stays synchronous, and it returns one removal record for each module, so each caller keeps its log order. The CLI passes `owns: () => true`, which keeps N1.
 
-`buildRevision` in `src/cli/build.ts` calls `runSaveRound`. `Session.build` (`cli/session.ts:84`) and `buildRevision` get `previous` as a new parameter. `effective build` and the `host-change` round pass `previous: []`. `BuildOutcome` gets `modules` and `removals`. The removal notes must not go into `outcome.notes`, because `printOutcome` prints the notes after `rechecked:` (`cli/report.ts:22`). The watch loop prints the `removed:` lines and the notes before `rechecked:`, and sets `previous = outcome.modules`.
+`buildRevision` in `src/cli/build.ts` calls `runSaveRound`. `Session.build` (`cli/session.ts:84`) and `buildRevision` get `previous` as a new parameter. `effektive build` and the `host-change` round pass `previous: []`. `BuildOutcome` gets `modules` and `removals`. The removal notes must not go into `outcome.notes`, because `printOutcome` prints the notes after `rechecked:` (`cli/report.ts:22`). The watch loop prints the `removed:` lines and the notes before `rechecked:`, and sets `previous = outcome.modules`.
 
 `saveRound` in `src/lsp/projects.ts` calls `runSaveRound` with `removal: "retry"` and the current ownership test. The sync steps, `heldReason`, the message texts, `deno check`, and each sort order stay where they are. The core must not import host code.
 
@@ -655,7 +655,7 @@ A Fable agent checked this section against HEAD `1665897`. It rated CK4 sound, a
 - CK1b: no test checks a wrong fact kind, so the `Kebab` restriction is the check. Static initializer order matters.
 - IC6a: a forged child gives a path that ends in `.times.type`, not `.times`.
 - CK5: one more read at line 3019.
-- ED3a: the stats test was dropped. `effective/stats` reads the overlay program, and the save round runs on `diskProgram`, so the test could not detect an ED3b regression.
+- ED3a: the stats test was dropped. `effektive/stats` reads the overlay program, and the save round runs on `diskProgram`, so the test could not detect an ED3b regression.
 
 ### Phase 4 results (2026-10-22)
 
@@ -693,7 +693,7 @@ Size (M, `scripts/measure.ts` over the `.ts` files of `src/core`, `b888a6a` agai
 
 Edit sites after Phase 4. A new builtin in an existing family edits the `PRELUDE` row, the rows of the family, and the family code, and `check_expr.ts` does not change. A change of the removal or ownership rule of a save round edits `src/host/save_round.ts` only.
 
-Decision 5 (N1), found in Phase 4. `effective build` wrote the outputs of a module that a nested `effektive.json` owns, and the language server did not. ED3 kept this difference as the `owns` parameter.
+Decision 5 (N1), found in Phase 4. `effektive build` wrote the outputs of a module that a nested `effektive.json` owns, and the language server did not. ED3 kept this difference as the `owns` parameter.
 
 The user chose (b) on 2026-10-22: the CLI uses the language server rule. `ownedByRoot` in `src/host/save_round.ts` now holds that rule for both callers. The ED3a test in `tests/cli_test.ts` now asserts that `build` skips those outputs, and a new test in `tests/watch_stale_test.ts` covers `watch`. Both tests fail with the old rule.
 

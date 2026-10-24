@@ -101,7 +101,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 Deno.test("the server answers hover, definition, and save, and exits 0", async () => {
-  const dir = Deno.makeTempDirSync({ prefix: "effective-lsp-" });
+  const dir = Deno.makeTempDirSync({ prefix: "effektive-lsp-" });
   let client: Client | undefined;
   try {
     copyDirectory(new URL("examples/", FIXTURES), dir);
@@ -121,7 +121,7 @@ Deno.test("the server answers hover, definition, and save, and exits 0", async (
       jsonrpc: "2.0",
       method: "textDocument/didOpen",
       params: {
-        textDocument: { uri, languageId: "effective", version: 1, text },
+        textDocument: { uri, languageId: "effektive", version: 1, text },
       },
     });
     const published = await client.waitFor((m) =>
@@ -176,7 +176,7 @@ Deno.test("the server answers hover, definition, and save, and exits 0", async (
     await client.send({
       jsonrpc: "2.0",
       id: 4,
-      method: "effective/stats",
+      method: "effektive/stats",
       params: { textDocument: { uri } },
     });
     await client.waitFor((m) => isRecord(m) && m.id === 4);
@@ -196,7 +196,7 @@ Deno.test("the server answers hover, definition, and save, and exits 0", async (
 });
 
 Deno.test("end of stdin without shutdown exits 1", async () => {
-  const dir = Deno.makeTempDirSync({ prefix: "effective-lsp-" });
+  const dir = Deno.makeTempDirSync({ prefix: "effektive-lsp-" });
   let client: Client | undefined;
   try {
     copyDirectory(new URL("examples/", FIXTURES), dir);

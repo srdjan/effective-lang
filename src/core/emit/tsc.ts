@@ -1,10 +1,10 @@
-// The `tsc` oracle on the Effective side (plan sections 5.3 and 6.5, part
+// The `tsc` oracle on the Effektive side (plan sections 5.3 and 6.5, part
 // A6b). Two pure functions:
 //
 // - `parseDenoCheck` reads the text that `deno check` prints on failure and
 //   returns its TypeScript diagnostics.
 // - `mapTscDiagnostic` maps one TypeScript diagnostic of a generated file back
-//   to the Effective source, through the span table of that file.
+//   to the Effektive source, through the span table of that file.
 //
 // A diagnostic on a host assertion constant (`const UsersLive$host: ... =
 // UsersLive;`) means that the host module disagrees with its declaration file.
@@ -141,7 +141,7 @@ export function parseDenoCheck(text: string, root: string): DenoCheckOutput {
 
 // ------------------------------------------------------------------ mapping
 
-/** A TypeScript diagnostic mapped to the Effective side. */
+/** A TypeScript diagnostic mapped to the Effektive side. */
 export type TscMapping =
   /** The diagnostic lies on a host assertion constant. */
   | {

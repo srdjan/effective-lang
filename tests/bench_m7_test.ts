@@ -48,7 +48,7 @@ Deno.test("the body edit p90 comes from the large preset rows only", () => {
 
 Deno.test("the M7 report names the completion signal, the floor, and the budget verdict", () => {
   const text = formatM7(result);
-  assert(text.includes("effective/stats reply"));
+  assert(text.includes("effektive/stats reply"));
   assert(text.includes("floor %"));
   assert(text.includes("large body"));
   assert(text.includes("p90 50.000 ms against the budget of 100 ms: within"));

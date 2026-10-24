@@ -36,7 +36,7 @@ values or effects, but cannot capture or invoke self. Expressions without self
 remain ordinary checked Schema leaves, including inline transformations.
 Capture checks use binding identities, so a separate local named self is valid.
 
-```effective
+```effektive
 type Int = int
 type Tree = { score: Int, children: Tree[] }
 type TreeInput = { score?: Int, children?: TreeInput[] }

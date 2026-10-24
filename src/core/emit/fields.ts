@@ -155,7 +155,7 @@ export function fieldHelperDeclarations(scope: ExprScope): Doc[] {
   const presence = scope.fieldHelpers.get("suppliedFields");
   if (presence !== undefined) {
     helpers.push(
-      `const ${presence} = globalThis.Symbol.for("effective/source-fields");`,
+      `const ${presence} = globalThis.Symbol.for("effektive/source-fields");`,
     );
   }
   const untagged = scope.fieldHelpers.get("untagged");

@@ -172,7 +172,7 @@ The IR already stores `FunctionType.execution` and both effect rows. The interfa
 
 Independent validation checks that every pure function type has empty rows. It checks each call against the recorded execution mode.
 
-Emission uses the current TypeScript function type. TypeScript does not encode the Effective execution mode.
+Emission uses the current TypeScript function type. TypeScript does not encode the Effektive execution mode.
 
 The editor highlights and completes `pure` in function-type positions. Hover includes `pure` in the displayed function type.
 

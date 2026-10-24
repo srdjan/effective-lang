@@ -22,7 +22,7 @@ async function command(
 }
 
 Deno.test("local artifacts install and run offline outside the checkout with an empty cache", async () => {
-  const temporary = Deno.makeTempDirSync({ prefix: "effective-install-" });
+  const temporary = Deno.makeTempDirSync({ prefix: "effektive-install-" });
   try {
     const output = join(temporary, "artifacts");
     const artifacts = await packageRelease(output);
@@ -71,7 +71,7 @@ Deno.test("local artifacts install and run offline outside the checkout with an 
         "--deny-net",
         "--allow-read",
         "--allow-write",
-        join(unpacked, "extension", "server", "effective-lsp.js"),
+        join(unpacked, "extension", "server", "effektive-lsp.js"),
       ],
       cwd: project,
       env,
@@ -100,7 +100,7 @@ Deno.test("local artifacts install and run offline outside the checkout with an 
           params: {
             textDocument: {
               uri,
-              languageId: "effective",
+              languageId: "effektive",
               version: 1,
               text: source,
             },
@@ -109,7 +109,7 @@ Deno.test("local artifacts install and run offline outside the checkout with an 
         {
           jsonrpc: "2.0",
           id: 2,
-          method: "effective/generatedTypeScript",
+          method: "effektive/generatedTypeScript",
           params: { textDocument: { uri } },
         },
         { jsonrpc: "2.0", id: 3, method: "shutdown", params: null },
@@ -148,7 +148,7 @@ Deno.test("local artifacts install and run offline outside the checkout with an 
         "--root",
         installRoot,
         "--name",
-        "effective",
+        "effektive",
         "--no-config",
         "--no-lock",
         "--cached-only",
@@ -163,11 +163,11 @@ Deno.test("local artifacts install and run offline outside the checkout with an 
     const installed = join(
       installRoot,
       "bin",
-      Deno.build.os === "windows" ? "effective.cmd" : "effective",
+      Deno.build.os === "windows" ? "effektive.cmd" : "effektive",
     );
     assertStringIncludes(
       await command(installed, ["--help"], project, env),
-      "usage: effective",
+      "usage: effektive",
     );
     await command(installed, ["check"], project, env);
     await command(installed, ["build"], project, env);

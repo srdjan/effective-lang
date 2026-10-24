@@ -107,7 +107,7 @@ function buildProject(root: string, entries: readonly string[]): Built {
 }
 
 function withTemporary<T>(body: (dir: string) => Promise<T>): Promise<T> {
-  return withTemporaryDirectory("effective-emit-", body);
+  return withTemporaryDirectory("effektive-emit-", body);
 }
 
 async function check(dir: string, files: readonly string[]): Promise<void> {

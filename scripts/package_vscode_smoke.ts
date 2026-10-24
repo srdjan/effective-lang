@@ -53,7 +53,7 @@ export async function installedEditorSmoke(
     Deno.writeTextFileSync(
       join(harness, "package.json"),
       JSON.stringify({
-        name: "effective-install-smoke",
+        name: "effektive-install-smoke",
         publisher: "local",
         version: "0.0.0",
         engines: { vscode: "^1.91.0" },
@@ -67,9 +67,9 @@ export async function installedEditorSmoke(
       DENO_DIR: join(temporary, "empty-cache"),
       DENO_NO_UPDATE_CHECK: "1",
       NO_COLOR: "1",
-      EFFECTIVE_TEST_PROJECT: project,
-      EFFECTIVE_TEST_EXTENSIONS: extensions,
-      EFFECTIVE_TEST_FEATURES: String(features),
+      EFFEKTIVE_TEST_PROJECT: project,
+      EFFEKTIVE_TEST_EXTENSIONS: extensions,
+      EFFEKTIVE_TEST_FEATURES: String(features),
     };
     await checked(
       code,
@@ -109,8 +109,8 @@ export async function installedEditorSmoke(
         cwd: project,
         env: {
           ...env,
-          EFFECTIVE_TEST_PHASE: phase,
-          EFFECTIVE_TEST_RESULT: resultFile,
+          EFFEKTIVE_TEST_PHASE: phase,
+          EFFEKTIVE_TEST_RESULT: resultFile,
         },
         stdout: "piped",
         stderr: "piped",
@@ -145,7 +145,7 @@ export async function installedEditorSmoke(
       );
     }
   } finally {
-    if (Deno.env.get("EFFECTIVE_KEEP_SMOKE") === "1") {
+    if (Deno.env.get("EFFEKTIVE_KEEP_SMOKE") === "1") {
       console.log(`Retained smoke workspace: ${temporary}`);
     } else Deno.removeSync(temporary, { recursive: true });
   }
@@ -153,7 +153,7 @@ export async function installedEditorSmoke(
 
 if (import.meta.main) {
   await installedEditorSmoke(
-    Deno.env.get("EFFECTIVE_VSCODE_EXECUTABLE") ?? DEFAULT_CODE,
+    Deno.env.get("EFFEKTIVE_VSCODE_EXECUTABLE") ?? DEFAULT_CODE,
     !Deno.args.includes("--baseline"),
   );
 }

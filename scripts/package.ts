@@ -130,8 +130,8 @@ export async function packageRelease(
     extension,
   );
   Deno.mkdirSync(out, { recursive: true });
-  const cli = join(out, "effective.js");
-  const server = join(out, "effective-lsp.js");
+  const cli = join(out, "effektive.js");
+  const server = join(out, "effektive-lsp.js");
   for (
     const [entry, target] of [["src/cli/main.ts", cli], [
       "src/lsp/main.ts",
@@ -153,7 +153,7 @@ export async function packageRelease(
     ]);
     const bundled = Deno.readTextFileSync(target);
     const guard =
-      `if (Deno.version.deno !== "${REQUIRED_DENO_VERSION}") {\n  console.error("Effective requires Deno ${REQUIRED_DENO_VERSION}; found " + Deno.version.deno + ".");\n  Deno.exit(2);\n}\n`;
+      `if (Deno.version.deno !== "${REQUIRED_DENO_VERSION}") {\n  console.error("Effektive requires Deno ${REQUIRED_DENO_VERSION}; found " + Deno.version.deno + ".");\n  Deno.exit(2);\n}\n`;
     Deno.writeTextFileSync(target, guard + bundled);
   }
   const pkg = JSON.parse(
@@ -182,7 +182,7 @@ export async function packageRelease(
     bytes: Deno.readFileSync(join(ROOT, "LICENSE")),
   });
   entries.push({
-    name: "extension/server/effective-lsp.js",
+    name: "extension/server/effektive-lsp.js",
     bytes: Deno.readFileSync(server),
   });
   const manifest = `<?xml version="1.0" encoding="utf-8"?>
@@ -193,7 +193,7 @@ export async function packageRelease(
     xml(pkg.displayName)
   }</DisplayName><Description xml:space="preserve">${
     xml(pkg.description)
-  }</Description><Tags>effective,language</Tags><Categories>Programming Languages</Categories><Properties><Property Id="Microsoft.VisualStudio.Code.Engine" Value="${
+  }</Description><Tags>effektive,language</Tags><Categories>Programming Languages</Categories><Properties><Property Id="Microsoft.VisualStudio.Code.Engine" Value="${
     xml(pkg.engines.vscode)
   }"/><Property Id="Microsoft.VisualStudio.Code.ExtensionDependencies" Value=""/></Properties></Metadata>
   <Installation><InstallationTarget Id="Microsoft.VisualStudio.Code"/></Installation><Dependencies/>
@@ -210,7 +210,7 @@ export async function packageRelease(
       '<?xml version="1.0" encoding="utf-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="json" ContentType="application/json"/><Default Extension="js" ContentType="application/javascript"/><Default Extension="md" ContentType="text/markdown"/><Default Extension="vsixmanifest" ContentType="text/xml"/><Default Extension="xml" ContentType="text/xml"/><Default Extension="txt" ContentType="text/plain"/></Types>',
     ),
   });
-  const vsix = join(out, `effective-vscode-${pkg.version}.vsix`);
+  const vsix = join(out, `effektive-vscode-${pkg.version}.vsix`);
   Deno.writeFileSync(vsix, archive(entries));
   return [cli, server, vsix];
 }

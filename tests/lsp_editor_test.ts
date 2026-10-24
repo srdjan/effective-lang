@@ -22,7 +22,7 @@ function harness(): Harness {
     jsonrpc: "2.0",
     method: "textDocument/didOpen",
     params: {
-      textDocument: { uri, languageId: "effective", version: 7, text: main },
+      textDocument: { uri, languageId: "effektive", version: 7, text: main },
     },
   });
   return h;
@@ -56,7 +56,7 @@ Deno.test("LSP references and rename use current unsaved UTF-16 text and version
     params: {
       textDocument: {
         uri: libUri,
-        languageId: "effective",
+        languageId: "effektive",
         version: 9,
         text: overlay,
       },

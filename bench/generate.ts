@@ -1,7 +1,7 @@
 // The synthetic module generator for the measurements M2, M5, and M6.
 //
 // `generateProject` is a pure function. It returns the text of a valid
-// Effective project: `effektive.json`, one `base.eff` module, a chain of
+// Effektive project: `effektive.json`, one `base.eff` module, a chain of
 // feature modules `m00.eff`, `m01.eff`, and so on, an `app.eff` module, the
 // host interface file, and the TypeScript host module. The scale parameter is
 // the number of declarations in the feature modules. The same options always

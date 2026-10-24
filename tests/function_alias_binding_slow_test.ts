@@ -22,7 +22,7 @@ const viaService = await Effect.runPromise(
   f(2).pipe(Effect.provideService(Svc, { m: (x) => Effect.succeed(x + 1) })),
 );
 console.log(JSON.stringify({ viaService, g: g(3), h: h(4) }));`,
-    "effective-function-alias-",
+    "effektive-function-alias-",
   );
   assertEquals(JSON.parse(stdout), { viaService: 3, g: 3, h: 4 });
 });

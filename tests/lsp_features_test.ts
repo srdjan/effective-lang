@@ -96,7 +96,7 @@ Deno.test("hover on a function name has the contract, the backend type, and the 
   const [contract, backend] = hover.contents.value.split("\n\n");
   assertEquals(
     contract,
-    "```effective\nrename(id: UserId, name: Name): User fails " +
+    "```effektive\nrename(id: UserId, name: Name): User fails " +
       "StoreUnavailable | UserMissing uses Users.find | Users.save\n```",
   );
   assert(backend.startsWith("```typescript\n(id: UserId, name: Name): "));
@@ -115,7 +115,7 @@ Deno.test("hover on an expression has only the contract block", () => {
   );
   const hover = hoverOf(h, 1);
   assert(hover !== null);
-  assert(hover.contents.value.startsWith("```effective\n"));
+  assert(hover.contents.value.startsWith("```effektive\n"));
   assert(!hover.contents.value.includes("typescript"));
   assert(!hover.contents.value.includes("backend type"));
 });
@@ -132,7 +132,7 @@ Deno.test("hover in a module with errors shows the unavailable line", () => {
   );
   const hover = hoverOf(h, 1);
   assert(hover !== null);
-  assertStringIncludes(hover.contents.value, "```effective\nrename(");
+  assertStringIncludes(hover.contents.value, "```effektive\nrename(");
   assert(
     hover.contents.value.endsWith(
       "\n\nbackend type: not available while the module has errors",
@@ -328,7 +328,7 @@ Deno.test("document symbols before the first good revision", () => {
     didOpen(MAIN, 1, MAIN_TEXT),
     request(1, "textDocument/documentSymbol", { textDocument: { uri: MAIN } }),
     request(2, "textDocument/hover", position(MAIN, at(MAIN_TEXT, "main", 1))),
-    request(3, "effective/generatedTypeScript", {
+    request(3, "effektive/generatedTypeScript", {
       textDocument: { uri: MAIN },
     }),
   );
@@ -343,7 +343,7 @@ Deno.test("document symbols before the first good revision", () => {
 
 function generated(h: Harness, id: number, uri = MAIN) {
   h.deliver(
-    request(id, "effective/generatedTypeScript", { textDocument: { uri } }),
+    request(id, "effektive/generatedTypeScript", { textDocument: { uri } }),
   );
   return result(h.responses(id)[0]) as GeneratedTypeScriptResult | null;
 }
@@ -357,15 +357,15 @@ Deno.test("generated TypeScript is fresh, then stale after a breaking edit", () 
   assertStringIncludes(fresh.text, "export");
   h.clearSent();
   h.deliver(didChangeFull(MAIN, 2, MAIN_BROKEN));
-  assertEquals(h.notifications("effective/generatedChanged"), [{ uri: MAIN }]);
+  assertEquals(h.notifications("effektive/generatedChanged"), [{ uri: MAIN }]);
   assertEquals(generated(h, 2), { text: fresh.text, stale: true });
   // A second broken edit changes nothing for the client.
   h.clearSent();
   h.deliver(didChangeFull(MAIN, 3, MAIN_BROKEN + "\n"));
-  assertEquals(h.notifications("effective/generatedChanged"), []);
+  assertEquals(h.notifications("effektive/generatedChanged"), []);
   // The fix flips the stale flag back once, with the same text.
   h.deliver(didChangeFull(MAIN, 4, MAIN_TEXT));
-  assertEquals(h.notifications("effective/generatedChanged"), [{ uri: MAIN }]);
+  assertEquals(h.notifications("effektive/generatedChanged"), [{ uri: MAIN }]);
   assertEquals(generated(h, 3), { text: fresh.text, stale: false });
 });
 
@@ -378,15 +378,15 @@ Deno.test("generatedChanged follows a text change, not an equal text", () => {
   // A trailing blank line leaves the generated text equal.
   h.deliver(didChangeFull(MAIN, 2, MAIN_TEXT + "\n\n"));
   assertEquals(h.published().length, 1);
-  assertEquals(h.notifications("effective/generatedChanged"), []);
+  assertEquals(h.notifications("effektive/generatedChanged"), []);
   h.deliver(didChangeFull(MAIN, 3, MAIN_TEXT.replace('"u1"', '"u2"')));
-  assertEquals(h.notifications("effective/generatedChanged"), [{ uri: MAIN }]);
+  assertEquals(h.notifications("effektive/generatedChanged"), [{ uri: MAIN }]);
   const changed = generated(h, 2);
   assert(changed !== null && changed.text !== fresh.text && !changed.stale);
   // The client now has the new text: the same edit again sends nothing.
   h.clearSent();
   h.deliver(didChangeFull(MAIN, 4, MAIN_TEXT.replace('"u1"', '"u2"') + "\n"));
-  assertEquals(h.notifications("effective/generatedChanged"), []);
+  assertEquals(h.notifications("effektive/generatedChanged"), []);
 });
 
 Deno.test("a module that never emitted gives null, and a later fix sends a notification", () => {
@@ -397,11 +397,11 @@ Deno.test("a module that never emitted gives null, and a later fix sends a notif
   assertEquals(generated(h, 1, bad), null);
   h.clearSent();
   h.deliver(didChangeFull(bad, 2, broken + "\n"));
-  assertEquals(h.notifications("effective/generatedChanged"), []);
+  assertEquals(h.notifications("effektive/generatedChanged"), []);
   h.deliver(
     didChangeFull(bad, 3, "export const x = (): Int => 1\n\ntype Int = int\n"),
   );
-  assertEquals(h.notifications("effective/generatedChanged"), [{ uri: bad }]);
+  assertEquals(h.notifications("effektive/generatedChanged"), [{ uri: bad }]);
   const fixed = generated(h, 2, bad);
   assert(fixed !== null && !fixed.stale);
 });
@@ -411,12 +411,12 @@ Deno.test("only subscribed modules send generatedChanged, and a configuration er
   h.deliver(didOpen(MAIN, 1, MAIN_TEXT), didOpen(USERS, 1, USERS_TEXT));
   h.clearSent();
   h.deliver(didChangeFull(MAIN, 2, MAIN_TEXT.replace('"u1"', '"u2"')));
-  assertEquals(h.notifications("effective/generatedChanged"), []);
+  assertEquals(h.notifications("effektive/generatedChanged"), []);
   assert(generated(h, 1) !== null);
   h.clearSent();
   h.files.set(`${ROOT}/effektive.json`, "{");
   h.deliver(watched({ uri: uriOf(`${ROOT}/effektive.json`), type: 2 }));
-  assertEquals(h.notifications("effective/generatedChanged"), []);
+  assertEquals(h.notifications("effektive/generatedChanged"), []);
   // The module of a file that is not `.eff` is never subscribed.
   assertEquals(generated(h, 2, PROVIDERS), null);
 });
@@ -637,7 +637,7 @@ Deno.test("a watched effektive.json event with writeOnSave false runs no round",
 // ---- Stats ------------------------------------------------------------------
 
 function stats(h: Harness, id: number, uri = MAIN): StatsResult | null {
-  h.deliver(request(id, "effective/stats", { textDocument: { uri } }));
+  h.deliver(request(id, "effektive/stats", { textDocument: { uri } }));
   return result(h.responses(id)[0]) as StatsResult | null;
 }
 

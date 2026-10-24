@@ -620,7 +620,7 @@ Deno.test("an interface emits a companion module with every declaration exported
   const text = emitted.text;
   assert(
     text.startsWith(
-      "// Generated from host.effi by the Effective compiler. Do not edit.\n",
+      "// Generated from host.effi by the Effektive compiler. Do not edit.\n",
     ),
     text,
   );

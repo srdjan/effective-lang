@@ -74,7 +74,7 @@ export type {
   SourceMapV3,
 } from "./emit/sourcemap.ts";
 
-// The `deno check` output parser and the mapping to Effective spans.
+// The `deno check` output parser and the mapping to Effektive spans.
 export {
   hostModulePaths,
   mapTscDiagnostic,

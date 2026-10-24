@@ -7,7 +7,7 @@ This extends the [constructor metadata contract](2026-10-19-schema-constructor-m
 The [pinned target probe](schema-adapter-probes/constructor-optional.ts) has three
 passing tests. The target's [optional field documentation](https://effect.website/docs/v4/schema/advanced-usage)
 distinguishes decoding defaults from constructor defaults; this contract makes
-that distinction explicit for Effective's existing adapters.
+that distinction explicit for Effektive's existing adapters.
 
 ## Propagation rule
 

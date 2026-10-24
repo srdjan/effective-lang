@@ -35,7 +35,7 @@ branch against `expected` with `fits` and returns `expected` as the result.
 The plan review (codex Astra) found this with a probe before implementation.
 A program of this shape is accepted without the hint:
 
-```effective
+```effektive
 type Branch = Sink<Int, Text, Stop, Count.tick, Text>
 const run = (s: Stream<Int>, flag: Bool, a: Branch, b: Branch): Text fails Stop uses Count.tick =>
   runStream(s, if (flag) { a } else { b })

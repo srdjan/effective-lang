@@ -1,6 +1,6 @@
 # Scheduled worker application
 
-This application uses existing Effective forms. Source code owns the repetition
+This application uses existing Effektive forms. Source code owns the repetition
 policy, transient retry selection, resource brackets and result state.
 The TypeScript driver supplies recording in-memory jobs and primitive waits.
 The runtime entry point supplies drivers and runs the exported worker.
@@ -8,7 +8,7 @@ The runtime entry point supplies drivers and runs the exported worker.
 From the effektive-lang repository root:
 
 ```sh
-deno task effective build fixtures/applications/scheduled-worker --validate --tsc
+deno task effektive build fixtures/applications/scheduled-worker --validate --tsc
 deno run --config fixtures/applications/scheduled-worker/deno.json fixtures/applications/scheduled-worker/main.ts
 deno test --config fixtures/applications/scheduled-worker/deno.json fixtures/applications/scheduled-worker/runtime_test.ts
 ```

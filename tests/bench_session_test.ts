@@ -36,7 +36,7 @@ Deno.test("all 10000 edit texts stay distinct even when semantic toggles repeat"
     assert(result.ok, JSON.stringify(result));
     text = result.value;
     seen.add(text);
-    assertEquals((text.match(/effective-bench revision/g) ?? []).length, 1);
+    assertEquals((text.match(/effektive-bench revision/g) ?? []).length, 1);
   }
   assertEquals(seen.size, 10000);
   assert(text.length < 300);
@@ -49,10 +49,10 @@ Deno.test("companion revisions change the actual annotated feature body and repl
   const second = applyCompanionEdit(first, 3);
   assert(first.includes("n + 2"));
   assert(second.includes("n + 3"));
-  assertEquals((second.match(/effective-bench revision/g) ?? []).length, 1);
+  assertEquals((second.match(/effektive-bench revision/g) ?? []).length, 1);
   assertEquals(
     applyCompanionEdit("export type Text = string\n", 7),
-    "export type Text = string\n\n// effective-bench revision 7\n",
+    "export type Text = string\n\n// effektive-bench revision 7\n",
   );
 });
 

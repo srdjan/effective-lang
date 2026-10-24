@@ -1,7 +1,7 @@
 # Proposed canonical spec amendment: first-class Effect values
 
 Status: accepted and applied for Phase 4. The canonical file is
-`/Users/srdjans/Code/effective/public/effective-spec.html`. The source form
+`/Users/srdjans/Code/effektive/public/effektive-spec.html`. The source form
 and backend behavior pass the compiler and Effect 4 target tests.
 
 ## Data and types

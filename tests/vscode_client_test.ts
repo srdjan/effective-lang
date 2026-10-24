@@ -43,17 +43,17 @@ function collectMatches(value: unknown): string[] {
   return own.concat(Object.values(value).flatMap(collectMatches));
 }
 
-Deno.test("package.json contributes the effective language and grammar", () => {
+Deno.test("package.json contributes the effektive language and grammar", () => {
   const pkg = readJson("package.json");
-  assertEquals(pkg.name, "effective-vscode");
+  assertEquals(pkg.name, "effektive-vscode");
   assertEquals(pkg.main, "./extension.js");
   const contributes = field(pkg, "contributes");
 
   const languages = list(field(contributes, "languages"));
   assertEquals(languages.length, 1);
-  assertEquals(field(languages[0], "id"), "effective");
+  assertEquals(field(languages[0], "id"), "effektive");
   assertEquals(field(languages[0], "extensions"), [".eff", ".effi"]);
-  assertEquals(field(languages[0], "aliases"), ["Effective"]);
+  assertEquals(field(languages[0], "aliases"), ["Effektive"]);
   assertEquals(
     field(languages[0], "configuration"),
     "./language-configuration.json",
@@ -61,12 +61,12 @@ Deno.test("package.json contributes the effective language and grammar", () => {
 
   const grammars = list(field(contributes, "grammars"));
   assertEquals(grammars.length, 1);
-  assertEquals(field(grammars[0], "scopeName"), "source.effective");
+  assertEquals(field(grammars[0], "scopeName"), "source.effektive");
   assertEquals(
     field(grammars[0], "path"),
-    "./syntaxes/effective.tmLanguage.json",
+    "./syntaxes/effektive.tmLanguage.json",
   );
-  assertEquals(field(grammars[0], "language"), "effective");
+  assertEquals(field(grammars[0], "language"), "effektive");
 });
 
 Deno.test("package.json contributes the command and the four settings", () => {
@@ -76,47 +76,47 @@ Deno.test("package.json contributes the command and the four settings", () => {
   assertEquals(commands.length, 1);
   assertEquals(
     field(commands[0], "command"),
-    "effective.showGeneratedTypeScript",
+    "effektive.showGeneratedTypeScript",
   );
   assertEquals(
     field(commands[0], "title"),
-    "Effective: Show Generated TypeScript",
+    "Effektive: Show Generated TypeScript",
   );
 
   const menus = field(contributes, "menus");
   for (const place of ["editor/title", "commandPalette"]) {
     const entries = list(field(menus, place));
     assertEquals(entries.length, 1);
-    assertEquals(field(entries[0], "when"), "editorLangId == effective");
+    assertEquals(field(entries[0], "when"), "editorLangId == effektive");
   }
 
   const properties = field(field(contributes, "configuration"), "properties");
   assert(isRecord(properties));
   assertEquals(Object.keys(properties).sort(), [
-    "effective.debounceMs",
-    "effective.server.deno",
-    "effective.server.repository",
-    "effective.writeOnSave",
+    "effektive.debounceMs",
+    "effektive.server.deno",
+    "effektive.server.repository",
+    "effektive.writeOnSave",
   ]);
-  assertEquals(field(properties["effective.server.deno"], "default"), "deno");
+  assertEquals(field(properties["effektive.server.deno"], "default"), "deno");
   assertEquals(
-    field(properties["effective.server.repository"], "default"),
+    field(properties["effektive.server.repository"], "default"),
     "",
   );
-  assertEquals(field(properties["effective.writeOnSave"], "default"), true);
-  assertEquals(field(properties["effective.debounceMs"], "default"), 0);
-  assertEquals(field(properties["effective.debounceMs"], "minimum"), 0);
+  assertEquals(field(properties["effektive.writeOnSave"], "default"), true);
+  assertEquals(field(properties["effektive.debounceMs"], "default"), 0);
+  assertEquals(field(properties["effektive.debounceMs"], "minimum"), 0);
 });
 
 Deno.test("package.json activates on the language and the command", () => {
   const events = list(field(readJson("package.json"), "activationEvents"));
-  assert(events.includes("onLanguage:effective"));
-  assert(events.includes("onCommand:effective.showGeneratedTypeScript"));
+  assert(events.includes("onLanguage:effektive"));
+  assert(events.includes("onCommand:effektive.showGeneratedTypeScript"));
 });
 
 Deno.test("the grammar names the scope and every lexer keyword", () => {
-  const grammar = readJson("syntaxes/effective.tmLanguage.json");
-  assertEquals(grammar.scopeName, "source.effective");
+  const grammar = readJson("syntaxes/effektive.tmLanguage.json");
+  assertEquals(grammar.scopeName, "source.effektive");
   const words = [
     ...KEYWORDS.keys(),
     ...PRELUDE_NAMES,
@@ -142,7 +142,7 @@ Deno.test("the grammar names the scope and every lexer keyword", () => {
 
 Deno.test("the grammar highlights nominal only as a declaration word", () => {
   const matchers = collectMatches(
-    readJson("syntaxes/effective.tmLanguage.json"),
+    readJson("syntaxes/effektive.tmLanguage.json"),
   )
     .map((match) => new RegExp(match));
   const found = (text: string): string | undefined =>
@@ -155,7 +155,7 @@ Deno.test("the grammar highlights nominal only as a declaration word", () => {
 
 Deno.test("the grammar highlights sealed and pure only as modifiers", () => {
   const matchers = collectMatches(
-    readJson("syntaxes/effective.tmLanguage.json"),
+    readJson("syntaxes/effektive.tmLanguage.json"),
   ).map((match) => new RegExp(match));
   const found = (text: string, word: string): string | undefined =>
     matchers.map((matcher) => matcher.exec(text)?.[0]).find((hit) =>
@@ -172,10 +172,10 @@ Deno.test("the grammar highlights sealed and pure only as modifiers", () => {
 
 Deno.test("the builtin-types rule matches every builtin type name exactly", () => {
   const rule = field(
-    field(readJson("syntaxes/effective.tmLanguage.json"), "repository"),
+    field(readJson("syntaxes/effektive.tmLanguage.json"), "repository"),
     "builtin-types",
   );
-  assertEquals(field(rule, "name"), "support.type.builtin.effective");
+  assertEquals(field(rule, "name"), "support.type.builtin.effektive");
   const match = field(rule, "match");
   assert(typeof match === "string", "the rule must hold a match expression");
   const matcher = new RegExp(match);
@@ -251,7 +251,7 @@ function activateClient(
   };
   runInNewContext(Deno.readTextFileSync(new URL("extension.js", CLIENT)), {
     module,
-    __dirname: "/installed/effective",
+    __dirname: "/installed/effektive",
     require: (name: string) => {
       if (name === "fs") return { existsSync: () => true };
       if (name === "path") return path;
@@ -286,13 +286,13 @@ Deno.test("the installed client starts its bundled server without checkout confi
     "--cached-only",
     "--allow-read",
     "--allow-write",
-    "/installed/effective/server/effective-lsp.js",
+    "/installed/effektive/server/effektive-lsp.js",
   ]);
 });
 
 Deno.test("the client keeps an explicit checkout development override", () => {
   const { errors, launches } = activateClient({
-    "server.repository": "/work/effective",
+    "server.repository": "/work/effektive",
     "server.deno": "/tools/deno",
   }, "2.9.8");
   assertEquals(errors, []);
@@ -302,8 +302,8 @@ Deno.test("the client keeps an explicit checkout development override", () => {
     "--allow-read",
     "--allow-write",
     "--config",
-    "/work/effective/deno.json",
-    "/work/effective/src/lsp/main.ts",
+    "/work/effektive/deno.json",
+    "/work/effektive/src/lsp/main.ts",
   ]);
 });
 
@@ -313,7 +313,7 @@ Deno.test("missing or incompatible Deno prevents startup with an actionable erro
     assertEquals(launches, []);
     assertEquals(errors.length, 1);
     assert(errors[0].includes("2.9.8"));
-    assert(errors[0].includes("effective.server.deno"));
+    assert(errors[0].includes("effektive.server.deno"));
     if (version instanceof Error) assert(errors[0].includes("ENOENT"));
   }
 });

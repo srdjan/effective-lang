@@ -2,8 +2,8 @@ import { assert, assertEquals } from "@std/assert";
 import { copyDirectory, FIXTURES } from "./helpers.ts";
 import { withTemporaryDirectory } from "./process_helpers.ts";
 
-Deno.test("real watch --tsc reports and clears a local dependency error without editing Effective source", async () => {
-  await withTemporaryDirectory("effective-watch-host-", async (dir) => {
+Deno.test("real watch --tsc reports and clears a local dependency error without editing Effektive source", async () => {
+  await withTemporaryDirectory("effektive-watch-host-", async (dir) => {
     copyDirectory(new URL("examples/", FIXTURES), dir);
     const host = `${dir}/users-live.ts`;
     Deno.writeTextFileSync(
@@ -12,7 +12,7 @@ Deno.test("real watch --tsc reports and clears a local dependency error without 
     );
     Deno.writeTextFileSync(`${dir}/helper.ts`, "export const value = 1;\n");
     const child = new Deno.Command("deno", {
-      args: ["task", "effective", "watch", dir, "--tsc"],
+      args: ["task", "effektive", "watch", dir, "--tsc"],
       cwd: new URL("../", import.meta.url),
       env: { NO_COLOR: "1" },
       stdout: "piped",

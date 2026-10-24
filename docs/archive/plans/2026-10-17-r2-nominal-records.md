@@ -83,7 +83,7 @@ T6. Dropped (finding m3). `Schema.brand` has no runtime effect, and T4 covers `U
 
 ## 6. Out of scope
 
-- The spec text in `/Users/srdjans/Code/effective`. The user owns the spec. The report names the needed amendment: a field read and an update through a brand of a record.
+- The spec text in `/Users/srdjans/Code/effektive`. The user owns the spec. The report names the needed amendment: a field read and an update through a brand of a record.
 - R1 (primitives only inside type definitions). The assessment comes after R2.
 - Equality of record brands. The checker rejects it now, as the spec requires ("Comparing records requires a named comparison function").
 - A pre-existing emitter gap (finding m4): `isOptionalField` returns false for a union base, but `readField` marks a read through a union optional. So `(a: A | B).nickname` prints without `Option.fromUndefinedOr`. This plan does not change it. The report names it for a later fix.
@@ -96,7 +96,7 @@ The implementer and then Opus run these commands from the repository root:
 1. `deno task test` (fast tests).
 2. `deno task check` (format, lint, type check, fast and slow tests).
 3. `deno task golden:update`, then `git status --short fixtures/golden` must print nothing.
-4. `deno task effective build /tmp/rules-probe/r2 --validate --tsc`: the two expected `type-mismatch/003` lines remain (`wrong` and `literal`). The three G1 and G2 diagnostics are gone.
+4. `deno task effektive build /tmp/rules-probe/r2 --validate --tsc`: the two expected `type-mismatch/003` lines remain (`wrong` and `literal`). The three G1 and G2 diagnostics are gone.
 
 ## 8. Commit
 

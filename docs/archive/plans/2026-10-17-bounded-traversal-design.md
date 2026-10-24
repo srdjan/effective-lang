@@ -18,7 +18,7 @@ describes fail-fast behavior.
 
 The source form extends the existing operation:
 
-```effective
+```effektive
 traverse(items, callback, { concurrency: 2 })
 ```
 

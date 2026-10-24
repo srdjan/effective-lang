@@ -6,7 +6,7 @@ import { memoryIo } from "./cli_helpers.ts";
 
 const ROOT = "/proj";
 const HEADER =
-  "// Generated from gone.eff by the Effective compiler. Do not edit.";
+  "// Generated from gone.eff by the Effektive compiler. Do not edit.";
 
 Deno.test("removeStaleOutputs keeps the .ts file when its map cannot be removed", () => {
   const m = memoryIo({
@@ -35,7 +35,7 @@ Deno.test("removeStaleOutputs removes the .ts file when its map is missing", () 
 
 Deno.test("removeStaleOutputs removes the companion module of a left interface, and keeps a hand-written one", () => {
   const header =
-    "// Generated from gone.effi by the Effective compiler. Do not edit.";
+    "// Generated from gone.effi by the Effektive compiler. Do not edit.";
   const m = memoryIo({
     [`${ROOT}/gone.effi.ts`]: `${header}\n\nexport {};\n`,
     [`${ROOT}/gone.effi.ts.map`]: "{}",

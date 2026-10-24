@@ -94,7 +94,7 @@ export function hoverRequest(
   if (hit === undefined) return answer(null);
   const range = rangeOfSpan(revision, hit.span);
   if (range === undefined) return answer(null);
-  let value = fenced("effective", hit.contract);
+  let value = fenced("effektive", hit.contract);
   if (hit.backend?.tag === "type") {
     value += "\n\n" + fenced("typescript", hit.backend.text);
   } else if (hit.backend?.tag === "unavailable") {
@@ -189,7 +189,7 @@ interface GeneratedEntry {
 /**
  * The generated TypeScript of the subscribed modules (plan 5.8). A request
  * subscribes the module. After each flush that produced a revision, the tracker
- * sends `effective/generatedChanged` for each subscribed module whose text or
+ * sends `effektive/generatedChanged` for each subscribed module whose text or
  * stale flag differs from what the client has.
  */
 export class GeneratedTexts {
@@ -223,7 +223,7 @@ export class GeneratedTexts {
       : { text: entry.lastGood, stale: true };
   }
 
-  /** Answers `effective/generatedTypeScript` and subscribes the module. */
+  /** Answers `effektive/generatedTypeScript` and subscribes the module. */
   request(
     project: ProjectState,
     path: string,
@@ -267,7 +267,7 @@ export class GeneratedTexts {
   }
 }
 
-/** `effective/generatedTypeScript` (plan 5.8). */
+/** `effektive/generatedTypeScript` (plan 5.8). */
 export function generatedTypeScriptRequest(
   params: TextDocumentParams,
   ctx: ServerContext,
@@ -295,7 +295,7 @@ export function didSave(params: TextDocumentParams, ctx: ServerContext): void {
 
 // ---- Stats ------------------------------------------------------------------
 
-/** `effective/stats` (plan 5.11). */
+/** `effektive/stats` (plan 5.11). */
 export function statsRequest(
   params: TextDocumentParams,
   ctx: ServerContext,

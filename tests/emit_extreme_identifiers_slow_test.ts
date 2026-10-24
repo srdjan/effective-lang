@@ -117,7 +117,7 @@ Deno.test("extreme identifiers preserve formatting, execution and source mapping
   const imports = ['import { Effect, Option, Schema } from "effect";'];
   const runs: string[] = [];
   await withTemporaryDirectory(
-    "effective-extreme-identifiers-",
+    "effektive-extreme-identifiers-",
     async (dir) => {
       Deno.writeTextFileSync(
         `${dir}/deno.json`,

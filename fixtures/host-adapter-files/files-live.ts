@@ -1,5 +1,5 @@
 // The package stays behind host:providers. Only Files and FileReadError cross
-// the Effective boundary.
+// the Effektive boundary.
 import { NodeFileSystem } from "@effect/platform-node";
 import { Effect, FileSystem, Layer } from "effect";
 import { FileReadError, Files, type Path, type Text } from "./files.ts";

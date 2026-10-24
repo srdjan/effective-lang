@@ -1,6 +1,6 @@
 # Plan: examples with nominal data types
 
-Status: done, 2026-10-23. EX3 to EX6 landed in commits dd4966b (EX3), fde39f8 (EX4), and the commit that archives this plan (EX6). EX5 landed as ac83206 in the sibling repository `../effective/`. Fable validated the draft and reported 2 major and 10 minor findings. Opus accepted all 12. Section 5 maps each finding to its resolution.
+Status: done, 2026-10-23. EX3 to EX6 landed in commits dd4966b (EX3), fde39f8 (EX4), and the commit that archives this plan (EX6). EX5 landed as ac83206 in the sibling repository `../effektive/`. Fable validated the draft and reported 2 major and 10 minor findings. Opus accepted all 12. Section 5 maps each finding to its resolution.
 
 This plan uses the ID prefix EX. EX1 and EX2 are the user's decisions. EX3 and later are work items.
 
@@ -9,7 +9,7 @@ This plan uses the ID prefix EX. EX1 and EX2 are the user's decisions. EX3 and l
 On 2026-10-23 the user asked for a few examples with nominal types, in this repository and on the website. The user accepted these options ("as recommended"):
 
 - EX1 (a). The compiled example is a new application fixture, `fixtures/applications/order-lifecycle/`. `tests/application_slow_test.ts` checks, lowers, validates, emits, type-checks, tests, and runs it, as it does for the three other applications.
-- EX2 (a). The website gets a new mini-book chapter, "Nominal data", with three checked figures. The full application goes to `effective-examples/order-lifecycle/` and is linked from the chapter and from the specification.
+- EX2 (a). The website gets a new mini-book chapter, "Nominal data", with three checked figures. The full application goes to `effektive-examples/order-lifecycle/` and is linked from the chapter and from the specification.
 
 The existing examples in `fixtures/examples/` stay structural, because their host code builds those records as plain objects (NT9 in [the nominal data types plan](2026-10-23-nominal-data-types.md)).
 
@@ -48,13 +48,13 @@ A `match` whose arms return string literals, with a literal-union result type, c
 - Add a row to the application table in `docs/status.md` in its format, with the plan link `plans/2026-10-23-nominal-examples.md`. Update each count of the applications: `docs/development.md:60`, `docs/api.md:132`, `README.md:78`, and `docs/status.md` lines 3, 7, 9, and 66. The new application is a witness for nominal data types, beside the three gate applications. Write this distinction where a count changes.
 - Run `deno task lex:update`.
 
-### EX5. The website (one commit in `../effective/`)
+### EX5. The website (one commit in `../effektive/`)
 
-- Copy the application to `public/effective-examples/order-lifecycle/` by the rules of the other copies: rename `runtime_test.ts` to `checks.ts`, rewrite the README as a download page (the file list, `deno run --config deno.json main.ts`, and `deno test --config deno.json checks.ts`), and do not copy `.gitignore` or `deno.lock`. No sync script exists.
+- Copy the application to `public/effektive-examples/order-lifecycle/` by the rules of the other copies: rename `runtime_test.ts` to `checks.ts`, rewrite the README as a download page (the file list, `deno run --config deno.json main.ts`, and `deno test --config deno.json checks.ts`), and do not copy `.gitignore` or `deno.lock`. No sync script exists.
 - Add the chapter "Nominal data" to `public/index.html` after the chapter "A payment pipeline" (`id="payment"`). Headings have no numbers. Update the `aria-label="Navigation for section N"` of each later `nav.section-nav`, the "Previous" and "Next" links on both sides, and the three menus: `nav.chapter-index` in `section#book`, the mobile `details.contents-menu > nav.contents.mobile-contents > ol`, and the desktop `nav.contents[aria-label="Contents"]`.
-- The chapter has three figures with an Effective panel and an Effect-TS panel each: (1) declare the states and construct and update a value, with the nominal mismatch in prose; (2) a match by name over `Order`; (3) the recursive pricing rules. The Effect-TS panel of figure 1 carries a `data-check-id`. Figures 2 and 3 use `data-check-requires` with that id (`typecheck/check.ts:330-353`). Take each Effect-TS panel from the real compiler output, simplified as the other panels are. The panel of figure 3 must keep the explicit interface and `Schema.suspend` form, because `typeof X.Type` inside a cycle fails `deno check`. The prose says that the panels use short tags and that the compiler uses module-qualified tags.
-- Add a fourth "runnable ..." paragraph for the application in the modules chapter of `index.html` (near line 1094) and in `effective-spec.html` (near line 1064).
-- Add a dated entry to `public/effective-validation.txt`. Run `deno task test` and `deno task typecheck`. `deno task stamp` is not needed, because `deno.json` does not change.
+- The chapter has three figures with an Effektive panel and an Effect-TS panel each: (1) declare the states and construct and update a value, with the nominal mismatch in prose; (2) a match by name over `Order`; (3) the recursive pricing rules. The Effect-TS panel of figure 1 carries a `data-check-id`. Figures 2 and 3 use `data-check-requires` with that id (`typecheck/check.ts:330-353`). Take each Effect-TS panel from the real compiler output, simplified as the other panels are. The panel of figure 3 must keep the explicit interface and `Schema.suspend` form, because `typeof X.Type` inside a cycle fails `deno check`. The prose says that the panels use short tags and that the compiler uses module-qualified tags.
+- Add a fourth "runnable ..." paragraph for the application in the modules chapter of `index.html` (near line 1094) and in `effektive-spec.html` (near line 1064).
+- Add a dated entry to `public/effektive-validation.txt`. Run `deno task test` and `deno task typecheck`. `deno task stamp` is not needed, because `deno.json` does not change.
 
 ### EX6. Close (one commit in this repository)
 

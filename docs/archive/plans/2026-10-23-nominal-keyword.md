@@ -8,7 +8,7 @@ This plan uses the ID prefix NM. NM1 to NM4 are the user's decisions. NM5 to NM8
 
 ## 1. Goal
 
-Effective has two kinds of declared types. A `type` declaration is structural: two types with equal structure are interchangeable. A `nominal` declaration has identity by name: two nominal types with equal bodies are different types. The word `nominal` replaces `data`, and it also replaces `Brand<T>`. The source has no brand concept. Brands, tags, and schemas are details of the TypeScript lowering, which the compiler emits.
+Effektive has two kinds of declared types. A `type` declaration is structural: two types with equal structure are interchangeable. A `nominal` declaration has identity by name: two nominal types with equal bodies are different types. The word `nominal` replaces `data`, and it also replaces `Brand<T>`. The source has no brand concept. Brands, tags, and schemas are details of the TypeScript lowering, which the compiler emits.
 
 Before and after:
 
@@ -19,7 +19,7 @@ data Account = { id: UserId }      ->  nominal Account = { id: UserId }
 unbrand(account)                   ->  account (it fits its base record)
 ```
 
-The user's design rule for this work: Effective syntax stays minimal and succinct, and the compiler hides the verbose Effect-TS forms.
+The user's design rule for this work: Effektive syntax stays minimal and succinct, and the compiler hides the verbose Effect-TS forms.
 
 ## 2. Decisions of the user
 
@@ -69,7 +69,7 @@ In scope:
 - The parser, resolver, checker, lowering, IR, validator, emitter, editor tokens, completion, TextMate grammar, and playground highlighter.
 - Every `.eff` and `.effi` fixture, the tests, the golden files, the validation fixtures, and the lex snapshot.
 - `docs/language-rules.md`, `docs/api.md`, `docs/status.md`, `CONCEPTS.md`, and `README.md`.
-- The website: the spec, the book, `effective-examples/`, `typed-ir.ts`, `log.ir.json`, and a validation entry.
+- The website: the spec, the book, `effektive-examples/`, `typed-ir.ts`, `log.ir.json`, and a validation entry.
 
 Out of scope:
 
@@ -116,14 +116,14 @@ NM11 (widening, operators, and the removal of `unbrand`). Base: NM10.
 
 NM12 (editor, grammar, playground). Base: NM11.
 
-- `editors/vscode/syntaxes/effective.tmLanguage.json`: `nominal` replaces `data`. Remove `Brand` and `unbrand`.
+- `editors/vscode/syntaxes/effektive.tmLanguage.json`: `nominal` replaces `data`. Remove `Brand` and `unbrand`.
 - `playground/src/highlight.ts`, `src/core/editor_tokens.ts`, and `src/core/editor_completion.ts`: `nominal` replaces `data`.
 
 NM13 (docs). `docs/language-rules.md`, `docs/api.md`, `docs/status.md`, `CONCEPTS.md`, and `README.md`. Each rule row for brands and data types becomes a row for nominal types. Run the STE check on the changed text.
 
-NM14 (website, in `../effective`, separate commits). The spec moves to draft 0.60. It changes the declaration paragraphs, the brand operator paragraph (NM7), the widening rule (NM6), and the removal of `unbrand`.
+NM14 (website, in `../effektive`, separate commits). The spec moves to draft 0.60. It changes the declaration paragraphs, the brand operator paragraph (NM7), the widening rule (NM6), and the removal of `unbrand`.
 
-The book: every figure with `Brand`, `data`, or `unbrand`, and the chapter "Nominal data", which becomes "Nominal types". `effective-examples/`: copy the migrated files from the fixtures. `typed-ir.ts` and `log.ir.json`: IR version 3. Run `deno task test` and `deno task typecheck`. Add a dated validation entry.
+The book: every figure with `Brand`, `data`, or `unbrand`, and the chapter "Nominal data", which becomes "Nominal types". `effektive-examples/`: copy the migrated files from the fixtures. `typed-ir.ts` and `log.ir.json`: IR version 3. Run `deno task test` and `deno task typecheck`. Add a dated validation entry.
 
 NM15 (archive). Move this plan to `docs/archive/plans/`, and fix the links.
 

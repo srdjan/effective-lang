@@ -218,7 +218,7 @@ function groupDiagnostics(
       range: rangeOf(d.span),
       severity: d.severity === "error" ? 1 : 2,
       code: d.code,
-      source: "effective",
+      source: "effektive",
       message: d.message,
       ...(related.length > 0 ? { relatedInformation: related } : {}),
     };
@@ -329,7 +329,7 @@ export class ProjectSet {
         this.#logged.add(uri);
         this.ports.log(
           3,
-          `${uri} is not in an Effective project; it gets no diagnostics`,
+          `${uri} is not in an Effektive project; it gets no diagnostics`,
         );
       }
       return;
@@ -564,7 +564,7 @@ export class ProjectSet {
         range: { start: origin, end: origin },
         severity: 1,
         code: "config",
-        source: "effective",
+        source: "effektive",
         message: describeConfigError(error),
       }]);
       return;

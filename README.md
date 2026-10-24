@@ -1,11 +1,11 @@
 # effektive-lang
 
-Effective is a small functional language that transpiles to Effect-TS 4. This
+Effektive is a small functional language that transpiles to Effect-TS 4. This
 repository holds the transpiler core library, its command-line tool, a language
 server, a VS Code client, and a browser playground.
 
 The canonical specification is in the sibling repository
-`../effective/public/effective-spec.html` and governs the language. The
+`../effektive/public/effektive-spec.html` and governs the language. The
 implemented language rules are in
 [docs/language-rules.md](docs/language-rules.md).
 
@@ -39,9 +39,9 @@ Run each command from the repository root. Give the project directory that holds
 `effektive.json`:
 
 ```sh
-deno task effective check fixtures/examples
-deno task effective build fixtures/examples
-deno task effective watch fixtures/examples
+deno task effektive check fixtures/examples
+deno task effektive build fixtures/examples
+deno task effektive watch fixtures/examples
 ```
 
 `check` prints the diagnostics. `build` also writes `<module>.ts` and

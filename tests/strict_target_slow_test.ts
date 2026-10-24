@@ -1,4 +1,4 @@
-// Strict-target cases for compiled Effective sources. Each case checks, lowers,
+// Strict-target cases for compiled Effektive sources. Each case checks, lowers,
 // and validates its project, writes the emitted modules into its own temporary
 // directory, and runs `deno check` and `deno run` on its script there. The
 // project must have no diagnostics, and both commands must exit with code 0.
@@ -54,7 +54,7 @@ if (!Exit.isFailure(await Effect.runPromiseExit(parse(bad as T)))) throw new Err
 const missing: unknown = { tag: "a" };
 if (!Exit.isFailure(await Effect.runPromiseExit(parse(missing as T)))) throw new Error("a missing next field decoded");
 `,
-    prefix: "effective-tag-alias-",
+    prefix: "effektive-tag-alias-",
   },
   {
     name:
@@ -70,7 +70,7 @@ import { firstTwo } from "./main.ts";
 const taken = await Effect.runPromise(firstTwo(Stream.fromIterable([1, 2, 3, 4, 5])));
 console.log(JSON.stringify(taken));
 `,
-    prefix: "effective-run-stream-sink-",
+    prefix: "effektive-run-stream-sink-",
     verify: (output) =>
       assertEquals(JSON.parse(output.trim().split("\n").pop() ?? ""), [1, 2]),
   },
@@ -92,7 +92,7 @@ import { wide } from "./main.ts";
 const widest: Schedule.Schedule<number, unknown> = wide;
 void widest;
 `,
-    prefix: "effective-schedule-output-",
+    prefix: "effektive-schedule-output-",
   },
   {
     name:
@@ -175,7 +175,7 @@ const invalidWire: typeof record.Encoded = {};
 void invalidWire;
 
 `,
-    prefix: "effective-schema-constructor-",
+    prefix: "effektive-schema-constructor-",
   },
   {
     name:
@@ -262,7 +262,7 @@ await Effect.runPromise(Effect.gen(function*() {
   if (!released) throw new Error("field default cleanup outlived interruption");
 }));
 `,
-    prefix: "effective-constructor-fields-",
+    prefix: "effektive-constructor-fields-",
   },
   {
     name:
@@ -346,7 +346,7 @@ const wrongM: typeof child["~type.make.in"] = { score: "8" };
 void invalidD; void invalidE; void wrongM; void array; void optional; void union;
 
 `,
-    prefix: "effective-schema-constructor-metadata-",
+    prefix: "effektive-schema-constructor-metadata-",
   },
   {
     name:
@@ -423,7 +423,7 @@ const invalidD: typeof decoded.Type = { settings: {} };
 const invalidE: typeof decoded.Encoded = { settings: {} };
 void invalidD; void invalidE;
 `,
-    prefix: "effective-constructor-optional-",
+    prefix: "effektive-constructor-optional-",
   },
   {
     name:
@@ -505,7 +505,7 @@ await Effect.runPromise(Effect.gen(function*() {
   if (!released) throw new Error("retained default cleanup outlived interruption");
 }));
 `,
-    prefix: "effective-constructor-order-",
+    prefix: "effektive-constructor-order-",
   },
   {
     name:
@@ -581,7 +581,7 @@ await Effect.runPromise(Effect.gen(function*() {
   if (!released) throw new Error("recursive default cleanup outlived interruption");
 }));
 `,
-    prefix: "effective-constructor-recursive-",
+    prefix: "effektive-constructor-recursive-",
   },
   {
     name:
@@ -656,7 +656,7 @@ void wire;
 const missingDecoded: typeof omitted.Type = {};
 void missingDecoded;
 `,
-    prefix: "effective-schema-default-encoding-",
+    prefix: "effektive-schema-default-encoding-",
   },
   {
     name: "effectful optional Schema getters and defaults compile and run",
@@ -699,7 +699,7 @@ const defectiveRead = Layer.succeed(Read)({ next: () => Effect.die("boom") });
 const died = await Effect.runPromiseExit(readOptional({}).pipe(Effect.provide(defectiveRead)));
 if (!Exit.isFailure(died) || !Cause.hasDies(died.cause)) throw new Error("defect became a typed failure");
 `,
-    prefix: "effective-schema-effectful-",
+    prefix: "effektive-schema-effectful-",
   },
   {
     name:
@@ -809,7 +809,7 @@ for (const point of ["read", "default", "write"] as const) {
 }
 
 `,
-    prefix: "effective-schema-encoded-default-",
+    prefix: "effektive-schema-encoded-default-",
   },
   {
     name:
@@ -867,7 +867,7 @@ await Effect.runPromise(Fiber.interrupt(fiber));
 const interrupted = await Effect.runPromise(Fiber.await(fiber));
 if (!Exit.isFailure(interrupted) || !Cause.hasInterrupts(interrupted.cause)) throw new Error("interruption backtracked or changed channel");
 `,
-    prefix: "effective-schema-union-",
+    prefix: "effektive-schema-union-",
   },
   {
     name:
@@ -965,7 +965,7 @@ await Effect.runPromise(Effect.gen(function*() {
   if (!released) throw new Error("default finalizer outlived interruption");
 }));
 `,
-    prefix: "effective-schema-null-default-",
+    prefix: "effektive-schema-null-default-",
   },
   {
     name:
@@ -1044,7 +1044,7 @@ expect(await Effect.runPromise(Schema.decodeUnknownEffect(exact)({ name: null })
 const exit = await Effect.runPromiseExit(Schema.decodeUnknownEffect(exact)({ name: "Ada" }).pipe(Effect.provide(defective)));
 if (!Exit.isFailure(exit) || !Cause.hasDies(exit.cause)) throw new Error("defect changed channel");
 `,
-    prefix: "effective-schema-nullable-",
+    prefix: "effektive-schema-nullable-",
   },
   {
     name:
@@ -1102,7 +1102,7 @@ await Effect.runPromise(Fiber.interrupt(fiber));
 const interrupted = await Effect.runPromise(Fiber.await(fiber));
 if (!Exit.isFailure(interrupted) || !Cause.hasInterrupts(interrupted.cause)) throw new Error("interruption translated");
 `,
-    prefix: "effective-schema-optional-",
+    prefix: "effektive-schema-optional-",
   },
   {
     name:
@@ -1147,7 +1147,7 @@ for (const operation of invalidInputs) {
   if (!Exit.isFailure(exit) || !(Option.getOrUndefined(Cause.findErrorOption(exit.cause)) instanceof Schema.SchemaError)) throw new Error("present undefined accepted");
 }
 `,
-    prefix: "effective-schema-field-",
+    prefix: "effektive-schema-field-",
   },
   {
     name:
@@ -1235,7 +1235,7 @@ for (const direction of ["read", "write"] as const) {
   }));
 }
 `,
-    prefix: "effective-recursive-wire-",
+    prefix: "effektive-recursive-wire-",
   },
   {
     name: "required-encoded optional Schema fields compile and run",
@@ -1286,7 +1286,7 @@ void encoded;
 const absentEncoded: typeof guarded.Encoded = {};
 void absentEncoded;
 `,
-    prefix: "effective-schema-required-",
+    prefix: "effektive-schema-required-",
   },
 ];
 

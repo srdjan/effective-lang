@@ -1,6 +1,6 @@
 # Plan: runtime checks of data values at the host boundary
 
-Status: done, 2026-10-23. HB3 to HB7 landed in commits 94c64bd (HB3), 29fc514 (HB4), 8436f78 (HB5), and the commit that archives this plan (HB7). HB6 landed as b71ce2a and 85f42d8 in the sibling repository `../effective/`. The companion module of HB7 has its own plan. Fable reported 3 major and 11 minor findings on the draft. Opus accepted all 14. Section 6 maps each finding to its resolution.
+Status: done, 2026-10-23. HB3 to HB7 landed in commits 94c64bd (HB3), 29fc514 (HB4), 8436f78 (HB5), and the commit that archives this plan (HB7). HB6 landed as b71ce2a and 85f42d8 in the sibling repository `../effektive/`. The companion module of HB7 has its own plan. Fable reported 3 major and 11 minor findings on the draft. Opus accepted all 14. Section 6 maps each finding to its resolution.
 
 This plan uses the ID prefix HB. HB1 and HB2 are the user's decisions. HB3 and later are work items.
 
@@ -93,9 +93,9 @@ Each commit must pass `deno task check`. An item that adds or edits a `.eff` or 
 - `docs/api.md` (near line 339): describe the wrapped form of the assertion constant.
 - `docs/status.md`: describe the new checks under "Nominal data types". Keep the TS1361 limit, which HB7 addresses.
 
-### HB6. Website (one commit in `../effective/`)
+### HB6. Website (one commit in `../effektive/`)
 
-- Update the specification paragraphs near lines 352 and 415 (coverage), and near 497 and 767 (host modules, and adapters that validate data boundaries) of `public/effective-spec.html`, for the provider boundary checks and the last-arm test. The website copy of order-lifecycle holds no generated code, so it does not change. Add a dated entry to `public/effective-validation.txt`. Run `deno task test` and `deno task typecheck`.
+- Update the specification paragraphs near lines 352 and 415 (coverage), and near 497 and 767 (host modules, and adapters that validate data boundaries) of `public/effektive-spec.html`, for the provider boundary checks and the last-arm test. The website copy of order-lifecycle holds no generated code, so it does not change. Add a dated entry to `public/effektive-validation.txt`. Run `deno task test` and `deno task typecheck`.
 
 ### HB7. Close, and plan the companion module (one commit)
 

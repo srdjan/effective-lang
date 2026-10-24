@@ -21,7 +21,7 @@ export const lifted = (value: Int): Int => applyEffect(value, increment)
     `import { Effect } from "effect";
 import { imported, inline, lifted } from "./main.ts";
 console.log(JSON.stringify({ imported: imported(1), inline: inline(1), lifted: await Effect.runPromise(lifted(1)) }));`,
-    "effective-pure-function-type-",
+    "effektive-pure-function-type-",
   );
   assertEquals(JSON.parse(stdout), { imported: 2, inline: 3, lifted: 2 });
 });

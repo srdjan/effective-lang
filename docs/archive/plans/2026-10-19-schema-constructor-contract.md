@@ -38,7 +38,7 @@ evaluated Schema value.
 A factory supplies its own make-input type and fills defaults before calling
 schemaMake. For example:
 
-```effective
+```effektive
 type Int = int
 type MakeInput = { score?: Int }
 type Record = { score: Int }

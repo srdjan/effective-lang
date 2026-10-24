@@ -266,7 +266,7 @@ Deno.test("nested roots: the outer round neither writes nor removes the inner ou
   assertMatchesOracle(h, "inner/");
   // The inner project owns these files. The outer round leaves them alone.
   const header =
-    "// Generated from inner/m.eff by the Effective compiler. Do not edit.";
+    "// Generated from inner/m.eff by the Effektive compiler. Do not edit.";
   setDisk(h, "inner/m.ts", `${header}\n`);
   setDisk(h, "inner/m.eff", undefined);
   h.deliver(save(MAIN));

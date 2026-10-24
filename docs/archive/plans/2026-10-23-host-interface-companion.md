@@ -1,6 +1,6 @@
 # Plan: a generated companion module for each host interface
 
-Status: done, 2026-10-23. CM6 to CM12 landed in commits d7f0691 (CM6), decf945 (CM7), c2428bd (CM8), c877fc3 (CM9), e6ec178 (CM10), and the commit that archives this plan (CM12). CM11 landed as fc5acd9 in the sibling repository `../effective/`. The user accepted CM1 to CM5 as recommended. Fable reported 4 major and 9 minor findings on the draft. Opus accepted all 13. Section 6 maps each finding to its resolution.
+Status: done, 2026-10-23. CM6 to CM12 landed in commits d7f0691 (CM6), decf945 (CM7), c2428bd (CM8), c877fc3 (CM9), e6ec178 (CM10), and the commit that archives this plan (CM12). CM11 landed as fc5acd9 in the sibling repository `../effektive/`. The user accepted CM1 to CM5 as recommended. Fable reported 4 major and 9 minor findings on the draft. Opus accepted all 13. Section 6 maps each finding to its resolution.
 
 This plan uses the ID prefix CM. CM1 to CM5 are decisions for the user. CM6 and later are work items. The plan is the follow-up that HB2 (a) asked for in [the host boundary plan](2026-10-23-host-boundary-checks.md).
 
@@ -40,7 +40,7 @@ The work items assume CM1 (a), CM2 (a), CM3 (a), CM4 (a), and CM5 (a). There is 
   - `fixtures/emit/scopes/host.effi` (alias `ScopeAlias`, which its `host.ts` does not declare)
   - `fixtures/parse/ok-forms.effi` (parse only)
   - `fixtures/errors/declaration-primitive-position-host/host.effi` (error fixture)
-- The website copy `../effective/public/effective-examples/service-workflow/` has the same `Runtime` service.
+- The website copy `../effektive/public/effektive-examples/service-workflow/` has the same `Runtime` service.
 - Probe `/tmp/cm-probe-cycle`: a companion module imports `type Backend` from `host.ts`, and `host.ts` imports `Runtime`, `StoreFailure`, and `Token` from `host.effi.ts`. It passes `deno check`, runs, and passes `deno fmt --check` with Effect 4.0.5. A companion module imports only `.eff` outputs and types of its host module, so it adds no runtime import cycle.
 - `lowerDeclarations` (`lower.ts:1532`) already yields only types, errors, and services. The `exports` list of an `.effi` module holds provider ids (`lower.ts:1688`), and the validator rejects an export that is not declared (`validate/world.ts:624-633`). The opaque declaration is a brand of `unknown` in the IR, and the emitter has no branch for it.
 - The program database knows only `.eff` outputs. `Revision.lowered` (`src/core/db.ts:293`) returns undefined for an `.effi` module, and `effModuleNames` (`db.ts:183`) excludes `.effi`. Its users are `writableModules` (`src/host/outputs.ts:55`), `runSaveRound` (`src/host/save_round.ts:76`), `src/cli/build.ts:68`, `src/cli/main.ts:66,85,165`, `src/lsp/projects.ts:461`, and `effModulesOf` in `playground/src/compile.ts:98`. `Scope.path` (`scope.ts:366`) is `<module>.ts`. `removeStaleOutputs` (`outputs.ts:153-181`) removes `<name>.ts` with the header `Generated from <name>.eff`.
@@ -104,9 +104,9 @@ A host module imports its data types, errors, and services from the companion mo
 - `docs/api.md`: the host contract and the companion module.
 - `docs/status.md`: remove the limit at lines 116-117.
 
-### CM11. Website (one commit in `../effective/`)
+### CM11. Website (one commit in `../effektive/`)
 
-- Update the specification for the companion module and the CM6 rule. Update the `service-workflow` example host module and its `Runtime` tag. Add a dated entry to `public/effective-validation.txt`. Run `deno task test` and `deno task typecheck`.
+- Update the specification for the companion module and the CM6 rule. Update the `service-workflow` example host module and its `Runtime` tag. Add a dated entry to `public/effektive-validation.txt`. Run `deno task test` and `deno task typecheck`.
 
 ### CM12. Close (one commit)
 

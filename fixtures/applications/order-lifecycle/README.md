@@ -24,7 +24,7 @@ missing `_tag` fails `decodeOrder`.
 From the effektive-lang repository root:
 
 ```sh
-deno task effective build fixtures/applications/order-lifecycle --validate --tsc
+deno task effektive build fixtures/applications/order-lifecycle --validate --tsc
 deno run --config fixtures/applications/order-lifecycle/deno.json fixtures/applications/order-lifecycle/main.ts
 deno test --config fixtures/applications/order-lifecycle/deno.json fixtures/applications/order-lifecycle/runtime_test.ts
 ```

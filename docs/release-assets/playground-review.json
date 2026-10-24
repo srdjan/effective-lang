@@ -56,7 +56,7 @@
           "id": "",
           "role": null,
           "label": null,
-          "text": "\n    The Effective playground needs JavaScript.\n    \n      Effective playground\n",
+          "text": "\n    The Effektive playground needs JavaScript.\n    \n      Effektive playground\n",
           "focusVisible": false
         },
         {
@@ -128,7 +128,7 @@
       "diagnostics": [
         "main.eff:6:40 type-mismatch/003 argument 1 has type int, but UserId is expected"
       ],
-      "staleOutput": "// Generated from main.eff by the Effective compiler. Do not edit.import { Effect, Layer } from \"effect\";import { displayName, Name, StoreUnavailable, Users } from \"./users.ts\";import { UsersLive } from \"./users-live.ts\";const UsersLive$host: Layer.Layer<Users> = UsersLive;export const main = (): Effect.Effect<Name, StoreUnavailable> =>  Effect.provide(Effect.suspend(() => displayName(\"u1\")), UsersLive$host);//# sourceMappingURL=main.ts.map",
+      "staleOutput": "// Generated from main.eff by the Effektive compiler. Do not edit.import { Effect, Layer } from \"effect\";import { displayName, Name, StoreUnavailable, Users } from \"./users.ts\";import { UsersLive } from \"./users-live.ts\";const UsersLive$host: Layer.Layer<Users> = UsersLive;export const main = (): Effect.Effect<Name, StoreUnavailable> =>  Effect.provide(Effect.suspend(() => displayName(\"u1\")), UsersLive$host);//# sourceMappingURL=main.ts.map",
       "cursor": "",
       "syntaxDiagnostics": [
         "main.eff:1:22 syntax/008 expected an expression, found end of file"
@@ -206,7 +206,7 @@
           "id": "",
           "role": "textbox",
           "label": "Generated TypeScript",
-          "text": "// Generated from main.eff by the Effective compiler. Do not edit.import { Effec",
+          "text": "// Generated from main.eff by the Effektive compiler. Do not edit.import { Effec",
           "focusVisible": true
         },
         {
@@ -214,7 +214,7 @@
           "id": "",
           "role": null,
           "label": null,
-          "text": "\n    The Effective playground needs JavaScript.\n    \n      Effective playground\n",
+          "text": "\n    The Effektive playground needs JavaScript.\n    \n      Effektive playground\n",
           "focusVisible": false
         },
         {
@@ -285,7 +285,7 @@
       "diagnostics": [
         "main.eff:6:40 type-mismatch/003 argument 1 has type int, but UserId is expected"
       ],
-      "staleOutput": "// Generated from main.eff by the Effective compiler. Do not edit.import { Effect, Layer } from \"effect\";import { displayName, Name, StoreUnavailable, Users } from \"./users.ts\";import { UsersLive } from \"./users-live.ts\";const UsersLive$host: Layer.Layer<Users> = UsersLive;export const main = (): Effect.Effect<Name, StoreUnavailable> =>  Effect.provide(Effect.suspend(() => displayName(\"u1\")), UsersLive$host);//# sourceMappingURL=main.ts.map",
+      "staleOutput": "// Generated from main.eff by the Effektive compiler. Do not edit.import { Effect, Layer } from \"effect\";import { displayName, Name, StoreUnavailable, Users } from \"./users.ts\";import { UsersLive } from \"./users-live.ts\";const UsersLive$host: Layer.Layer<Users> = UsersLive;export const main = (): Effect.Effect<Name, StoreUnavailable> =>  Effect.provide(Effect.suspend(() => displayName(\"u1\")), UsersLive$host);//# sourceMappingURL=main.ts.map",
       "cursor": "",
       "syntaxDiagnostics": [
         "main.eff:1:22 syntax/008 expected an expression, found end of file"
@@ -362,7 +362,7 @@
           "id": "",
           "role": "textbox",
           "label": "Generated TypeScript",
-          "text": "// Generated from main.eff by the Effective compiler. Do not edit.import { Effec",
+          "text": "// Generated from main.eff by the Effektive compiler. Do not edit.import { Effec",
           "focusVisible": true
         },
         {
@@ -370,7 +370,7 @@
           "id": "",
           "role": null,
           "label": null,
-          "text": "\n    The Effective playground needs JavaScript.\n    \n      Effective playground\n",
+          "text": "\n    The Effektive playground needs JavaScript.\n    \n      Effektive playground\n",
           "focusVisible": false
         },
         {
@@ -441,7 +441,7 @@
       "diagnostics": [
         "main.eff:6:40 type-mismatch/003 argument 1 has type int, but UserId is expected"
       ],
-      "staleOutput": "// Generated from main.eff by the Effective compiler. Do not edit.import { Effect, Layer } from \"effect\";import { displayName, Name, StoreUnavailable, Users } from \"./users.ts\";import { UsersLive } from \"./users-live.ts\";const UsersLive$host: Layer.Layer<Users> = UsersLive;export const main = (): Effect.Effect<Name, StoreUnavailable> =>  Effect.provide(Effect.suspend(() => displayName(\"u1\")), UsersLive$host);//# sourceMappingURL=main.ts.map",
+      "staleOutput": "// Generated from main.eff by the Effektive compiler. Do not edit.import { Effect, Layer } from \"effect\";import { displayName, Name, StoreUnavailable, Users } from \"./users.ts\";import { UsersLive } from \"./users-live.ts\";const UsersLive$host: Layer.Layer<Users> = UsersLive;export const main = (): Effect.Effect<Name, StoreUnavailable> =>  Effect.provide(Effect.suspend(() => displayName(\"u1\")), UsersLive$host);//# sourceMappingURL=main.ts.map",
       "cursor": "",
       "syntaxDiagnostics": [
         "main.eff:1:22 syntax/008 expected an expression, found end of file"

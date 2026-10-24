@@ -3,7 +3,7 @@
 // cache entry for each such path, so a shared DENO_DIR grows on each run.
 // Run it with `deno task test:slow`. Extra arguments go to `deno test`.
 
-const denoDir = Deno.makeTempDirSync({ prefix: "effective-slow-deno-dir-" });
+const denoDir = Deno.makeTempDirSync({ prefix: "effektive-slow-deno-dir-" });
 let code = 1;
 try {
   const child = new Deno.Command(Deno.execPath(), {

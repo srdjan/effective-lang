@@ -1,4 +1,4 @@
-// Generated from main.eff by the Effective compiler. Do not edit.
+// Generated from main.eff by the Effektive compiler. Do not edit.
 
 import { Effect, Layer } from "effect";
 import { displayName, Name, StoreUnavailable, Users } from "./users.ts";

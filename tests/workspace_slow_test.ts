@@ -7,7 +7,7 @@ import { withTemporaryDirectory } from "./process_helpers.ts";
 const REPOSITORY = new URL("../", import.meta.url).pathname;
 
 Deno.test("check ends on real symlink cycles and reads each module once", async () => {
-  await withTemporaryDirectory("effective-links-", async (dir) => {
+  await withTemporaryDirectory("effektive-links-", async (dir) => {
     Deno.mkdirSync(`${dir}/project/sub`, { recursive: true });
     Deno.mkdirSync(`${dir}/sibling`);
     Deno.writeTextFileSync(`${dir}/project/effektive.json`, "{}");
@@ -29,7 +29,7 @@ Deno.test("check ends on real symlink cycles and reads each module once", async 
     Deno.symlinkSync("y", `${dir}/project/x`);
     Deno.symlinkSync("x", `${dir}/project/y`);
     const output = await new Deno.Command(Deno.execPath(), {
-      args: ["task", "effective", "check", `${dir}/project`],
+      args: ["task", "effektive", "check", `${dir}/project`],
       cwd: REPOSITORY,
       env: { NO_COLOR: "1" },
       stdout: "piped",

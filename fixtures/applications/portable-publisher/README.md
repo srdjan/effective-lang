@@ -6,7 +6,7 @@ file-backed SQLite implement the same textual key-value contract.
 Run these commands from the repository root:
 
 ```sh
-deno task effective build fixtures/applications/portable-publisher --validate --tsc
+deno task effektive build fixtures/applications/portable-publisher --validate --tsc
 deno run --config fixtures/applications/portable-publisher/deno.json fixtures/applications/portable-publisher/main.ts
 deno test --config fixtures/applications/portable-publisher/deno.json fixtures/applications/portable-publisher/runtime_test.ts fixtures/applications/portable-publisher/lifecycle_test.ts
 deno test --allow-all tests/application_publisher_integration_slow_test.ts

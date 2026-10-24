@@ -28,7 +28,7 @@ function tempLeftovers(): string[] {
 Deno.test("cleanup checks detect this process's leaks and ignore other benchmark runs", () => {
   const before = tempLeftovers();
   const foreign = Deno.makeTempDirSync({
-    prefix: "effective-bench-lsp-other-process-",
+    prefix: "effektive-bench-lsp-other-process-",
   });
   try {
     assertEquals(tempLeftovers(), before);

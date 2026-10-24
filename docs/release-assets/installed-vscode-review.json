@@ -1,7 +1,7 @@
 {
   "date": "2026-10-21T19:02:03.626623+00:00",
   "gitHead": "bf8e570493285d0322fbddccfebfdf398d75614b",
-  "command": "EFFECTIVE_KEEP_SMOKE=1 deno task test:vscode",
+  "command": "EFFEKTIVE_KEEP_SMOKE=1 deno task test:vscode",
   "deno": "2.9.7",
   "node": "24.21.0",
   "vscode": "1.143.0",
@@ -18,17 +18,17 @@
   },
   "artifacts": [
     {
-      "name": "effective-lsp.js",
+      "name": "effektive-lsp.js",
       "bytes": 776070,
       "sha256": "066b35704ac5b3f01f4be0d2d23833d22d20aea48e71364be8c571eb100fb38d"
     },
     {
-      "name": "effective-vscode-0.5.2.vsix",
+      "name": "effektive-vscode-0.5.2.vsix",
       "bytes": 3479507,
       "sha256": "b9c2d329c42eed98478fb63c7d2ee88ac6ca9a08467394179aefaea48f55c86c"
     },
     {
-      "name": "effective.js",
+      "name": "effektive.js",
       "bytes": 889188,
       "sha256": "aa7f4d9e40829427e17b669ec0fa37b1bb4dd30c0a8d3ad518b2accc28fb58d1"
     }

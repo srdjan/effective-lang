@@ -331,7 +331,7 @@ export async function runVariants(
   targets: readonly Target[],
   config: VariantConfig,
 ): Promise<Result<VariantOutcome, M5Error>> {
-  const workspace = Deno.makeTempDirSync({ prefix: "effective-bench-ws-" });
+  const workspace = Deno.makeTempDirSync({ prefix: "effektive-bench-ws-" });
   const results: VariantResult[] = [];
   const skipped: Skipped[] = [];
   const skipAll = (reason: string): Result<VariantOutcome, M5Error> => ({

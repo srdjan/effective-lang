@@ -35,7 +35,7 @@ forms, type names, IR properties or operations are added. Assignment remains
 invariant in all flags and D/E/M. An adapter may explicitly reset or select a
 default according to this table; an annotation cannot silently discard it.
 
-```effective
+```effektive
 type Int = int
 const integer: Schema<Int> = schema()
 const source: SchemaConstructorDefault<Int> =
