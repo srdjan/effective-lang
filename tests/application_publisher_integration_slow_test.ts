@@ -16,7 +16,7 @@ Deno.test("portable publisher passes one KV contract on memory and file-backed S
   const files = Object.fromEntries(
     [...Deno.readDirSync(base)]
       .filter((file) =>
-        file.name.endsWith(".eff") || file.name === "effective.json"
+        file.name.endsWith(".eff") || file.name === "effektive.json"
       )
       .map((
         file,

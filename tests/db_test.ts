@@ -107,7 +107,7 @@ Deno.test("incremental alias and brand edits equal fresh checks across dependent
   const alias = "export type N = int\nexport const n: N = 1\n";
   const brand = "export nominal N = int\nexport const n: N = 1\n";
   const files = {
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "a.eff": alias,
     "b.eff": 'import { N, n } from "./a.eff"\nexport const copy: N = n\n',
   };
@@ -318,14 +318,14 @@ Deno.test("differential: a broken project file is an error value, and a fix brin
   const program = new Program("");
   const first = program.update({ set: files });
   assert(first.ok);
-  const broken = program.update({ set: { "effective.json": "{" } });
+  const broken = program.update({ set: { "effektive.json": "{" } });
   assert(!broken.ok);
   assertEquals(broken.error.tag, "malformed-json");
-  assertEquals(fromScratch({ ...files, "effective.json": "{" }), {
+  assertEquals(fromScratch({ ...files, "effektive.json": "{" }), {
     config: broken.error,
   });
   const fixed = program.update({
-    set: { "effective.json": files["effective.json"] },
+    set: { "effektive.json": files["effektive.json"] },
   });
   assert(fixed.ok);
   // Every module has the same key as before the break, so none is checked again.
@@ -348,7 +348,7 @@ Deno.test("a host registry change rechecks the importers of the host module", ()
       },
     },
   });
-  const second = session.apply({ "effective.json": config });
+  const second = session.apply({ "effektive.json": config });
   // The registry is part of every key, so every module checks again.
   assertEquals(second.rechecked.length, 6);
 });
@@ -486,7 +486,7 @@ Deno.test("revisionDelta: no change and a body edit change nothing, an interface
 
 Deno.test("revisionDelta: a mode flip appears in both lists", () => {
   const program = new Program("");
-  const pure = updated(program, { "effective.json": "{}", "m.eff": FLIP_PURE });
+  const pure = updated(program, { "effektive.json": "{}", "m.eff": FLIP_PURE });
   assertEquals(pure.diagnostics, []);
   assertEquals([...pure.checkedModule("m")!.modes.values()], ["pure"]);
   const effect = updated(program, { "m.eff": FLIP_EFFECT });
@@ -524,7 +524,7 @@ Deno.test("revisionDelta: a module absent from the previous revision, or no prev
 Deno.test("revision queries: path lookups, imports, declaration entries, and module order", () => {
   const result = new Program("").update({
     set: {
-      "effective.json": "{}",
+      "effektive.json": "{}",
       "a.eff": 'import { N, n } from "./b.eff"\nexport const copy: N = n\n',
       "b.eff": "export type N = int\nexport const n: N = 1\n",
     },

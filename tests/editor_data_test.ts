@@ -26,7 +26,7 @@ export const guarded = (): Text fails Broken => fail(Broken({ reason: "x" }))
 
 function load(text: string): Revision {
   const result = new Program("").update({
-    set: { "effective.json": "{}", "m.eff": text },
+    set: { "effektive.json": "{}", "m.eff": text },
   });
   assert(result.ok, JSON.stringify(result));
   return result.value;

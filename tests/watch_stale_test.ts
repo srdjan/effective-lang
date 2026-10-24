@@ -12,7 +12,7 @@ const module = (name: string): string =>
 
 function project(): ReturnType<typeof memoryIo> {
   return memoryIo({
-    [`${ROOT}/effective.json`]: "{}",
+    [`${ROOT}/effektive.json`]: "{}",
     [`${ROOT}/a.eff`]: module("a"),
     [`${ROOT}/pay.eff`]: module("pay"),
     [`${ROOT}/old.eff`]: module("old"),
@@ -68,19 +68,19 @@ Deno.test("watch removes outputs after a round with a configuration error", asyn
   const m = project();
   m.script = [
     () => {
-      m.files.set(`${ROOT}/effective.json`, "{");
+      m.files.set(`${ROOT}/effektive.json`, "{");
     },
     () => {
       m.files.delete(`${ROOT}/pay.eff`);
     },
     () => {
-      m.files.set(`${ROOT}/effective.json`, "{}");
+      m.files.set(`${ROOT}/effektive.json`, "{}");
     },
   ];
   assertEquals(await main(["watch", ROOT], m.io), 0);
   assertEquals(outputs(m), ["a.ts", "a.ts.map", "old.ts", "old.ts.map"]);
   const err = m.err.join("");
-  assert(err.includes("error: effective.json is not valid JSON"), err);
+  assert(err.includes("error: effektive.json is not valid JSON"), err);
   assert(err.includes("removed: pay.ts\n"), err);
 });
 
@@ -140,7 +140,7 @@ Deno.test("watch prints every removed path before the removal notes of a round",
 
 Deno.test("watch does not write or remove the outputs of a nested project", async () => {
   const m = project();
-  m.files.set(`${ROOT}/inner/effective.json`, "{}");
+  m.files.set(`${ROOT}/inner/effektive.json`, "{}");
   m.files.set(`${ROOT}/inner/m.eff`, module("m"));
   m.script = [() => {
     m.files.set(`${ROOT}/inner/m.eff`, module("m") + "\n");

@@ -36,7 +36,7 @@ To install the standalone command-line tool and the VS Code extension, read
 ## Usage
 
 Run each command from the repository root. Give the project directory that holds
-`effective.json`:
+`effektive.json`:
 
 ```sh
 deno task effective check fixtures/examples

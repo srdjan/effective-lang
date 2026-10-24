@@ -32,7 +32,7 @@ interface Application {
   readonly name: string;
   /** The fixture directory under `fixtures/applications/`. */
   readonly directory: string;
-  /** The source files of the project, including `effective.json`. */
+  /** The source files of the project, including `effektive.json`. */
   readonly sources: readonly string[];
   readonly entry: string | readonly string[];
   readonly prefix: string;
@@ -48,7 +48,7 @@ const APPLICATIONS: readonly Application[] = [
       "portable publisher passes emitted publication, grant, and lifetime checks",
     directory: "portable-publisher",
     sources: [
-      "effective.json",
+      "effektive.json",
       "domain.eff",
       "platform.eff",
       "ports.eff",
@@ -83,7 +83,7 @@ const APPLICATIONS: readonly Application[] = [
     name:
       "scheduled worker application passes strict emitted execution and cancellation gates",
     directory: "scheduled-worker",
-    sources: ["effective.json", "contracts.eff", "worker.eff"],
+    sources: ["effektive.json", "contracts.eff", "worker.eff"],
     entry: "worker.eff",
     prefix: "effective-application-worker-",
     hostFiles: ["driver.ts", "reference.ts", "runtime_test.ts", "main.ts"],
@@ -96,7 +96,7 @@ const APPLICATIONS: readonly Application[] = [
     name:
       "service workflow application passes strict registered host and transaction gates",
     directory: "service-workflow",
-    sources: ["effective.json", "contracts.eff", "host.effi", "workflow.eff"],
+    sources: ["effektive.json", "contracts.eff", "host.effi", "workflow.eff"],
     entry: "workflow.eff",
     prefix: "effective-application-service-",
     hostFiles: ["adapter.ts", "driver.ts", "runtime_test.ts", "main.ts"],
@@ -110,7 +110,7 @@ const APPLICATIONS: readonly Application[] = [
     name:
       "stream processor application passes strict emitted and lifecycle gates",
     directory: "stream-processor",
-    sources: ["effective.json", "contracts.eff", "processor.eff"],
+    sources: ["effektive.json", "contracts.eff", "processor.eff"],
     entry: "processor.eff",
     prefix: "effective-application-stream-",
     hostFiles: ["driver.ts", "runtime_test.ts", "main.ts"],
@@ -125,7 +125,7 @@ const APPLICATIONS: readonly Application[] = [
   {
     name: "order lifecycle application passes nominal data and decoding checks",
     directory: "order-lifecycle",
-    sources: ["effective.json", "contracts.eff", "orders.eff"],
+    sources: ["effektive.json", "contracts.eff", "orders.eff"],
     entry: "orders.eff",
     prefix: "effective-application-orders-",
     hostFiles: ["runtime_test.ts", "main.ts"],

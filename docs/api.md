@@ -19,7 +19,7 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
   parse.ts       Parser with recovery.
   hash.ts        Synchronous content hash (FNV-1a 64).
   index.ts       Declaration index of one file: names, kinds, spans, hashes.
-  project.ts     effective.json, module identity, module graph, cycles, order.
+  project.ts     effektive.json, module identity, module graph, cycles, order.
   resolve.ts     Names to identities, scopes, prelude, side table of targets.
   types.ts       Interned types, compatibility, IR conversion, canonical JSON.
   check.ts       Declaration checker: type lowering, signatures, providers.
@@ -175,10 +175,10 @@ an end position is exclusive.
 returns all diagnostics. The `host` value reads files. The `root` value is the
 project directory. The `entries` value is a list of root-relative paths.
 
-The function reads `effective.json` in the root. A missing or malformed file
+The function reads `effektive.json` in the root. A missing or malformed file
 gives an error value, not an exception. The function follows imports from the
 entry files. Relative imports must end in `.eff`. The import `host:key` selects
-a host interface file from `effective.json`.
+a host interface file from `effektive.json`.
 
 An optional `imports` array restricts direct imports. Each rule contains `from` and `allow` patterns.
 Patterns match normalized module names without `.eff` or `.effi`. A standalone `*` matches one path segment; `**` matches zero or more. Wildcards occupy a complete segment.
@@ -362,8 +362,8 @@ value. Expected failures are error values with the tag `unsupported` or
 An import of another module becomes a relative `.ts` specifier. An import of an
 `.effi` declaration becomes a relative path to its companion module, such as
 `host.effi.ts`. An opaque type and a provider come from the host module of
-`effective.json`. A module that names an opaque type of a `.effi` file without a
-host module in `effective.json` gives an `unsupported` error value. The emitter checks provider imports against the registry:
+`effektive.json`. A module that names an opaque type of a `.effi` file without a
+host module in `effektive.json` gives an `unsupported` error value. The emitter checks provider imports against the registry:
 `const UsersLive$host: Layer.Layer<Users> = UsersLive`. When a provided service
 method returns a nominal record value, the constant wraps the host Layer with run-time
 checks ([host boundary checks](archive/plans/2026-10-23-host-boundary-checks.md)).
@@ -468,7 +468,7 @@ deleted paths.
 
 The program reads its files only from these calls, so it needs no `SourceHost`.
 Every `.eff` file in the set is an entry. The call returns a `Result`. A missing
-or invalid `effective.json` is an error value, and no revision starts.
+or invalid `effektive.json` is an error value, and no revision starts.
 
 A `Revision` answers one query for each module name: `checkedModule`, `lowered`,
 `emitted`, `spanTable`, and `sourceMap`. It also holds `diagnostics`,
@@ -532,10 +532,10 @@ task runs in the repository directory, so pass an explicit root, for example
 | `deno task effective build [root] --tsc`      | Also runs `deno check` over the written files and the host modules, and maps each error to the source.    |
 | `deno task effective watch [root] [--tsc]`    | Builds once, then builds again after each change of a source file. It prints the modules that it checked. |
 
-The root is the project directory with `effective.json`. The modules are the
+The root is the project directory with `effektive.json`. The modules are the
 `.eff` files under the root, found by a recursive walk. The walk skips
 directories whose names start with `.` and directories named `node_modules`. The
-`.effi` files come from `effective.json`. The walk reads a directory once. It
+`.effi` files come from `effektive.json`. The walk reads a directory once. It
 skips a link to a directory that it already visited, and a link to a directory
 outside the root.
 
@@ -552,7 +552,7 @@ the first line is the header that the emitter writes for that module. It removes
 the map only together with the `.ts` file. The `build` command never removes a
 file.
 
-A directory under the root that holds its own `effective.json` is a nested
+A directory under the root that holds its own `effektive.json` is a nested
 project. The walk still reads its `.eff` files, so the outer project checks them
 and prints their diagnostics. But `build` and `watch` of the outer project do
 not write or remove the outputs of those modules, as the language server does.
@@ -573,7 +573,7 @@ prints one `effective: internal error: <message>` line to stderr for it. A
 failed build step is a failed write, or a `deno check` that cannot run or that
 fails with no diagnostic. A usage error is a missing or unknown command, an
 unknown flag, an extra argument, or a missing root directory. A configuration
-error is a missing or invalid `effective.json`, or a read error in the root.
+error is a missing or invalid `effektive.json`, or a read error in the root.
 
 `build` writes a module only when it has no error. A module with an error keeps
 its last good `.ts` and `.ts.map` files. The tool writes a file only when its
@@ -610,8 +610,8 @@ files that changed. When no file changed, it prints nothing. A batch joins the
 events that arrive within 100 milliseconds of the previous event.
 
 After each build, `watch` prints `rechecked: <modules>` to stderr, then the
-diagnostics. A broken `effective.json` prints an error, and the loop goes on. At
-start, a broken `effective.json` gives exit code 2. With `--tsc`, local
+diagnostics. A broken `effektive.json` prints an error, and the loop goes on. At
+start, a broken `effektive.json` gives exit code 2. With `--tsc`, local
 TypeScript and JavaScript dependencies and Deno, TypeScript, import-map and
 package configuration files also trigger target checking. These inputs are
 compared separately: a host-only change reuses the source revision and prints
@@ -717,8 +717,8 @@ comes from an old revision.
 
 ### Projects, save, and configuration errors
 
-A project is a directory with an `effective.json` file. When a document opens,
-the server walks up from its directory to the nearest `effective.json`. It keeps
+A project is a directory with an `effektive.json` file. When a document opens,
+the server walks up from its directory to the nearest `effektive.json`. It keeps
 one `Program` for each project root. A document with no project gets no
 diagnostics, and its requests return `null`.
 
@@ -732,7 +732,7 @@ changes on disk. The server ignores such an event for an open document, because
 the editor owns that text.
 
 A save round starts on `textDocument/didSave` of an `.eff` or `.effi` file, and
-on a watched-file event for the `effective.json` of a project, because the
+on a watched-file event for the `effektive.json` of a project, because the
 client sends no `didSave` for that file. The server does nothing when
 `writeOnSave` is false. `writeOnSave` comes from the initialization options, so
 a change takes effect after a restart of the server.
@@ -751,14 +751,14 @@ generated code changed.
 A module with an error keeps its last good `.ts` and `.ts.map` files, as `build`
 does. When a module left the project since an earlier round of the session, the
 round removes its files, as `watch` does. A project writes and removes only the
-outputs of modules that have no nearer `effective.json`. The round logs each
+outputs of modules that have no nearer `effektive.json`. The round logs each
 written and removed path at type 4 and each module that it holds back, with the
 reason, once at type 3. A read, write, or configuration error goes to
 `window/logMessage` at type 1. A concurrent `effective watch` or `build` on the
 same project can interleave its writes with the round.
 
-When `effective.json` is missing or invalid, the server publishes one diagnostic
-on `effective.json`, at line 0 and character 0. It keeps the last good revision
+When `effektive.json` is missing or invalid, the server publishes one diagnostic
+on `effektive.json`, at line 0 and character 0. It keeps the last good revision
 for hover, definition, symbols, and generated text. It keeps the published
 diagnostics of the other files. The next good update clears the configuration
 diagnostic. Before the first good revision, hover, definition, and generated

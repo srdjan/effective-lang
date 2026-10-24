@@ -13,7 +13,7 @@ import {
 } from "./lift_slot_programs.ts";
 
 function emit(text: string): string {
-  const emitted = emitFiles({ "effective.json": "{}", "m.eff": text }, [
+  const emitted = emitFiles({ "effektive.json": "{}", "m.eff": text }, [
     "m.eff",
   ]).get("m");
   assert(emitted !== undefined, "module m was not emitted");

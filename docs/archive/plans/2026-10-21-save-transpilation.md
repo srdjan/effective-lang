@@ -119,8 +119,8 @@ generated-TypeScript virtual document.
 A `didSave` of a `.eff` or `.effi` document starts a round. The VS Code client
 sends `didSave` for both, because both belong to the `effective` language.
 
-The client does not send `didSave` for `effective.json`. It sends a watched-file
-event instead. So a watched-file event for the `effective.json` of a project
+The client does not send `didSave` for `effektive.json`. It sends a watched-file
+event instead. So a watched-file event for the `effektive.json` of a project
 starts a round. Other watched-file events start no round, under SV-D2 (a).
 
 `writeOnSave` comes from the initialization options. A change to the VS Code
@@ -170,7 +170,7 @@ write scope, and the log level.
 | SV1 | Move the writable-set fixpoint from `src/cli/build.ts` into `src/host/outputs.ts` as a pure function of a revision and an optional validation map. `buildRevision` calls it. No behavior change: `tests/build_imports_test.ts` passes unchanged. A new unit test covers a cycle and a host target. | None |
 | SV2 | Fix `removeStaleOutputs`: remove the map before the `.ts` file, so that a failed map removal keeps the header that proves ownership. Add a test with an unremovable map. | None |
 | SV3 | Add the disk program and the save round (section 3.2) to `src/lsp/projects.ts`, with the ownership rule (section 3.4). Tests over the in-memory file system compare each round with a fresh `Program` over the same disk texts. | SV1, SV2, decisions |
-| SV4 | Call the round from `didSave` and from the `effective.json` watched-file event (section 3.3). Change the existing save tests so that each test sets the disk text before it sends `didSave`. Replace the test that asserts the dangling import. Add regression tests for gaps A to D. Add tests for: the first round, a no-change save, a `.effi` save, a configuration error and its recovery in both directions, a disk read error, a write failure, a partial write that the next save repairs, a deleted output that the next save repairs, an open document changed on disk, a rename, a close without save, nested roots, a failed map removal, and `writeOnSave` false (no disk program exists). | SV3 |
+| SV4 | Call the round from `didSave` and from the `effektive.json` watched-file event (section 3.3). Change the existing save tests so that each test sets the disk text before it sends `didSave`. Replace the test that asserts the dangling import. Add regression tests for gaps A to D. Add tests for: the first round, a no-change save, a `.effi` save, a configuration error and its recovery in both directions, a disk read error, a write failure, a partial write that the next save repairs, a deleted output that the next save repairs, an open document changed on disk, a rename, a close without save, nested roots, a failed map removal, and `writeOnSave` false (no disk program exists). | SV3 |
 | SV5 | Measure. Add bench row M7 on the small, medium, and large presets: a cold first round, a repeated save with no change, a body edit save, an interface edit save, and a "Save All" of every module. Extend M4 with the disk program enabled. Record the results in `docs/measurements.md`. If M7 misses the SV-D3 budget, stop and bring a narrowing proposal that keeps the repair of step 6. | SV4 |
 | SV6 | Update `docs/transpiler-design.md` section 2.1 (the per-save row), `docs/editor.md`, `docs/api.md`, `docs/installation.md` (the restart for `writeOnSave`), the `effective.writeOnSave` description in `editors/vscode/package.json`, and the README known limits. Add the term "disk program" to `CONCEPTS.md`. Update `docs/status.md` and, in a separate commit, the sibling site `../effective/public/` if the status changes. Run the installed VSIX check. | SV5 |
 
@@ -199,7 +199,7 @@ Recommended.
 it. Unrelated modules that were never built get no files.
 
 **SV-D2. Which watched-file events start a round?**
-(a) Only an event for `effective.json`, because the client sends no `didSave`
+(a) Only an event for `effektive.json`, because the client sends no `didSave`
 for it. The next save catches up with changes from `git checkout` or other
 tools. Recommended, because the setting is named "write on save".
 (b) Every event for a source file, as `effective watch` does.
@@ -222,7 +222,7 @@ run, because the Fable rate limit was reached.
 | Finding | Resolution |
 | --- | --- |
 | Refreshing only the saved path compiles stale text for other open documents and renamed paths. | Accepted. Step 1 reads the full workspace. |
-| The client sends no `didSave` for `effective.json`, and `writeOnSave` changes need a restart. | Accepted. Section 3.3. |
+| The client sends no `didSave` for `effektive.json`, and `writeOnSave` changes need a restart. | Accepted. Section 3.3. |
 | Nested roots let two projects write one output path. | Accepted. Section 3.4. |
 | Removal contradicts build parity, the first round cannot see earlier deletions, and the removal order loses ownership evidence. | Accepted. Invariant Part 2, step 4, and SV2. |
 | Skipping by emitted-object identity breaks the repair of deleted outputs. | Accepted. The skip is removed. Step 6 compares on every round. |

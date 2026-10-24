@@ -198,7 +198,7 @@ export const run = (): Int fails Stop uses Jobs.next =>
   withFiber(defer(() => Jobs.next()), (fiber) => joinFiber(fiber))
 type Int = int
 `;
-  const base = lower({ "effective.json": "{}", "m.eff": text }, "m.eff");
+  const base = lower({ "effektive.json": "{}", "m.eff": text }, "m.eff");
   const run = base.ir.declarations.find((d) => d.name === "run");
   assert(run?.kind === "function" && run.body.kind === "with-fiber");
   const use = run.body.use;
@@ -312,7 +312,7 @@ const EXPECTED_BORROWED: Record<string, number[]> = {
 
 Deno.test("borrowed handle references: only a borrowed argument may use the handle", () => {
   const files = {
-    "effective.json": JSON.stringify({
+    "effektive.json": JSON.stringify({
       host: { files: { interface: "./host.effi", module: "./host.ts" } },
     }),
     "host.effi": `
@@ -459,7 +459,7 @@ service Work { run(): void; value(key: Int): Int fails Stop }
 const grouped = (source: Stream<Int, Stop, Work.value>): Stream<Int[], Stop, Work.value> =>
  mapGroups(source, (n) => n, (key, group) => collectStream(group), { bufferSize: 1 })
 `;
-  const base = lower({ "effective.json": "{}", "m.eff": text }, "m.eff");
+  const base = lower({ "effektive.json": "{}", "m.eff": text }, "m.eff");
   const grouped = base.ir.declarations.find((d) => d.name === "grouped");
   assert(grouped?.kind === "function" && grouped.body.kind === "map-groups");
   const use = grouped.body.use;
@@ -665,7 +665,7 @@ Deno.test("recursive Schema guard: a self reference must sit in a guarded positi
   const text = Deno.readTextFileSync(
     new URL("../fixtures/emit/schema-recursive-wire.eff", import.meta.url),
   );
-  const base = lower({ "effective.json": "{}", "m.eff": text }, "m.eff");
+  const base = lower({ "effektive.json": "{}", "m.eff": text }, "m.eff");
   const node = base.ir.declarations.find((d) => d.name === "node");
   assert(node?.kind === "constant" && node.value.kind === "schema");
   const callback = node.value.arguments[0];

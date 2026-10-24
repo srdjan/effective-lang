@@ -347,7 +347,7 @@ export function listEffFiles(root: string): string[] {
 /**
  * One error fixture case. A single file in `fixtures/errors/` is a case with one
  * file. A directory `fixtures/errors/<category>-<topic>/` with its own
- * `effective.json` is a project case.
+ * `effektive.json` is a project case.
  */
 export interface ErrorCase {
   /** `errors/<name>` without a trailing slash. */
@@ -389,7 +389,7 @@ export function listErrorCases(): ErrorCase[] {
  * The diagnostics that a case produces. A single file whose name starts with
  * `syntax-` is only parsed. Every other case goes through the project loader, the
  * resolver, and the declaration checker. A single file runs as a one-file
- * project with an empty `effective.json`.
+ * project with an empty `effektive.json`.
  */
 export function diagnosticsOfCase(c: ErrorCase): Diagnostic[] {
   if (c.kind === "file" && c.name.startsWith("syntax-")) {
@@ -397,7 +397,7 @@ export function diagnosticsOfCase(c: ErrorCase): Diagnostic[] {
   }
   if (c.kind === "file") {
     const file = c.files[0];
-    const host = memoryHost({ "effective.json": "{}", [file.path]: file.text });
+    const host = memoryHost({ "effektive.json": "{}", [file.path]: file.text });
     const result = analyzeProject(host, "", [file.path]);
     if (!result.ok) throw new Error(JSON.stringify(result.error));
     return [...checkAnalysis(result.value).diagnostics];
@@ -452,7 +452,7 @@ export function copyDirectory(from: URL, to: string): void {
  */
 export function checkModule(text: string, file = "m.eff"): CheckedProject {
   const result = checkProject(
-    memoryHost({ "effective.json": "{}", [file]: text }),
+    memoryHost({ "effektive.json": "{}", [file]: text }),
     "",
     [file],
   );
@@ -465,7 +465,7 @@ export function exampleFiles(): Record<string, string> {
   const files: Record<string, string> = {};
   for (
     const path of [
-      "effective.json",
+      "effektive.json",
       "collections.eff",
       "log.eff",
       "main.eff",
@@ -553,7 +553,7 @@ export function emitExamples(): ReadonlyMap<string, EmittedModule> {
 
 /** A host interface with each kind of companion declaration, and a source module that imports it. */
 export const COMPANION_FILES: Record<string, string> = {
-  "effective.json":
+  "effektive.json":
     '{ "host": { "store": { "interface": "./host.effi", "module": "./host.ts" } } }',
   "domain.eff": "export type Id = string\nexport nominal Item = { id: Id }\n",
   "host.effi": [

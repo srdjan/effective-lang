@@ -59,7 +59,7 @@ export interface SaveRound {
 
 /**
  * True when the project at `root` owns the module `name`: no directory between
- * the root and the module holds its own `effective.json`. A nested project
+ * the root and the module holds its own `effektive.json`. A nested project
  * writes and removes the outputs of its own modules.
  */
 export function ownedByRoot(fs: CliFs, root: string, name: string): boolean {

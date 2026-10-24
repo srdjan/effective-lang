@@ -33,7 +33,7 @@ function exampleText(name: string): string {
 
 function checkText(text: string): CheckedProject {
   const result = checkProject(
-    memoryHost({ "effective.json": "{}", "m.eff": text }),
+    memoryHost({ "effektive.json": "{}", "m.eff": text }),
     "",
     ["m.eff"],
   );
@@ -154,7 +154,7 @@ Deno.test("a module outside the project is not lowered", () => {
 
 Deno.test("a host interface lowers its declarations, exports each one, and validates", () => {
   const files = {
-    "effective.json":
+    "effektive.json":
       '{ "host": { "x": { "interface": "./host.effi", "module": "./adapter.ts" } } }',
     "host.effi": `export opaque type Conn
 export type Text = string

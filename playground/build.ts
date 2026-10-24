@@ -24,7 +24,7 @@ export const REPOSITORY_ROOT: string = resolve(
 
 /** The files of `fixtures/examples` that the page edits (plan 5.2). */
 const EXAMPLE_FILES: readonly string[] = [
-  "effective.json",
+  "effektive.json",
   "collections.eff",
   "log.eff",
   "main.eff",

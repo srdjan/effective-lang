@@ -10,7 +10,7 @@ import { memoryHost } from "../src/core/source.ts";
 
 function codes(source: string): string[] {
   const result = analyzeProject(
-    memoryHost({ "effective.json": "{}", "m.eff": source }),
+    memoryHost({ "effektive.json": "{}", "m.eff": source }),
     "",
     ["m.eff"],
   );

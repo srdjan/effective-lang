@@ -7,7 +7,7 @@ import { assertDiagnostics, type Expected } from "./schema_diagnostics.ts";
 
 function diagnosticsOf(source: string) {
   const result = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": source }),
+    memoryHost({ "effektive.json": "{}", "main.eff": source }),
     "",
     ["main.eff"],
   );

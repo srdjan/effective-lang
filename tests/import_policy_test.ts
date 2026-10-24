@@ -46,7 +46,7 @@ function latestPublished(harness: Harness, uri: string) {
 
 Deno.test("import rules allow listed paths and reject direct forbidden edges", () => {
   const files = {
-    "effective.json": config([
+    "effektive.json": config([
       { from: "domain/**", allow: ["domain/**"] },
       { from: "feature/**", allow: ["domain/**", "feature/**"] },
       {
@@ -91,7 +91,7 @@ Deno.test("import rules allow listed paths and reject direct forbidden edges", (
 
 Deno.test("the first matching import rule controls the source module", () => {
   const found = diagnostics({
-    "effective.json": config([
+    "effektive.json": config([
       { from: "feature/**", allow: ["domain/**"] },
       { from: "feature/special", allow: ["host:*"] },
     ]),
@@ -103,7 +103,7 @@ Deno.test("the first matching import rule controls the source module", () => {
 
 Deno.test("one star matches one segment and two stars match descendants", () => {
   const found = diagnostics({
-    "effective.json": config([
+    "effektive.json": config([
       { from: "adapter/*", allow: ["host:*"] },
       { from: "adapter/**", allow: [] },
     ]),
@@ -117,7 +117,7 @@ Deno.test("one star matches one segment and two stars match descendants", () => 
 
 Deno.test("allowed cyclic imports keep the module cycle diagnostic", () => {
   const found = diagnostics({
-    "effective.json": config([{ from: "**", allow: ["**"] }]),
+    "effektive.json": config([{ from: "**", allow: ["**"] }]),
     "a.eff": [
       'import { b } from "./b.eff"',
       "type Int = int",
@@ -144,12 +144,12 @@ Deno.test("an absent policy and an unmatched source preserve unrestricted import
     "loose/main.eff": 'import { Clock } from "host:clock"\n',
   };
   assertEquals(
-    diagnostics({ "effective.json": config(), ...files }, ["loose/main.eff"]),
+    diagnostics({ "effektive.json": config(), ...files }, ["loose/main.eff"]),
     [],
   );
   assertEquals(
     diagnostics({
-      "effective.json": config([
+      "effektive.json": config([
         { from: "domain/**", allow: ["domain/**"] },
       ]),
       ...files,
@@ -171,7 +171,7 @@ Deno.test("import rules reject malformed configuration and glob patterns", () =>
   ];
   for (const value of malformed) {
     const result = checkProject(
-      memoryHost({ "effective.json": JSON.stringify(value) }),
+      memoryHost({ "effektive.json": JSON.stringify(value) }),
       "",
       [],
     );
@@ -190,20 +190,20 @@ Deno.test("a configuration edit invalidates cached import diagnostics", () => {
   const program = new Program("");
   const first = program.update({
     set: {
-      "effective.json": allowed,
+      "effektive.json": allowed,
       "domain/model.eff": "export type Id = int\n",
       "feature/read.eff": 'import { Id } from "../domain/model.eff"\n',
     },
   });
   assert(first.ok);
   assertEquals(first.value.diagnostics, []);
-  const second = program.update({ set: { "effective.json": forbidden } });
+  const second = program.update({ set: { "effektive.json": forbidden } });
   assert(second.ok);
   assertEquals(second.value.diagnostics.map((item) => item.code), [
     "module/005",
   ]);
   assert(second.value.rechecked.includes("feature/read"));
-  const third = program.update({ set: { "effective.json": allowed } });
+  const third = program.update({ set: { "effektive.json": allowed } });
   assert(third.ok);
   assertEquals(third.value.diagnostics, []);
 });
@@ -220,7 +220,7 @@ Deno.test("the language server republishes policy diagnostics after configuratio
   const text = 'import { Id } from "../domain/model.eff"\n';
   const harness = makeHarness({
     files: {
-      [`${ROOT}/effective.json`]: allowed,
+      [`${ROOT}/effektive.json`]: allowed,
       [`${ROOT}/domain/model.eff`]: "export type Id = int\n",
       [main]: text,
       [`${ROOT}/platform/clock.effi`]: CLOCK_INTERFACE,
@@ -230,18 +230,18 @@ Deno.test("the language server republishes policy diagnostics after configuratio
   harness.deliver(didOpen(mainUri, 1, text));
   assertEquals(latestPublished(harness, mainUri)?.diagnostics, []);
 
-  harness.files.set(`${ROOT}/effective.json`, forbidden);
+  harness.files.set(`${ROOT}/effektive.json`, forbidden);
   harness.deliver(watched({
-    uri: uriOf(`${ROOT}/effective.json`),
+    uri: uriOf(`${ROOT}/effektive.json`),
     type: 2,
   }));
   const denied = latestPublished(harness, mainUri)?.diagnostics ?? [];
   assertEquals(denied.map((item) => item.code), ["module/005"]);
   assertStringIncludes(denied[0].message, "domain/model");
 
-  harness.files.set(`${ROOT}/effective.json`, allowed);
+  harness.files.set(`${ROOT}/effektive.json`, allowed);
   harness.deliver(watched({
-    uri: uriOf(`${ROOT}/effective.json`),
+    uri: uriOf(`${ROOT}/effektive.json`),
     type: 2,
   }));
   assertEquals(latestPublished(harness, mainUri)?.diagnostics, []);
@@ -254,7 +254,7 @@ Deno.test("the language server republishes policy diagnostics after import edits
   const forbidden = 'import { other } from "../other.eff"\n' + clean;
   const harness = makeHarness({
     files: {
-      [`${ROOT}/effective.json`]: config([
+      [`${ROOT}/effektive.json`]: config([
         { from: "domain/**", allow: ["domain/**"] },
       ]),
       [main]: clean,

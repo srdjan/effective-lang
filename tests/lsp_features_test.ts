@@ -321,7 +321,7 @@ Deno.test("document symbols of a host file that no module imports", () => {
 
 Deno.test("document symbols before the first good revision", () => {
   const h = makeHarness({
-    files: { ...exampleFilesAt(ROOT), [`${ROOT}/effective.json`]: "{" },
+    files: { ...exampleFilesAt(ROOT), [`${ROOT}/effektive.json`]: "{" },
   });
   h.start();
   h.deliver(
@@ -414,8 +414,8 @@ Deno.test("only subscribed modules send generatedChanged, and a configuration er
   assertEquals(h.notifications("effective/generatedChanged"), []);
   assert(generated(h, 1) !== null);
   h.clearSent();
-  h.files.set(`${ROOT}/effective.json`, "{");
-  h.deliver(watched({ uri: uriOf(`${ROOT}/effective.json`), type: 2 }));
+  h.files.set(`${ROOT}/effektive.json`, "{");
+  h.deliver(watched({ uri: uriOf(`${ROOT}/effektive.json`), type: 2 }));
   assertEquals(h.notifications("effective/generatedChanged"), []);
   // The module of a file that is not `.eff` is never subscribed.
   assertEquals(generated(h, 2, PROVIDERS), null);
@@ -527,8 +527,8 @@ Deno.test("didSave of a host interface file runs the round and writes no file fo
 Deno.test("didSave during a configuration error writes nothing and logs type 1", () => {
   const h = started();
   h.deliver(didOpen(MAIN, 1, MAIN_TEXT));
-  onDisk(h, "effective.json", "{");
-  h.deliver(watched({ uri: uriOf(`${ROOT}/effective.json`), type: 2 }));
+  onDisk(h, "effektive.json", "{");
+  h.deliver(watched({ uri: uriOf(`${ROOT}/effektive.json`), type: 2 }));
   h.clearSent();
   const before = new Map(h.files);
   h.deliver(save(MAIN));
@@ -606,7 +606,7 @@ Deno.test("gap D: unsaved text of an open module does not reach main.ts", () => 
   assertEquals(h.files.get(MAIN_TS), saved);
 });
 
-Deno.test("a watched event for effective.json runs a round, and other events run none", () => {
+Deno.test("a watched event for effektive.json runs a round, and other events run none", () => {
   const h = started();
   h.deliver(didOpen(MAIN, 1, MAIN_TEXT));
   h.clearSent();
@@ -616,20 +616,20 @@ Deno.test("a watched event for effective.json runs a round, and other events run
   assert(!h.files.has(MAIN_TS));
   assertEquals(typeLogs(h, 4), []);
   // The configuration event runs the round for the project.
-  h.deliver(watched({ uri: uriOf(`${ROOT}/effective.json`), type: 2 }));
+  h.deliver(watched({ uri: uriOf(`${ROOT}/effektive.json`), type: 2 }));
   assertEquals(h.files.get(MAIN_TS), freshOutput(h, "main"));
   assert(typeLogs(h, 4).includes("wrote main.ts"));
   // A delete event for the configuration runs a round as well.
   h.clearSent();
-  h.files.delete(`${ROOT}/effective.json`);
-  h.deliver(watched({ uri: uriOf(`${ROOT}/effective.json`), type: 3 }));
+  h.files.delete(`${ROOT}/effektive.json`);
+  h.deliver(watched({ uri: uriOf(`${ROOT}/effektive.json`), type: 3 }));
   assertEquals(typeLogs(h, 4), []);
 });
 
-Deno.test("a watched effective.json event with writeOnSave false runs no round", () => {
+Deno.test("a watched effektive.json event with writeOnSave false runs no round", () => {
   const h = started({ writeOnSave: false });
   h.deliver(didOpen(MAIN, 1, MAIN_TEXT));
-  h.deliver(watched({ uri: uriOf(`${ROOT}/effective.json`), type: 2 }));
+  h.deliver(watched({ uri: uriOf(`${ROOT}/effektive.json`), type: 2 }));
   assert(!h.files.has(MAIN_TS));
   assertEquals(h.logs(), []);
 });
@@ -686,7 +686,7 @@ Deno.test("stats has the revision, the counts, the delta, and the memory", () =>
 
 Deno.test("stats before the first good revision, and with no project", () => {
   const h = makeHarness({
-    files: { ...exampleFilesAt(ROOT), [`${ROOT}/effective.json`]: "{" },
+    files: { ...exampleFilesAt(ROOT), [`${ROOT}/effektive.json`]: "{" },
   });
   h.start();
   h.deliver(didOpen(MAIN, 1, MAIN_TEXT));

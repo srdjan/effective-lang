@@ -43,7 +43,7 @@ Parity. `deno task check`. `deno task behavior:capture <base> <head>` with zero 
 
 ### ED2. Rename and contract actions rebuild the project from a copy of the config schema (high)
 
-Evidence. `revisionInputs` (`editor_rename.ts:178-194`) writes `effective.json` again with the keys `host`, `interface`, and `module` (M, checked). `parseConfig` holds the same key list in `TOP_KEYS` and `HOST_KEYS` (`project.ts:113-114`). Rename detects a conflict when the diagnostic count grows (`editor_rename.ts:142`, M, checked). Contract actions use `>=` on the same counts (`editor_actions.ts:145`). Each rename builds a new `Program` from no memo (`editor_rename.ts:132`): 168 to 232 ms on a generated project with 55 files and 2472 functions, against 14 ms for an incremental update (M).
+Evidence. `revisionInputs` (`editor_rename.ts:178-194`) writes `effektive.json` again with the keys `host`, `interface`, and `module` (M, checked). `parseConfig` holds the same key list in `TOP_KEYS` and `HOST_KEYS` (`project.ts:113-114`). Rename detects a conflict when the diagnostic count grows (`editor_rename.ts:142`, M, checked). Contract actions use `>=` on the same counts (`editor_actions.ts:145`). Each rename builds a new `Program` from no memo (`editor_rename.ts:132`): 168 to 232 ms on a generated project with 55 files and 2472 functions, against 14 ms for an incremental update (M).
 
 Failure scenarios. A new config key passes `parseConfig`, but `revisionInputs` drops it, so rename checks a different project. A new checker diagnostic in an unrelated healthy module can change the count result.
 
@@ -276,7 +276,7 @@ CK8 (ModuleChecker phase values). In `check.ts`, `checkType` returns its `TypeNo
 
 CK1a (required prologue rows). Change `PreludePrologues` (`check_expr.ts:270`) to `{ readonly [K in PreludeCallName]: Prologue<K> | "own-arity" }`. 92 of the 95 call names have a row now. Add rows `fail: "own-arity"`, `Some: "own-arity"`, and `unbrand: "own-arity"`. `preludeCall` (`:982`) runs the prologue only when the row is not `"own-arity"`. Optional, only if it compiles without changing a row: restrict a static `fact` object in `PrologueFacts<K>` to `NodeFact & { readonly kind: Kebab<K> }`, where `Kebab` converts camel case to kebab case at the type level. The validator measured that every static `fact` kind and every `bailFact` kind equals the kebab form of its name, so the restriction can also cover `bailFact`. If it does not compile, drop the option and report why.
 
-ED2 step 1 (revision inputs). `Revision` gets a private field with a snapshot of `Program.files` at the time of `update`, and a method `inputs(): ReadonlyMap<string, string>`. `Program.check` passes `new Map(this.files)`. `Program.files` holds only `.eff`, `.effi`, and the root `effective.json`, with root-relative keys (M). Delete `revisionInputs` from `editor_rename.ts`; `mod.ts` does not export it and no test imports it. `renameAt` and `contractActionsAt` call `new Map(revision.inputs())`, then apply their edits. Visible change: the speculative program now reads the real config text. A config with unknown keys gives `module/001` diagnostics. Today they count in the base revision but not in the speculative program, so a rename that adds up to that many new diagnostics passes. After this unit, both sides count them, so such a rename is rejected. Contract actions change the same way. Add one test for this case in `tests/editor_queries_test.ts`, and state the change in the commit body. The capture records each `Program.update`, and the inputs of the speculative programs now include the real config text, so `program` records can change their input hash. Judge this unit with the capture and accept only differences in `program` input hashes whose diagnostic lists stay equal. Also run `tests/editor_queries_test.ts` and `tests/lsp_editor_test.ts`.
+ED2 step 1 (revision inputs). `Revision` gets a private field with a snapshot of `Program.files` at the time of `update`, and a method `inputs(): ReadonlyMap<string, string>`. `Program.check` passes `new Map(this.files)`. `Program.files` holds only `.eff`, `.effi`, and the root `effektive.json`, with root-relative keys (M). Delete `revisionInputs` from `editor_rename.ts`; `mod.ts` does not export it and no test imports it. `renameAt` and `contractActionsAt` call `new Map(revision.inputs())`, then apply their edits. Visible change: the speculative program now reads the real config text. A config with unknown keys gives `module/001` diagnostics. Today they count in the base revision but not in the speculative program, so a rename that adds up to that many new diagnostics passes. After this unit, both sides count them, so such a rename is rejected. Contract actions change the same way. Add one test for this case in `tests/editor_queries_test.ts`, and state the change in the commit body. The capture records each `Program.update`, and the inputs of the speculative programs now include the real config text, so `program` records can change their input hash. Judge this unit with the capture and accept only differences in `program` input hashes whose diagnostic lists stay equal. Also run `tests/editor_queries_test.ts` and `tests/lsp_editor_test.ts`.
 
 CK6 (probe, no commit). The coordinator adds a temporary counter in `TypeTable.union` for ties where `irKey(a) === irKey(b)` and `a !== b`, runs `deno task test`, records the count in this section, and reverts the probe. With 0 ties, a later unit replaces `|| a - b` with an internal invariant throw. With any ties, the fallback stays and this section records the cases.
 
@@ -416,7 +416,7 @@ Rename (`editor_rename.ts:140-147`) rejects when `diagnosticDelta(before analysi
 
 Known visible changes. A rename that removes one analysis diagnostic and adds another passes today and is rejected after this unit. A contract action that removes two diagnostics and adds one is offered today and is skipped after this unit. A rename or action is no longer affected when an unrelated diagnostic moves only because of the edit.
 
-Measure the visible change before the commit with a temporary probe that is not committed. It runs over the 14 fixture directories that hold an `effective.json` (`find fixtures -name effective.json`). For each identifier occurrence, the probe calls `renameAt` with the new name `renamedProbe`. The plan check measured 2800 such calls in 15.4 s. Only the 6 `errors/` fixtures have diagnostics, so only they can show a rename difference.
+Measure the visible change before the commit with a temporary probe that is not committed. It runs over the 14 fixture directories that hold an `effektive.json` (`find fixtures -name effektive.json`). For each identifier occurrence, the probe calls `renameAt` with the new name `renamedProbe`. The plan check measured 2800 such calls in 15.4 s. Only the 6 `errors/` fixtures have diagnostics, so only they can show a rename difference.
 
 The fixtures offer 0 contract actions, so the probe also changes the fixtures for actions. For each function with an explicit contract and a `fails` or `uses` clause, the probe deletes that clause text. Then it calls `contractActionsAt` on the function span of the changed project, under the old and the new rule. The probe compares the old and the new results. List each difference in the commit body. With no difference, state that the probe found none, and state how many renames and actions it ran.
 
@@ -468,7 +468,7 @@ Measurements for this section (M, 2026-10-22, HEAD `61ef88b`). Three agents meas
 - IC3. `BodyValidator` has 127 members, of which 122 are methods. The 797 `this.` uses are correct.
 - IC4. The `targetCall` design already exists as `Callee`, `OPERAND_CALLS`, and `LEAF_CALLS` in `emit/calls.ts` (commit `9adc5cd`).
 - IC6. The validator has 284 path templates, not 223. One path is wrong: `simpleSchedule` (`validate/expr.ts:4246`) checks the argument under `${path}.argument`, but the IR fields are `times` and `delayMillis` (`ir.ts:183-184`). All other 109 `this.check(X, path)` calls match the access chain of `X`.
-- ED3. The CLI and the LSP already share `removeStaleOutputs`, `writableModules`, `writeGenerated`, and `generationSource`. About 25 lines of orchestration repeat on each side. Only `projects.ts:40` imports the protocol `Diagnostic`, so the proposed `publish.ts` gives nothing for that goal. The LSP also skips the modules that a nested `effective.json` owns (`projects.ts:470,488`), and the CLI does not (N1, probe `/tmp/p4-ed/nested_probe.ts`).
+- ED3. The CLI and the LSP already share `removeStaleOutputs`, `writableModules`, `writeGenerated`, and `generationSource`. About 25 lines of orchestration repeat on each side. Only `projects.ts:40` imports the protocol `Diagnostic`, so the proposed `publish.ts` gives nothing for that goal. The LSP also skips the modules that a nested `effektive.json` owns (`projects.ts:470,488`), and the CLI does not (N1, probe `/tmp/p4-ed/nested_probe.ts`).
 
 ### Scope
 
@@ -607,7 +607,7 @@ Decision 3 is (a). ED3 has two commits.
 ED3a (characterization tests first). Add tests for four behaviors that no test pins today:
 
 1. The CLI watch loop forgets a module after a failed removal (probe `/tmp/p4-ed/forget_probe.ts`).
-2. `effective build` writes the outputs of a module that a nested `effective.json` owns (N1, probe `/tmp/p4-ed/nested_probe.ts`).
+2. `effective build` writes the outputs of a module that a nested `effektive.json` owns (N1, probe `/tmp/p4-ed/nested_probe.ts`).
 3. The LSP logs each removed path and its notes in module order.
 4. The relative order of the LSP type-4, type-1, and type-3 logs in one save round.
 
@@ -693,7 +693,7 @@ Size (M, `scripts/measure.ts` over the `.ts` files of `src/core`, `b888a6a` agai
 
 Edit sites after Phase 4. A new builtin in an existing family edits the `PRELUDE` row, the rows of the family, and the family code, and `check_expr.ts` does not change. A change of the removal or ownership rule of a save round edits `src/host/save_round.ts` only.
 
-Decision 5 (N1), found in Phase 4. `effective build` wrote the outputs of a module that a nested `effective.json` owns, and the language server did not. ED3 kept this difference as the `owns` parameter.
+Decision 5 (N1), found in Phase 4. `effective build` wrote the outputs of a module that a nested `effektive.json` owns, and the language server did not. ED3 kept this difference as the `owns` parameter.
 
 The user chose (b) on 2026-10-22: the CLI uses the language server rule. `ownedByRoot` in `src/host/save_round.ts` now holds that rule for both callers. The ED3a test in `tests/cli_test.ts` now asserts that `build` skips those outputs, and a new test in `tests/watch_stale_test.ts` covers `watch`. Both tests fail with the old rule.
 

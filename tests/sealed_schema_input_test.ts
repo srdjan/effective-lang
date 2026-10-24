@@ -26,7 +26,7 @@ export const ownerTransform: Schema<Int, Positive> = schemaTransform(
 function checkConsumer(library: string, body: string) {
   const checked = checkProject(
     memoryHost({
-      "effective.json": "{}",
+      "effektive.json": "{}",
       "lib.eff": library,
       "main.eff": `
 import { Int, Positive, one, positiveSchema, positiveOptional, ownerTransform } from "./lib.eff"

@@ -37,7 +37,7 @@ const BASE = "export type A = int\nexport type B = int\n";
 
 function lowerBase(): ModuleIR {
   const checked = checkProject(
-    memoryHost({ "effective.json": "{}", "m.eff": BASE }),
+    memoryHost({ "effektive.json": "{}", "m.eff": BASE }),
     "",
     ["m.eff"],
   );

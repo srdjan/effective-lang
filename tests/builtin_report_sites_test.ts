@@ -23,7 +23,7 @@ interface SiteRow {
 }
 
 const HOST_FILES: Record<string, string> = {
-  "effective.json": JSON.stringify({
+  "effektive.json": JSON.stringify({
     host: { files: { interface: "./host.effi", module: "./host.ts" } },
   }),
   "host.effi": `
@@ -44,7 +44,7 @@ function diagnosticsOf(
 ): { readonly code: string; readonly message: string }[] {
   const files = host
     ? { ...HOST_FILES, "main.eff": text }
-    : { "effective.json": "{}", "main.eff": text };
+    : { "effektive.json": "{}", "main.eff": text };
   const result = checkProject(memoryHost(files), "", ["main.eff"]);
   if (!result.ok) throw new Error(JSON.stringify(result));
   return result.value.diagnostics.map((d) => ({

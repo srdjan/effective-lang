@@ -164,7 +164,7 @@ interface Program {
 
 function lowerProgram(text: string): Program {
   const checked = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": text }),
+    memoryHost({ "effektive.json": "{}", "main.eff": text }),
     "",
     ["main.eff"],
   );

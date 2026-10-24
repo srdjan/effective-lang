@@ -56,7 +56,7 @@ export const g: G = (x: Count): Count => x
 
 Deno.test("a written function type keeps its source order for inferred parameters", () => {
   const module = emitFiles({
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "m.eff": `type B = string
 type A = int
 export const g: (x: B | A) => A = (x) => 2

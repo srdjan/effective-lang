@@ -73,7 +73,7 @@ function linkedFs(
 }
 
 const FILES = {
-  "/p/effective.json": "{}",
+  "/p/effektive.json": "{}",
   "/p/a.eff": "a",
   "/p/sub/b.eff": "b",
   "/other/c.eff": "c",

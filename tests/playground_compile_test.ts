@@ -162,14 +162,14 @@ Deno.test("hover after a breaking edit gives the unavailable backend", () => {
   );
 });
 
-Deno.test("a broken effective.json gives a config error and no hover", () => {
+Deno.test("a broken effektive.json gives a config error and no hover", () => {
   const { pg } = start();
-  const result = pg.update("effective.json", "{ nope");
+  const result = pg.update("effektive.json", "{ nope");
   assert(!result.ok);
   assertEquals(result.error.tag, "config");
-  assert(result.error.message.includes("effective.json"));
+  assert(result.error.message.includes("effektive.json"));
   assertEquals(pg.hover("users.eff", 10), undefined);
-  const repaired = okOf(pg.update("effective.json", FILES["effective.json"]));
+  const repaired = okOf(pg.update("effektive.json", FILES["effektive.json"]));
   assertEquals(repaired.outputs["users.eff"]?.stale, false);
   assertNotEquals(
     pg.hover("users.eff", offsetOf(FILES["users.eff"], "rename")),

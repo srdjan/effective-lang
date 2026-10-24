@@ -81,15 +81,15 @@ function contextOf(
 function freshProject(context: Context, ctx: ServerContext): boolean {
   const { project, revision } = context;
   if (project.configError !== undefined) return false;
-  const config = project.open.get("effective.json")?.text;
+  const config = project.open.get("effektive.json")?.text;
   const diskConfig = config === undefined
-    ? ctx.fs.readText(joinPath(project.root, "effective.json"))
+    ? ctx.fs.readText(joinPath(project.root, "effektive.json"))
     : undefined;
   const currentConfig = config ??
     (diskConfig?.ok ? diskConfig.value : undefined);
   if (
     currentConfig === undefined ||
-    currentConfig !== project.current.get("effective.json")
+    currentConfig !== project.current.get("effektive.json")
   ) return false;
   for (const [path, text] of revision.sourceTexts()) {
     const open = project.open.get(path);

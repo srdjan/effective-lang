@@ -159,7 +159,7 @@ const CASES: readonly GuardedCase[] = [
 
 function lowerSource(text: string): ModuleIR {
   const checked = checkProject(
-    memoryHost({ "effective.json": "{}", "m.eff": text }),
+    memoryHost({ "effektive.json": "{}", "m.eff": text }),
     "",
     ["m.eff"],
   );
@@ -196,7 +196,7 @@ function applyForge(ir: ModuleIR, forge: Forge): void {
 Deno.test("the checker accepts guarded recursion only for distinct literal tags and a terminal branch", () => {
   for (const c of CASES) {
     const checked = checkProject(
-      memoryHost({ "effective.json": "{}", "m.eff": c.source }),
+      memoryHost({ "effektive.json": "{}", "m.eff": c.source }),
       "",
       ["m.eff"],
     );

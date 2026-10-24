@@ -1,4 +1,4 @@
-// The project: `effective.json`, module identity, the host registry, the module
+// The project: `effektive.json`, module identity, the host registry, the module
 // graph, import cycles, and the topological order. Plan section 5.3 states the
 // rules. The core reads files only through SourceHost.
 
@@ -14,7 +14,7 @@ import type { ReadError, Result, SourceHost, Span } from "./source.ts";
 import type { FileMode, SyntaxTree } from "./syntax.ts";
 import { compareText, errorMessage, isRecord } from "./util.ts";
 
-export const CONFIG_FILE = "effective.json";
+export const CONFIG_FILE = "effektive.json";
 
 // ------------------------------------------------------------------ paths
 
@@ -202,7 +202,7 @@ interface ConfigResult {
   readonly diagnostics: readonly Diagnostic[];
 }
 
-/** Parses the text of `effective.json`. Unknown keys give diagnostics. */
+/** Parses the text of `effektive.json`. Unknown keys give diagnostics. */
 export function parseConfig(
   text: string,
 ): Result<ConfigResult, ConfigError> {
@@ -343,7 +343,7 @@ export function parseConfig(
   return { ok: true, value: { config, diagnostics } };
 }
 
-/** Reads and parses `effective.json` in the project root. */
+/** Reads and parses `effektive.json` in the project root. */
 export function readConfig(
   host: SourceHost,
   root: string,

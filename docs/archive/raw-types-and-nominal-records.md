@@ -135,7 +135,7 @@ D28. Does R1 apply to `.effi` host interface files?
 D29. How does R1 reach the code?
 
 - (a) Always on. One plan migrates the examples, the fixtures, the tests, the bench generator, and the golden files. Recommended, because a language rule must not depend on a project setting.
-- (b) A project setting in `effective.json`, off by default. Old projects keep working, but the language then has two dialects.
+- (b) A project setting in `effektive.json`, off by default. Old projects keep working, but the language then has two dialects.
 
 D30. Which diagnostic code does R1 use?
 

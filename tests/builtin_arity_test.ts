@@ -195,7 +195,7 @@ const ARITY_ROWS: readonly ArityRow[] = [
 
 function arityMessages(call: string): string[] {
   const result = checkProject(
-    memoryHost({ "effective.json": "{}", "m.eff": `const x = ${call}\n` }),
+    memoryHost({ "effektive.json": "{}", "m.eff": `const x = ${call}\n` }),
     "",
     ["m.eff"],
   );

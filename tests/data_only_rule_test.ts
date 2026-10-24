@@ -88,7 +88,7 @@ export const ok: Schema<Int> = schema()
 
 function lowerBase(): ModuleIR {
   const checked = checkProject(
-    memoryHost({ "effective.json": "{}", "m.eff": BASE }),
+    memoryHost({ "effektive.json": "{}", "m.eff": BASE }),
     "",
     ["m.eff"],
   );

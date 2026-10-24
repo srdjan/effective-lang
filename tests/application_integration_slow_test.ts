@@ -14,7 +14,7 @@ Deno.test("service workflow passes real loopback HTTP and file-backed SQLite acc
     import.meta.url,
   );
   const files = Object.fromEntries(
-    ["effective.json", "contracts.eff", "host.effi", "workflow.eff"].map((
+    ["effektive.json", "contracts.eff", "host.effi", "workflow.eff"].map((
       name,
     ) => [
       name,

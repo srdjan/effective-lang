@@ -10,7 +10,7 @@ Deno.test("check ends on real symlink cycles and reads each module once", async 
   await withTemporaryDirectory("effective-links-", async (dir) => {
     Deno.mkdirSync(`${dir}/project/sub`, { recursive: true });
     Deno.mkdirSync(`${dir}/sibling`);
-    Deno.writeTextFileSync(`${dir}/project/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/project/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/project/a.eff`,
       "type I = int\nexport const a: I = 1\n",

@@ -100,7 +100,7 @@ interface Lowered {
 
 function lowerText(text: string): Lowered {
   const checked = checkProject(
-    memoryHost({ "effective.json": "{}", "m.eff": text }),
+    memoryHost({ "effektive.json": "{}", "m.eff": text }),
     "",
     ["m.eff"],
   );

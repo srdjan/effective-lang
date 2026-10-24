@@ -517,18 +517,18 @@ Deno.test("watched events outside known projects or outside source paths are ign
 
 // ---- Configuration errors ---------------------------------------------------
 
-Deno.test("a configuration error is published on effective.json and cleared later", () => {
+Deno.test("a configuration error is published on effektive.json and cleared later", () => {
   const h = started();
   h.deliver(didOpen(MAIN, 1, MAIN_TEXT));
   const found = h.server.projects.lookup(MAIN);
   assert(found !== undefined);
   const good = found.project.lastGood;
   assert(good !== undefined);
-  const config = uriOf(`${ROOT}/effective.json`);
-  const goodConfig = h.files.get(`${ROOT}/effective.json`) ?? "";
+  const config = uriOf(`${ROOT}/effektive.json`);
+  const goodConfig = h.files.get(`${ROOT}/effektive.json`) ?? "";
   h.clearSent();
 
-  h.files.set(`${ROOT}/effective.json`, "{");
+  h.files.set(`${ROOT}/effektive.json`, "{");
   h.deliver(watched({ uri: config, type: 2 }));
   const published = h.published();
   assertEquals(published.length, 1);
@@ -552,7 +552,7 @@ Deno.test("a configuration error is published on effective.json and cleared late
   assertEquals(h.published(), []);
   assert(found.project.lastGood === good);
 
-  h.files.set(`${ROOT}/effective.json`, goodConfig);
+  h.files.set(`${ROOT}/effektive.json`, goodConfig);
   h.deliver(watched({ uri: config, type: 2 }));
   assertEquals(h.published().map(summary), [
     [MAIN, 2, 1],
@@ -630,7 +630,7 @@ Deno.test("two projects side by side stay separate", () => {
   const h = makeHarness({
     files: {
       ...exampleFilesAt(ROOT),
-      [`${second}/effective.json`]: "{}",
+      [`${second}/effektive.json`]: "{}",
       [`${second}/a.eff`]:
         "export const a = (): Num => 1\n\ntype Num = number\n",
     },

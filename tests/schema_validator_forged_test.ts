@@ -14,7 +14,7 @@ function lowerFixture(name: string) {
     new URL(`../fixtures/emit/${name}.eff`, import.meta.url),
   );
   const checked = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": text }),
+    memoryHost({ "effektive.json": "{}", "main.eff": text }),
     "",
     ["main.eff"],
   );

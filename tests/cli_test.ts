@@ -88,7 +88,7 @@ Deno.test("check uses the current directory as the default root", async () => {
 
 Deno.test("check prints one line per diagnostic, with a one-based line and column", async () => {
   const r = await run(["check", ROOT], {
-    [`${ROOT}/effective.json`]: "{}",
+    [`${ROOT}/effektive.json`]: "{}",
     [`${ROOT}/m.eff`]: errorFixture("type-mismatch-argument-count.eff"),
   });
   assertEquals(r.code, 1);
@@ -101,7 +101,7 @@ Deno.test("check prints one line per diagnostic, with a one-based line and colum
 
 Deno.test("check sorts diagnostics by path, position, and code", async () => {
   const r = await run(["check", ROOT], {
-    [`${ROOT}/effective.json`]: "{}",
+    [`${ROOT}/effektive.json`]: "{}",
     [`${ROOT}/b.eff`]: errorFixture("syntax-unterminated-string.eff"),
     [`${ROOT}/a.eff`]: errorFixture("type-mismatch-argument-count.eff"),
     [`${ROOT}/sub/c.eff`]: errorFixture("syntax-unterminated-string.eff"),
@@ -141,7 +141,7 @@ Deno.test("a multi-line message prints on one line", () => {
 Deno.test("the walk finds .eff files in subdirectories and skips dot directories and node_modules", async () => {
   const bad = errorFixture("syntax-unterminated-string.eff");
   const r = await run(["check", ROOT], {
-    [`${ROOT}/effective.json`]: "{}",
+    [`${ROOT}/effektive.json`]: "{}",
     [`${ROOT}/ok.eff`]: "export const one: Int = 1\n\ntype Int = int\n",
     [`${ROOT}/deep/er/bad.eff`]: bad,
     [`${ROOT}/.hidden/bad.eff`]: bad,
@@ -158,8 +158,8 @@ Deno.test("the walk finds .eff files in subdirectories and skips dot directories
 Deno.test("isSourcePath accepts sources and the project file, and skips hidden and vendored directories", () => {
   assert(isSourcePath("a.eff"));
   assert(isSourcePath("host/p.effi"));
-  assert(isSourcePath("effective.json"));
-  assert(!isSourcePath("sub/effective.json"));
+  assert(isSourcePath("effektive.json"));
+  assert(!isSourcePath("sub/effektive.json"));
   assert(!isSourcePath("a.ts"));
   assert(!isSourcePath(".x/a.eff"));
   assert(!isSourcePath("a/node_modules/b.eff"));
@@ -177,10 +177,10 @@ Deno.test("usage and configuration errors exit 2", async () => {
       ["missing root", ["check", "/nowhere"], good],
       ["missing project file", ["check", ROOT], { [`${ROOT}/a.eff`]: "" }],
       ["malformed project file", ["check", ROOT], {
-        [`${ROOT}/effective.json`]: "{",
+        [`${ROOT}/effektive.json`]: "{",
       }],
       ["invalid project file", ["build", ROOT], {
-        [`${ROOT}/effective.json`]: "[]",
+        [`${ROOT}/effektive.json`]: "[]",
       }],
     ];
   for (const [title, args, files] of cases) {
@@ -192,15 +192,15 @@ Deno.test("usage and configuration errors exit 2", async () => {
 });
 
 Deno.test("a configuration error names the file and the reason", async () => {
-  const r = await run(["check", ROOT], { [`${ROOT}/effective.json`]: "{" });
+  const r = await run(["check", ROOT], { [`${ROOT}/effektive.json`]: "{" });
   assert(
-    r.stderr.startsWith("effective: effective.json is not valid JSON"),
+    r.stderr.startsWith("effective: effektive.json is not valid JSON"),
     r.stderr,
   );
   const missing = await run(["check", ROOT], { [`${ROOT}/a.eff`]: "" });
   assertEquals(
     missing.stderr,
-    "effective: /proj/effective.json does not exist\n",
+    "effective: /proj/effektive.json does not exist\n",
   );
 });
 
@@ -248,7 +248,7 @@ Deno.test("build writes the companion of the host interface, and a second build 
 
 Deno.test("build writes nothing for a module with an error and keeps its last good file", async () => {
   const files = {
-    [`${ROOT}/effective.json`]: "{}",
+    [`${ROOT}/effektive.json`]: "{}",
     [`${ROOT}/good.eff`]: "export const one = (): Int => 1\n\ntype Int = int\n",
     [`${ROOT}/bad.eff`]: errorFixture("type-mismatch-argument-count.eff"),
     [`${ROOT}/bad.ts`]: "// the last good file\n",
@@ -290,7 +290,7 @@ Deno.test("build --validate on the examples reports nothing", async () => {
 
 Deno.test("build --validate accepts a retry pipeline with an effectful left value", async () => {
   const files = {
-    [`${ROOT}/effective.json`]: "{}",
+    [`${ROOT}/effektive.json`]: "{}",
     [`${ROOT}/m.eff`]: [
       "service S { mk(): () => Int }",
       "export const f = (): Int uses S.mk => S.mk() |> retry({ times: 2 })",
@@ -419,7 +419,7 @@ Deno.test("build --tsc sends output that is not a diagnostic to stderr", async (
 
 Deno.test("build --tsc skips deno check when the build has an error", async () => {
   const files = {
-    [`${ROOT}/effective.json`]: "{}",
+    [`${ROOT}/effektive.json`]: "{}",
     [`${ROOT}/bad.eff`]: errorFixture("type-mismatch-argument-count.eff"),
   };
   const r = await run(["build", ROOT, "--tsc"], files);
@@ -479,19 +479,19 @@ Deno.test("watch builds once, then rebuilds for each event and prints the rechec
 Deno.test("watch goes on after a broken project file", async () => {
   const files = under(ROOT, exampleFiles());
   const m = memoryIo(files);
-  const config = files[`${ROOT}/effective.json`];
+  const config = files[`${ROOT}/effektive.json`];
   m.script = [
     () => {
-      m.files.set(`${ROOT}/effective.json`, "{");
+      m.files.set(`${ROOT}/effektive.json`, "{");
     },
     () => {
-      m.files.set(`${ROOT}/effective.json`, config);
+      m.files.set(`${ROOT}/effektive.json`, config);
     },
   ];
   const code = await main(["watch", ROOT], m.io);
   assertEquals(code, 0);
   const err = m.err.join("");
-  assert(err.includes("error: effective.json is not valid JSON"), err);
+  assert(err.includes("error: effektive.json is not valid JSON"), err);
   const rechecked = err.split("\n").filter((l) => l.startsWith("rechecked: "));
   // The fix brings back the same keys, so the program checks nothing again.
   assertEquals(rechecked, [
@@ -550,7 +550,7 @@ Deno.test("debounceBatches ends when the source ends", async () => {
 });
 
 Deno.test("an unexpected throw is an internal error with exit code 3", async () => {
-  const m = memoryIo({ [`${ROOT}/effective.json`]: "{}" });
+  const m = memoryIo({ [`${ROOT}/effektive.json`]: "{}" });
   const io = {
     ...m.io,
     fs: {
@@ -567,13 +567,13 @@ Deno.test("an unexpected throw is an internal error with exit code 3", async () 
 });
 
 // The nested project writes the outputs of its own modules, as in the language server.
-Deno.test("build does not write the outputs of a module that a nested effective.json owns", async () => {
+Deno.test("build does not write the outputs of a module that a nested effektive.json owns", async () => {
   const mod = (name: string): string =>
     `type I = int\nexport const ${name}: I = 1\n`;
   const r = await run(["build", ROOT], {
-    [`${ROOT}/effective.json`]: "{}",
+    [`${ROOT}/effektive.json`]: "{}",
     [`${ROOT}/a.eff`]: mod("a"),
-    [`${ROOT}/inner/effective.json`]: "{}",
+    [`${ROOT}/inner/effektive.json`]: "{}",
     [`${ROOT}/inner/m.eff`]: mod("m"),
   });
   assertEquals(r.code, 0, r.stderr);

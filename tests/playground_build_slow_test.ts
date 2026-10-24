@@ -15,7 +15,7 @@ const OUTPUTS: readonly string[] = [
 
 const EXAMPLE_PATHS: readonly string[] = [
   "collections.eff",
-  "effective.json",
+  "effektive.json",
   "host/providers.effi",
   "log.eff",
   "main.eff",

@@ -43,7 +43,7 @@ A `match` whose arms return string literals, with a literal-union result type, c
 
 ### EX4. The application fixture (one commit in this repository)
 
-- Add `fixtures/applications/order-lifecycle/` with `effective.json`, `deno.json` (the same imports and compiler options as `stream-processor/deno.json`), `.gitignore` (as `stream-processor/.gitignore`, for the emitted `contracts.ts`, `orders.ts`, maps, and `deno.lock`), `contracts.eff`, `orders.eff`, `main.ts`, `runtime_test.ts`, and `README.md` in the style of the other application READMEs.
+- Add `fixtures/applications/order-lifecycle/` with `effektive.json`, `deno.json` (the same imports and compiler options as `stream-processor/deno.json`), `.gitignore` (as `stream-processor/.gitignore`, for the emitted `contracts.ts`, `orders.ts`, maps, and `deno.lock`), `contracts.eff`, `orders.eff`, `main.ts`, `runtime_test.ts`, and `README.md` in the style of the other application READMEs.
 - `tests/application_slow_test.ts`: add the `APPLICATIONS` row with `hostFiles: ["runtime_test.ts", "main.ts"]`, add the new report fields to the `Report` interface, and change the header comment that says "three application fixtures".
 - Add a row to the application table in `docs/status.md` in its format, with the plan link `plans/2026-10-23-nominal-examples.md`. Update each count of the applications: `docs/development.md:60`, `docs/api.md:132`, `README.md:78`, and `docs/status.md` lines 3, 7, 9, and 66. The new application is a witness for nominal data types, beside the three gate applications. Write this distinction where a count changes.
 - Run `deno task lex:update`.

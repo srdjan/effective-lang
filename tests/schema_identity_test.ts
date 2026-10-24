@@ -13,7 +13,7 @@ const fixture = Deno.readTextFileSync(
 const checked = (source: string) => checkModule(source, "main.eff");
 
 function emitted(source: string): string {
-  const module = emitFiles({ "effective.json": "{}", "main.eff": source }, [
+  const module = emitFiles({ "effektive.json": "{}", "main.eff": source }, [
     "main.eff",
   ]).get("main");
   assert(module !== undefined, "module main was not emitted");

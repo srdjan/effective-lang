@@ -333,7 +333,7 @@ Deno.test("the on option must be a literal of the three operations", () => {
     const source = prefix +
       `const bad = schemaDefaultKey(text, (): Text => "Ada", ${options})`;
     const result = checkProject(
-      memoryHost({ "effective.json": "{}", "main.eff": source }),
+      memoryHost({ "effektive.json": "{}", "main.eff": source }),
       "",
       ["main.eff"],
     );
@@ -348,7 +348,7 @@ Deno.test("the on option must be a literal of the three operations", () => {
   }
   const variable = checkProject(
     memoryHost({
-      "effective.json": "{}",
+      "effektive.json": "{}",
       "main.eff": prefix +
         `const mode = "null"\nconst bad = schemaDefaultKey(text, (): Text => "Ada", { on: mode })`,
     }),

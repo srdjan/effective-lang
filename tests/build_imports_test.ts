@@ -10,7 +10,7 @@ const ROOT = "/proj";
 async function build(files: Readonly<Record<string, string>>) {
   const m = memoryIo(
     Object.fromEntries(
-      Object.entries({ "effective.json": "{}", ...files }).map((
+      Object.entries({ "effektive.json": "{}", ...files }).map((
         [path, text],
       ) => [`${ROOT}/${path}`, text]),
     ),

@@ -18,7 +18,7 @@ Deno.test("pure functions lift through alias chains up to the accepted depth", a
     ...depths.map((depth) => `export const lifted${depth}: A${depth} = plain`),
   ].join("\n");
   const checked = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": source }),
+    memoryHost({ "effektive.json": "{}", "main.eff": source }),
     "",
     ["main.eff"],
   );

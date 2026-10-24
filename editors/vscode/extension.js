@@ -196,7 +196,7 @@ function activate(context) {
         fileEvents: [
           vscode.workspace.createFileSystemWatcher("**/*.eff"),
           vscode.workspace.createFileSystemWatcher("**/*.effi"),
-          vscode.workspace.createFileSystemWatcher("**/effective.json"),
+          vscode.workspace.createFileSystemWatcher("**/effektive.json"),
         ],
       },
       initializationOptions: {

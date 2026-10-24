@@ -16,7 +16,7 @@ All work stays on local `main`. No agent pushes changes.
 
 ## PX1: import rules
 
-Add optional `imports` rules to `effective.json`. The first matching `from` rule controls each module's allowed direct imports.
+Add optional `imports` rules to `effektive.json`. The first matching `from` rule controls each module's allowed direct imports.
 Resolve ordinary targets before matching normalized paths. Match host targets against their `host:` specifiers.
 An unmatched module remains unrestricted. Preserve existing cycle diagnostics and all projects without rules.
 

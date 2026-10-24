@@ -90,7 +90,7 @@ function lowerText(
   text: string,
 ): { ir: ModuleIR; sources: Map<string, string> } {
   const checked = checkProject(
-    memoryHost({ "effective.json": "{}", "m.eff": text }),
+    memoryHost({ "effektive.json": "{}", "m.eff": text }),
     "",
     ["m.eff"],
   );
@@ -1707,7 +1707,7 @@ function lowerFiles(
 
 const EXTRA_PROGRAMS: Readonly<Record<string, Record<string, string>>> = {
   "incremental stream and sink": {
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "m.eff": `
 service Source { next(state: Int): Option<[Int, Int]> }
 service Consumer { accept(value: Int): void }
@@ -1719,7 +1719,7 @@ type Int = int
 `,
   },
   "bounded traversal": {
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "m.eff": `
 error Stop = {}
 service S { step(n: Int): Int fails Stop }
@@ -1729,7 +1729,7 @@ type Int = int
 `,
   },
   "scoped operation records": {
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "m.eff": `
 error Stop = {}
 service Files { open(): { read: () => Text fails Stop, close: () => void } }
@@ -1739,7 +1739,7 @@ type Text = string
 `,
   },
   "block-local functions, optional fields, and boolean operators": {
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "m.eff": `
 type P = { name: string, age?: int }
 export const f = (p: P, xs: Int[]): Int => {
@@ -1753,7 +1753,7 @@ type Int = int
 `,
   },
   "error unions in try and match": {
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "m.eff": `
 error A = { a: string }
 error B = { b: int }
@@ -1767,7 +1767,7 @@ type Text = string
 `,
   },
   "options, equality, and mixed arithmetic": {
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "m.eff": `
 export const f = (x: Int): Option<Int> => Some(x + 1)
 export const g = (): Option<Text> => None
@@ -1782,7 +1782,7 @@ type Bool = boolean
 `,
   },
   "pipeline stages that call, perform, and fail": {
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "m.eff": `
 error E = { m: string }
 error F = { x: int }
@@ -2012,7 +2012,7 @@ const nonVoid = defer(() => 1)
 
 Deno.test("borrowed host handle validation rejects a lost qualifier", () => {
   const files = {
-    "effective.json": JSON.stringify({
+    "effektive.json": JSON.stringify({
       host: { files: { interface: "./host.effi", module: "./host.ts" } },
     }),
     "host.effi": `
@@ -2111,7 +2111,7 @@ Deno.test("traverse validates callback effects in direct and pipeline calls", ()
 
 Deno.test("a provider with acquisition failures validates with zero diagnostics", () => {
   const lowered = lowerFiles({
-    "effective.json": JSON.stringify({
+    "effektive.json": JSON.stringify({
       host: {
         providers: { interface: "./host/providers.effi", module: "./live.ts" },
       },
@@ -2137,7 +2137,7 @@ Deno.test("a provider from a host module carries the service it provides", () =>
   // m imports only the provider L. The interface of host:p carries the
   // service S of s.eff, so the capability in the provider type resolves.
   const lowered = lowerFiles({
-    "effective.json": JSON.stringify({
+    "effektive.json": JSON.stringify({
       host: { p: { interface: "./host/p.effi", module: "./live.ts" } },
     }),
     "host/p.effi":

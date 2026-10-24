@@ -15,7 +15,7 @@ const PRELUDE = "type Int = int\nerror E = {}\nerror F = {}\n";
 function reportsFor(body: string): string[][] {
   const text = `${PRELUDE}type T = ${body}\n`;
   const result = checkProject(
-    memoryHost({ "effective.json": "{}", "m.eff": text }),
+    memoryHost({ "effektive.json": "{}", "m.eff": text }),
     "",
     ["m.eff"],
   );

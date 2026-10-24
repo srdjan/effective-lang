@@ -192,7 +192,7 @@ Deno.test("ranges are sorted and do not overlap in every example file", () => {
   const files = exampleFiles();
   for (const [path, text] of Object.entries(files)) {
     const ranges = highlightTokens(text);
-    assert(ranges.length > 0 || path === "effective.json", path);
+    assert(ranges.length > 0 || path === "effektive.json", path);
     let end = 0;
     for (const r of ranges) {
       assert(r.from >= end, `${path}: overlap at ${r.from}`);

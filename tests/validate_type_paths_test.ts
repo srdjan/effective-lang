@@ -150,7 +150,7 @@ const SLOTS: readonly Slot[] = [
 function lowerBase(): ModuleIR {
   const source = "export type A = int\n";
   const checked = checkProject(
-    memoryHost({ "effective.json": "{}", "m.eff": source }),
+    memoryHost({ "effektive.json": "{}", "m.eff": source }),
     "",
     ["m.eff"],
   );

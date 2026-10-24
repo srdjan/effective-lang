@@ -20,7 +20,7 @@ export const linkedNode: Schema<Node,WireNode,Read.parse,Write.print,NodeInput> 
 `;
   const incompatible = checkProject(
     memoryHost({
-      "effective.json": "{}",
+      "effektive.json": "{}",
       "main.eff": fixture,
       "imported.eff": imported + `
 type OtherWire = { score: Text, next?: OtherWire | null }
@@ -43,7 +43,7 @@ const bad: Schema<Node,OtherWire,Read.parse,Write.print,NodeInput> = node`,
   );
   const project = checkProject(
     memoryHost({
-      "effective.json": "{}",
+      "effektive.json": "{}",
       "main.eff": fixture,
       "imported.eff": imported,
     }),

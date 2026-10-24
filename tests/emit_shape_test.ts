@@ -75,7 +75,7 @@ function irOfExamplesAndEmitFixtures(): ModuleIR[] {
       }
       : {};
     modules.push(
-      ...lowerOk({ ...files, "effective.json": JSON.stringify(host) }, entries),
+      ...lowerOk({ ...files, "effektive.json": JSON.stringify(host) }, entries),
     );
   }
   return modules;

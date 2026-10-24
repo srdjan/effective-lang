@@ -12,7 +12,7 @@ const uri = uriOf(`${root}/m.eff`);
 function harness(): Harness {
   const h = makeHarness({
     files: {
-      [`${root}/effective.json`]: "{}",
+      [`${root}/effektive.json`]: "{}",
       [`${root}/lib.eff`]: lib,
       [`${root}/m.eff`]: main,
     },
@@ -134,7 +134,7 @@ Deno.test("LSP rejects stale edit requests and ignores out-of-order document cha
   );
   assertEquals(record(disk.error).code, -32801);
   h.files.set(`${root}/lib.eff`, lib);
-  h.files.set(`${root}/effective.json`, "{ ");
+  h.files.set(`${root}/effektive.json`, "{ ");
   const config = record(
     request(h, "textDocument/rename", {
       textDocument: { uri },
@@ -246,11 +246,11 @@ Deno.test("new editor methods validate request parameters", () => {
 
 Deno.test("editor edits are withheld while project configuration is invalid", () => {
   const h = harness();
-  h.files.set(`${root}/effective.json`, "{");
+  h.files.set(`${root}/effektive.json`, "{");
   h.deliver({
     jsonrpc: "2.0",
     method: "workspace/didChangeWatchedFiles",
-    params: { changes: [{ uri: uriOf(`${root}/effective.json`), type: 2 }] },
+    params: { changes: [{ uri: uriOf(`${root}/effektive.json`), type: 2 }] },
   });
   const params = {
     textDocument: { uri },

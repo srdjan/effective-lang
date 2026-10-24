@@ -27,7 +27,7 @@ export const use = (arg: Int): Int fails Stop uses S.read => { const other = val
 Deno.test("revision index shares declaration identities across imports, locals, types and capabilities", () => {
   const program = new Program("");
   const loaded = program.update({
-    set: { "effective.json": "{}", "lib.eff": library, "m.eff": consumer },
+    set: { "effektive.json": "{}", "lib.eff": library, "m.eff": consumer },
   });
   assert(loaded.ok);
   assertEquals(loaded.value.diagnostics, []);
@@ -58,7 +58,7 @@ Deno.test("indices are revision scoped and recover resolvable symbols from malfo
   const program = new Program("");
   const first = program.update({
     set: {
-      "effective.json": "{}",
+      "effektive.json": "{}",
       "m.eff":
         "type Int = int\nconst a = (x: Int): Int => x\nconst broken = (\n",
     },
@@ -88,7 +88,7 @@ Deno.test("rename follows identities across modules and expands shorthand withou
   const text =
     "type Int = int\nexport const old = (x: Int): { x: Int } => ({ x })\n";
   const loaded = new Program("").update({
-    set: { "effective.json": "{}", "m.eff": text },
+    set: { "effektive.json": "{}", "m.eff": text },
   });
   assert(loaded.ok);
   const result = renameAt(loaded.value, "m.eff", text.indexOf("x:"), "fresh");
@@ -98,7 +98,7 @@ Deno.test("rename follows identities across modules and expands shorthand withou
     text.replace("(x:", "(fresh:").replace("({ x })", "({ x: fresh })"),
   );
   const multiple = new Program("").update({
-    set: { "effective.json": "{}", "lib.eff": library, "m.eff": consumer },
+    set: { "effektive.json": "{}", "lib.eff": library, "m.eff": consumer },
   });
   assert(multiple.ok);
   const renamed = renameAt(
@@ -115,7 +115,7 @@ Deno.test("rename rejects capture, conflicts, reserved names, structural fields 
   const text =
     "type Int = int\nconst a = (x: Int): Int => { const other = 2; x + other }\n";
   const loaded = new Program("").update({
-    set: { "effective.json": "{}", "m.eff": text },
+    set: { "effektive.json": "{}", "m.eff": text },
   });
   assert(loaded.ok);
   for (const name of ["other", "class", "fail", "int", "Number", "bad-name"]) {
@@ -127,7 +127,7 @@ Deno.test("rename rejects capture, conflicts, reserved names, structural fields 
   }
   const fields = new Program("").update({
     set: {
-      "effective.json": "{}",
+      "effektive.json": "{}",
       "m.eff":
         "type R = { value: int }\nconst f = (r: R): R => ({value: r.value})\n",
     },
@@ -136,7 +136,7 @@ Deno.test("rename rejects capture, conflicts, reserved names, structural fields 
   assertEquals(prepareRenameAt(fields.value, "m.eff", 15), undefined);
   const host = new Program("").update({
     set: {
-      "effective.json": JSON.stringify({
+      "effektive.json": JSON.stringify({
         host: { native: { interface: "./native.effi", module: "./native.ts" } },
       }),
       "native.effi": "export type Int = int\n",
@@ -157,7 +157,7 @@ Deno.test("completion respects prefix, context, local scopes and incomplete memb
  const g = (): Int => S.re
  `;
   const loaded = new Program("").update({
-    set: { "effective.json": "{}", "m.eff": text },
+    set: { "effektive.json": "{}", "m.eff": text },
   });
   assert(loaded.ok);
   assertEquals(
@@ -190,7 +190,7 @@ Deno.test("completion respects prefix, context, local scopes and incomplete memb
 Deno.test("type completion offers every type word and the Effect error names", () => {
   const text = "type R = { first: int }\nconst f = (outer: R): int => 1\n";
   const loaded = new Program("").update({
-    set: { "effective.json": "{}", "m.eff": text },
+    set: { "effektive.json": "{}", "m.eff": text },
   });
   assert(loaded.ok);
   const labels = new Set(
@@ -225,11 +225,11 @@ Deno.test("rename counts configuration diagnostics on both sides of the speculat
     "type Int = int\nconst a = (x: Int): Int => { const other = 2; x + other }\n";
   const config = '{"unknown": 1}';
   const loaded = new Program("").update({
-    set: { "effective.json": config, "m.eff": text },
+    set: { "effektive.json": config, "m.eff": text },
   });
   assert(loaded.ok);
   assertEquals(loaded.value.diagnostics.map((d) => d.code), ["module/001"]);
-  assertEquals(loaded.value.inputs().get("effective.json"), config);
+  assertEquals(loaded.value.inputs().get("effektive.json"), config);
   // `Number` adds one diagnostic, and the config diagnostic counts on both sides.
   const result = renameAt(loaded.value, "m.eff", text.indexOf("x:"), "Number");
   assertEquals(result.ok, false);
@@ -240,7 +240,7 @@ const deltaText =
 
 Deno.test("diagnosticDelta moves a diagnostic after an edit before it", () => {
   const loaded = new Program("").update({
-    set: { "effective.json": "{}", "m.eff": deltaText },
+    set: { "effektive.json": "{}", "m.eff": deltaText },
   });
   assert(loaded.ok);
   const before = loaded.value.analysisDiagnostics;
@@ -256,7 +256,7 @@ Deno.test("diagnosticDelta moves a diagnostic after an edit before it", () => {
   assert(renamed.ok);
   const next = new Program("").update({
     set: {
-      "effective.json": "{}",
+      "effektive.json": "{}",
       "m.eff": applySourceEdits(deltaText, renamed.value),
     },
   });
@@ -274,7 +274,7 @@ Deno.test("diagnosticDelta moves a diagnostic after an edit before it", () => {
 
 Deno.test("diagnosticDelta moves only the end of a span that contains an edit", () => {
   const loaded = new Program("").update({
-    set: { "effective.json": "{}", "m.eff": deltaText },
+    set: { "effektive.json": "{}", "m.eff": deltaText },
   });
   assert(loaded.ok);
   const [diagnostic] = loaded.value.analysisDiagnostics;
@@ -307,7 +307,7 @@ Deno.test("diagnosticDelta moves only the end of a span that contains an edit", 
 
 Deno.test("diagnosticDelta counts a duplicate diagnostic twice", () => {
   const loaded = new Program("").update({
-    set: { "effective.json": "{}", "m.eff": deltaText },
+    set: { "effektive.json": "{}", "m.eff": deltaText },
   });
   assert(loaded.ok);
   const [diagnostic] = loaded.value.analysisDiagnostics;
@@ -323,7 +323,7 @@ Deno.test("rename rejects a new analysis diagnostic when the diagnostic count st
   const text =
     "type Int = int\nconst f = (x: Int): Int => { const t = w; const w = 2; t + w + x }\n";
   const loaded = new Program("").update({
-    set: { "effective.json": "{}", "m.eff": text },
+    set: { "effektive.json": "{}", "m.eff": text },
   });
   assert(loaded.ok);
   assertEquals(loaded.value.analysisDiagnostics.map((d) => d.code), [
@@ -339,7 +339,7 @@ Deno.test("semantic classifications retain UTF-16 spans and lexical fallback on 
   const text =
     "// 😀 comment\ntype Int = int\nconst f = (value: Int): Int => value + 1\nconst broken = (\n";
   const loaded = new Program("").update({
-    set: { "effective.json": "{}", "m.eff": text },
+    set: { "effektive.json": "{}", "m.eff": text },
   });
   assert(loaded.ok);
   const tokens = semanticClassifications(loaded.value, "m.eff", text);
@@ -366,7 +366,7 @@ Deno.test("contract actions derive and validate missing effects while preserving
     ]
   ) {
     const loaded = new Program("").update({
-      set: { "effective.json": "{}", "m.eff": text },
+      set: { "effektive.json": "{}", "m.eff": text },
     });
     assert(loaded.ok);
     const actions = contractActionsAt(
@@ -377,7 +377,7 @@ Deno.test("contract actions derive and validate missing effects while preserving
     assertEquals(actions.length, 1, JSON.stringify(loaded.value.diagnostics));
     const next = applySourceEdits(text, actions[0].edits);
     const checked = new Program("").update({
-      set: { "effective.json": "{}", "m.eff": next },
+      set: { "effektive.json": "{}", "m.eff": next },
     });
     assert(checked.ok);
     assertEquals(checked.value.diagnostics, [], next);
@@ -387,7 +387,7 @@ Deno.test("contract actions derive and validate missing effects while preserving
   }
   const broken = "type Int = int\nconst f = (): Int => unknownName()\n";
   const loaded = new Program("").update({
-    set: { "effective.json": "{}", "m.eff": broken },
+    set: { "effektive.json": "{}", "m.eff": broken },
   });
   assert(loaded.ok);
   assertEquals(contractActionsAt(loaded.value, "m.eff", 0, broken.length), []);
@@ -401,7 +401,7 @@ Deno.test("references separate same-named local scopes and capability rename pre
  export const third = (): Int uses S.read => S.read()
  `;
   const loaded = new Program("").update({
-    set: { "effective.json": "{}", "m.eff": text },
+    set: { "effektive.json": "{}", "m.eff": text },
   });
   assert(loaded.ok);
   assertEquals(
@@ -413,12 +413,12 @@ Deno.test("references separate same-named local scopes and capability rename pre
   assertEquals(method.value.length, 3);
   const file = applySourceEdits(text, method.value);
   const next = new Program("").update({
-    set: { "effective.json": "{}", "m.eff": file },
+    set: { "effektive.json": "{}", "m.eff": file },
   });
   assert(next.ok);
   assertEquals(next.value.diagnostics, []);
   const modules = new Program("").update({
-    set: { "effective.json": "{}", "lib.eff": library, "m.eff": consumer },
+    set: { "effektive.json": "{}", "lib.eff": library, "m.eff": consumer },
   });
   assert(modules.ok);
   assertEquals(
@@ -431,7 +431,7 @@ Deno.test("member completion tolerates whitespace around the dot", () => {
   const text =
     "type Int = int\nservice S { read(): Int }\nconst f = (): Int => S . re\n";
   const loaded = new Program("").update({
-    set: { "effective.json": "{}", "m.eff": text },
+    set: { "effektive.json": "{}", "m.eff": text },
   });
   assert(loaded.ok);
   assertEquals(

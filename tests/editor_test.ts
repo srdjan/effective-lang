@@ -18,7 +18,7 @@ function load(files: Files): Revision {
 
 /** A single module `m.eff` with an empty project file. */
 function loadModule(text: string): Revision {
-  return load({ "effective.json": "{}", "m.eff": text });
+  return load({ "effektive.json": "{}", "m.eff": text });
 }
 
 const FILES = exampleFiles();

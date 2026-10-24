@@ -24,7 +24,7 @@ type Obj = Record<string, unknown>;
 function check(files: Record<string, string>): CheckedProject {
   const entries = Object.keys(files).filter((f) => f.endsWith(".eff"));
   const result = checkProject(
-    memoryHost({ "effective.json": "{}", ...files }),
+    memoryHost({ "effektive.json": "{}", ...files }),
     "",
     entries,
   );
@@ -415,7 +415,7 @@ Deno.test("constants that depend on each other give an unsupported emission erro
 });
 
 const HOST_FILES = {
-  "effective.json": JSON.stringify({
+  "effektive.json": JSON.stringify({
     host: { p: { interface: "./host/p.effi", module: "./live.ts" } },
   }),
   "host/p.effi": 'import { S } from "../s.eff"\nexport provider L provides S\n',

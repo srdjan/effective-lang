@@ -8,7 +8,7 @@ import { memoryHost } from "../src/core/source.ts";
 /** Checks one module `m.eff` and returns its diagnostics as `code message` lines. */
 function diagnosticsOf(text: string): string[] {
   const result = checkProject(
-    memoryHost({ "effective.json": "{}", "m.eff": text }),
+    memoryHost({ "effektive.json": "{}", "m.eff": text }),
     "",
     ["m.eff"],
   );

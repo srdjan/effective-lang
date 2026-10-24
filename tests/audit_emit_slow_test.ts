@@ -23,7 +23,7 @@ const signatures = [
 async function checkTwoModules(library: string, value: string): Promise<void> {
   const project = checkProject(
     memoryHost({
-      "effective.json": "{}",
+      "effektive.json": "{}",
       "library.eff": library,
       "consumer.eff": `import { ${value} } from "./library.eff"\n` +
         `const forward = ${value}\n` +

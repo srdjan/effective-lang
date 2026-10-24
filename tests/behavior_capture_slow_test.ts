@@ -12,7 +12,7 @@ Deno.test("a CLI build subprocess without environment permission writes records"
     writeInstrumentedTree(dir, records);
     const project = `${dir}/project`;
     Deno.mkdirSync(project);
-    Deno.writeTextFileSync(`${project}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${project}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${project}/m.eff`,
       "export const f = (): Int => 1\ntype Int = int\n",
@@ -39,7 +39,7 @@ Deno.test("a CLI build subprocess without environment permission writes records"
 type Core = typeof import("../src/core/mod.ts");
 
 const PROJECT = {
-  "effective.json": "{}",
+  "effektive.json": "{}",
   "m.eff": "export const f = (): Int => 1\ntype Int = int\n",
   // A type error: the checker reports it, and the module does not lower.
   "bad.eff": 'export const x: Int = "no"\ntype Int = int\n',
@@ -58,7 +58,7 @@ function exercise(core: Core): void {
   assert(!core.lowerModule(checked.value, "missing").ok);
   // A failed emission: the host module is not in the project file.
   const hostFiles = {
-    "effective.json": JSON.stringify({
+    "effektive.json": JSON.stringify({
       host: { p: { interface: "./host/p.effi", module: "./live.ts" } },
     }),
     "host/p.effi":
@@ -129,7 +129,7 @@ Deno.test("two different clean programs give different check, program, and valid
     );
     const captureOf = (text: string): Map<string, string> => {
       Deno.writeTextFileSync(records, "");
-      const files = { "effective.json": "{}", "m.eff": text };
+      const files = { "effektive.json": "{}", "m.eff": text };
       const checked = core.checkProject(core.memoryHost(files), "", ["m.eff"]);
       assert(checked.ok);
       assertEquals(checked.value.diagnostics, []);

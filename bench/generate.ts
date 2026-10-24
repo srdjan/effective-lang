@@ -1,7 +1,7 @@
 // The synthetic module generator for the measurements M2, M5, and M6.
 //
 // `generateProject` is a pure function. It returns the text of a valid
-// Effective project: `effective.json`, one `base.eff` module, a chain of
+// Effective project: `effektive.json`, one `base.eff` module, a chain of
 // feature modules `m00.eff`, `m01.eff`, and so on, an `app.eff` module, the
 // host interface file, and the TypeScript host module. The scale parameter is
 // the number of declarations in the feature modules. The same options always
@@ -44,7 +44,7 @@ export interface EditTarget {
 export interface GeneratedProject {
   readonly declarations: number;
   readonly seed: number;
-  /** The files that the program reads: `effective.json`, `.eff`, and `.effi` files. */
+  /** The files that the program reads: `effektive.json`, `.eff`, and `.effi` files. */
   readonly sources: ReadonlyMap<string, string>;
   /** The TypeScript host modules, keyed by root-relative path. */
   readonly hostModules: ReadonlyMap<string, string>;
@@ -450,7 +450,7 @@ export const main = (raw: Text): Text
 export const total = (n: Int): Int => link${moduleCount - 1}(n)
 `,
   );
-  sources.set("effective.json", CONFIG);
+  sources.set("effektive.json", CONFIG);
   sources.set("host/providers.effi", PROVIDERS);
 
   const editName = moduleName(editIndex);

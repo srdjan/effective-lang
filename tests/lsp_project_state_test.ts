@@ -10,7 +10,7 @@ Deno.test("project state keeps revisions and deltas paired through initial error
     project.lastDelta,
     project.configError,
   ], [false, undefined, undefined, undefined]);
-  const firstError = project.program.update({ set: { "effective.json": "{" } });
+  const firstError = project.program.update({ set: { "effektive.json": "{" } });
   assert(!firstError.ok);
   project.recordUpdate(firstError);
   assert(project.started);
@@ -19,7 +19,7 @@ Deno.test("project state keeps revisions and deltas paired through initial error
   assertEquals(project.lastDelta, undefined);
   const first = project.program.update({
     set: {
-      "effective.json": "{}",
+      "effektive.json": "{}",
       "m.eff": "type I = int\nexport const x: I = 1\n",
     },
   });
@@ -29,7 +29,7 @@ Deno.test("project state keeps revisions and deltas paired through initial error
   assertEquals(project.lastDelta, revisionDelta(undefined, first.value));
   assertEquals(project.configError, undefined);
   const previousDelta = project.lastDelta;
-  const failed = project.program.update({ set: { "effective.json": "{" } });
+  const failed = project.program.update({ set: { "effektive.json": "{" } });
   assert(!failed.ok);
   project.recordUpdate(failed);
   assert(project.lastGood === first.value);
@@ -37,7 +37,7 @@ Deno.test("project state keeps revisions and deltas paired through initial error
   assertEquals(project.configError, failed.error);
   const recovered = project.program.update({
     set: {
-      "effective.json": "{}",
+      "effektive.json": "{}",
       "m.eff": "type I = int\nexport const x: I = 2\n",
     },
   });

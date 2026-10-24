@@ -34,7 +34,7 @@ function source(result: Generation): GeneratedSource {
 Deno.test("generationSource adapts real revisions, unknown modules and source errors", () => {
   const updated = new Program().update({
     set: {
-      "effective.json": "{}",
+      "effektive.json": "{}",
       "m.eff": "type I = int\nexport const x: I = 1\n",
       "bad.eff": 'type I = int\nexport const x: I = "bad"\n',
     },
@@ -61,7 +61,7 @@ Deno.test("generationSource retains query order and classifies emit, map and abs
     const calls: string[] = [];
     const lower = new Program().update({
       set: {
-        "effective.json": "{}",
+        "effektive.json": "{}",
         "m.eff": "type I = int\nexport const x: I = 1\n",
       },
     });

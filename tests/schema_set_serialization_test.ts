@@ -20,7 +20,7 @@ const adapted = schemaTransform(
 
 Deno.test("Schema requirement sets must be sorted and unique in both service directions", () => {
   const checked = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": source }),
+    memoryHost({ "effektive.json": "{}", "main.eff": source }),
     "",
     ["main.eff"],
   );

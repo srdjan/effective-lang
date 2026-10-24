@@ -10,7 +10,7 @@ import { completionsAt } from "../src/core/editor_completion.ts";
 import { semanticClassifications } from "../src/core/editor_tokens.ts";
 import type { FunctionDecl } from "../src/core/ir.ts";
 
-const CONFIG = { "effective.json": "{}" };
+const CONFIG = { "effektive.json": "{}" };
 
 function checked(files: Readonly<Record<string, string>>, entries: string[]) {
   const result = checkProject(memoryHost({ ...CONFIG, ...files }), "", entries);
@@ -178,7 +178,7 @@ type Int = int
 export const apply = (callback: pure (value: Int) => Int): Int => callback(1)
 `;
   const loaded = new Program("").update({
-    set: { "effective.json": "{}", "main.eff": text },
+    set: { "effektive.json": "{}", "main.eff": text },
   });
   assert(loaded.ok, JSON.stringify(loaded));
   const pure = text.indexOf("pure");
@@ -196,7 +196,7 @@ export const apply = (callback: pure (value: Int) => Int): Int => callback(1)
 
   const bindingText = "type pure = int\nexport const value: pu = 1\n";
   const binding = new Program("").update({
-    set: { "effective.json": "{}", "main.eff": bindingText },
+    set: { "effektive.json": "{}", "main.eff": bindingText },
   });
   assert(binding.ok, JSON.stringify(binding));
   assertEquals(

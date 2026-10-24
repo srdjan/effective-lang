@@ -22,7 +22,7 @@ export interface Analysis {
 /**
  * Loads the project at `root` from the entry files (root-relative paths) and
  * every module that they import, then resolves every name. A missing or
- * malformed `effective.json` is an error value. All other problems are
+ * malformed `effektive.json` is an error value. All other problems are
  * diagnostics in the result.
  */
 export function analyzeProject(

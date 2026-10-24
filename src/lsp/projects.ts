@@ -1,5 +1,5 @@
 // Projects and the open-document overlay (plan 5.3 and 5.5). A project is a
-// directory with `effective.json`. The set keeps one `Program` per project for
+// directory with `effektive.json`. The set keeps one `Program` per project for
 // the life of the server. The text that the program sees is the disk text of
 // each file with the open documents laid over it. A flush gives the program the
 // difference and then publishes diagnostics.
@@ -401,7 +401,7 @@ export class ProjectSet {
    * project root, passes `isSourcePath`, and is not an open document.
    */
   didChangeWatchedFiles(events: readonly FileEvent[]): void {
-    // The projects whose `effective.json` changed. The client sends no
+    // The projects whose `effektive.json` changed. The client sends no
     // `didSave` for that file, so each of them gets a save round.
     const reconfigured = new Set<ProjectState>();
     for (const event of events) {
@@ -498,7 +498,7 @@ export class ProjectSet {
 
   /**
    * True when no directory between the root and the module's directory has its
-   * own `effective.json`. The root itself does not count.
+   * own `effektive.json`. The root itself does not count.
    */
   #owns(project: ProjectState, name: string): boolean {
     return ownedByRoot(this.ports.fs, project.root, name);

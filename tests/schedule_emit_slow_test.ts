@@ -15,7 +15,7 @@ import { runStrictTarget } from "./target_helpers.ts";
  */
 async function compileAndRun(source: string, run: string): Promise<unknown> {
   const project = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": source }),
+    memoryHost({ "effektive.json": "{}", "main.eff": source }),
     "",
     ["main.eff"],
   );

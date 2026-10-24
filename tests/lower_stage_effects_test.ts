@@ -20,7 +20,7 @@ const CFG_LIMIT: Effects = { failures: [], requirements: ["cap:m#Cfg.limit"] };
  */
 function lowerProbeWithValidation(text: string) {
   const checked = checkProject(
-    memoryHost({ "effective.json": "{}", "m.eff": text }),
+    memoryHost({ "effektive.json": "{}", "m.eff": text }),
     "",
     ["m.eff"],
   );
@@ -158,7 +158,7 @@ Deno.test("codec, decode, encode, and schema builtins reject a pipeline stage, s
   ];
   for (const { builtin, text } of programs) {
     const checked = checkProject(
-      memoryHost({ "effective.json": "{}", "m.eff": text }),
+      memoryHost({ "effektive.json": "{}", "m.eff": text }),
       "",
       ["m.eff"],
     );

@@ -13,7 +13,7 @@ const SOURCES = new Map([["m.eff", SOURCE]]);
 
 function lower(source: string): ModuleIR {
   const checked = checkProject(
-    memoryHost({ "effective.json": "{}", "m.eff": source }),
+    memoryHost({ "effektive.json": "{}", "m.eff": source }),
     "",
     ["m.eff"],
   );

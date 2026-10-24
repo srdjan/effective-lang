@@ -38,7 +38,7 @@ export const make = (next: () => Text): Choice => ({ kind: "b", value: next() })
 export const formatted = (x: LongTags): Int => match x { { longDiscriminatorField: "aVeryLongDiscriminatorLiteralStringToForceMultilineFormatting", ...a } => a.value, { longDiscriminatorField: "anotherVeryLongDiscriminatorLiteralStringToForceMultilineFormatting", ...b } => b.value, _ => 0 }
 `;
   const project = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": source }),
+    memoryHost({ "effektive.json": "{}", "main.eff": source }),
     "",
     ["main.eff"],
   );

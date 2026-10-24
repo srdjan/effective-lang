@@ -26,7 +26,7 @@ function analyzeText(
   entry = "m.eff",
 ): Analysis {
   const result = analyzeProject(
-    memoryHost({ "effective.json": "{}", ...files }),
+    memoryHost({ "effektive.json": "{}", ...files }),
     "",
     [entry],
   );
@@ -501,7 +501,7 @@ Deno.test("a builtin used outside a call is rejected, but None is a value", () =
 
 Deno.test("provides names whole services only", () => {
   const analysis = analyzeText({
-    "effective.json":
+    "effektive.json":
       '{"host": {"h": {"interface": "./h.effi", "module": "./h.ts"}}}',
     "m.eff": 'import { P } from "host:h"\nconst x = (): int => 1\n',
     "h.effi":

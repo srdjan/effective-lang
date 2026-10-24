@@ -1,5 +1,5 @@
 // The files of a project directory. The CLI reads every `.eff` and `.effi` file
-// under the root, and `effective.json` at the root. The walk skips directories
+// under the root, and `effektive.json` at the root. The walk skips directories
 // whose names start with `.` and directories named `node_modules`.
 
 import {

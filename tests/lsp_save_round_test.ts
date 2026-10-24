@@ -139,29 +139,29 @@ Deno.test("a save with no change writes and logs nothing", () => {
 });
 
 Deno.test("a configuration error writes nothing and recovery matches the oracle in both directions", () => {
-  const config = F["effective.json"];
+  const config = F["effektive.json"];
   const h = started();
   h.deliver(save(MAIN));
   const good = new Map(h.files);
   // good, bad, good: the disk program must see the exact previous text again.
-  setDisk(h, "effective.json", "{");
+  setDisk(h, "effektive.json", "{");
   setDisk(h, "users.eff", USERS_PURE);
   h.clearSent();
   h.deliver(save(MAIN));
   assertEquals(h.files.get(`${ROOT}/main.ts`), good.get(`${ROOT}/main.ts`));
   assertEquals(logsOf(h, 1).length, 1);
-  setDisk(h, "effective.json", config);
+  setDisk(h, "effektive.json", config);
   h.deliver(save(MAIN));
   assertMatchesOracle(h);
   assert(h.files.get(`${ROOT}/main.ts`) !== good.get(`${ROOT}/main.ts`));
   // bad, good: a project whose first round meets a bad configuration.
   const bad = makeHarness();
   bad.start();
-  setDisk(bad, "effective.json", "{");
+  setDisk(bad, "effektive.json", "{");
   bad.deliver(didOpen(MAIN, 1, MAIN_TEXT), save(MAIN));
   assertEquals(generatedOnDisk(bad), []);
   assertEquals(logsOf(bad, 1).length, 1);
-  setDisk(bad, "effective.json", config);
+  setDisk(bad, "effektive.json", config);
   bad.deliver(save(MAIN));
   assertMatchesOracle(bad);
 });
@@ -259,7 +259,7 @@ Deno.test("a close without save leaves the outputs on the disk texts", () => {
 
 Deno.test("nested roots: the outer round neither writes nor removes the inner outputs", () => {
   const inner = "export const inner = (): Int => 1\n\ntype Int = int\n";
-  const h = started({ "inner/effective.json": "{}", "inner/m.eff": inner });
+  const h = started({ "inner/effektive.json": "{}", "inner/m.eff": inner });
   h.deliver(save(MAIN));
   assert(oracle(h).has("inner/m.ts"));
   assert(!h.files.has(`${ROOT}/inner/m.ts`));
@@ -370,7 +370,7 @@ Deno.test("writeOnSave false creates no disk program, writes nothing, and logs n
   const before = new Map(h.files);
   h.deliver(
     save(MAIN),
-    watched({ uri: uriOf(`${ROOT}/effective.json`), type: 2 }),
+    watched({ uri: uriOf(`${ROOT}/effektive.json`), type: 2 }),
   );
   assertEquals(h.files, before);
   assertEquals(h.logs(), []);

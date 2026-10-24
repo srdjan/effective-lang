@@ -42,7 +42,7 @@ The entry module imports both Layers. Each `provide` call discharges the same `C
 
 Checking, lowering, and independent validation accept both selections. A new `platform` declaration would duplicate this composition.
 
-Host selection has a narrower limit. One `effective.json` host name maps one interface to one host module for that build.
+Host selection has a narrower limit. One `effektive.json` host name maps one interface to one host module for that build.
 
 The language does not compare entry signatures across separate project configurations. No accepted invariant requires that comparison.
 
@@ -204,7 +204,7 @@ The portable publisher follows its intended direction without enforcement. The m
 
 ### Review-only dependency policy
 
-The minimal design adds an optional `imports` list to `effective.json`:
+The minimal design adds an optional `imports` list to `effektive.json`:
 
 ```json
 {

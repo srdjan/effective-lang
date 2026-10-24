@@ -14,7 +14,7 @@ const LIMIT = 128;
 /** The codes of the diagnostics for one module. */
 function codesOf(text: string): string[] {
   const result = checkProject(
-    memoryHost({ "effective.json": "{}", "m.eff": text }),
+    memoryHost({ "effektive.json": "{}", "m.eff": text }),
     "",
     ["m.eff"],
   );

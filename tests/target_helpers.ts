@@ -24,7 +24,7 @@ export function compileStrictTarget(
   prefix: string,
 ): Promise<string> {
   const project = checkProject(
-    memoryHost({ "effective.json": "{}", ...files }),
+    memoryHost({ "effektive.json": "{}", ...files }),
     "",
     entries,
   );

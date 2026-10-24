@@ -22,7 +22,7 @@ const base = Deno.readTextFileSync(
 function checked(source = fixture) {
   const result = checkProject(
     memoryHost({
-      "effective.json": "{}",
+      "effektive.json": "{}",
       "main.eff": source,
       "schema-constructor-fields.eff": base,
     }),

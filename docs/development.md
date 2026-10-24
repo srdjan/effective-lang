@@ -83,7 +83,7 @@ uses the extension `.effi`.
 A single file runs as a project with one module and an empty project file. A
 file whose name starts with `syntax-` only goes through the parser.
 
-A project directory holds its own `effective.json` and the files of the case.
+A project directory holds its own `effektive.json` and the files of the case.
 The test loads every `.eff` file of the directory as an entry. A host interface
 file must have an import that reaches it.
 
@@ -100,8 +100,8 @@ token. The marker goes above the incomplete line.
 
 The files `fixtures/parse/recovery-*.eff` use the same markers. The files
 `fixtures/parse/ok-*` and the files in `fixtures/examples/` must parse with no
-diagnostics. The project files `fixtures/examples/effective.json` and
-`fixtures/ir/effective.json` set the module roots.
+diagnostics. The project files `fixtures/examples/effektive.json` and
+`fixtures/ir/effektive.json` set the module roots.
 
 ## Format and lint scope
 

@@ -104,7 +104,7 @@ interface Unit {
 }
 
 /**
- * Directories whose files form one project without an `effective.json`. The
+ * Directories whose files form one project without an `effektive.json`. The
  * emit tests add a configuration for them, and so does this test.
  */
 const BUNDLES = new Set([
@@ -142,7 +142,7 @@ function fixtureUnits(): Unit[] {
   const units: Unit[] = [];
   const walk = (dir: string): void => {
     const names = [...Deno.readDirSync(new URL(dir + "/", FIXTURES))];
-    if (names.some((e) => e.isFile && e.name === "effective.json")) {
+    if (names.some((e) => e.isFile && e.name === "effektive.json")) {
       const files = readTree(dir);
       units.push({ label: dir, files, entries: entriesOf(files) });
       return;
@@ -156,7 +156,7 @@ function fixtureUnits(): Unit[] {
         : {};
       units.push({
         label: dir,
-        files: { ...files, "effective.json": JSON.stringify(host) },
+        files: { ...files, "effektive.json": JSON.stringify(host) },
         entries: entriesOf(files),
       });
       return;
@@ -168,7 +168,7 @@ function fixtureUnits(): Unit[] {
         units.push({
           label: child,
           files: {
-            "effective.json": "{}",
+            "effektive.json": "{}",
             [entry.name]: Deno.readTextFileSync(new URL(child, FIXTURES)),
           },
           entries: [entry.name],

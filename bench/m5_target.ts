@@ -114,7 +114,7 @@ export function exampleTarget(): Result<Target, M5Error> {
   }
   const sources = new Map(
     [...tree].filter(([p]) =>
-      p.endsWith(".eff") || p.endsWith(".effi") || p === "effective.json"
+      p.endsWith(".eff") || p.endsWith(".effi") || p === "effektive.json"
     ),
   );
   const generated = emitSources(sources);

@@ -7,7 +7,7 @@ import { writableModules } from "../src/host/outputs.ts";
 
 function writable(files: Readonly<Record<string, string>>): string[] {
   const revision = new Program().update({
-    set: { "effective.json": "{}", ...files },
+    set: { "effektive.json": "{}", ...files },
   });
   if (!revision.ok) throw new Error(JSON.stringify(revision));
   return writableModules(revision.value);
@@ -32,7 +32,7 @@ Deno.test("writableModules writes the companion of a host interface target", () 
     );
   const revision = new Program().update({
     set: {
-      "effective.json": read("effective.json"),
+      "effektive.json": read("effektive.json"),
       "users.eff": read("users.eff"),
       "host/providers.effi": read("host/providers.effi"),
       "main.eff": read("main.eff"),
@@ -67,7 +67,7 @@ Deno.test("writableModules writes no module whose imported host interface has an
     );
   const revision = new Program().update({
     set: {
-      "effective.json": read("effective.json"),
+      "effektive.json": read("effektive.json"),
       "users.eff": read("users.eff"),
       "host/providers.effi": `${
         read("host/providers.effi")

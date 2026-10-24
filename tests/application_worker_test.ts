@@ -12,7 +12,7 @@ const base = new URL(
   import.meta.url,
 );
 const files = Object.fromEntries(
-  ["effective.json", "contracts.eff", "worker.eff"].map((
+  ["effektive.json", "contracts.eff", "worker.eff"].map((
     name,
   ) => [name, Deno.readTextFileSync(new URL(name, base))]),
 );

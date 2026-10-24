@@ -166,7 +166,7 @@ const bad: T = { kind: "b", value: 1 }
   }
 });
 
-const FILES = (text: string) => ({ "effective.json": "{}", "main.eff": text });
+const FILES = (text: string) => ({ "effektive.json": "{}", "main.eff": text });
 
 Deno.test("union member order does not depend on the revision history", () => {
   const history = "type N = int\ntype Q = { k: N[], v: N }\n";

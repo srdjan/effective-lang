@@ -86,7 +86,7 @@ function sources(width: number): Record<string, string> {
 }
 
 Deno.test("extreme identifiers preserve formatting, execution and source mappings at wrapping boundaries", async () => {
-  const files: Record<string, string> = { "effective.json": "{}" };
+  const files: Record<string, string> = { "effektive.json": "{}" };
   const cases = widths.flatMap((width) =>
     Object.entries(sources(width)).map(([kind, body]) => {
       const module = `${kind}-${width}`;

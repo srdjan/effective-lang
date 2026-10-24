@@ -119,7 +119,7 @@ function checkText(
   modes: ModeMap = new Map(),
 ): ProjectCheck {
   return checkDeclarations(
-    analyzeFiles({ "effective.json": "{}", "m.eff": text }, ["m.eff"]),
+    analyzeFiles({ "effektive.json": "{}", "m.eff": text }, ["m.eff"]),
     modes,
   );
 }
@@ -676,7 +676,7 @@ export const make = (): Secret[] => []
 
 Deno.test("an edit to a private type of an import changes the interface hash of the dependent", () => {
   const files = (code: string) => ({
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "a.eff": `
 type Hidden = { code: ${code} }
 export type Wrapper = { inner: Hidden }
@@ -700,7 +700,7 @@ type Int = int
 
 Deno.test("imported types resolve through the interface graph, not through syntax", () => {
   const files = {
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "a.eff": `
 type Hidden = { code: int }
 export type Wrapper = { inner: Hidden }
@@ -750,7 +750,7 @@ export const show = (name: Name, wrapper: Wrapper): Name => name
 
 Deno.test("a service from another module expands through its interface", () => {
   const files = {
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "a.eff": `
 export service Store {
   get(id: Text): Text
@@ -868,7 +868,7 @@ Deno.test("a guarded recursive alias rejects a cycle among its tag aliases", () 
 
 Deno.test("an imported guarded alias accepts tags that are literal aliases", () => {
   const files = {
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "a.eff": `
 export type T = { tag: A, next: T } | { tag: B }
 type A = "a"
@@ -916,7 +916,7 @@ const integer: Schema<Int> = schema()
 const bad: ${word}${gap}<Int> = integer
 `;
     const result = checkProject(
-      memoryHost({ "effective.json": "{}", "m.eff": source }),
+      memoryHost({ "effektive.json": "{}", "m.eff": source }),
       "",
       ["m.eff"],
     );

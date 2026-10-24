@@ -9,7 +9,7 @@ import {
 
 function lowered(files: Readonly<Record<string, string>>) {
   const checked = checkProject(
-    memoryHost({ "effective.json": "{}", ...files }),
+    memoryHost({ "effektive.json": "{}", ...files }),
     "",
     ["main.eff"],
   );

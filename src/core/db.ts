@@ -276,7 +276,7 @@ export class Revision {
 
   /**
    * The input files of this revision, keyed by root-relative path. They are the
-   * `.eff` and `.effi` files and the root `effective.json`. A speculative program
+   * `.eff` and `.effi` files and the root `effektive.json`. A speculative program
    * starts from a copy of them.
    */
   inputs(): ReadonlyMap<string, string> {
@@ -382,7 +382,7 @@ export class Program {
 
   /**
    * Applies the changes and starts a new revision. A missing or malformed
-   * `effective.json` is an error value, and no revision starts. The files stay
+   * `effektive.json` is an error value, and no revision starts. The files stay
    * changed, so a later `update` that fixes the project file succeeds.
    */
   update(changes: ProgramChanges = {}): Result<Revision, ConfigError> {

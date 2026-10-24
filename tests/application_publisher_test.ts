@@ -15,7 +15,7 @@ function sources(): Record<string, string> {
   return Object.fromEntries(
     [...Deno.readDirSync(base)]
       .filter((file) =>
-        file.name.endsWith(".eff") || file.name === "effective.json"
+        file.name.endsWith(".eff") || file.name === "effektive.json"
       )
       .map((
         file,

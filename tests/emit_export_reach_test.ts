@@ -7,7 +7,7 @@ import { assert } from "@std/assert";
 import { emitFiles } from "./helpers.ts";
 
 function emitted(text: string): string {
-  const module = emitFiles({ "effective.json": "{}", "m.eff": text }, [
+  const module = emitFiles({ "effektive.json": "{}", "m.eff": text }, [
     "m.eff",
   ]).get("m");
   assert(module !== undefined, "module m was not emitted");

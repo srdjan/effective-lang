@@ -17,7 +17,7 @@ import {
 } from "./helpers.ts";
 
 function oneModule(text: string): string {
-  const files = { "effective.json": "{}", "m.eff": text };
+  const files = { "effektive.json": "{}", "m.eff": text };
   const emitted = emitFiles(files, ["m.eff"]).get("m");
   assert(emitted !== undefined, "module m was not emitted");
   return emitted.text;
@@ -696,7 +696,7 @@ Deno.test("a nominal record emits field reads and updates that keep the data typ
 
 Deno.test("a nominal type over a record alias keeps the field order of the alias", () => {
   const emitted = emitFiles({
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "fields.eff": "export type Remote = { zeta: string, alpha: int }\n",
     "m.eff":
       'import { Remote } from "./fields.eff"\ntype Local = { zeta: string, alpha: int }\nexport nominal A = Local\nexport nominal B = Remote\n',
@@ -905,7 +905,7 @@ type Int = int
 Deno.test("a module with an initialization cycle has no IR to emit", () => {
   const checked = checkProject(
     memoryHost({
-      "effective.json": "{}",
+      "effektive.json": "{}",
       "m.eff": "const a: Int = b\nconst b: Int = a\ntype Int = int\n",
     }),
     "",
@@ -960,7 +960,7 @@ Deno.test("specifiers are relative to the generated file", () => {
 
 Deno.test("imports and host modules are rewritten relative to a nested module", () => {
   const emitted = emitFiles({
-    "effective.json": JSON.stringify({
+    "effektive.json": JSON.stringify({
       host: { p: { interface: "./host/p.effi", module: "./impl/live.ts" } },
     }),
     "host/p.effi":
@@ -1014,7 +1014,7 @@ Deno.test("source code imports a host interface data type, error, and service fr
 
 Deno.test("an opaque type that a module names without importing it comes from the host module", () => {
   const text = emitFiles({
-    "effective.json":
+    "effektive.json":
       '{ "host": { "db": { "interface": "./host.effi", "module": "./adapter.ts" } } }',
     "host.effi":
       "export opaque type Conn\nexport service Db { open(): Conn }\nexport provider DbLive provides Db\n",
@@ -1286,7 +1286,7 @@ Deno.test("a flattened run of binary operations keeps one span record for each o
   const declaration =
     'export const f = (a: StrVal, b: StrVal, c: StrVal): StrVal => a + "-" + b + "-" + c\n';
   const source = declaration + "type StrVal = string\n";
-  const files = { "effective.json": "{}", "m.eff": source };
+  const files = { "effektive.json": "{}", "m.eff": source };
   const module = emitFiles(files, ["m.eff"]).get("m");
   assert(module !== undefined);
   const pairs = module.spans
@@ -1310,7 +1310,7 @@ Deno.test("a flattened run of binary operations keeps one span record for each o
 Deno.test("emitProject reports a module that did not lower", () => {
   const checked = checkProject(
     memoryHost({
-      "effective.json": "{}",
+      "effektive.json": "{}",
       "m.eff": 'export const x: Int = "no"\ntype Int = int\n',
     }),
     "",
@@ -1327,7 +1327,7 @@ Deno.test("emitProject reports a module that did not lower", () => {
 
 Deno.test("emitModule returns an error value for a host module that the project file lacks", () => {
   const files = {
-    "effective.json": JSON.stringify({
+    "effektive.json": JSON.stringify({
       host: { p: { interface: "./host/p.effi", module: "./live.ts" } },
     }),
     "host/p.effi":

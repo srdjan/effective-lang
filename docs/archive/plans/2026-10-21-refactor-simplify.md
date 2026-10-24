@@ -68,7 +68,7 @@ RS23 (unreachable fallbacks and defaults). `lex.ts:196` `TOKEN_NAMES[kind] ?? "t
 
 RS24 (test-only `parseFromHost`). `parse.ts:68-76` has no production caller; only `tests/parse_test.ts:408` uses it, and `parse` with `SourceHost.readText` covers the same behavior (M). Fix: delete the function, its test, and the imports that only it uses.
 
-RS25 (playground config constant). `playground/src/app.ts:32` declares `CONFIG_FILE = "effective.json"`, but `core/mod.ts` exports `CONFIG_FILE` and `app.ts` already imports from `mod.ts` (M). Fix: import it.
+RS25 (playground config constant). `playground/src/app.ts:32` declares `CONFIG_FILE = "effektive.json"`, but `core/mod.ts` exports `CONFIG_FILE` and `app.ts` already imports from `mod.ts` (M). Fix: import it.
 
 ## 4. Out of scope
 

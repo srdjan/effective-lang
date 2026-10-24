@@ -83,7 +83,7 @@ console.log(JSON.stringify(result));
 
 Deno.test("throttleStream shape delays the next element until the window elapses", async () => {
   const checked = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": SOURCE }),
+    memoryHost({ "effektive.json": "{}", "main.eff": SOURCE }),
     "",
     ["main.eff"],
   );

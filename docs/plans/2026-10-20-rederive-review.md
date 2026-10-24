@@ -443,7 +443,7 @@ Scope traps:
 D1. Codec over a reserved Schema error.
 
 - Observation. `codec` over `SchemaIssue` and over `SchemaError` passes the checker and the validator. `deno check` then fails on the output: 4 `TS2551` errors for `SchemaIssue` (`SchemaIssue.Issue` does not exist), and 8 `TS2322` and `TS2345` errors for `SchemaError`. `codec` over `void` passes all three gates. The inputs and outputs are in `rederive-review-evidence/repro/d1-*`.
-- Command. In an empty directory with `effective.json` containing `{}` and the `.eff` file as `m.eff`, run `deno run --allow-read --allow-write --allow-run=deno src/cli/main.ts build <dir> --validate --tsc` from the repository root.
+- Command. In an empty directory with `effektive.json` containing `{}` and the `.eff` file as `m.eff`, run `deno run --allow-read --allow-write --allow-run=deno src/cli/main.ts build <dir> --validate --tsc` from the repository root.
 - Option (a). Reject `SchemaIssue` and `SchemaError` as codec types in the checker and in the validator, each in its own code. Keep `void` valid for codec, although `schemaData` rejects `unit` for `Schema<...>`. No fixture or test in `fixtures/` or `tests/` uses a codec over a reserved error.
 - Option (b). Teach the emitter to derive a schema for them.
 - Recommendation: (a). It removes a class of programs that pass every Effective gate but fail `deno check`, and it changes no output for valid programs.

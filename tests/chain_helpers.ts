@@ -43,7 +43,7 @@ export function chainSource(form: ChainForm, links: number): string {
 /** The diagnostic codes of `source` as a module `main.eff`, from `Program.update`. */
 export function diagnosticCodes(source: string): string[] {
   const revision = new Program().update({
-    set: { "effective.json": "{}", "main.eff": source },
+    set: { "effektive.json": "{}", "main.eff": source },
   });
   if (!revision.ok) throw new Error(JSON.stringify(revision));
   return revision.value.diagnostics.map((d) => d.code);
@@ -56,7 +56,7 @@ export function diagnosticCodes(source: string): string[] {
  */
 export function runAllPasses(source: string): string[] {
   const revision = new Program().update({
-    set: { "effective.json": "{}", "main.eff": source },
+    set: { "effektive.json": "{}", "main.eff": source },
   });
   if (!revision.ok) throw new Error(JSON.stringify(revision));
   const codes = revision.value.diagnostics.map((d) => d.code);

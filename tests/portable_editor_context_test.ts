@@ -17,7 +17,7 @@ Deno.test("sealed keyword completion stays at module declarations", () => {
   ];
   for (const { text, expected } of cases) {
     const result = new Program("").update({
-      set: { "effective.json": "{}", "main.eff": text },
+      set: { "effektive.json": "{}", "main.eff": text },
     });
     assert(result.ok, JSON.stringify(result));
     const found = completionsAt(
@@ -34,7 +34,7 @@ Deno.test("semantic tokens classify a multiline pure function type", () => {
   const text =
     "type Int = int\nexport const apply = (callback: pure\n(value: Int)\n=> Int): Int => callback(1)\n";
   const result = new Program("").update({
-    set: { "effective.json": "{}", "main.eff": text },
+    set: { "effektive.json": "{}", "main.eff": text },
   });
   assert(result.ok, JSON.stringify(result));
   assertEquals(result.value.diagnostics, []);

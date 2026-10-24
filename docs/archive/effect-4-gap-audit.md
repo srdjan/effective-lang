@@ -315,7 +315,7 @@ show the distinction.
 
 ## Reproduced probes
 
-Each `.eff` probe below used a separate temporary project containing `effective.json` with `{"host":{}}`. Run `deno task effective check <project>` from this repository. The results are the original audit observations; the updates above and in the last column identify behavior that has since changed.
+Each `.eff` probe below used a separate temporary project containing `effektive.json` with `{"host":{}}`. Run `deno task effective check <project>` from this repository. The results are the original audit observations; the updates above and in the last column identify behavior that has since changed.
 
 | `main.eff` body                                                                                                                    | Original result                                                                                   | Current interpretation                                                                                                                        |
 | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |

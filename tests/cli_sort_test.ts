@@ -18,7 +18,7 @@ const ROOT = "/proj";
 /** Runs `check` on one file and returns its output lines. */
 async function checkLines(text: string): Promise<string[]> {
   const m = memoryIo({
-    [`${ROOT}/effective.json`]: "{}",
+    [`${ROOT}/effektive.json`]: "{}",
     [`${ROOT}/m.eff`]: text,
   });
   assertEquals(await main(["check", ROOT], m.io), 1);

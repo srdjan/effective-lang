@@ -12,7 +12,7 @@ import {
 } from "../src/core/mod.ts";
 import { parse } from "../src/core/parse.ts";
 
-const CONFIG = { "effective.json": "{}" };
+const CONFIG = { "effektive.json": "{}" };
 
 function checked(
   files: Readonly<Record<string, string>>,

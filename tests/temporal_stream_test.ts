@@ -14,7 +14,7 @@ const THROTTLE_RULE =
 function diagnosticsOf(declaration: string) {
   const source = prefix + declaration;
   const result = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": source }),
+    memoryHost({ "effektive.json": "{}", "main.eff": source }),
     "",
     ["main.eff"],
   );

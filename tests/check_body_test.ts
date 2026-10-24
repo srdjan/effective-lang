@@ -38,13 +38,13 @@ function checkFiles(
 
 /** Checks one module `m.eff` with an empty project file. */
 function checkText(text: string): CheckedProject {
-  return checkFiles({ "effective.json": "{}", "m.eff": text }, ["m.eff"]);
+  return checkFiles({ "effektive.json": "{}", "m.eff": text }, ["m.eff"]);
 }
 
 /** The hover contract of `m.eff` at an offset, through the public editor query. */
 function hoverContract(text: string, offset: number): string | undefined {
   const result = new Program("").update({
-    set: { "effective.json": "{}", "m.eff": text },
+    set: { "effektive.json": "{}", "m.eff": text },
   });
   assert(result.ok, JSON.stringify(result));
   return hoverAt(result.value, "m.eff", offset)?.contract;
@@ -424,7 +424,7 @@ const use = (): Int => transduceStream(takeSink(2), 3)`);
 Deno.test("Sink leftover graphs reach private aliases, update hashes, and reject recursion", () => {
   const project = (tail: string) =>
     checkFiles({
-      "effective.json": "{}",
+      "effektive.json": "{}",
       "a.eff":
         `type Tail = ${tail}\nexport type S = Sink<int, int, never, never, Tail>`,
       "b.eff":
@@ -2255,7 +2255,7 @@ type Int = int
 
 Deno.test("an imported function keeps the mode from its interface", () => {
   const files = {
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "lib.eff": `
 export const double = (n: Int): Int => n * 2
 export const loud = (n: Int): Int => retry(() => n, { times: 1 })
@@ -3011,7 +3011,7 @@ type Int = int
 
 Deno.test("opaque handles require borrowed host parameters and cannot escape", () => {
   const files = {
-    "effective.json": JSON.stringify({
+    "effektive.json": JSON.stringify({
       host: { files: { interface: "./host.effi", module: "./host.ts" } },
     }),
     "host.effi": `
@@ -3055,7 +3055,7 @@ const forged = (): Handle => Handle(1)
 });
 
 const HOST = {
-  "effective.json": JSON.stringify({
+  "effektive.json": JSON.stringify({
     host: {
       providers: { interface: "./host/providers.effi", module: "./live.ts" },
     },
@@ -3487,8 +3487,8 @@ type Int = int
 export const f = (n: Int): Int => retry(() => n, { times: 1 })
 type Int = int
 `;
-  const a = checkFiles({ "effective.json": "{}", "m.eff": base }, ["m.eff"]);
-  const b = checkFiles({ "effective.json": "{}", "m.eff": effectful }, [
+  const a = checkFiles({ "effektive.json": "{}", "m.eff": base }, ["m.eff"]);
+  const b = checkFiles({ "effektive.json": "{}", "m.eff": effectful }, [
     "m.eff",
   ]);
   assert(a.modules.get("m")!.hash !== b.modules.get("m")!.hash);
@@ -3942,7 +3942,7 @@ const call = (): Int => data(1)
 
 Deno.test("a data type is legal in a host interface file", () => {
   const project = checkFiles({
-    "effective.json": JSON.stringify({
+    "effektive.json": JSON.stringify({
       host: { rows: { interface: "./rows.effi", module: "./rows.ts" } },
     }),
     "rows.effi": `

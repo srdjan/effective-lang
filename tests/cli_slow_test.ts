@@ -59,7 +59,7 @@ Deno.test("check on fixtures/examples prints nothing and exits 0", async () => {
 
 Deno.test("check on an error project prints the exact diagnostic line and exits 1", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.copyFileSync(
       new URL("errors/type-mismatch-argument-count.eff", FIXTURES),
       `${dir}/m.eff`,
@@ -85,12 +85,12 @@ Deno.test("a usage error exits 2 and prints nothing on stdout", async () => {
   assertEquals(flag.code, 2);
 });
 
-Deno.test("an invalid effective.json exits 2", async () => {
+Deno.test("an invalid effektive.json exits 2", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{");
     const run = await effective(["check", dir]);
     assertEquals(run.code, 2);
-    assert(run.stderr.includes("effective.json is not valid JSON"), run.stderr);
+    assert(run.stderr.includes("effektive.json is not valid JSON"), run.stderr);
   });
 });
 
@@ -120,7 +120,7 @@ Deno.test("build --tsc --validate writes the golden files and the source maps, a
       "collections.eff",
       "collections.ts",
       "collections.ts.map",
-      "effective.json",
+      "effektive.json",
       "host",
       "log.eff",
       "log.ts",
@@ -239,7 +239,7 @@ Deno.test("build --tsc maps a wrong host module to the import in the .eff file",
 
 Deno.test("build --validate --tsc accepts an effectful retry pipeline", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       "service Jobs { next(): () => Int }\n" +
@@ -268,7 +268,7 @@ Deno.test("build --validate --tsc accepts a nominal value widened to its base an
 
 Deno.test("build --validate --tsc accepts a custom retry schedule", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -287,7 +287,7 @@ Deno.test("build --validate --tsc accepts a custom retry schedule", async () => 
 
 Deno.test("build --validate --tsc accepts stored Effect values", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -307,7 +307,7 @@ Deno.test("build --validate --tsc accepts stored Effect values", async () => {
 
 Deno.test("build --validate --tsc accepts array and tuple literals", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       "service S { read(): Int }\n" +
@@ -340,7 +340,7 @@ Deno.test("build --validate --tsc accepts sequential traverse", async () => {
 
 Deno.test("build --validate --tsc accepts scoped operation records", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -364,7 +364,7 @@ Deno.test("build --validate --tsc accepts scoped operation records", async () =>
 
 Deno.test("build --validate --tsc accepts bounded traversal", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       "export const f = (): Int[] => traverse([1, 2], (n) => n + 1, { concurrency: 2 })\n" +
@@ -378,7 +378,7 @@ Deno.test("build --validate --tsc accepts bounded traversal", async () => {
 
 Deno.test("build --validate --tsc accepts an incremental stream and sink", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -445,7 +445,7 @@ console.log(JSON.stringify({ value, missing: missing._tag, invalid: invalid.mess
 Deno.test("opaque host handles pass only through borrowed scoped methods", async () => {
   await withTemporary(async (dir) => {
     Deno.writeTextFileSync(
-      `${dir}/effective.json`,
+      `${dir}/effektive.json`,
       JSON.stringify({
         host: { files: { interface: "./host.effi", module: "./host.ts" } },
       }),
@@ -575,7 +575,7 @@ Deno.test("build --validate accepts an inline record type 100 levels deep", asyn
   await withTemporary(async (dir) => {
     const record = (leaf: string) =>
       "{ a: ".repeat(100) + leaf + " }".repeat(100);
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/m.eff`,
       `export const f = (x: ${record("Num")}): Int => 1\n` +

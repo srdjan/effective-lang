@@ -45,7 +45,7 @@ export async function installedEditorSmoke(
     for (const directory of [project, extensions, userData, harness]) {
       Deno.mkdirSync(directory);
     }
-    Deno.writeTextFileSync(join(project, "effective.json"), "{}\n");
+    Deno.writeTextFileSync(join(project, "effektive.json"), "{}\n");
     Deno.writeTextFileSync(
       join(project, "main.eff"),
       "type Count = int\nexport const twice = (value: Count): Count => value + value\nexport const result = (): Count => twice(21)\n",

@@ -8,7 +8,7 @@ Deno.test("actual build task checks targets through canonical and symlinked Deno
   await withTemporaryDirectory("effective-path-", async (dir) => {
     Deno.mkdirSync(`${dir}/bin`);
     Deno.symlinkSync(Deno.realPathSync(Deno.execPath()), `${dir}/bin/deno`);
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       "export const answer = (): Int => 42\ntype Int = int\n",
@@ -36,7 +36,7 @@ Deno.test("actual build task checks targets through canonical and symlinked Deno
 
 Deno.test("target check reports missing PATH executable usefully", async () => {
   await withTemporaryDirectory("effective-missing-deno-", async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       "export const answer = (): Int => 42\ntype Int = int\n",

@@ -51,7 +51,7 @@ Deno.test("local artifacts install and run offline outside the checkout with an 
     );
     const project = join(temporary, "project");
     Deno.mkdirSync(project);
-    Deno.writeTextFileSync(join(project, "effective.json"), "{}\n");
+    Deno.writeTextFileSync(join(project, "effektive.json"), "{}\n");
     const source =
       "type Answer = int\nexport const answer = (): Answer => 42\n";
     Deno.writeTextFileSync(join(project, "main.eff"), source);

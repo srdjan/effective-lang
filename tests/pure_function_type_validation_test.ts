@@ -15,7 +15,7 @@ import type {
 
 function lowered(text: string) {
   const project = checkProject(
-    memoryHost({ "effective.json": "{}", "main.eff": text }),
+    memoryHost({ "effektive.json": "{}", "main.eff": text }),
     "",
     ["main.eff"],
   );

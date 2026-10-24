@@ -15,7 +15,7 @@ async function withProgram<T>(
 ): Promise<T> {
   const dir = Deno.makeTempDirSync({ prefix: "effective-lift-" });
   try {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(`${dir}/m.eff`, text);
     return await body(dir);
   } finally {

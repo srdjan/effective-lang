@@ -32,7 +32,7 @@ function codes(files: Files, entries: readonly string[]): string[] {
   return check(files, entries).diagnostics.map((diagnostic) => diagnostic.code);
 }
 
-const CONFIG = { "effective.json": "{}" };
+const CONFIG = { "effektive.json": "{}" };
 
 Deno.test("nominal visibility blocks imports but updates keep the nominal type", () => {
   assertEquals(
@@ -263,7 +263,7 @@ export const current = (): Int => provide(ClockLive, () => Clock.now())
 
 Deno.test("host registration enables an otherwise unrestricted domain import", () => {
   validated({
-    "effective.json": HOST_CONFIG,
+    "effektive.json": HOST_CONFIG,
     ...HOST_IMPORT_FILES,
   }, ["domain.eff"]);
   assertEquals(
@@ -278,7 +278,7 @@ Deno.test("host registration enables an otherwise unrestricted domain import", (
 Deno.test("module cycles are separate from dependency direction", () => {
   assertEquals(
     codes({
-      "effective.json": HOST_CONFIG,
+      "effektive.json": HOST_CONFIG,
       "contracts.eff": `
 import { ClockLive } from "host:clock"
 export type Int = int

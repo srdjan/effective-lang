@@ -146,7 +146,7 @@ Deno.test("host providers preserve shared scope handles and reject raw target sc
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/scopes/", FIXTURES), dir);
     Deno.writeTextFileSync(
-      `${dir}/effective.json`,
+      `${dir}/effektive.json`,
       JSON.stringify({
         host: {
           boundary: { interface: "./host.effi", module: "./host.ts" },
@@ -213,7 +213,7 @@ Deno.test("the emitted forms and name-collision modules pass deno check", async 
 
 Deno.test("contextual Some payloads retain tuple shape and literals through Effect callbacks", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.copyFileSync(
       new URL("emit/contextual-options.eff", FIXTURES),
       `${dir}/main.eff`,
@@ -269,7 +269,7 @@ console.log(JSON.stringify({ first, second, nested: [unwrap(nestedValue[0]), nes
 
 Deno.test("withResource releases after success, typed failure, and interruption", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -346,7 +346,7 @@ console.log(JSON.stringify({ success, typedFailure, events }));
 
 Deno.test("bounded traverse limits jobs and waits for scoped finalizers", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -446,7 +446,7 @@ console.log(JSON.stringify({ success, failure, interruption }));
 
 Deno.test("unbounded traverse starts every job and waits for scoped finalizers", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -564,7 +564,7 @@ console.log(JSON.stringify({ success, failure, interruption, empty, allResults }
 
 Deno.test("all preserves tuple and record results and cleans up siblings", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -661,7 +661,7 @@ console.log(JSON.stringify({ tupleResult, recordResult, failure, interruption })
 
 Deno.test("partitionAll collects successes and failures within a concurrency bound", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -710,7 +710,7 @@ console.log(JSON.stringify({ successes, failures: failures.map((error) => error.
 
 Deno.test("validateAll accumulates nominal failures and keeps successful results", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -776,7 +776,7 @@ console.log(JSON.stringify({ success, failure }));
 
 Deno.test("allResults keeps successes and failures in array, tuple, and record positions", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -841,7 +841,7 @@ console.log(JSON.stringify({ pair, named, items, started }));
 
 Deno.test("switchMapStreams interrupts superseded inners and waits for cleanup", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -924,7 +924,7 @@ console.log(JSON.stringify({ before, success, failure }));
 
 Deno.test("catchStream retains earlier values and switches on typed failure", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -990,7 +990,7 @@ console.log(JSON.stringify({ before, first, second, tag: error._tag, sourceCalls
 
 Deno.test("retryStream replays values and resets its schedule after output", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -1058,7 +1058,7 @@ console.log(JSON.stringify({ before, first, firstRun, second, attempt, calls, fi
 
 Deno.test("temporal stream controls coalesce and shape or drop elements", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -1118,7 +1118,7 @@ console.log(JSON.stringify({ before, debounced, enforced, shaped, calls, tag: fa
 
 Deno.test("concurrent stream mapping bounds work and closes failed siblings", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -1233,7 +1233,7 @@ console.log(JSON.stringify({ before, mapSuccess, mapFailed, flatSuccess, flatFai
 
 Deno.test("source-authored streams pull incrementally through an effectful sink", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -1292,7 +1292,7 @@ console.log(JSON.stringify({ before, produced, consumed, maximumAhead, output })
 });
 Deno.test("buffered merged streams defer production and preserve each source order", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -1340,7 +1340,7 @@ console.log(JSON.stringify({ before, produced, first: output.filter((n) => n < 1
 });
 Deno.test("zipped streams defer production and stop at the shorter input", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -1392,7 +1392,7 @@ console.log(JSON.stringify({ before, output }));
 });
 Deno.test("zipped stream failure interrupts its waiting peer", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -1440,7 +1440,7 @@ console.log(JSON.stringify({ tag: error._tag, started, released }));
 });
 Deno.test("concatenated streams run in sequence and skip the right side after failure", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -1514,7 +1514,7 @@ console.log(JSON.stringify({ before, success, failure: { tag: error._tag, emitte
 });
 Deno.test("flat mapped streams exhaust each inner stream and stop after inner failure", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -1601,7 +1601,7 @@ console.log(JSON.stringify({ before, success, failure, interrupted: { output, ou
 });
 Deno.test("takeStream stops upstream pulls at a dynamic count", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -1669,7 +1669,7 @@ console.log(JSON.stringify({ before, zero, negative, two, failure: { tag: failur
 
 Deno.test("dropStream consumes a dynamic prefix and propagates skipped failures", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -1761,7 +1761,7 @@ console.log(JSON.stringify({ before, zero, negative, two, beyond, failure: { tag
 
 Deno.test("takeWhileEffectStream with a pure callback omits the false element and closes upstream work", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -1834,7 +1834,7 @@ console.log(JSON.stringify({ before, empty, prefix, failure: { tag: failure._tag
 
 Deno.test("takeUntilEffectStream with a pure callback includes the matching element and closes upstream work", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -1916,7 +1916,7 @@ console.log(JSON.stringify({ before, first, prefix, noMatch, failure: { tag: fai
 
 Deno.test("dropWhileEffectStream with a pure callback emits the first false element and all later elements", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -2003,7 +2003,7 @@ console.log(JSON.stringify({ before, immediate, suffix, allDropped, failure: { t
 
 Deno.test("effectful stream predicates stop, fail, and close pulls", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -2139,7 +2139,7 @@ console.log(JSON.stringify({ before, filterResult, whileResult, untilResult, dro
 
 Deno.test("filterEffectStream with a pure callback evaluates every element and propagates source failures", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -2226,7 +2226,7 @@ console.log(JSON.stringify({ before, all, selected, none, failure: { tag: failur
 
 Deno.test("mapEffect with a pure callback changes element type and propagates source failures", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -2314,7 +2314,7 @@ console.log(JSON.stringify({ before, all, selected, none, failure: { tag: failur
 
 Deno.test("scanStream emits fresh seed and state before source failure", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -2418,7 +2418,7 @@ console.log(JSON.stringify({ before, first, second, emptyResult, failure: { tag:
 
 Deno.test("mapAccumStream threads state and emits zero or more values", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -2515,7 +2515,7 @@ console.log(JSON.stringify({ before, first, second, shifted, emptyResult, failur
 
 Deno.test("foldStream returns fresh final state and propagates source failure", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -2584,7 +2584,7 @@ console.log(JSON.stringify({ before, first, second, emptyResult, failure: { tag:
 
 Deno.test("foldEffectStream runs updates sequentially and stops on failure", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -2709,7 +2709,7 @@ console.log(JSON.stringify({ before, first, second, pure, emptyResult, sourceRes
 
 Deno.test("collectStream gathers ordered values and closes failed pulls", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -2782,7 +2782,7 @@ console.log(JSON.stringify({ before, first, second, emptyResult, failure: { tag:
 
 Deno.test("headStream stops after the first element and closes upstream work", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -2856,7 +2856,7 @@ console.log(JSON.stringify({ before, first, second, emptyResult, failure: { tag:
 
 Deno.test("lastStream consumes through completion and closes upstream work", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -2930,7 +2930,7 @@ console.log(JSON.stringify({ before, first, second, emptyResult, failure: { tag:
 
 Deno.test("drainStream consumes every value and closes upstream work", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -3004,7 +3004,7 @@ console.log(JSON.stringify({ before, first, second, emptyResult, failure: { tag:
 
 Deno.test("a source race interrupts its losing fiber and waits for cleanup", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -3042,7 +3042,7 @@ console.log(JSON.stringify({ value, started, released }));
 });
 Deno.test("forkScoped outlives its spawning fiber and closes with its scope", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -3086,7 +3086,7 @@ console.log(JSON.stringify({ observed, active, released }));
 });
 Deno.test("reference updates are atomic under bounded traversal", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -3113,7 +3113,7 @@ console.log(JSON.stringify({ value: await Effect.runPromise(main()) }));
 });
 Deno.test("custom retry schedule sees one-based attempts and stops on None", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -3143,7 +3143,7 @@ console.log(JSON.stringify({ attempts, tag: error._tag }));
 });
 Deno.test("pure codecs validate both directions and preserve None", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -3228,7 +3228,7 @@ const WIDENED_RECORDS = [
 
 Deno.test("a widened record value constructs another nominal type, in a copy, an update, and a nested field, and encodes without its tag", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(`${dir}/main.eff`, WIDENED_RECORDS);
     build(dir, ["main.eff"]);
     const result = await runScript(
@@ -3294,7 +3294,7 @@ console.log(JSON.stringify({
 
 Deno.test("a data value with a missing optional prototype-named field nests in another data value", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -3329,7 +3329,7 @@ console.log(JSON.stringify(box()));
 });
 Deno.test("a widened record value with a nested optional prototype-named field loses its tag and keeps the field adapter", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -3465,7 +3465,7 @@ console.log(JSON.stringify({
 });
 Deno.test("a pure codec over a data type decodes into data and encodes back", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -3497,7 +3497,7 @@ console.log(JSON.stringify({
 });
 Deno.test("withFiber interrupts its child and waits for finalizers", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -3534,7 +3534,7 @@ console.log(JSON.stringify({ value, started, released }));
 });
 Deno.test("source Layers merge and provide their declared services", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -3562,7 +3562,7 @@ console.log(JSON.stringify({ value: await Effect.runPromise(main()) }));
 });
 Deno.test("source Layer acquisition carries its failure and service requirement", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -3593,7 +3593,7 @@ console.log(JSON.stringify({ value: await Effect.runPromise(main().pipe(Effect.p
 });
 Deno.test("stream pull releases a scoped operation on failure and interruption", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -3650,7 +3650,7 @@ console.log(JSON.stringify({ failure, interruption: events }));
 
 Deno.test("stored Effect values run twice after deferred construction", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -3691,7 +3691,7 @@ console.log(JSON.stringify({ before, sum, calls }));
 
 Deno.test("traverse runs sequentially and stops after a typed callback failure", async () => {
   await withTemporary(async (dir) => {
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/main.eff`,
       [
@@ -4106,7 +4106,7 @@ Deno.test("a host layer of the declared service that lacks a method gives one ho
 Deno.test("explicit scopes survive root return and share aliases across modules", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/scopes/", FIXTURES), dir);
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     const project = checkProject(fileHost, dir, ["consumer.eff"]);
     assert(project.ok);
     assertEquals(project.value.diagnostics, []);
@@ -4189,7 +4189,7 @@ console.log(JSON.stringify({ same, events }));
 Deno.test("explicit close callers wait for one cleanup and retain its defects", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/scopes/", FIXTURES), dir);
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     build(dir, ["consumer.eff"]);
     const result = await runScript(
       dir,
@@ -4242,7 +4242,7 @@ console.log(JSON.stringify({ events, replayed, lateIsSeparate: Exit.isFailure(la
 Deno.test("scope registration captures services and evaluates arguments before execution", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/scopes/", FIXTURES), dir);
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     build(dir, ["consumer.eff"]);
     const result = await runScript(
       dir,
@@ -4304,7 +4304,7 @@ console.log(JSON.stringify({ events, value, after }));
 Deno.test("mapGroups emits typed live routing with fresh state and closes unused or partial groups", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/groups/", FIXTURES), dir);
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     const checked = checkProject(fileHost, dir, ["main.eff"]);
     assert(checked.ok);
     assertEquals(checked.value.diagnostics, []);
@@ -4363,7 +4363,7 @@ console.log(JSON.stringify({ before, pulls, runs, unused, partial, keys: keys.so
 Deno.test("mapGroups emits a later live key, waits for cleanup, and applies per-key backpressure", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/groups/", FIXTURES), dir);
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     build(dir, ["main.eff"]);
     const result = await runScript(
       dir,
@@ -4411,7 +4411,7 @@ console.log(JSON.stringify({ first: Option.getOrUndefined(first), events: events
 Deno.test("mapGroups preserves construction and deferred services and closes callback-owned scoped workers", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/groups/", FIXTURES), dir);
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     build(dir, ["main.eff"]);
     const result = await runScript(
       dir,
@@ -4462,7 +4462,7 @@ console.log(JSON.stringify({ before, runs, buildFailure: Exit.isFailure(failed) 
 Deno.test("mapGroups source failure, callback failure, and interruption await peer cleanup", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/groups/", FIXTURES), dir);
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     build(dir, ["main.eff"]);
     const result = await runScript(
       dir,
@@ -4522,7 +4522,7 @@ console.log(JSON.stringify(outcomes));
 Deno.test("Sink transduction replays chunks, repeats with fresh state, and preserves terminal semantics", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/sinks/", FIXTURES), dir);
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     const checked = checkProject(fileHost, dir, ["main.eff"]);
     assert(checked.ok);
     assertEquals(checked.value.diagnostics, []);
@@ -4587,7 +4587,7 @@ console.log(JSON.stringify({ outputs, exact, empty, terminal, wider, foreign, ma
 Deno.test("Sink construction effects stay separate from consumption services and failures", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/sinks/", FIXTURES), dir);
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     build(dir, ["main.eff"]);
     const result = await runScript(
       dir,
@@ -4633,7 +4633,7 @@ console.log(JSON.stringify({ atConstruction, sinkFailure, sourceFailure, success
 Deno.test("Sink transduction retains consumption scopes and closes pending pulls on interruption", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/sinks/", FIXTURES), dir);
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     build(dir, ["main.eff"]);
     const result = await runScript(
       dir,
@@ -4691,7 +4691,7 @@ Deno.test("Sink host providers retain leftover types across the existing interfa
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/sinks/", FIXTURES), dir);
     Deno.writeTextFileSync(
-      `${dir}/effective.json`,
+      `${dir}/effektive.json`,
       JSON.stringify({
         host: { sinks: { interface: "./host.effi", module: "./host.ts" } },
       }),
@@ -4735,7 +4735,7 @@ export const FactoryLive = Layer.succeed(Factory)({
 Deno.test("aggregateStream emits target batches, replay, and demand behavior", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/sinks/", FIXTURES), dir);
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     const checked = checkProject(fileHost, dir, ["main.eff"]);
     assert(checked.ok);
     assertEquals(checked.value.diagnostics, []);
@@ -4813,7 +4813,7 @@ console.log(JSON.stringify({ outputs, targetOutputs, exact, empty, broad, zero, 
 Deno.test("aggregateStream retains deferred failures and awaits cancellation cleanup", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/sinks/", FIXTURES), dir);
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     build(dir, ["main.eff"]);
     const result = await runScript(
       dir,
@@ -4884,7 +4884,7 @@ console.log(JSON.stringify({
 Deno.test("general Schedule values drive timed aggregation with fresh state and cleanup", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/schedules/", FIXTURES), dir);
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     const checked = checkProject(fileHost, dir, ["main.eff"]);
     assert(checked.ok);
     assertEquals(checked.value.diagnostics, []);
@@ -4984,7 +4984,7 @@ console.log(JSON.stringify({
 Deno.test("composed Schedule values preserve delays, phases, fresh state, and failure", async () => {
   await withTemporary(async (dir) => {
     copyDirectory(new URL("emit/schedules/", FIXTURES), dir);
-    Deno.writeTextFileSync(`${dir}/effective.json`, "{}");
+    Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     const checked = checkProject(fileHost, dir, ["composition.eff"]);
     assert(checked.ok);
     assertEquals(checked.value.diagnostics, []);
@@ -5236,7 +5236,7 @@ function buildHostChecks(dir: string): Built {
 Deno.test("a host check accepts a data value with a missing optional prototype-named field", async () => {
   await withTemporary(async (dir) => {
     const files: Record<string, string> = {
-      "effective.json":
+      "effektive.json":
         '{ "host": { "h": { "interface": "./h.effi", "module": "./h.ts" } } }',
       "h.effi": [
         "export type Text = string",

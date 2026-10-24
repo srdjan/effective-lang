@@ -37,7 +37,7 @@ function lowerConsumer(source: string): {
 } {
   const checked = checkProject(
     memoryHost({
-      "effective.json": "{}",
+      "effektive.json": "{}",
       "lib.eff": LIBRARY,
       "main.eff": `
 import { Int, Text, Flag, Input, Positive, Article, HiddenRecord, positiveSchema } from "./lib.eff"
@@ -144,7 +144,7 @@ Deno.test("validator rejects a sealed flag on an alias", () => {
 
 Deno.test("validator rejects sealed nominal metadata from an effi source", () => {
   const files = {
-    "effective.json": JSON.stringify({
+    "effektive.json": JSON.stringify({
       host: { x: { interface: "./host.effi", module: "./x.ts" } },
     }),
     "host.effi": "export nominal Token = int\n",

@@ -175,8 +175,8 @@ Deno.test("error fixtures are named <category>-<topic>, as a file or as a projec
     assert(/^[a-z]+(-[a-z]+)*$/.test(topic), `${c.path}: bad topic`);
     if (c.kind === "project") {
       assert(
-        Deno.statSync(new URL(`${c.path}/effective.json`, FIXTURES)).isFile,
-        `${c.path} has no effective.json`,
+        Deno.statSync(new URL(`${c.path}/effektive.json`, FIXTURES)).isFile,
+        `${c.path} has no effektive.json`,
       );
     } else {
       assert(/\.effi?$/.test(c.files[0].path), c.path);

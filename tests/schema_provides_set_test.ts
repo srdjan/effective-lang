@@ -12,7 +12,7 @@ import {
 import { EXAMPLE_ENTRIES, exampleFiles } from "./helpers.ts";
 
 const FILES: Record<string, string> = {
-  "effective.json": JSON.stringify({
+  "effektive.json": JSON.stringify({
     host: { p: { interface: "./host/p.effi", module: "./live.ts" } },
   }),
   "host/p.effi": 'import { S } from "../s.eff"\nexport provider L provides S\n',

@@ -6,7 +6,7 @@ const source = "type Int = int\nexport const answer = (): Int => 42\n";
 
 Deno.test("watch target checks local hosts on edits, additions, removals and polling without source rechecks", async () => {
   const m = memoryIo({
-    "p/effective.json": "{}",
+    "p/effektive.json": "{}",
     "p/m.eff": source,
     "p/helper.ts": "export const n = 1",
   });
@@ -46,16 +46,16 @@ Deno.test("watch target checks local hosts on edits, additions, removals and pol
 });
 
 Deno.test("watch retains configuration and source errors during host-only changes", async () => {
-  const m = memoryIo({ "p/effective.json": "{}", "p/m.eff": source });
+  const m = memoryIo({ "p/effektive.json": "{}", "p/m.eff": source });
   m.script = [
     () => {
-      m.files.set("p/effective.json", "{");
+      m.files.set("p/effektive.json", "{");
     },
     () => {
       m.files.set("p/helper.ts", "export const n = 1");
     },
     () => {
-      m.files.set("p/effective.json", "{}");
+      m.files.set("p/effektive.json", "{}");
       m.files.set("p/m.eff", source.replace("42", '"bad"'));
     },
     () => {

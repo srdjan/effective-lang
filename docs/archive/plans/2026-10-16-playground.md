@@ -90,7 +90,7 @@ tests/playground_build_slow_test.ts
 ### 5.1 Compile facade (`compile.ts`)
 
 `createPlayground(files, ports)` returns a session. `files` maps root-relative
-paths to text and includes `effective.json`. `ports` has two members:
+paths to text and includes `effektive.json`. `ports` has two members:
 
 - `now: () => number`, the clock.
 - `program: ProgramPort`, with default `new Program("")`.
@@ -126,7 +126,7 @@ undefined until the next good update.
 
 ### 5.2 Examples
 
-`build.ts` reads `fixtures/examples/effective.json`, the five `.eff` files, and
+`build.ts` reads `fixtures/examples/effektive.json`, the five `.eff` files, and
 `host/providers.effi`. It writes them to `examples.json` in the output
 directory, as one object from path to text. The page fetches that file at
 start. `users-live.ts` is not included, because the page does not run code.

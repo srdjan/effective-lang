@@ -45,23 +45,23 @@ Deno.test("paths normalize against the root", () => {
   assertEquals(joinPath("p/", "a.eff"), "p/a.eff");
 });
 
-Deno.test("a missing effective.json is an error value", () => {
+Deno.test("a missing effektive.json is an error value", () => {
   const result = loadProject(memoryHost({}), "proj", []);
   assert(!result.ok);
-  assertEquals(result.error, { tag: "missing", path: "proj/effective.json" });
+  assertEquals(result.error, { tag: "missing", path: "proj/effektive.json" });
   assertEquals(
     describeConfigError(result.error),
-    "proj/effective.json does not exist",
+    "proj/effektive.json does not exist",
   );
 });
 
-Deno.test("a malformed effective.json is an error value", () => {
+Deno.test("a malformed effektive.json is an error value", () => {
   const result = parseConfig("{ not json");
   assert(!result.ok);
   assertEquals(result.error.tag, "malformed-json");
 });
 
-Deno.test("an effective.json with the wrong shape is an error value", () => {
+Deno.test("an effektive.json with the wrong shape is an error value", () => {
   for (
     const text of [
       "[]",
@@ -77,7 +77,7 @@ Deno.test("an effective.json with the wrong shape is an error value", () => {
   }
 });
 
-Deno.test("unknown keys in effective.json are module diagnostics on the key", () => {
+Deno.test("unknown keys in effektive.json are module diagnostics on the key", () => {
   const text = `{
   "extra": 1,
   "host": {
@@ -96,8 +96,8 @@ Deno.test("unknown keys in effective.json are module diagnostics on the key", ()
     source: d.span.source,
   }));
   assertEquals(found, [
-    { code: "module/001", key: '"extra"', source: "effective.json" },
-    { code: "module/001", key: '"colour"', source: "effective.json" },
+    { code: "module/001", key: '"extra"', source: "effektive.json" },
+    { code: "module/001", key: '"colour"', source: "effektive.json" },
   ]);
 });
 
@@ -158,7 +158,7 @@ Deno.test("the host import links to the interface file and keeps the import stri
 
 Deno.test("discovery follows imports from the entry files", () => {
   const project = load({
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "a.eff": 'import { b } from "./sub/b.eff"\nexport const a = (): int => 1\n',
     "sub/b.eff":
       'import { c } from "../c.eff"\nexport const b = (): int => 1\n',
@@ -172,7 +172,7 @@ Deno.test("discovery follows imports from the entry files", () => {
 
 Deno.test("the order does not depend on the entry order", () => {
   const files = {
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "a.eff": 'import { b } from "./b.eff"\nexport const a = (): int => 1\n',
     "b.eff": "export const b = (): int => 1\n",
   };
@@ -182,7 +182,7 @@ Deno.test("the order does not depend on the entry order", () => {
 
 Deno.test("an import cycle gives one diagnostic on an import in the cycle", () => {
   const project = load({
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "a.eff": 'import { b } from "./b.eff"\nexport const a = (): int => 1\n',
     "b.eff": 'import { c } from "./c.eff"\nexport const b = (): int => 1\n',
     "c.eff": 'import { a } from "./a.eff"\nexport const c = (): int => 1\n',
@@ -198,7 +198,7 @@ Deno.test("an import cycle gives one diagnostic on an import in the cycle", () =
 
 Deno.test("a module that imports itself is a cycle", () => {
   const project = load({
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "a.eff": 'import { a } from "./a.eff"\nexport const a = (): int => 1\n',
   }, ["a.eff"]);
   assertEquals(messages(project), ["a.eff module/003 a imports itself"]);
@@ -206,7 +206,7 @@ Deno.test("a module that imports itself is a cycle", () => {
 
 Deno.test("two separate cycles give two diagnostics", () => {
   const project = load({
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "a.eff": 'import { b } from "./b.eff"\nexport const a = (): int => 1\n',
     "b.eff": 'import { a } from "./a.eff"\nexport const b = (): int => 1\n',
     "c.eff": 'import { d } from "./d.eff"\nexport const c = (): int => 1\n',
@@ -220,7 +220,7 @@ Deno.test("two separate cycles give two diagnostics", () => {
 
 Deno.test("import problems are module diagnostics on the specifier", () => {
   const files = {
-    "effective.json":
+    "effektive.json":
       '{"host": {"known": {"interface": "./k.effi", "module": "./k.ts"}}}',
     "dir/main.eff": [
       'import { a } from "./lib"',
@@ -253,7 +253,7 @@ Deno.test("import problems are module diagnostics on the specifier", () => {
 
 Deno.test("a relative import resolves against the importing file", () => {
   const project = load({
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "a/b/main.eff":
       'import { x } from "../../top.eff"\nexport const m = (): int => 1\n',
     "top.eff": "export const x = (): int => 1\n",
@@ -265,7 +265,7 @@ Deno.test("a relative import resolves against the importing file", () => {
 Deno.test("a root path is joined to the paths that the host reads", () => {
   const project = load(
     {
-      "proj/effective.json": "{}",
+      "proj/effektive.json": "{}",
       "proj/a.eff": "export const a = (): int => 1\n",
     },
     ["a.eff"],
@@ -276,7 +276,7 @@ Deno.test("a root path is joined to the paths that the host reads", () => {
 });
 
 Deno.test("an entry that cannot be read is a module diagnostic", () => {
-  const project = load({ "effective.json": "{}" }, [
+  const project = load({ "effektive.json": "{}" }, [
     "gone.eff",
     "../x.eff",
     "notes.txt",
@@ -290,7 +290,7 @@ Deno.test("an entry that cannot be read is a module diagnostic", () => {
 
 Deno.test("two files with one module name conflict", () => {
   const project = load({
-    "effective.json":
+    "effektive.json":
       '{"host": {"h": {"interface": "./m.effi", "module": "./m.ts"}}}',
     "main.eff":
       'import { x } from "./m.eff"\nimport { y } from "host:h"\nexport const a = (): int => 1\n',
@@ -302,7 +302,7 @@ Deno.test("two files with one module name conflict", () => {
 
 Deno.test("a module path with special characters is a module diagnostic", () => {
   const files = {
-    "effective.json": "{}",
+    "effektive.json": "{}",
     "main.eff": 'import { a } from "./a#b.eff"\n',
     "a#b.eff": "export const a: int = 1\n",
   };
@@ -314,7 +314,7 @@ Deno.test("a module path with special characters is a module diagnostic", () => 
 
 Deno.test("a chain of 10000 modules links without overflowing the stack", () => {
   const count = 10_000;
-  const files: Record<string, string> = { "effective.json": "{}" };
+  const files: Record<string, string> = { "effektive.json": "{}" };
   for (let i = 0; i < count; i++) {
     const body = "export const v = (): int => 1\n";
     files[`m${i}.eff`] = i + 1 < count

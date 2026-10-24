@@ -20,7 +20,7 @@ Decided by the user on 2026-10-16 and 2026-10-17. Each entry took the recommende
 | D7 Identity encoding | (b) Module-qualified strings such as `users#UserMissing`. The spec requires this: "A backend must encode resolved declaration identities in error tags, service keys, and brand tokens." |
 | D8 Mode firewall hole (I1) | (a) Source purity assertions stay deferred. The incremental model invalidates dependents on a mode change. M3 informs a later review. |
 | D9 Latency budget | (a) Set the budget after M1 and M6 give a baseline. Set on 2026-10-16: 100 ms at p90 from `didChange` to `publishDiagnostics` on the large synthetic size. Phase B is not needed while M1 meets this budget. Evidence below the table. |
-| D10 Host registry format | (a) Effective-syntax declaration file with a `provider` form, plus a `host:` map in `effective.json`. |
+| D10 Host registry format | (a) Effective-syntax declaration file with a `provider` form, plus a `host:` map in `effektive.json`. |
 | D11 IR validator | (a) Independent validator in the first version, used as a differential oracle for the checker. |
 | D12 Output formatting | (a) Own printer with one fixed style. A test confirms that `deno fmt --check` accepts the output unchanged. |
 | D13 Exported constants (Q4) | (a) Every exported constant requires a type annotation. This closes firewall hole I6. |
@@ -718,7 +718,7 @@ shows a need. That escape hatch is a design property, not a plan.
 | --- | --- | --- | --- | --- |
 | Q1 | What is the scope and derivation of synthetic builtin `ValueId`s: per module or per program, counter or content? | Pipelines and collections | Output determinism and incremental emission | Per module, content hash of the closed type |
 | Q2 | How is the module name derived (`example/log` for `log.lft`), and what exact string goes into `_tag`, service keys, and brand tokens? | Typed IR and backends; fixture | Emitter, fixtures, and wire stability | Module path relative to a configured root; tag `users#UserMissing` |
-| Q3 | What is the host registry format and location, and how is a provider type written? The grammar has no provider syntax. | Retry and providers; Modules and boundaries | `provide` and `main.eff` cannot check | A declaration file in Effective syntax with a `provider` form, next to a `host:` name map in `effective.json` |
+| Q3 | What is the host registry format and location, and how is a provider type written? The grammar has no provider syntax. | Retry and providers; Modules and boundaries | `provide` and `main.eff` cannot check | A declaration file in Effective syntax with a `provider` form, next to a `host:` name map in `effektive.json` |
 | Q4 | Must an exported constant carry a type annotation? | Functions and blocks; Surface grammar | Closes firewall hole I6 | Yes |
 | Q5 | Are unannotated functions allowed at module level (not exported), as `const job = () => log("ready")` suggests? | Functions and blocks | Confirms I5 is module-local only | Yes, and never exported |
 | Q6 | Who inserts the safe-integer check for `int` arithmetic: the emitter, a runtime helper, or nobody? | Data and types; Surface grammar | Generated code shape and determinism | Emitter calls a small runtime helper for `int` operations |
@@ -838,7 +838,7 @@ callback parameters.
 
 **D10. Host registry format (Q3).**
 (a) A declaration file in Effective syntax with a `provider` form, plus a
-`host:` name map in `effective.json`. Recommended.
+`host:` name map in `effektive.json`. Recommended.
 (b) A JSON registry.
 (c) A TypeScript declaration file read through the `typescript` API.
 

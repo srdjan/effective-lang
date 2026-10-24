@@ -33,7 +33,7 @@ function reportsOf(
 }
 
 function single(text: string): Record<string, string> {
-  return { "effective.json": "{}", "m.eff": text };
+  return { "effektive.json": "{}", "m.eff": text };
 }
 
 // ------------------------------------------------------------------ fiber
@@ -130,7 +130,7 @@ const probe = () => withResource(() => Files.open(), (file) => ${row.body}, (fil
 
 function handleProject(main: string): Record<string, string> {
   return {
-    "effective.json": JSON.stringify({
+    "effektive.json": JSON.stringify({
       host: { files: { interface: "./host.effi", module: "./host.ts" } },
     }),
     "host.effi": `
