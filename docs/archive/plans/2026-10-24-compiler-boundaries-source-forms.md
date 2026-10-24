@@ -97,8 +97,8 @@ Verification on 2026-10-24:
 
 ### Performance
 
-Same machine, Deno 2.9.8, quick M1/M3/M4 profile. Raw samples:
-[baseline](../../ms-baseline-bench.json) and [final](../../ms-final-bench.json).
+Same machine, Deno 2.9.8, quick M1/M3/M4 profile. The raw samples are not kept;
+`deno task bench` regenerates them.
 
 | Large-input diagnostics p90 | Baseline ms | Final ms |
 | --- | ---: | ---: |
