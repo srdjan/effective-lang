@@ -11,6 +11,7 @@ symptoms:
 root_cause: logic_error
 resolution_type: code_fix
 severity: medium
+last_updated: 2026-10-24
 tags: [union, type-table, typeref, intern-order, determinism, incremental, record-literal, toir, lowered-ir]
 ---
 
@@ -18,7 +19,7 @@ tags: [union, type-table, typeref, intern-order, determinism, incremental, recor
 
 ## Problem
 
-`TypeTable.union()` in `src/core/types.ts` sorted union members by `TypeRef`, the intern index. `Program` in `src/core/db.ts` keeps one `TypeTable` across revisions (`src/core/db.ts:266`). So the member order of a union depended on which types earlier edits had interned. `recordTarget` in `src/core/check_expr.ts` took the first fitting member. The same source could pass or fail depending on edit history.
+`TypeTable.union()` in `src/core/types.ts` sorted union members by `TypeRef`, the intern index. `Program` in `src/core/db.ts` keeps one `TypeTable` across revisions (`src/core/db.ts:287`). So the member order of a union depended on which types earlier edits had interned. `recordTarget` in `src/core/check_expr.ts` took the first fitting member. The same source could pass or fail depending on edit history.
 
 ## Symptoms
 
@@ -46,7 +47,7 @@ A fuzz of 55,230 mutants found 27 differences between incremental and fresh buil
 
 Commit d3a1633 on local main has two parts.
 
-First, `union()` sorts by the canonical JSON of the IR of each member. It uses the `TypeRef` number only as a tie-break (`src/core/types.ts:663-680`). `irKey` memoizes the key for each `TypeRef` (`src/core/types.ts:682-689`, map at line 319).
+First, `union()` sorts by the canonical JSON of the IR of each member. It uses the `TypeRef` number only as a tie-break (`src/core/types.ts:697-715`). `irKey` memoizes the key for each `TypeRef` (`src/core/types.ts:717-724`, map at line 349).
 
 ```ts
 // before: the order of interning decided the member order
@@ -75,7 +76,7 @@ A fixed order is not enough. With a fixed order, `recordTarget` still picks the 
 - Prefer a canonical structural key for any order or choice that a user can see. Here the key is `canonicalJson(toIr(ref))`.
 - Do not swap `Lowered.ir` for `toIr`. See the second lesson below.
 - When a checker takes "the first fitting" candidate, narrow the candidates by every fact that the source gives. A stable order only hides the choice.
-- Keep record brands out of `recordTarget`. A plain record literal must not fit a record brand, so a new narrowing rule must not see through a brand (session history).
+- Keep tagged records out of assignability in `recordTarget`. A plain record literal never fits a tagged record by assignability. It becomes one only by implicit construction at exactly the expected tagged type, through the `construct` result of `recordTarget` (`src/core/check_expr.ts:1523-1531`). A new narrowing rule must not let a literal take a tagged type without that construction. This bullet once said "record brand": the type identity change renamed the concept (see `docs/solutions/architecture-patterns/type-identity-is-a-flag-on-an-alias.md`).
 - Compare incremental and fresh builds on diagnostic text, not only on emitted code and hashes. The fuzz found all 27 differences this way.
 
 ### Second lesson: `Lowered.ir` is not `toIr(ref)`
