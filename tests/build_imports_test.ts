@@ -25,9 +25,8 @@ async function build(files: Readonly<Record<string, string>>) {
 
 Deno.test("build writes no module that imports a module with an error", async () => {
   const r = await build({
-    "a.eff":
-      'import { b } from "./b.eff"\ntype I = int\nexport const a = (): I => b()\n',
-    "b.eff": 'type I = int\nexport const b = (): I => "text"\n',
+    "a.eff": 'import { b, I } from "./b.eff"\nexport const a = (): I => b()\n',
+    "b.eff": 'export type I = int\nexport const b = (): I => "text"\n',
     "ok.eff": "type I = int\nexport const ok = (): I => 1\n",
   });
   assertEquals(r.code, 1);
@@ -50,9 +49,8 @@ Deno.test("build writes no module that imports an unwritten module through a cha
 Deno.test("build writes no module of an import cycle when one module has an error", async () => {
   const r = await build({
     "c.eff":
-      'import { d } from "./d.eff"\ntype I = int\nexport const c = (): I => 1\n',
-    "d.eff":
-      'import { c } from "./c.eff"\ntype I = int\nexport const d = (): I => c()\n',
+      'import { d } from "./d.eff"\nexport type I = int\nexport const c = (): I => 1\n',
+    "d.eff": 'import { c, I } from "./c.eff"\nexport const d = (): I => c()\n',
   });
   assertEquals(r.code, 1);
   assertEquals(r.outputs, []);

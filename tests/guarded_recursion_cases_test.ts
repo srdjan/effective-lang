@@ -38,9 +38,10 @@ const primitive = (name: "int" | "string"): Type => ({
   kind: "primitive",
   name,
 });
+// A tag alias has a literal body, so it has identity and its body is `base`.
 const aliasType = (declaration: string, value: Type): Forge => ({
   declaration,
-  path: ["definition", "type"],
+  path: ["definition", declaration === "T" ? "type" : "base"],
   value,
 });
 

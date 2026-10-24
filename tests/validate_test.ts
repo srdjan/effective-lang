@@ -2126,9 +2126,9 @@ Deno.test("a provider with acquisition failures validates with zero diagnostics"
     "host/providers.effi":
       'import { Db, Down } from "../db.eff"\nexport provider DbLive provides Db fails Down\n',
     "db.eff":
-      "export error Down = { why: string }\nexport service Db { q(): Int fails Down }\ntype Int = int\n",
+      "export error Down = { why: string }\nexport service Db { q(): Int fails Down }\nexport type Int = int\n",
     "m.eff":
-      'import { Db, Down } from "./db.eff"\nimport { DbLive } from "host:providers"\nexport const g = (): Int fails Down => provide(DbLive, () => Db.q())\nexport const h = (): Int fails Down => DbLive |> provide(() => Db.q())\ntype Int = int\n',
+      'import { Db, Down, Int } from "./db.eff"\nimport { DbLive } from "host:providers"\nexport const g = (): Int fails Down => provide(DbLive, () => Db.q())\nexport const h = (): Int fails Down => DbLive |> provide(() => Db.q())\n',
   }, ["db.eff", "m.eff"]);
   assertEquals(lowered.modules.size, 3);
   for (const [name, ir] of lowered.modules) {
@@ -2369,14 +2369,14 @@ Deno.test("types: a nominal value fits its base and compares with it, and two no
   const lowered = lowerText(`
 nominal Cents = int
 nominal Meters = int
-nominal UserId = string
+nominal UserId = Text
 nominal Account = { id: UserId, name: Text }
 type Fields = { id: UserId, name: Text }
 const text = (id: UserId): Text => id
 const fields = (account: Account): Fields => account
 const same = (id: UserId): Bool => id === "u1"
 const positive = (cents: Cents): Bool => cents > 0
-const twice = (cents: Cents): Int => cents * 2
+const twice = (cents: Cents): Cents => cents * 2
 const compare = (a: Cents, b: Cents): Bool => a === b
 const add = (a: Cents, b: Cents): Cents => a + b
 type Int = int
@@ -2881,6 +2881,7 @@ const ENV: TypeEnv = {
       ],
     }],
   ]),
+  identities: new Set<string>(),
   brands: new Map<string, Type>([["type:m#Id", STRING]]),
   data: new Map(),
   errors: new Map<string, readonly Field[]>(),
@@ -3305,7 +3306,7 @@ error Failed = { count: Count }
   }
 });
 
-Deno.test("data: a brand base cannot be a record, a data type, or a union with one", () => {
+Deno.test("data: an untagged base may be a record, a data type, or a union with one", () => {
   const lowered = lowerText(`
 type Text = string
 type Plain = { id: Text }
@@ -3325,18 +3326,16 @@ nominal Ids = Text[]
   const text: Type = { kind: "named", id: "type:m#Text" };
   // A tagged record base is a data type in the IR, so it is legal.
   assertEquals(forge({ kind: "record", fields: [] }, true), []);
-  assertEquals(forge({ kind: "record", fields: [] }), ["validation/002"]);
+  // An untagged nominal type is an alias with identity, and a `type` may have
+  // an option or array body over a record, so the validator has no body rule.
+  assertEquals(forge({ kind: "record", fields: [] }), []);
   // The flag `tagged` needs a record base.
   assertEquals(forge({ kind: "primitive", name: "string" }, true), [
     "validation/002",
   ]);
-  assertEquals(forge(row), ["validation/002"]);
-  assertEquals(forge({ kind: "named", id: "type:m#Plain" }), [
-    "validation/002",
-  ]);
-  assertEquals(forge({ kind: "union", members: [row, text] }), [
-    "validation/002",
-  ]);
+  assertEquals(forge(row), []);
+  assertEquals(forge({ kind: "named", id: "type:m#Plain" }), []);
+  assertEquals(forge({ kind: "union", members: [row, text] }), []);
   assertEquals(forge({ kind: "array", element: row }), []);
   assertEquals(forge({ kind: "option", element: row }), []);
 });
@@ -3408,14 +3407,14 @@ type B = "b"
   // Two tag aliases now hold one value, so the branches are not distinct.
   const duplicate = copy(lowered.ir);
   const second = duplicate.declarations.find((d) => d.name === "B");
-  assert(second?.kind === "type" && second.definition.kind === "alias");
-  Object.assign(second.definition.type, { value: "a" });
+  assert(second?.kind === "type" && second.definition.kind === "nominal");
+  Object.assign(second.definition.base, { value: "a" });
   assertEquals(codesOf(duplicate, lowered.sources), ["validation/002"]);
   // A tag alias that is no longer a string literal is not a discriminant.
   const widened = copy(lowered.ir);
   const first = widened.declarations.find((d) => d.name === "A");
-  assert(first?.kind === "type" && first.definition.kind === "alias");
-  Object.assign(first.definition, { type: STRING });
+  assert(first?.kind === "type" && first.definition.kind === "nominal");
+  Object.assign(first.definition, { base: STRING });
   assertEquals(codesOf(widened, lowered.sources), ["validation/002"]);
 });
 

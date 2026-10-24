@@ -1,4 +1,4 @@
-import { Int, Text, Positive, Article, positiveSchema } from "./lib.eff"
+import { Int, Text, Positive, Natural, Article, positiveSchema } from "./lib.eff"
 
 const construct = (): Positive =>
   // error: sealed/001
@@ -14,3 +14,19 @@ const arithmetic = (value: Positive): Int =>
 
 // error: sealed/004
 const derived: Schema<Positive> = schema()
+
+const literal = (): Positive =>
+  // error: type-mismatch/003
+  1
+
+const literalPrimitive = (): Natural =>
+  // error: type-mismatch/003
+  1
+
+const widen = (value: Positive): Int =>
+  // error: type-mismatch/003
+  value
+
+const widenPrimitive = (value: Natural): Int =>
+  // error: type-mismatch/003
+  value

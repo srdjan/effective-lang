@@ -6,12 +6,12 @@ type Bool = boolean
 nominal UserId = string
 nominal Cents = int
 
-export const asText = (id: UserId): Text => id
+export const asText = (id: UserId): Text => Text(id)
 export const greet = (id: UserId): Text => id + "!"
 export const isFirst = (id: UserId): Bool => id === "u1"
 export const positive = (total: Cents): Bool => total > 0
-export const double = (total: Cents): Int => total * 2
-export const shifted = (total: Cents): Int => total + 5
+export const double = (total: Cents): Cents => total * 2
+export const shifted = (total: Cents): Cents => total + 5
 export const half = (total: Cents): Num => total / 2
 export const square = (total: Cents): Int => total * total
 export const sum = (a: Cents, b: Cents): Cents => a + b

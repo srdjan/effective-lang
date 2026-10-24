@@ -2,7 +2,10 @@
 // and types", "Execution order and mode", "Retry and providers") and from the
 // lift rule in docs/language-rules.md. This file does not use the checker.
 //
-//   - A type alias unfolds structurally. A brand and an error are nominal.
+//   - A transparent alias unfolds structurally. An alias with identity, a brand,
+//     and an error are nominal. Two different identities never mix. An
+//     identity widens to its body, and an unnamed value fits an identity whose
+//     body it fits. A sealed identity keeps both steps in its own module.
 //   - int fits number. A literal fits its primitive. never fits every type.
 //   - A union fits a target when each member fits. A source fits a union
 //     target when it fits one member.
@@ -24,6 +27,8 @@ export interface TypeEnv {
   readonly module: string;
   /** Alias identity to the aliased type. */
   readonly aliases: ReadonlyMap<string, Type>;
+  /** Identities of the aliases that have identity by name. */
+  readonly identities: ReadonlySet<string>;
   /** Brand identity to the base type. */
   readonly brands: ReadonlyMap<string, Type>;
   /** Data type identity to the base record type. */
@@ -57,6 +62,26 @@ export function isNever(type: Type): boolean {
 /** True when a nominal type is open or belongs to the module under validation. */
 export function ownsSealed(env: TypeEnv, id: string): boolean {
   return !env.sealed.has(id) || id.startsWith(`type:${env.module}#`);
+}
+
+/** The base of a brand, or the body of an alias with identity. */
+export function identityBody(env: TypeEnv, id: string): Type | undefined {
+  return env.brands.get(id) ??
+    (env.identities.has(id) ? env.aliases.get(id) : undefined);
+}
+
+/** Follows transparent aliases and stops at an alias with identity. */
+export function unfoldTransparent(env: TypeEnv, type: Type): Type {
+  let current = type;
+  for (let i = 0; i < MAX_DEPTH; i++) {
+    if (current.kind !== "named" || env.identities.has(current.id)) {
+      return current;
+    }
+    const alias = env.aliases.get(current.id);
+    if (alias === undefined) return current;
+    current = alias;
+  }
+  return current;
 }
 
 /** Follows aliases until the type is not an alias. A brand or an error stays named. */
@@ -167,6 +192,19 @@ export function members(env: TypeEnv, type: Type, depth = 0): Type[] {
   return [unfolded];
 }
 
+/** As `members`, but an alias with identity stops the unfold. */
+export function identityMembers(env: TypeEnv, type: Type, depth = 0): Type[] {
+  const unfolded = unfoldTransparent(env, type);
+  if (unfolded.kind === "union" && depth < MAX_DEPTH) {
+    const out: Type[] = [];
+    for (const member of unfolded.members) {
+      out.push(...identityMembers(env, member, depth + 1));
+    }
+    return out;
+  }
+  return [unfolded];
+}
+
 function literalFits(
   value: string | number | boolean | null,
   name: string,
@@ -200,6 +238,7 @@ function assignable(
   t: Type,
   lift: boolean,
   depth: number,
+  adopt = true,
 ): boolean {
   if (depth > MAX_DEPTH) return false;
   if (s.kind === "named" && t.kind === "named" && s.id === t.id) return true;
@@ -213,33 +252,64 @@ function assignable(
     guardedAlias(env, s.id) && guardedAlias(env, t.id)
   ) return false;
   if (s.kind === "primitive" && s.name === "never") return true;
-  if (s.kind === "named") {
+  // A transparent alias unfolds. An alias with identity stays a name.
+  if (s.kind === "named" && !env.identities.has(s.id)) {
     const alias = env.aliases.get(s.id);
-    if (alias !== undefined) return assignable(env, alias, t, lift, depth + 1);
+    if (alias !== undefined) {
+      return assignable(env, alias, t, lift, depth + 1, adopt);
+    }
   }
-  if (t.kind === "named") {
+  if (t.kind === "named" && !env.identities.has(t.id)) {
     const alias = env.aliases.get(t.id);
-    if (alias !== undefined) return assignable(env, s, alias, lift, depth + 1);
+    if (alias !== undefined) {
+      return assignable(env, s, alias, lift, depth + 1, adopt);
+    }
   }
+  // An identity widens to its body. A sealed identity needs its own module.
+  if (s.kind === "named" && env.identities.has(s.id) && ownsSealed(env, s.id)) {
+    const body = env.aliases.get(s.id);
+    if (
+      body !== undefined && assignable(env, body, t, lift, depth + 1, false)
+    ) return true;
+  }
+  // Two different identities never mix.
+  if (
+    s.kind === "named" && t.kind === "named" && s.id !== t.id &&
+    isIdentity(env, s.id) && isIdentity(env, t.id)
+  ) return false;
+  // A value that widened to a body adopts no name at that level.
+  if (!adopt && t.kind === "named" && isIdentity(env, t.id)) return false;
   // A nominal value fits its base, as `TypeTable.assignable` does.
   if (
     s.kind === "named" && !env.opaque.has(s.id) &&
     ownsSealed(env, s.id)
   ) {
     const base = env.data.get(s.id) ?? env.brands.get(s.id);
-    if (base !== undefined && assignable(env, base, t, lift, depth + 1)) {
+    if (
+      base !== undefined && assignable(env, base, t, lift, depth + 1, false)
+    ) {
+      return true;
+    }
+  }
+  // An unnamed value fits an identity whose body it fits.
+  if (
+    adopt && t.kind === "named" && s.kind !== "named" &&
+    env.identities.has(t.id) && !env.opaque.has(t.id) && ownsSealed(env, t.id)
+  ) {
+    const body = env.aliases.get(t.id);
+    if (body !== undefined && assignable(env, s, body, lift, depth + 1)) {
       return true;
     }
   }
   if (s.kind === "union") {
     for (const member of s.members) {
-      if (!assignable(env, member, t, false, depth + 1)) return false;
+      if (!assignable(env, member, t, false, depth + 1, adopt)) return false;
     }
     return true;
   }
   if (t.kind === "union") {
     for (const member of t.members) {
-      if (assignable(env, s, member, false, depth + 1)) return true;
+      if (assignable(env, s, member, false, depth + 1, adopt)) return true;
     }
     return false;
   }
@@ -418,9 +488,40 @@ export function fits(env: TypeEnv, source: Type, target: Type): boolean {
   return assignable(env, source, target, true, 0);
 }
 
-/** Each type fits the other, with no lift. This is type equality up to aliases and union order. */
+/** True for a brand, a data type, or an alias with identity. */
+function isIdentity(env: TypeEnv, id: string): boolean {
+  return env.identities.has(id) || env.brands.has(id) || env.data.has(id);
+}
+
+/** The sorted names that a type holds, not looking into the body of an identity. */
+function nameSignature(env: TypeEnv, type: Type): string {
+  const names = new Set<string>();
+  const seen = new Set<Type>();
+  const visit = (current: Type, depth: number): void => {
+    if (seen.has(current) || depth > MAX_DEPTH) return;
+    seen.add(current);
+    if (current.kind === "named") {
+      const alias = env.identities.has(current.id)
+        ? undefined
+        : env.aliases.get(current.id);
+      if (alias === undefined) names.add(current.id);
+      else visit(alias, depth + 1);
+      return;
+    }
+    for (const child of typeChildren(current)) visit(child.type, depth + 1);
+  };
+  visit(type, 0);
+  return [...names].sort().join(",");
+}
+
+/**
+ * Each type fits the other, with no lift, and both hold the same names. This is
+ * type equality up to transparent aliases and union order. `int` and an
+ * identity over `int` fit each other, but they are not the same type.
+ */
 export function same(env: TypeEnv, a: Type, b: Type): boolean {
-  return assignable(env, a, b, false, 0) && assignable(env, b, a, false, 0);
+  return assignable(env, a, b, false, 0) && assignable(env, b, a, false, 0) &&
+    nameSignature(env, a) === nameSignature(env, b);
 }
 
 /** A union of the given types without duplicates. One type stands for itself. */
@@ -506,13 +607,13 @@ export function isBooleanLike(env: TypeEnv, type: Type): boolean {
 }
 
 /**
- * The brand type when the type, after aliases, is a brand of `int` or
- * `number`. A brand of a literal union or of another brand is not numeric.
+ * The identity type when the type, after transparent aliases, is an identity
+ * over `int` or `number`. An identity over a literal union is not numeric.
  */
 export function numericBrandOf(env: TypeEnv, type: Type): Type | undefined {
-  const unfolded = unfold(env, type);
+  const unfolded = unfoldTransparent(env, type);
   if (unfolded.kind !== "named") return undefined;
-  const base = env.brands.get(unfolded.id);
+  const base = identityBody(env, unfolded.id);
   if (base === undefined) return undefined;
   const baseType = unfold(env, base);
   return baseType.kind === "primitive" &&
@@ -532,7 +633,7 @@ export function comparisonClass(
 ): string | undefined {
   if (depth > MAX_DEPTH) return undefined;
   let found: string | undefined;
-  for (const member of members(env, type)) {
+  for (const member of identityMembers(env, type)) {
     let current: string | undefined;
     if (member.kind === "literal") {
       current = member.value === null ? "null" : typeof member.value;
@@ -542,7 +643,7 @@ export function comparisonClass(
         current = member.name;
       }
     } else if (member.kind === "named") {
-      const base = env.brands.get(member.id);
+      const base = identityBody(env, member.id);
       if (
         base !== undefined &&
         comparisonClass(env, base, depth + 1) !== undefined
@@ -559,10 +660,10 @@ export function comparisonClass(
 
 const BRAND_CLASS = "brand:";
 
-/** The class of the base of a brand class, or undefined for another class. */
+/** The class of the body of an identity class, or undefined for another class. */
 function baseClass(env: TypeEnv, cls: string): string | undefined {
   if (!cls.startsWith(BRAND_CLASS)) return undefined;
-  const base = env.brands.get(cls.slice(BRAND_CLASS.length));
+  const base = identityBody(env, cls.slice(BRAND_CLASS.length));
   return base === undefined ? undefined : comparisonClass(env, base);
 }
 

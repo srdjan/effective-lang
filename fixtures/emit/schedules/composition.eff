@@ -32,7 +32,7 @@ export const long: Schedule<Int> = scheduleFromStep(
 export const slowest: Schedule<Millis> = scheduleMax(short, long)
 export const fastest: Schedule<Millis> = scheduleMin(short, long)
 export const phases: Schedule<Int> = scheduleConcat(short, long)
-export const comparable = (a: Schedule<Int, Int>, b: Schedule<Int, Millis>): Schedule<Millis, Int> =>
+export const comparable = (a: Schedule<Int, Int>, b: Schedule<Int, Int>): Schedule<Millis, Int> =>
   scheduleMax(a, b)
 
 export const left: Schedule<Int, Option<Int[]>, LeftStop, LeftPolicy.next> =

@@ -56,7 +56,7 @@ function sources(width: number): Record<string, string> {
     service:
       `export service ${service} { read(): Text }\nexport const read = (): Text uses ${service}.read => { const value = ${service}.read()\n value }`,
     parameter:
-      `type ${text} = string\nexport const read = (value: ${text}): Text => value`,
+      `type ${text} = Text\nexport const read = (value: ${text}): Text => value`,
     optional:
       `type Box = { ${field}?: string }\nexport const read = (box: Box): Option<Text> => box.${field}`,
     nested:

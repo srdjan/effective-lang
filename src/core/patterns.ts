@@ -57,6 +57,25 @@ export function flattenMembers(table: TypeTable, ref: TypeRef): TypeRef[] {
   return out;
 }
 
+/** As `flattenMembers`, but an alias with identity stops the unfold. */
+export function flattenIdentityMembers(
+  table: TypeTable,
+  ref: TypeRef,
+): TypeRef[] {
+  const out: TypeRef[] = [];
+  const visit = (current: TypeRef, depth: number): void => {
+    const unfolded = table.unfoldTransparent(current);
+    const node = table.node(unfolded);
+    if (node.kind === "union" && depth < MAX_DEPTH) {
+      for (const member of node.members) visit(member, depth + 1);
+    } else {
+      out.push(unfolded);
+    }
+  };
+  visit(ref, 0);
+  return out;
+}
+
 function literalValuesOf(
   table: TypeTable,
   ref: TypeRef,

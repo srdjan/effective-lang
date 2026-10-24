@@ -1,4 +1,4 @@
-nominal UserId = string
+nominal UserId = Text
 
 nominal Email = string
 

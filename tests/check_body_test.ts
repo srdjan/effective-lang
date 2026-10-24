@@ -2101,9 +2101,8 @@ Deno.test("field reads and block bindings are recorded", () => {
 // ------------------------------------------------------------------ contracts
 
 const USERS_BROKEN = `${exampleFiles()["users.eff"]}
-export const broken = (id: Text): User
+export const broken = (id: UserId): User
   uses Users.find => getUser(id)
-type Text = string
 `;
 
 Deno.test("the invalid example of the spec gives exactly one failure-contract diagnostic", () => {
@@ -2179,13 +2178,18 @@ type Int = int
 
 Deno.test("function results with a wider declared type accept narrower bodies", () => {
   const project = checkText(`
-const f = (n: Int): Num => n
-const g = (n: Int): Int | Text => n
+const f = (n: Int): Int | Text => n
 type Int = int
-type Num = number
 type Text = string
 `);
   assertEquals(messages(project), []);
+  // Two different identities never mix: a named int does not fit a named number.
+  const named = checkText(`
+const f = (n: Int): Num => n
+type Int = int
+type Num = number
+`);
+  assertEquals(codes(named), ["type-mismatch/003"]);
 });
 
 // ------------------------------------------------------------------ callbacks and modes
@@ -2271,13 +2275,12 @@ Deno.test("an imported function keeps the mode from its interface", () => {
     "lib.eff": `
 export const double = (n: Int): Int => n * 2
 export const loud = (n: Int): Int => retry(() => n, { times: 1 })
-type Int = int
+export type Int = int
 `,
     "main.eff": `
-import { double, loud } from "./lib.eff"
+import { double, loud, Int } from "./lib.eff"
 const a = (xs: Int[]): Int[] => xs |> map(double)
 const b = (xs: Int[]): Int[] => xs |> map(loud)
-type Int = int
 `,
   };
   const project = checkFiles(files, ["main.eff"]);
@@ -2491,7 +2494,12 @@ type Num = number
 type Text = string
 type Bool = boolean
 `);
-  assertEquals(codes(project), ["type-mismatch/003", "type-mismatch/007"]);
+  // `c` mixes the identities Int and Num: a named int does not fit a named number.
+  assertEquals(codes(project), [
+    "type-mismatch/007",
+    "type-mismatch/003",
+    "type-mismatch/007",
+  ]);
 });
 
 Deno.test("two values of one numeric brand compare, add, and subtract", () => {
@@ -2532,27 +2540,74 @@ type Text = string
 type Bool = boolean
 `;
 
-Deno.test("arithmetic with a numeric brand widens it to its base", () => {
+Deno.test("arithmetic with a numeric brand and an unnamed operand keeps the name", () => {
   const project = checkText(`${NOMINAL_OPERANDS}
-const times = (a: Cents): Int => a * 2
-const plus = (a: Cents): Int => a + 5
-const minus = (a: Cents): Int => 5 - a
+const times = (a: Cents): Cents => a * 2
+const timesLeft = (a: Cents): Cents => 2 * a
+const plus = (a: Cents): Cents => a + 5
+const minus = (a: Cents): Cents => 5 - a
+const unnamed = (a: Cents[]): Cents => a |> fold(0, (s, n) => s + n)
 const divide = (a: Cents): Num => a / 2
 const square = (a: Cents): Int => a * a
-const scaled = (r: Rate): Num => r * 2
+const scaled = (r: Rate): Rate => r * 2
 const half = (r: Rate): Num => r / r
 const keep = (a: Cents, b: Cents): Cents => a + b
+const fraction = (a: Cents): Num => a * 1.5
 `);
   assertEquals(messages(project), []);
 });
 
-Deno.test("arithmetic that widens a brand does not give the brand back", () => {
+Deno.test("a numeric brand and an unnamed operand give the brand, or widen to the base", () => {
+  const source = `${NOMINAL_OPERANDS}
+const a = (c: Cents) => c * 2
+const b = (c: Cents) => 2 * c
+const d = (c: Cents) => c + 1
+const e = (c: Cents) => c * 1.5
+const f = (c: Cents) => c / 2
+const g = (c: Cents, m: Cents) => c * m
+`;
+  assertEquals(messages(checkText(source)), []);
+  const at = (text: string) => hoverContract(source, source.indexOf(text) + 2);
+  assertEquals(at("c * 2"), "Cents");
+  assertEquals(at("2 * c"), "Cents");
+  assertEquals(at("c + 1"), "Cents");
+  assertEquals(at("c * 1.5"), "number");
+  assertEquals(at("c / 2"), "number");
+  assertEquals(at("c * m"), "int");
+});
+
+Deno.test("two identities with one short name print as module#Name", () => {
+  const project = checkFiles({
+    "effektive.json": "{}",
+    "a.eff":
+      "export type Text = string\nexport const take = (t: Text): Text => t\n",
+    "b.eff":
+      "export type Text = string\nexport const make = (t: Text): Text => t\n",
+    "main.eff": `import { take } from "./a.eff"
+import { make } from "./b.eff"
+const run = () => take(make("x"))
+`,
+  }, ["main.eff"]);
+  assertEquals(messages(project), [
+    "type-mismatch/003 argument 1 has type b#Text, but a#Text is expected",
+  ]);
+});
+
+Deno.test("arithmetic with an unnamed operand does not give another name", () => {
   const project = checkText(`${NOMINAL_OPERANDS}
-const times = (a: Cents, b: Cents): Cents => a * b
+type Count = int
+const other = (a: Cents): Count => a * 2
+const otherLeft = (a: Cents): Count => 2 + a
+const fraction = (a: Cents): Cents => a * 1.5
 const divide = (a: Cents, b: Cents): Cents => a / b
-const plain = (a: Cents): Cents => a + 1
 `);
-  assertEquals(codes(project), Array(3).fill("type-mismatch/003"));
+  assertEquals(codes(project), Array(4).fill("type-mismatch/003"));
+  assertEquals(project.diagnostics.map((d) => d.message), [
+    "the function body has type Cents, but Count is expected",
+    "the function body has type Cents, but Count is expected",
+    "the function body has type number, but Cents is expected",
+    "the function body has type number, but Cents is expected",
+  ]);
 });
 
 Deno.test("arithmetic with two different nominal classes is an error", () => {
@@ -2595,10 +2650,11 @@ const otherEq = (a: Cents, b: Meters): Bool => a !== b
 const idText = (id: UserId): Bool => id < "u"
 const idNumber = (id: UserId): Bool => id === 1
 `);
-  assertEquals(codes(project), Array(5).fill("type-mismatch/007"));
+  // `atLeast` compares the identities Int and Cents, which never mix.
+  assertEquals(codes(project), Array(6).fill("type-mismatch/007"));
   assertEquals(
     project.diagnostics.map((d) => d.message.includes("Cents and Meters")),
-    [false, true, true, false, false],
+    [false, false, true, true, false, false],
   );
 });
 
@@ -2608,7 +2664,7 @@ nominal Tip = Cents
 const same = (a: Tip, b: Tip): Bool => a < b
 const literal = (a: Tip): Bool => a > 0
 const base = (a: Tip, b: Cents): Bool => a <= b
-const sum = (a: Tip, b: Int): Int => a + b
+const sum = (a: Tip, b: Cents): Int => a + b
 const other = (a: Tip, b: Meters): Bool => a < b
 `);
   assertEquals(codes(project), ["type-mismatch/007"]);
@@ -2620,7 +2676,7 @@ nominal Id = string
 nominal Other = string
 type Point = { x: int }
 type Status = "a" | "b"
-const a = (x: Int, y: Num): Bool => x === y
+const a = (x: Int, y: Int): Bool => x === y
 const b = (x: Status): Bool => x === "a"
 const c = (x: Id, y: Id): Bool => x !== y
 const d = (x: Id, y: Other): Bool => x === y
@@ -2726,7 +2782,7 @@ type Text = string
 Deno.test("brand construction follows the nominal rules, and unbrand is an unknown name", () => {
   const project = checkText(`
 nominal Id = string
-type Name = string
+type Name = Text
 const a = (s: Text): Id => Id(s)
 const b = (i: Id): Text => i
 const c = (n: Int): Id => Id(n)
@@ -2739,6 +2795,7 @@ type Text = string
   assertEquals(codes(project), [
     "type-mismatch/003",
     "type-mismatch/003",
+    "type-mismatch/003",
     "type-mismatch/010",
     "unknown-name/001",
   ]);
@@ -2749,7 +2806,7 @@ type Text = string
 const WIDENING = `
 type Text = string
 type Int = int
-nominal UserId = string
+nominal UserId = Text
 nominal Account = { id: UserId, name: Text }
 type Fields = { id: UserId, name: Text }
 const take = (s: Text): Text => s
@@ -2777,7 +2834,7 @@ const keptText = (id: UserId): UserId | Text => id
 
 Deno.test("a base value does not fit a nominal type, and one nominal type does not fit another", () => {
   const project = checkText(`${WIDENING}
-nominal Email = string
+nominal Email = Text
 nominal Twin = { id: UserId, name: Text }
 const down = (s: Text): UserId => s
 const list = (ss: Text[]): UserId[] => ss
@@ -2913,7 +2970,7 @@ const c = (xs: Int[]): Int => xs |> fold(0, (s, n) => s + n)
 const d = (xs: Int[]): Int => xs |> fold(0, (s) => s)
 const e = (n: Int): Int[] => n |> map((x) => x)
 const f = (xs: Text[]): Text => xs |> fold("", (s, x) => s + x)
-const g = (xs: Int[]): Num => xs |> fold(0, (s, n) => s + n)
+const g = (xs: Num[]): Num => xs |> fold(0, (s, n) => s + n)
 type Int = int
 type Num = number
 type Text = string
@@ -3083,7 +3140,7 @@ export service Db {
   read(): Int fails Down
   write(n: Int): void
 }
-type Int = int
+export type Int = int
 `,
   "host/providers.effi": `
 import { Db, Down } from "../svc.eff"
@@ -3095,13 +3152,12 @@ Deno.test("provide with a host provider has the callback's failures and the acqu
   const project = checkFiles({
     ...HOST,
     "main.eff": `
-import { Db, Down } from "./svc.eff"
+import { Db, Down, Int } from "./svc.eff"
 import { DbLive } from "host:providers"
 export const run = (): Int fails Down =>
   provide(DbLive, () => Db.read())
 export const bad = (): Int fails Down uses Db.read =>
   provide(DbLive, () => Db.read())
-type Int = int
 `,
   }, ["main.eff"]);
   assertEquals(messages(project), []);
@@ -3115,12 +3171,11 @@ Deno.test("provide needs a host provider and a zero-argument job", () => {
   const project = checkFiles({
     ...HOST,
     "main.eff": `
-import { Db, Down } from "./svc.eff"
+import { Db, Down, Int } from "./svc.eff"
 import { DbLive } from "host:providers"
 export const a = (n: Int): Int fails Down => provide(n, () => 1)
 export const b = (): Int fails Down => provide(DbLive, (n: Int) => n)
 export const c = (): Int fails Down => provide(DbLive)
-type Int = int
 `,
   }, ["main.eff"]);
   assertEquals(codes(project), [
@@ -3543,12 +3598,12 @@ function deepRecord(levels: number, leaf: string): string {
   return "{ a: ".repeat(levels) + leaf + " }".repeat(levels);
 }
 
-Deno.test("a record type 300 levels deep compares int to number with no diagnostic", () => {
+Deno.test("a record type 300 levels deep compares an alias to its target with no diagnostic", () => {
   const project = checkText(`
-const f = (x: ${deepRecord(300, "Num")}): Int => 1
-const g = (y: ${deepRecord(300, "Int")}): Int => f(y)
+const f = (x: ${deepRecord(300, "Int")}): Int => 1
+const g = (y: ${deepRecord(300, "Same")}): Int => f(y)
 type Int = int
-type Num = number
+type Same = Int
 `);
   assertEquals(messages(project), []);
 });

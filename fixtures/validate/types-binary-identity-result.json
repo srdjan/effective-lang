@@ -1,0 +1,1090 @@
+{
+  "declarations": [
+    {
+      "definition": {
+        "base": {
+          "kind": "primitive",
+          "name": "string"
+        },
+        "kind": "nominal"
+      },
+      "id": "type:collections#Name",
+      "kind": "type",
+      "name": "Name",
+      "span": {
+        "end": 18,
+        "source": "collections.eff",
+        "start": 0
+      }
+    },
+    {
+      "definition": {
+        "base": {
+          "kind": "primitive",
+          "name": "int"
+        },
+        "kind": "nominal"
+      },
+      "id": "type:collections#Amount",
+      "kind": "type",
+      "name": "Amount",
+      "span": {
+        "end": 36,
+        "source": "collections.eff",
+        "start": 19
+      }
+    },
+    {
+      "definition": {
+        "kind": "alias",
+        "type": {
+          "fields": [
+            {
+              "name": "name",
+              "optional": false,
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            },
+            {
+              "name": "active",
+              "optional": false,
+              "type": {
+                "kind": "primitive",
+                "name": "boolean"
+              }
+            }
+          ],
+          "kind": "record"
+        }
+      },
+      "id": "type:collections#User",
+      "kind": "type",
+      "name": "User",
+      "span": {
+        "end": 83,
+        "source": "collections.eff",
+        "start": 38
+      }
+    },
+    {
+      "body": {
+        "effects": {
+          "failures": [],
+          "requirements": []
+        },
+        "execution": "pure",
+        "kind": "block",
+        "result": {
+          "arguments": [
+            {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "reference",
+              "span": {
+                "end": 181,
+                "source": "collections.eff",
+                "start": 141
+              },
+              "target": "local:collections#activeNames/$p2",
+              "type": {
+                "element": {
+                  "id": "type:collections#User",
+                  "kind": "named"
+                },
+                "kind": "array"
+              }
+            },
+            {
+              "body": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "field": "name",
+                "kind": "get",
+                "record": {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "reference",
+                  "span": {
+                    "end": 205,
+                    "source": "collections.eff",
+                    "start": 201
+                  },
+                  "target": "local:collections#activeNames/user/2",
+                  "type": {
+                    "id": "type:collections#User",
+                    "kind": "named"
+                  }
+                },
+                "span": {
+                  "end": 210,
+                  "source": "collections.eff",
+                  "start": 201
+                },
+                "type": {
+                  "kind": "primitive",
+                  "name": "string"
+                }
+              },
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "closure",
+              "parameters": [
+                {
+                  "id": "local:collections#activeNames/user/2",
+                  "name": "user",
+                  "span": {
+                    "end": 197,
+                    "source": "collections.eff",
+                    "start": 193
+                  },
+                  "type": {
+                    "id": "type:collections#User",
+                    "kind": "named"
+                  }
+                }
+              ],
+              "span": {
+                "end": 210,
+                "source": "collections.eff",
+                "start": 193
+              },
+              "type": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "function",
+                "parameters": [
+                  {
+                    "id": "type:collections#User",
+                    "kind": "named"
+                  }
+                ],
+                "result": {
+                  "kind": "primitive",
+                  "name": "string"
+                }
+              }
+            }
+          ],
+          "callee": {
+            "effects": {
+              "failures": [],
+              "requirements": []
+            },
+            "execution": "pure",
+            "kind": "reference",
+            "span": {
+              "end": 192,
+              "source": "collections.eff",
+              "start": 189
+            },
+            "target": "value:collections#$builtin/map/8d563422cc9f",
+            "type": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "function",
+              "parameters": [
+                {
+                  "element": {
+                    "id": "type:collections#User",
+                    "kind": "named"
+                  },
+                  "kind": "array"
+                },
+                {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "function",
+                  "parameters": [
+                    {
+                      "id": "type:collections#User",
+                      "kind": "named"
+                    }
+                  ],
+                  "result": {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                }
+              ],
+              "result": {
+                "element": {
+                  "kind": "primitive",
+                  "name": "string"
+                },
+                "kind": "array"
+              }
+            }
+          },
+          "effects": {
+            "failures": [],
+            "requirements": []
+          },
+          "execution": "pure",
+          "kind": "call",
+          "span": {
+            "end": 211,
+            "source": "collections.eff",
+            "start": 189
+          },
+          "type": {
+            "element": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "kind": "array"
+          }
+        },
+        "span": {
+          "end": 211,
+          "source": "collections.eff",
+          "start": 141
+        },
+        "steps": [
+          {
+            "binding": {
+              "id": "local:collections#activeNames/$p1",
+              "name": "$p1",
+              "span": {
+                "end": 146,
+                "source": "collections.eff",
+                "start": 141
+              },
+              "type": {
+                "element": {
+                  "id": "type:collections#User",
+                  "kind": "named"
+                },
+                "kind": "array"
+              }
+            },
+            "kind": "bind",
+            "value": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "reference",
+              "span": {
+                "end": 146,
+                "source": "collections.eff",
+                "start": 141
+              },
+              "target": "local:collections#activeNames/users",
+              "type": {
+                "element": {
+                  "id": "type:collections#User",
+                  "kind": "named"
+                },
+                "kind": "array"
+              }
+            }
+          },
+          {
+            "binding": {
+              "id": "local:collections#activeNames/$p2",
+              "name": "$p2",
+              "span": {
+                "end": 181,
+                "source": "collections.eff",
+                "start": 141
+              },
+              "type": {
+                "element": {
+                  "id": "type:collections#User",
+                  "kind": "named"
+                },
+                "kind": "array"
+              }
+            },
+            "kind": "bind",
+            "value": {
+              "arguments": [
+                {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "reference",
+                  "span": {
+                    "end": 146,
+                    "source": "collections.eff",
+                    "start": 141
+                  },
+                  "target": "local:collections#activeNames/$p1",
+                  "type": {
+                    "element": {
+                      "id": "type:collections#User",
+                      "kind": "named"
+                    },
+                    "kind": "array"
+                  }
+                },
+                {
+                  "body": {
+                    "effects": {
+                      "failures": [],
+                      "requirements": []
+                    },
+                    "execution": "pure",
+                    "field": "active",
+                    "kind": "get",
+                    "record": {
+                      "effects": {
+                        "failures": [],
+                        "requirements": []
+                      },
+                      "execution": "pure",
+                      "kind": "reference",
+                      "span": {
+                        "end": 173,
+                        "source": "collections.eff",
+                        "start": 169
+                      },
+                      "target": "local:collections#activeNames/user",
+                      "type": {
+                        "id": "type:collections#User",
+                        "kind": "named"
+                      }
+                    },
+                    "span": {
+                      "end": 180,
+                      "source": "collections.eff",
+                      "start": 169
+                    },
+                    "type": {
+                      "kind": "primitive",
+                      "name": "boolean"
+                    }
+                  },
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "closure",
+                  "parameters": [
+                    {
+                      "id": "local:collections#activeNames/user",
+                      "name": "user",
+                      "span": {
+                        "end": 165,
+                        "source": "collections.eff",
+                        "start": 161
+                      },
+                      "type": {
+                        "id": "type:collections#User",
+                        "kind": "named"
+                      }
+                    }
+                  ],
+                  "span": {
+                    "end": 180,
+                    "source": "collections.eff",
+                    "start": 161
+                  },
+                  "type": {
+                    "effects": {
+                      "failures": [],
+                      "requirements": []
+                    },
+                    "execution": "pure",
+                    "kind": "function",
+                    "parameters": [
+                      {
+                        "id": "type:collections#User",
+                        "kind": "named"
+                      }
+                    ],
+                    "result": {
+                      "kind": "primitive",
+                      "name": "boolean"
+                    }
+                  }
+                }
+              ],
+              "callee": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "reference",
+                "span": {
+                  "end": 160,
+                  "source": "collections.eff",
+                  "start": 154
+                },
+                "target": "value:collections#$builtin/filter/7bb109852e57",
+                "type": {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "function",
+                  "parameters": [
+                    {
+                      "element": {
+                        "id": "type:collections#User",
+                        "kind": "named"
+                      },
+                      "kind": "array"
+                    },
+                    {
+                      "effects": {
+                        "failures": [],
+                        "requirements": []
+                      },
+                      "execution": "pure",
+                      "kind": "function",
+                      "parameters": [
+                        {
+                          "id": "type:collections#User",
+                          "kind": "named"
+                        }
+                      ],
+                      "result": {
+                        "kind": "primitive",
+                        "name": "boolean"
+                      }
+                    }
+                  ],
+                  "result": {
+                    "element": {
+                      "id": "type:collections#User",
+                      "kind": "named"
+                    },
+                    "kind": "array"
+                  }
+                }
+              },
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "call",
+              "span": {
+                "end": 181,
+                "source": "collections.eff",
+                "start": 154
+              },
+              "type": {
+                "element": {
+                  "id": "type:collections#User",
+                  "kind": "named"
+                },
+                "kind": "array"
+              }
+            }
+          }
+        ],
+        "type": {
+          "element": {
+            "kind": "primitive",
+            "name": "string"
+          },
+          "kind": "array"
+        }
+      },
+      "id": "value:collections#activeNames",
+      "kind": "function",
+      "name": "activeNames",
+      "parameters": [
+        {
+          "id": "local:collections#activeNames/users",
+          "name": "users",
+          "span": {
+            "end": 126,
+            "source": "collections.eff",
+            "start": 113
+          },
+          "type": {
+            "element": {
+              "id": "type:collections#User",
+              "kind": "named"
+            },
+            "kind": "array"
+          }
+        }
+      ],
+      "span": {
+        "end": 211,
+        "source": "collections.eff",
+        "start": 85
+      },
+      "type": {
+        "effects": {
+          "failures": [],
+          "requirements": []
+        },
+        "execution": "pure",
+        "kind": "function",
+        "parameters": [
+          {
+            "element": {
+              "id": "type:collections#User",
+              "kind": "named"
+            },
+            "kind": "array"
+          }
+        ],
+        "result": {
+          "element": {
+            "id": "type:collections#Name",
+            "kind": "named"
+          },
+          "kind": "array"
+        }
+      },
+      "written": {
+        "fails": true,
+        "result": true,
+        "uses": true
+      }
+    },
+    {
+      "body": {
+        "effects": {
+          "failures": [],
+          "requirements": []
+        },
+        "execution": "pure",
+        "kind": "block",
+        "result": {
+          "arguments": [
+            {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "reference",
+              "span": {
+                "end": 274,
+                "source": "collections.eff",
+                "start": 267
+              },
+              "target": "local:collections#total/$p1",
+              "type": {
+                "element": {
+                  "id": "type:collections#Amount",
+                  "kind": "named"
+                },
+                "kind": "array"
+              }
+            },
+            {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "literal",
+              "span": {
+                "end": 284,
+                "source": "collections.eff",
+                "start": 283
+              },
+              "type": {
+                "kind": "primitive",
+                "name": "int"
+              },
+              "value": 0
+            },
+            {
+              "body": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "binary",
+                "left": {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "reference",
+                  "span": {
+                    "end": 306,
+                    "source": "collections.eff",
+                    "start": 303
+                  },
+                  "target": "local:collections#total/sum",
+                  "type": {
+                    "id": "type:collections#Amount",
+                    "kind": "named"
+                  }
+                },
+                "operator": "*",
+                "right": {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "literal",
+                  "span": {
+                    "end": 1,
+                    "source": "collections.eff",
+                    "start": 0
+                  },
+                  "type": {
+                    "kind": "literal",
+                    "value": 2
+                  },
+                  "value": 2
+                },
+                "span": {
+                  "end": 315,
+                  "source": "collections.eff",
+                  "start": 303
+                },
+                "type": {
+                  "kind": "primitive",
+                  "name": "int"
+                }
+              },
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "closure",
+              "parameters": [
+                {
+                  "id": "local:collections#total/sum",
+                  "name": "sum",
+                  "span": {
+                    "end": 290,
+                    "source": "collections.eff",
+                    "start": 287
+                  },
+                  "type": {
+                    "id": "type:collections#Amount",
+                    "kind": "named"
+                  }
+                },
+                {
+                  "id": "local:collections#total/amount",
+                  "name": "amount",
+                  "span": {
+                    "end": 298,
+                    "source": "collections.eff",
+                    "start": 292
+                  },
+                  "type": {
+                    "id": "type:collections#Amount",
+                    "kind": "named"
+                  }
+                }
+              ],
+              "span": {
+                "end": 315,
+                "source": "collections.eff",
+                "start": 286
+              },
+              "type": {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "function",
+                "parameters": [
+                  {
+                    "id": "type:collections#Amount",
+                    "kind": "named"
+                  },
+                  {
+                    "id": "type:collections#Amount",
+                    "kind": "named"
+                  }
+                ],
+                "result": {
+                  "id": "type:collections#Amount",
+                  "kind": "named"
+                }
+              }
+            }
+          ],
+          "callee": {
+            "effects": {
+              "failures": [],
+              "requirements": []
+            },
+            "execution": "pure",
+            "kind": "reference",
+            "span": {
+              "end": 282,
+              "source": "collections.eff",
+              "start": 278
+            },
+            "target": "value:collections#$builtin/fold/9bf50209798a",
+            "type": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "function",
+              "parameters": [
+                {
+                  "element": {
+                    "id": "type:collections#Amount",
+                    "kind": "named"
+                  },
+                  "kind": "array"
+                },
+                {
+                  "id": "type:collections#Amount",
+                  "kind": "named"
+                },
+                {
+                  "effects": {
+                    "failures": [],
+                    "requirements": []
+                  },
+                  "execution": "pure",
+                  "kind": "function",
+                  "parameters": [
+                    {
+                      "id": "type:collections#Amount",
+                      "kind": "named"
+                    },
+                    {
+                      "id": "type:collections#Amount",
+                      "kind": "named"
+                    }
+                  ],
+                  "result": {
+                    "id": "type:collections#Amount",
+                    "kind": "named"
+                  }
+                }
+              ],
+              "result": {
+                "id": "type:collections#Amount",
+                "kind": "named"
+              }
+            }
+          },
+          "effects": {
+            "failures": [],
+            "requirements": []
+          },
+          "execution": "pure",
+          "kind": "call",
+          "span": {
+            "end": 316,
+            "source": "collections.eff",
+            "start": 278
+          },
+          "type": {
+            "id": "type:collections#Amount",
+            "kind": "named"
+          }
+        },
+        "span": {
+          "end": 316,
+          "source": "collections.eff",
+          "start": 267
+        },
+        "steps": [
+          {
+            "binding": {
+              "id": "local:collections#total/$p1",
+              "name": "$p1",
+              "span": {
+                "end": 274,
+                "source": "collections.eff",
+                "start": 267
+              },
+              "type": {
+                "element": {
+                  "id": "type:collections#Amount",
+                  "kind": "named"
+                },
+                "kind": "array"
+              }
+            },
+            "kind": "bind",
+            "value": {
+              "effects": {
+                "failures": [],
+                "requirements": []
+              },
+              "execution": "pure",
+              "kind": "reference",
+              "span": {
+                "end": 274,
+                "source": "collections.eff",
+                "start": 267
+              },
+              "target": "local:collections#total/amounts",
+              "type": {
+                "element": {
+                  "id": "type:collections#Amount",
+                  "kind": "named"
+                },
+                "kind": "array"
+              }
+            }
+          }
+        ],
+        "type": {
+          "id": "type:collections#Amount",
+          "kind": "named"
+        }
+      },
+      "id": "value:collections#total",
+      "kind": "function",
+      "name": "total",
+      "parameters": [
+        {
+          "id": "local:collections#total/amounts",
+          "name": "amounts",
+          "span": {
+            "end": 252,
+            "source": "collections.eff",
+            "start": 235
+          },
+          "type": {
+            "element": {
+              "id": "type:collections#Amount",
+              "kind": "named"
+            },
+            "kind": "array"
+          }
+        }
+      ],
+      "span": {
+        "end": 316,
+        "source": "collections.eff",
+        "start": 213
+      },
+      "type": {
+        "effects": {
+          "failures": [],
+          "requirements": []
+        },
+        "execution": "pure",
+        "kind": "function",
+        "parameters": [
+          {
+            "element": {
+              "id": "type:collections#Amount",
+              "kind": "named"
+            },
+            "kind": "array"
+          }
+        ],
+        "result": {
+          "id": "type:collections#Amount",
+          "kind": "named"
+        }
+      },
+      "written": {
+        "fails": true,
+        "result": true,
+        "uses": true
+      }
+    }
+  ],
+  "exports": [
+    "value:collections#activeNames",
+    "value:collections#total"
+  ],
+  "format": "light-functional-ir",
+  "imports": [
+    {
+      "bindings": [],
+      "errors": [],
+      "exports": [
+        "value:collections#$builtin/filter/7bb109852e57",
+        "value:collections#$builtin/fold/9bf50209798a",
+        "value:collections#$builtin/map/8d563422cc9f"
+      ],
+      "module": "effektive:prelude",
+      "services": [],
+      "types": [],
+      "values": [
+        {
+          "id": "value:collections#$builtin/filter/7bb109852e57",
+          "name": "$builtin/filter/7bb109852e57",
+          "type": {
+            "effects": {
+              "failures": [],
+              "requirements": []
+            },
+            "execution": "pure",
+            "kind": "function",
+            "parameters": [
+              {
+                "element": {
+                  "id": "type:collections#User",
+                  "kind": "named"
+                },
+                "kind": "array"
+              },
+              {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "function",
+                "parameters": [
+                  {
+                    "id": "type:collections#User",
+                    "kind": "named"
+                  }
+                ],
+                "result": {
+                  "kind": "primitive",
+                  "name": "boolean"
+                }
+              }
+            ],
+            "result": {
+              "element": {
+                "id": "type:collections#User",
+                "kind": "named"
+              },
+              "kind": "array"
+            }
+          }
+        },
+        {
+          "id": "value:collections#$builtin/fold/9bf50209798a",
+          "name": "$builtin/fold/9bf50209798a",
+          "type": {
+            "effects": {
+              "failures": [],
+              "requirements": []
+            },
+            "execution": "pure",
+            "kind": "function",
+            "parameters": [
+              {
+                "element": {
+                  "id": "type:collections#Amount",
+                  "kind": "named"
+                },
+                "kind": "array"
+              },
+              {
+                "id": "type:collections#Amount",
+                "kind": "named"
+              },
+              {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "function",
+                "parameters": [
+                  {
+                    "id": "type:collections#Amount",
+                    "kind": "named"
+                  },
+                  {
+                    "id": "type:collections#Amount",
+                    "kind": "named"
+                  }
+                ],
+                "result": {
+                  "id": "type:collections#Amount",
+                  "kind": "named"
+                }
+              }
+            ],
+            "result": {
+              "id": "type:collections#Amount",
+              "kind": "named"
+            }
+          }
+        },
+        {
+          "id": "value:collections#$builtin/map/8d563422cc9f",
+          "name": "$builtin/map/8d563422cc9f",
+          "type": {
+            "effects": {
+              "failures": [],
+              "requirements": []
+            },
+            "execution": "pure",
+            "kind": "function",
+            "parameters": [
+              {
+                "element": {
+                  "id": "type:collections#User",
+                  "kind": "named"
+                },
+                "kind": "array"
+              },
+              {
+                "effects": {
+                  "failures": [],
+                  "requirements": []
+                },
+                "execution": "pure",
+                "kind": "function",
+                "parameters": [
+                  {
+                    "id": "type:collections#User",
+                    "kind": "named"
+                  }
+                ],
+                "result": {
+                  "kind": "primitive",
+                  "name": "string"
+                }
+              }
+            ],
+            "result": {
+              "element": {
+                "kind": "primitive",
+                "name": "string"
+              },
+              "kind": "array"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "module": "collections",
+  "sources": [
+    "collections.eff"
+  ],
+  "version": 5
+}

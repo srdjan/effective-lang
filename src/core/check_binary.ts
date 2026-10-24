@@ -5,7 +5,7 @@
 
 import { isErrorId } from "./ids.ts";
 import type { TypeId } from "./ir.ts";
-import { flattenMembers } from "./patterns.ts";
+import { flattenIdentityMembers } from "./patterns.ts";
 import type { BinaryOperator } from "./syntax_queries.ts";
 import type { TypeRef, TypeTable } from "./types.ts";
 
@@ -14,14 +14,14 @@ function isError(table: TypeTable, ref: TypeRef): boolean {
 }
 
 /**
- * The brand id when the type, after aliases, is a brand of `int` or `number`.
- * A brand of a literal union or of another brand is not numeric.
+ * The identity id when the type, after transparent aliases, is an identity
+ * over `int` or `number`. An identity over a literal union is not numeric.
  */
 export function numericBrand(
   table: TypeTable,
   ref: TypeRef,
 ): TypeId | undefined {
-  const node = table.node(table.unfold(ref));
+  const node = table.node(table.unfoldTransparent(ref));
   if (node.kind !== "named" || isErrorId(node.id)) return undefined;
   const id = node.id;
   const base = table.brandBaseOf(id);
@@ -45,6 +45,28 @@ export function sharedNumericBrand(
     : undefined;
 }
 
+/**
+ * The identity id when exactly one operand is a numeric identity and the other
+ * operand is unnamed and fits the body of that identity (NI25).
+ */
+function adoptedNumericBrand(
+  table: TypeTable,
+  module: string,
+  left: TypeRef,
+  right: TypeRef,
+): TypeId | undefined {
+  const l = numericBrand(table, left);
+  const r = numericBrand(table, right);
+  if ((l === undefined) === (r === undefined)) return undefined;
+  const named = l ?? r;
+  const unnamed = l === undefined ? left : right;
+  const body = named === undefined ? undefined : table.brandBaseOf(named);
+  return named !== undefined && body !== undefined &&
+      table.isAssignableIn(module, unnamed, body)
+    ? named
+    : undefined;
+}
+
 export function isBoolean(
   table: TypeTable,
   module: string,
@@ -54,12 +76,12 @@ export function isBoolean(
     !isError(table, ref) && ref !== table.never;
 }
 
-/** The comparison class of a type: a primitive name or a brand identity. */
+/** The comparison class of a type: a primitive name or an identity. */
 export function comparisonClass(
   table: TypeTable,
   ref: TypeRef,
 ): string | undefined {
-  const members = flattenMembers(table, ref);
+  const members = flattenIdentityMembers(table, ref);
   let found: string | undefined;
   for (const member of members) {
     const node = table.node(member);
@@ -201,6 +223,14 @@ export function operatorResult(
         const brand = sharedNumericBrand(table, left, right);
         if (brand !== undefined) {
           return { type: table.named(brand), mismatch: false };
+        }
+      }
+      // One named operand and one unnamed operand that fits its body: the
+      // result keeps the name, in either operand order.
+      if (operator !== "/") {
+        const named = adoptedNumericBrand(table, module, left, right);
+        if (named !== undefined) {
+          return { type: table.named(named), mismatch: false };
         }
       }
       if (isNumericClass(table, l) && isNumericClass(table, r)) {

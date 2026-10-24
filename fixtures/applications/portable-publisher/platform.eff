@@ -1,5 +1,5 @@
-export type Text = string
-export type Bool = boolean
+import { Text, Bool } from "./domain.eff"
+
 export type Int = int
 export type LexicalOps = {
   isBlank: (value: Text) => Bool,

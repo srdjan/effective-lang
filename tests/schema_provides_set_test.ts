@@ -17,9 +17,9 @@ const FILES: Record<string, string> = {
   }),
   "host/p.effi": 'import { S } from "../s.eff"\nexport provider L provides S\n',
   "s.eff":
-    "export service S { a(): Int\n  b(): Int }\nexport error Down = { why: string }\ntype Int = int\n",
+    "export service S { a(): Int\n  b(): Int }\nexport error Down = { why: string }\nexport type Int = int\n",
   "m.eff":
-    'import { L } from "host:p"\nimport { S } from "./s.eff"\nexport const g = (): Int => provide(L, () => S.a())\ntype Int = int\n',
+    'import { L } from "host:p"\nimport { S, Int } from "./s.eff"\nexport const g = (): Int => provide(L, () => S.a())\n',
 };
 
 function lowerAll(files: Record<string, string>, entries: readonly string[]) {

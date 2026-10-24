@@ -207,7 +207,7 @@ const record = (book: Book) =>
   using (ledger = {
       const id = Ledger.open()
       {
-        write: () => Ledger.write(id, book.title),
+        write: () => Ledger.write(id, Line(book.title)),
         close: () => Ledger.close(id)
       }
     }) {

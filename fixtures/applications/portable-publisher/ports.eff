@@ -1,9 +1,10 @@
 import { Text, Bool, ArticleId, Instant, Article, PublishPlan } from "./domain.eff"
+import { Key } from "./platform.eff"
 
 export nominal SnapshotToken = string
 export type ObservedArticle = { article: Article, token: SnapshotToken }
 
-export error Corrupt = { key: Text, reason: Text }
+export error Corrupt = { key: Key, reason: Text }
 export error StorageUnavailable = { cause: unknown }
 export error StorageUncertain = { cause: unknown }
 export error ArticleConflict = { id: ArticleId }

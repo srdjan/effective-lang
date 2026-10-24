@@ -253,6 +253,64 @@ const MUTATIONS: readonly Mutation[] = [
     },
   },
   {
+    name: "types-identity-mismatch",
+    area: "types",
+    base: "users",
+    mutation:
+      "The argument of Users.find in getUser is recorded as a Name, but the parameter is a UserId.",
+    sources: ["users.eff"],
+    apply(ir) {
+      const f = declIndex(ir, "getUser");
+      const path = `declarations[${f}].body.subject.arguments[0]`;
+      setAt(ir, `${path}.type`, { kind: "named", id: "type:users#Name" });
+      return `${path}.type`;
+    },
+  },
+  {
+    name: "types-binary-identity-result",
+    area: "types",
+    base: "collections",
+    mutation:
+      "The body of the fold callback is sum * 2 with the type Amount, and the node is recorded as int.",
+    sources: ["collections.eff"],
+    apply(ir) {
+      const f = declIndex(ir, "total");
+      const path = `declarations[${f}].body.result.arguments[2].body`;
+      setAt(ir, `${path}.operator`, "*");
+      setAt(ir, `${path}.right`, {
+        kind: "literal",
+        value: 2,
+        type: { kind: "literal", value: 2 },
+        execution: "pure",
+        effects: { failures: [], requirements: [] },
+        span: span("collections.eff", 0, 1),
+      });
+      setAt(ir, `${path}.type`, INT);
+      return `${path}.type`;
+    },
+  },
+  {
+    name: "types-sealed-literal-foreign",
+    area: "types",
+    base: "main",
+    mutation:
+      "The imported UserId is sealed, so the literal argument of displayName in main flows into a foreign sealed identity.",
+    sources: MAIN,
+    apply(ir) {
+      const imports = arr(ir, "imports");
+      const users = imports.findIndex((i) => isObj(i) && i.module === "users");
+      const types = arr(ir, `imports[${users}].types`);
+      const t = types.findIndex((x) =>
+        isObj(x) && x.id === "type:users#UserId"
+      );
+      const path = `imports[${users}].types[${t}].definition`;
+      setAt(ir, `${path}.sealed`, true);
+      return `declarations[${
+        declIndex(ir, "main")
+      }].body.job.body.arguments[0]`;
+    },
+  },
+  {
     name: "contracts-dropped-failure",
     area: "contracts",
     base: "log",
@@ -454,6 +512,7 @@ export interface Built {
 
 /** The sources of a fixture: identifier to the fixture path of its text. */
 const SOURCE_PATHS: Readonly<Record<string, string>> = {
+  "collections.eff": "examples/collections.eff",
   "empty-effect.eff": "ir/empty-effect.eff",
   "log.eff": "examples/log.eff",
   "main.eff": "examples/main.eff",

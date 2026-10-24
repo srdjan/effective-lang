@@ -8,8 +8,8 @@
       "e562fc63dc7a796d"
     ],
     "fixtures/applications/order-lifecycle/orders.eff": [
-      "b7538bf2b2424a24",
-      "61deb5817aa3771b"
+      "f9464e469ed01294",
+      "07027ff31fc12b09"
     ],
     "fixtures/applications/portable-publisher/domain.eff": [
       "66d7ce639157b7d1",
@@ -24,20 +24,20 @@
       "d25185b2a21e8558"
     ],
     "fixtures/applications/portable-publisher/platform.eff": [
-      "afc9ab3383b660f5",
-      "91b4bb66a74753f8"
+      "f0e912dd430845eb",
+      "05b5badafe9bf508"
     ],
     "fixtures/applications/portable-publisher/ports.eff": [
       "524e96ee280814b0",
       "f3bf500bfc7cc01d"
     ],
     "fixtures/applications/portable-publisher/publisher.eff": [
-      "a6945f0870ff713a",
-      "beb28e8f6cca8399"
+      "1a4b67fc2ff6ef6e",
+      "29534bb7ff3a2c7d"
     ],
     "fixtures/applications/portable-publisher/storage.eff": [
-      "d6c1ad59bd008e47",
-      "d1fcf9155557d8ab"
+      "2ca20329b6989c2b",
+      "9c0ab2003cc63c1e"
     ],
     "fixtures/applications/scheduled-worker/contracts.eff": [
       "a2c7c606af49fa94",
@@ -92,8 +92,8 @@
       "ea9a697a5d0773c0"
     ],
     "fixtures/emit/forms/forms.eff": [
-      "ad2a1e5db0b7741b",
-      "962e569765885441"
+      "c53cc42a38d6385c",
+      "2e3efa0f2a9da789"
     ],
     "fixtures/emit/forms/inline-records.eff": [
       "df8f1be0c5feb306",
@@ -148,12 +148,12 @@
       "b883e86e369ca6bc"
     ],
     "fixtures/emit/nominal-operators/main.eff": [
-      "07715d575f7d8755",
-      "9b4e2a07c5acd251"
+      "bcaf95814c341a23",
+      "a02050dff76bae55"
     ],
     "fixtures/emit/schedules/composition.eff": [
-      "b012eb53381c3d61",
-      "3bcd17fe88076604"
+      "a675817eabe1a9e8",
+      "d60609fb0a269709"
     ],
     "fixtures/emit/schedules/main.eff": [
       "28a8c06b3163eb0d",
@@ -464,12 +464,12 @@
       "a24a02b1127d615f"
     ],
     "fixtures/errors/sealed-authority/lib.eff": [
-      "a1a5b75ae91ca1d4",
-      "7c1aa28950c0317b"
+      "8452e4bb64c222ed",
+      "0e9ce63bd785aef9"
     ],
     "fixtures/errors/sealed-authority/main.eff": [
-      "d7ea19e471793c7a",
-      "453ec79484ac788e"
+      "fb9b163ddb76f297",
+      "c2cbbae038e7665e"
     ],
     "fixtures/errors/syntax-bad-escape.eff": [
       "abfe0b81741d221f",
@@ -494,6 +494,10 @@
     "fixtures/errors/syntax-number-not-finite.eff": [
       "67cc1c4e590f68c8",
       "9d70a276f634d174"
+    ],
+    "fixtures/errors/syntax-option-fallback-logical.eff": [
+      "e19033987b84f6b2",
+      "3afb13f034833942"
     ],
     "fixtures/errors/syntax-provider-in-eff.eff": [
       "a3124ef6d295fd44",
@@ -536,8 +540,8 @@
       "14c9775c718f8942"
     ],
     "fixtures/errors/type-mismatch-binding-arrow.eff": [
-      "b96eb221b7d0bf2f",
-      "96e24ee46aee738e"
+      "96f230a1cd13381f",
+      "ffb072907bcec096"
     ],
     "fixtures/errors/type-mismatch-branch-types.eff": [
       "dd34981023d30cb6",
@@ -560,8 +564,8 @@
       "7721fd50abb3aa7e"
     ],
     "fixtures/errors/type-mismatch-nominal-identity.eff": [
-      "71d1731d0799355b",
-      "5c3f3fb2ec3e7608"
+      "7eec5d331b5b8005",
+      "f79d4147baa1c25d"
     ],
     "fixtures/errors/type-mismatch-nominal-record.eff": [
       "c4c3b84802ed5bb6",
@@ -596,12 +600,12 @@
       "4a1d2edae34e8f24"
     ],
     "fixtures/errors/unknown-name-import-export/lib.eff": [
-      "674030dc40fcfad6",
-      "83ef09ca305019bc"
+      "621f2070642a5dee",
+      "c0e9de021d7cfc10"
     ],
     "fixtures/errors/unknown-name-import-export/main.eff": [
-      "5d6295c4439df46a",
-      "118d241600fc8b48"
+      "bde58aa21dfe1a88",
+      "f4bd6a93e9885855"
     ],
     "fixtures/errors/unknown-name-service-method.eff": [
       "71d6fd203bbc8066",
@@ -682,6 +686,14 @@
     "fixtures/parse/recovery-unclosed-block.eff": [
       "451759a7e38342d1",
       "47a501d15c344bc3"
+    ],
+    "fixtures/tutorial/library.eff": [
+      "840d59103feb044e",
+      "30615ca90d04c22b"
+    ],
+    "fixtures/tutorial/loans.eff": [
+      "d75b6cac8e50a89e",
+      "bf01415ba1caf455"
     ]
   }
 }

@@ -19,7 +19,6 @@ import {
   dataOnly,
   isNever,
   MAX_DEPTH,
-  members,
   same,
   type TypeEnv,
   unfold,
@@ -118,6 +117,7 @@ export function buildWorld(ir: ModuleIR): World {
     for (const m of s.methods) addFirst(methods, m.id, m);
   }
   const aliases = new Map<string, Type>();
+  const identities = new Set<string>();
   const brands = new Map<string, Type>();
   const data = new Map<string, Extract<Type, { kind: "record" }>>();
   const opaque = new Set<string>();
@@ -136,7 +136,12 @@ export function buildWorld(ir: ModuleIR): World {
           t.definition.tagged === true && t.definition.base.kind === "record"
         ) {
           data.set(t.id, t.definition.base);
-        } else brands.set(t.id, t.definition.base);
+        } else if (t.opaque === true) brands.set(t.id, t.definition.base);
+        else {
+          // An untagged nominal type is an alias with identity.
+          aliases.set(t.id, t.definition.base);
+          identities.add(t.id);
+        }
         break;
     }
   }
@@ -147,6 +152,7 @@ export function buildWorld(ir: ModuleIR): World {
     env: {
       module: ir.module,
       aliases,
+      identities,
       brands,
       data,
       errors: errorFields,
@@ -595,20 +601,6 @@ function checkTypeDecl(ctx: Ctx, d: TypeDecl, path: string): void {
       checkDeclaredType(ctx, f.type, `${at}[${i}].type`, d.span)
     );
     return;
-  }
-  if (
-    d.definition.kind === "nominal" &&
-    members(ctx.world.env, d.definition.base).some((m) =>
-      m.kind === "record" ||
-      (m.kind === "named" && ctx.world.env.data.has(m.id))
-    )
-  ) {
-    ctx.report.add(
-      AREA.types,
-      `${path}.definition.base`,
-      "a nominal body cannot hold a nominal record or a union with a record; declare each record alone",
-      d.span,
-    );
   }
   const type = d.definition.kind === "alias"
     ? d.definition.type

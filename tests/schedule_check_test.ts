@@ -30,8 +30,8 @@ function validatorMessages(source: string): string[] {
 }
 
 const widened = `type Int = int
-type Millis = number
-export const wide: Schedule<Millis> = scheduleFromStep(
+type Text = string
+export const wide: Schedule<Int | Text> = scheduleFromStep(
   (): Int => 0,
   (state: Int, meta: ScheduleInput<unknown>): ScheduleDecision<Int, Int> => ({ kind: "Done", output: state })
 )
@@ -44,7 +44,7 @@ Deno.test("scheduleFromStep derives its output and accepts a wider annotation", 
 
 Deno.test("scheduleFromStep infers its output without an annotation", () => {
   const inferred = widened.replace(
-    "export const wide: Schedule<Millis>",
+    "export const wide: Schedule<Int | Text>",
     "const wide",
   );
   assertEquals(codes(inferred), []);

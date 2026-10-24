@@ -64,7 +64,7 @@ const min = (left: Cents, right: Cents) =>
 export const price = (rule: Rule, base: Cents): Cents =>
   match rule {
     Fixed(f) => f.amount,
-    Times(t) => Cents(base * t.factor),
+    Times(t) => Cents(base * Cents(t.factor)),
     Capped(c) => min(price(c.rule, base), c.cap),
     Sum(s) => s.parts |> fold(Cents(0), (acc, part) => acc + price(part, base))
   }

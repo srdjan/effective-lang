@@ -1,5 +1,5 @@
-import { Key, Payload, Version, KeyValue, LexicalOps, InvalidKey, InvalidPayload, PlatformUnavailable, CompareConflict, WriteUncertain, Platform, TextRules, Text } from "./platform.eff"
-import { ArticleId, Revision, NonBlankText, Instant, Draft, Published, PublishPlan } from "./domain.eff"
+import { Key, Payload, Version, KeyValue, LexicalOps, InvalidKey, InvalidPayload, PlatformUnavailable, CompareConflict, WriteUncertain, Platform, TextRules } from "./platform.eff"
+import { Text, ArticleId, Revision, NonBlankText, Instant, Draft, Published, PublishPlan } from "./domain.eff"
 import { SnapshotToken, Corrupt, StorageUnavailable, StorageUncertain, ArticleConflict, ArticleStore } from "./ports.eff"
 
 export type StoredArticle = {
@@ -45,7 +45,7 @@ const toArticle = (lexical: LexicalOps, key: Key, expectedId: ArticleId, stored:
     const { id, revision, kind, title, body, publishedAt: publicationTime } = stored
     if (lexical.isBlank(id)) {
       fail(Corrupt({ key, reason: "blank article id" }))
-    } else if (id !== expectedId) {
+    } else if (ArticleId(id) !== expectedId) {
       fail(Corrupt({ key, reason: "article identity mismatch" }))
     } else if (revision < 0) {
       fail(Corrupt({ key, reason: "negative article revision" }))
@@ -84,7 +84,7 @@ const toArticle = (lexical: LexicalOps, key: Key, expectedId: ArticleId, stored:
   }
 
 const load = (store: KeyValue, serializer: ArticleCodec, lexical: LexicalOps, id: ArticleId) =>
-  if (lexical.isBlank(id)) {
+  if (lexical.isBlank(Text(id))) {
     fail(Corrupt({ key: keyOf(id), reason: "blank article id" }))
   } else { match readEntry(store, id) {
     Some(found) => {
@@ -96,10 +96,10 @@ const load = (store: KeyValue, serializer: ArticleCodec, lexical: LexicalOps, id
 
 const storedPublished = (article: Published): StoredArticle => ({
   kind: "published",
-  id: article.id,
+  id: Text(article.id),
   revision: article.revision,
-  title: article.title,
-  body: article.body,
+  title: Text(article.title),
+  body: Text(article.body),
   publishedAt: article.publishedAt
 })
 

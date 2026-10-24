@@ -1,7 +1,7 @@
 // Stream and Sink construction, callbacks, execution and group lifetimes.
 import { type LocalId, type Result, SCOPE_CAPABILITY } from "../ir.ts";
 import { isErrorId } from "../ids.ts";
-import { flattenMembers } from "../patterns.ts";
+import { flattenIdentityMembers } from "../patterns.ts";
 import { kindOf, type NodeId, SyntaxKind } from "../syntax.ts";
 import { isPatternKind, isTypeKind, literalOf } from "../syntax_queries.ts";
 import {
@@ -943,7 +943,7 @@ function groupKeyClass(
     return undefined;
   }
   let found: string | undefined;
-  for (const member of flattenMembers(c.table, ref)) {
+  for (const member of flattenIdentityMembers(c.table, ref)) {
     const type = c.table.node(member);
     let current: string | undefined;
     if (type.kind === "literal") {

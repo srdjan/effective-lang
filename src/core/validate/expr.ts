@@ -51,6 +51,7 @@ import {
   fieldsOf,
   fits,
   foreignSealedOf,
+  identityBody,
   INT,
   isBooleanLike,
   isNumericClass,
@@ -168,6 +169,28 @@ function tagMayEqual(
   }
   if (type.kind === "primitive" && type.name === "unknown") return true;
   return fits(env, { kind: "literal", value }, type);
+}
+
+/**
+ * The identity type when exactly one operand is a numeric identity and the
+ * other operand is unnamed and fits the body of that identity.
+ */
+function adoptedNumericBrand(
+  env: TypeEnv,
+  left: Type,
+  right: Type,
+): Type | undefined {
+  const l = numericBrandOf(env, left);
+  const r = numericBrandOf(env, right);
+  if ((l === undefined) === (r === undefined)) return undefined;
+  const named = l ?? r;
+  const unnamed = l === undefined ? left : right;
+  const body = named?.kind === "named"
+    ? identityBody(env, named.id)
+    : undefined;
+  return named !== undefined && body !== undefined && fits(env, unnamed, body)
+    ? named
+    : undefined;
 }
 
 export class BodyValidator implements ValidatorCore {
@@ -1640,6 +1663,11 @@ export class BodyValidator implements ValidatorCore {
         if (brand !== undefined && (e.operator === "+" || e.operator === "-")) {
           return derivedResult(brand, active);
         }
+        // One named operand and one unnamed operand that fits its body keep the name.
+        const adopted = e.operator !== "/"
+          ? adoptedNumericBrand(env, left.type, right.type)
+          : undefined;
+        if (adopted !== undefined) return derivedResult(adopted, active);
         if (isNumericClass(env, l) && isNumericClass(env, r)) {
           const integral = e.operator !== "/" && fits(env, left.type, INT) &&
             fits(env, right.type, INT);

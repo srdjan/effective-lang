@@ -456,6 +456,67 @@ Deno.test("brands are nominal: a brand fits itself and its base, never another b
   assert(!t.isAssignable(a, t.union([b, t.int])));
 });
 
+function identity(t: TypeTable, id: TypeId, body: TypeRef): TypeRef {
+  t.defineAlias(id, body);
+  t.markIdentity(id);
+  return t.named(id);
+}
+
+Deno.test("an alias with identity fits its body, takes unnamed values, and never mixes with another identity", () => {
+  const t = fresh();
+  const a = identity(t, ID_A, t.int);
+  const b = identity(t, ID_B, t.int);
+  const number = identity(t, USER, t.number);
+  assert(t.isIdentity(ID_A));
+  assertEquals(t.brandBaseOf(ID_A), t.int);
+  assertEquals(t.unfoldTransparent(a), a);
+  assertEquals(t.unfold(a), t.int);
+  assert(t.isAssignable(a, t.int));
+  assert(t.isAssignable(t.int, a));
+  assert(t.isAssignable(t.literal(5), a));
+  assert(!t.isAssignable(t.string, a));
+  // Two different identities never mix, with equal bodies, or int into number.
+  assert(!t.isAssignable(a, b));
+  assert(!t.isAssignable(a, number));
+  // A widened value takes no other name at that level.
+  assert(t.isAssignable(t.array(a), t.array(t.int)));
+  assert(t.isAssignable(t.array(t.int), t.array(a)));
+  assert(!t.isAssignable(t.array(a), t.array(b)));
+  // Ref, Codec, and Schema positions fit in both directions.
+  assert(t.isAssignable(t.ref(t.int), t.ref(a)));
+  assert(t.isAssignable(t.ref(a), t.ref(t.int)));
+  assert(!t.isAssignable(t.ref(a), t.ref(b)));
+});
+
+Deno.test("a body that is a name chains widening, and a sealed identity keeps its module", () => {
+  const t = fresh();
+  const text = identity(t, ID_B, t.string);
+  const id = identity(t, ID_A, text);
+  assert(t.isAssignable(id, text));
+  assert(!t.isAssignable(text, id));
+  t.markSealed(ID_A);
+  assert(t.isSealed(ID_A));
+  // A foreign module cannot widen the identity or give it an unnamed value.
+  assert(!t.isAssignableIn("other", id, text));
+  assert(!t.isAssignableIn("other", t.literal("x"), id));
+  assert(t.isAssignableIn("m", id, text));
+  assert(t.isAssignableIn("m", t.literal("x"), id));
+  // `defineAlias` clears the flag, and `markSealed` needs an identity.
+  t.defineAlias(ID_A, t.string);
+  t.markSealed(ID_A);
+  assert(!t.isSealed(ID_A));
+});
+
+Deno.test("two ids with one short name show as module#Name", () => {
+  const t = fresh();
+  const a = identity(t, "type:a#Text" as TypeId, t.string);
+  const b = identity(t, "type:b#Text" as TypeId, t.string);
+  assertEquals(t.showAll(a, b), ["a#Text", "b#Text"]);
+  assertEquals(t.showAll(a, a), ["Text", "Text"]);
+  assertEquals(t.showAll(t.array(a), t.int), ["Text[]", "int"]);
+  assertEquals(t.show(a), "Text");
+});
+
 Deno.test("a data type widens to its record, and the record does not fit back", () => {
   const t = fresh();
   const record = t.record([field("id", t.string)]);

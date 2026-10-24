@@ -5,7 +5,16 @@ import {
   TypeScriptOutputs,
 } from "../src/core/typescript.ts";
 
-/** The accepted v3 wire changes, with the v5 version and `tagged` flag. Keep spans, annotations and identities intact. */
+/** True when a `type` body gives identity: not a record, a bare name, or a union with a non-literal member. */
+function hasIdentity(type: unknown): boolean {
+  const node = type as { kind?: unknown; members?: { kind?: unknown }[] };
+  if (node.kind === "union") {
+    return node.members?.every((m) => m.kind === "literal") === true;
+  }
+  return node.kind !== "record" && node.kind !== "named";
+}
+
+/** The accepted v3 wire changes, with the v5 version, the `tagged` flag, and identity on a `type`. Keep spans, annotations and identities intact. */
 function v4(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(v4);
   if (value === null || typeof value !== "object") return value;
@@ -15,6 +24,8 @@ function v4(value: unknown): unknown {
     Object.entries(
       record.kind === "nominal" && base?.kind === "record"
         ? { ...record, tagged: true }
+        : record.kind === "alias" && hasIdentity(record.type)
+        ? { kind: "nominal", base: record.type }
         : record,
     )
       .filter(([key]) =>

@@ -214,10 +214,10 @@ Deno.test("an inferred contract prints its backend header from the lowered type"
   const revision = loadModule(text);
   assertEquals(revision.diagnostics, []);
   const hover = hoverAt(revision, "m.eff", offsetOf(text, "bump", 1), outputs);
-  assertEquals(hover?.contract, "bump(n: Int): int");
+  assertEquals(hover?.contract, "bump(n: Int): Int");
   assertEquals(hover?.backend, {
     tag: "type",
-    text: "(n: Int): number",
+    text: "(n: Int): Int",
   });
 });
 

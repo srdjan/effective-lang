@@ -1529,7 +1529,17 @@ class ModuleChecker {
         ? this.lowerer.errorLowered()
         : this.lowerer.lower(body);
       this.table.defineAlias(id, lowered.ref);
-      definition = { kind: "alias", type: lowered.ir };
+      if (body !== undefined && this.hasIdentity(lowered.ref)) {
+        this.table.markIdentity(id);
+        if (entry.sealed) this.table.markSealed(id);
+        definition = {
+          kind: "nominal",
+          base: lowered.ir,
+          ...(entry.sealed ? { sealed: true } : {}),
+        };
+      } else {
+        definition = { kind: "alias", type: lowered.ir };
+      }
     }
     this.types.push({
       kind: "type",
@@ -1552,6 +1562,25 @@ class ModuleChecker {
       kind,
       refs,
     };
+  }
+
+  /**
+   * A `type` body gives identity unless it is a record, a union with a
+   * non-literal member, a bare name, or the error type. A record stays a
+   * transparent alias for now.
+   */
+  private hasIdentity(body: TypeRef): boolean {
+    const node = this.table.node(body);
+    switch (node.kind) {
+      case "record":
+      case "named":
+      case "error":
+        return false;
+      case "union":
+        return node.members.every((m) => this.table.node(m).kind === "literal");
+      default:
+        return true;
+    }
   }
 
   /**
@@ -1643,7 +1672,11 @@ class ModuleChecker {
         });
       }
     } else {
+      // A brand and a `type` identity share one meaning: an alias with identity.
       this.nominalBodies.push({ id, span });
+      this.table.defineAlias(id, lowered.ref);
+      this.table.markIdentity(id);
+      if (entry.sealed) this.table.markSealed(id);
     }
     this.types[pending.index] = {
       ...this.types[pending.index],
@@ -1789,10 +1822,8 @@ class ModuleChecker {
         })),
       );
       for (const member of component) {
-        if (member.kind === "alias") {
+        if (member.kind === "alias" || member.kind === "brand") {
           this.table.defineAlias(member.id, this.table.error);
-        } else if (member.kind === "brand") {
-          this.table.defineBrand(member.id, this.table.error);
         }
       }
     }
@@ -1818,6 +1849,9 @@ class ModuleChecker {
         definition?.kind === "nominal" && definition.tagged === true &&
         definition.base.kind === "record"
       ) {
+        return [definition.base];
+      }
+      if (definition?.kind === "nominal" && definition.tagged !== true) {
         return [definition.base];
       }
       return definition?.kind === "alias" ? [definition.type] : [];
@@ -1925,7 +1959,7 @@ class ModuleChecker {
           "a nominal body cannot hold a nominal record or a union with a record; declare each record alone",
           nominal.span,
         );
-        this.table.defineBrand(nominal.id, this.table.error);
+        this.table.defineAlias(nominal.id, this.table.error);
       } else if (containsDeferredType(this.table, base)) {
         this.lowerer.report(
           "declaration/015",

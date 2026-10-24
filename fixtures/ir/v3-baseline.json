@@ -682,8 +682,8 @@
                           "start": 307
                         },
                         "type": {
-                          "kind": "primitive",
-                          "name": "int"
+                          "kind": "named",
+                          "id": "type:collections#Amount"
                         }
                       },
                       "effects": {
@@ -743,8 +743,8 @@
                           }
                         ],
                         "result": {
-                          "kind": "primitive",
-                          "name": "int"
+                          "kind": "named",
+                          "id": "type:collections#Amount"
                         }
                       }
                     }
@@ -1327,7 +1327,7 @@
           "hostAssertions": []
         },
         "map": "{\n  \"version\": 3,\n  \"file\": \"collections.ts\",\n  \"sources\": [\n    \"collections.eff\"\n  ],\n  \"names\": [],\n  \"mappings\": \";;;;;;;;;;;;;;;AAAA;AAAA,oC;;AACA;AAAA,wC;;AAEA;AAAA;AAAA;AAAA;AAAA,oC;;AAEA;AAAA;AAAA;AAAA,mCACE,KADF;AAAA,mCACE,GACK,QAAO,UAAU,WAAjB,CAFP;AAAA,SACE,GAEK,KAAI,UAAU,SAAd,CAHP;AAAA,E;;AAKA;AAAA,qCACE,OADF;AAAA,SACE,GAAW,gBAAQ,iBAAiB,WAAM,MAAN,CAAzB,EAAK,CAAL,CADb;AAAA,E;;\"\n}\n",
-        "hash": "af42982bd7bea47c"
+        "hash": "e1bb25b6732f6f44"
       },
       {
         "name": "users",
@@ -3405,7 +3405,7 @@
           "hostAssertions": []
         },
         "map": "{\n  \"version\": 3,\n  \"file\": \"users.ts\",\n  \"sources\": [\n    \"users.eff\"\n  ],\n  \"names\": [],\n  \"mappings\": \";;;;AAAA;AAAA,wC;;AACA;AAAA,oC;;AAEA;AAAA;AAAA;AAAA;AAAA;AAAA,oC;;AAMA;AAAA;AAAA;AAAA,I;;AACA;AAAA;AAAA;AAAA,I;;AAEA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA,sB;;AAMA;AAAA;AAAA;AAAA;AAAA;AAAA,EAGE;AAAA,+BAAM,iCAAW,EAAX,EAAN;AAAA,oBAEU,YAAK,uBAAL,CAFV;AAAA,wBACgB,oBADhB;AAAA;AAAA,IAHF,C;;AAQA;AAAA;AAAA;AAAA;AAAA;AAAA,EAEkC;AAAA,uBACnB,eAAQ,EAAR,CADmB;AAAA,0BAEhB,KAAK,IAAL,QAFgB;AAAA,IAGhC,iCAAW,OAAX,EAHgC;AAAA,WAIhC,OAJgC;AAAA,IAFlC,C;;AASA;AAAA;AAAA;AAAA;AAAA;AAAA,EAGM;AAAA,WACF,gBAAQ,EAAR,OADE;AAAA,IAAJ;AAAA;AAAA,sCAGwB,uBAHxB;AAAA;AAAA,GAHF,C;;AASA;AAAA;AAAA;AAAA;AAAA;AAAA,EAGE;AAAA;AAAA,wCACK,QAAO,UAAU,WAAjB,CADL;AAAA,cAEK,KAAI,UAAU,SAAd,CAFL;AAAA,IAHF,C;;\"\n}\n",
-        "hash": "9164ae4a6ea56259"
+        "hash": "4e111d5b2ef78901"
       },
       {
         "name": "host/providers",
@@ -3783,7 +3783,7 @@
           "hostAssertions": []
         },
         "map": "{\n  \"version\": 3,\n  \"file\": \"providers.effi.ts\",\n  \"sources\": [],\n  \"names\": [],\n  \"mappings\": \";;;;\"\n}\n",
-        "hash": "1aa9c4403665ca49"
+        "hash": "a196905cf3111208"
       },
       {
         "name": "log",
@@ -4036,7 +4036,7 @@
           "hostAssertions": []
         },
         "map": "{\n  \"version\": 3,\n  \"file\": \"log.ts\",\n  \"sources\": [\n    \"log.eff\"\n  ],\n  \"names\": [],\n  \"mappings\": \";;;;AAAA;AAAA,0C;;AAEA;AAAA;AAAA;AAAA;AAAA,M;;AAEA;AAAA;AAAA,sB;;AAIA;AAAA;AAAA;AAAA;AAAA,KAEwB,6BAAc,OAAd,EAFxB,C;;\"\n}\n",
-        "hash": "2d8bc1a54dd35c35"
+        "hash": "062d85203e971172"
       },
       {
         "name": "main",
@@ -4903,7 +4903,7 @@
           ]
         },
         "map": "{\n  \"version\": 3,\n  \"file\": \"main.ts\",\n  \"sources\": [\n    \"main.eff\"\n  ],\n  \"names\": [],\n  \"mappings\": \";;;;;;;;AAGA;AAAA,EAEE,8BAAmB,MAAM,YAAY,IAAZ,CAAzB,GAAQ,cAAR,CAFF,C;;\"\n}\n",
-        "hash": "a9a90163978b39cf"
+        "hash": "9c53f3b90f362942"
       },
       {
         "name": "pay",
@@ -6758,7 +6758,7 @@
           "hostAssertions": []
         },
         "map": "{\n  \"version\": 3,\n  \"file\": \"pay.ts\",\n  \"sources\": [\n    \"pay.eff\"\n  ],\n  \"names\": [],\n  \"mappings\": \";;;;;;;;;;AAAA;AAAA,sC;;AACA;AAAA,4C;;AAEA;AAAA,0C;;AACA;AAAA;AAAA;AAAA;AAAA;AAAA,sC;;AAMA;AAAA;AAAA;AAAA,I;;AACA;AAAA;AAAA;AAAA,I;;AAEA;AAAA;AAAA;AAAA,qB;;AAKA;AAAA;AAAA,uB;;AAIA;AAAA,EACE;AAAA,+BAAM,kCAAY,EAAZ,EAAN;AAAA,oBAEU,YAAK,yBAAL,CAFV;AAAA,yBACiB,qBADjB;AAAA;AAAA,IADF,C;;AAMA;AAAA,EAAsC;AAAA,IACpC;AAAA,qBAAM,MAAM,+BAAgB,gBAAhB,EAAZ;AAAA;AAAA,KADoC;AAAA,WAEpC,KAFoC;AAAA,IAAtC,C;;AAKA,oCACG,KAAK,KAAL,UAAoB,eAApB,EADH,E;;AAGA;AAAA,EAAoC;AAAA,IAClC,kCAAY,KAAZ,EADkC;AAAA,WAElC,KAFkC;AAAA,IAApC,C;;AAKA;AAAA;AAAA;AAAA;AAAA;AAAA,EAGE;AAAA;AAAA,uBACK,iBADL,GACK,CADL;AAAA,uBAEK,mBAFL,GAEK,CAFL;AAAA,uBAGK,SAHL,GAGK,CAHL;AAAA,WAIK,iBAJL,GAIK,CAJL;AAAA,IAHF,C;;\"\n}\n",
-        "hash": "cf0b50fe31e16e64"
+        "hash": "367be8b1913accc4"
       }
     ]
   },
@@ -9203,7 +9203,7 @@
           "hostAssertions": []
         },
         "map": "{\n  \"version\": 3,\n  \"file\": \"m.ts\",\n  \"sources\": [\n    \"m.eff\"\n  ],\n  \"names\": [],\n  \"mappings\": \";;;;;;;;;;;;;;;;;;;AAAA;AAAA,kC;;AACA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA,iB;;AACA;AAAA,EAAkD;AAAA,yBAAmB,2BAAnB;AAAA,aAAyC,UAAzC;AAAA,aAA8D,WAA9D;AAAA,GAAlD,C;;AACA;AAAA,EAA+C;AAAA,qBAAU,eAAM,MAAM,2BAAZ,CAAV;AAAA,IAAoC,oCAAW,WAAU,KAAV,CAA/C;AAAA;AAAA,GAA/C,C;;AACA;AAAA,EAAwC;AAAA,sBAAU,MAAV,EAAkB,OAAO,CAAzB;AAAA;AAAA;AAAA;AAAA,uBAA4B;AAAA,UAAgB;AAAA,YAAc,KAAd;AAAA,WAA5C;AAAA;AAAA;AAAA,GAAxC,C;;AAGA;AAAA;AAAA;AAAA,KAAkE,2BAAa,YAAb,EAA2B,KAA3B,CAAlE,C;;AACA;AAAA,EAA8D,oBAAa,YAAb,EAA2B,KAA3B,CAA9D,C;;AACA;AAAA,EAAsE,YAAX,YAAyB,KAAzB,CAA3D,C;;AAJA;AAAA;AAAA;AAAA;AAAA;AAAA,IAAe;AAAA,EAAe,2BAAY,gBAAe,CAAf,CAAZ,EAA+B;AAAA,oBAAe,CAAf;AAAA,GAA/B,2DAAf;AAAA,EAAkE,2BAAY,gBAAe,CAAf,CAAZ,EAA+B;AAAA,oBAAe,CAAf;AAAA,GAA/B,2DAAlE;AAAA,CAAf,C;;AACA,2DAAkC,kBAAlC,C;;\"\n}\n",
-        "hash": "9d19427ba1d26e78"
+        "hash": "db5b5de483bb20b5"
       }
     ]
   }

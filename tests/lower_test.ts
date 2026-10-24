@@ -523,7 +523,7 @@ type Int = int
 // ------------------------------------------------------------------ every node kind
 
 const WIDE = `
-nominal Id = string
+nominal Id = Text
 type Shape = { kind: "circle", r: number } | { kind: "square", side: number }
 type Cfg = { name: string, note?: string }
 error Boom = { code: int }
@@ -675,7 +675,7 @@ Deno.test("an inferred function uses its inferred type", () => {
   const inc = ir.declarations[0];
   assert(inc.kind === "function");
   assertEquals(inc.written, { result: false, fails: false, uses: false });
-  assertEquals(inc.type.result, { kind: "primitive", name: "int" });
+  assertEquals(inc.type.result, { kind: "named", id: "type:m#Int" });
   assertEquals(inc.type.execution, "pure");
 });
 

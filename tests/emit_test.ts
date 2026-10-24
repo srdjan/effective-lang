@@ -29,6 +29,17 @@ function indexOfOrFail(text: string, needle: string): number {
   return at;
 }
 
+Deno.test("a literal fits a type with identity and emits with no call", () => {
+  const output = oneModule(`
+type Cents = int
+const c: Cents = 50
+export const d = (n: Cents): Cents => n * 2
+`);
+  assertStringIncludes(output, "const c: Cents = 50;");
+  assertStringIncludes(output, "$int(n * 2)");
+  assert(!output.includes("Cents.make"));
+});
+
 Deno.test("withResource emits acquireUseRelease with suspended callbacks", () => {
   const output = oneModule(`
 service Files { open(): { read: () => Text, close: () => void } }
@@ -965,12 +976,11 @@ Deno.test("imports and host modules are rewritten relative to a nested module", 
     }),
     "host/p.effi":
       'import { S } from "../s.eff"\nexport provider L provides S\n',
-    "s.eff": "export service S { f(): Int }\ntype Int = int\n",
+    "s.eff": "export service S { f(): Int }\nexport type Int = int\n",
     "sub/m.eff": [
-      'import { S } from "../s.eff"',
+      'import { S, Int } from "../s.eff"',
       'import { L } from "host:p"',
       "export const g = (): Int => provide(L, () => S.f())",
-      "type Int = int",
       "",
     ].join("\n"),
   }, ["s.eff", "sub/m.eff"]);

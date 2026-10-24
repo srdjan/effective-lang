@@ -12,6 +12,7 @@ const ENV: TypeEnv = {
   aliases: new Map<string, Type>([
     ["type:m#Alias", { kind: "primitive", name: "string" }],
   ]),
+  identities: new Set<string>(),
   brands: new Map<string, Type>(),
   data: new Map(),
   errors: new Map<string, readonly Field[]>(),

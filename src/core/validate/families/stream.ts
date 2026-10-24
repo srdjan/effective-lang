@@ -17,9 +17,10 @@ import {
   BOOLEAN,
   dataOnly,
   fits,
+  identityBody,
+  identityMembers,
   INT,
   isUnknown,
-  members,
   NEVER,
   same,
   unfold,
@@ -799,7 +800,7 @@ function groupKeyClass(
 ): string | undefined {
   if (depth > 128) return undefined;
   let found: string | undefined;
-  for (const member of members(c.env, type)) {
+  for (const member of identityMembers(c.env, type)) {
     let current: string | undefined;
     if (member.kind === "literal") {
       if (member.value === null) return undefined;
@@ -812,7 +813,7 @@ function groupKeyClass(
         member.name === "boolean"
       ) current = member.name;
     } else if (member.kind === "named") {
-      const base = c.env.brands.get(member.id);
+      const base = identityBody(c.env, member.id);
       if (
         base !== undefined &&
         groupKeyClass(c, base, depth + 1) !== undefined

@@ -33,7 +33,9 @@ const DUPLICATE: Type = {
   ],
 };
 
-const BASE = "export type A = int\nexport type B = int\n";
+// A bare name is a transparent alias, so `A` and `B` keep an `alias` definition.
+const BASE =
+  "export type Base = int\nexport type A = Base\nexport type B = Base\n";
 
 function lowerBase(): ModuleIR {
   const checked = checkProject(

@@ -107,7 +107,8 @@ const USERS = "users.eff";
 
 Deno.test("incremental alias and brand edits equal fresh checks across dependents and removal", () => {
   const alias = "export type N = int\nexport const n: N = 1\n";
-  const brand = "export nominal N = int\nexport const n: N = 1\n";
+  const brand =
+    "export nominal N = int\nexport type M = int\nexport const n: N = M(1)\n";
   const files = {
     "effektive.json": "{}",
     "a.eff": alias,
@@ -118,7 +119,7 @@ Deno.test("incremental alias and brand edits equal fresh checks across dependent
   const branded = session.apply({ "a.eff": brand });
   assert(branded.diagnostics.some((d) => d.code === "type-mismatch/003"));
   assertEquals(
-    session.apply({ "a.eff": brand.replace("= 1", "= N(1)") }).diagnostics,
+    session.apply({ "a.eff": brand.replace("= M(1)", "= N(1)") }).diagnostics,
     [],
   );
   assertEquals(session.apply({ "a.eff": alias }).diagnostics, []);

@@ -456,7 +456,7 @@ function freshOutput(h: Harness, name: string): string {
 
 const USERS_PURE = USERS_TEXT.replace(
   /export const displayName[\s\S]*?\n\n/,
-  "export const displayName = (id: UserId): Name => id\n\n",
+  "export const displayName = (id: UserId): Name => Name(id)\n\n",
 );
 
 Deno.test("the first didSave writes main.ts and users.ts with their maps", () => {

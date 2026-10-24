@@ -61,6 +61,37 @@
       }
     },
     {
+      "area": "types",
+      "code": "validation/002",
+      "file": "types-identity-mismatch.json",
+      "mutation": "The argument of Users.find in getUser is recorded as a Name, but the parameter is a UserId.",
+      "path": "declarations[6].body.subject.arguments[0].type",
+      "sources": {
+        "users.eff": "examples/users.eff"
+      }
+    },
+    {
+      "area": "types",
+      "code": "validation/002",
+      "file": "types-binary-identity-result.json",
+      "mutation": "The body of the fold callback is sum * 2 with the type Amount, and the node is recorded as int.",
+      "path": "declarations[4].body.result.arguments[2].body.type",
+      "sources": {
+        "collections.eff": "examples/collections.eff"
+      }
+    },
+    {
+      "area": "types",
+      "code": "validation/002",
+      "file": "types-sealed-literal-foreign.json",
+      "mutation": "The imported UserId is sealed, so the literal argument of displayName in main flows into a foreign sealed identity.",
+      "path": "declarations[0].body.job.body.arguments[0]",
+      "sources": {
+        "main.eff": "examples/main.eff",
+        "users.eff": "examples/users.eff"
+      }
+    },
+    {
       "area": "contracts",
       "code": "validation/003",
       "file": "contracts-dropped-failure.json",

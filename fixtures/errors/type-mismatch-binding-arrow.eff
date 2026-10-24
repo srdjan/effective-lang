@@ -9,7 +9,11 @@ export const wrongArity: (x: Int, y: Int) => Int = (x: Int): Int => x
 // error: type-mismatch/003
 const notFunction: Int = (x: Int): Int => x
 
-export const fits: (x: Int) => Num = (x: Num): Int => 1
+export const fits: (x: Int) => Num = (x: Int): Num => 1
+
+// A named int does not fit a named number, in a parameter or a result.
+// error: type-mismatch/003
+export const named: (x: Int) => Num = (x: Num): Int => 1
 
 type Int = int
 type Text = string

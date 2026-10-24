@@ -119,8 +119,8 @@ void storeLive;
       "a Schedule annotated wider than its decision output validates and passes strict tsc",
     files: {
       "main.eff": `type Int = int
-type Millis = number
-export const wide: Schedule<Millis> = scheduleFromStep(
+type Text = string
+export const wide: Schedule<Int | Text> = scheduleFromStep(
   (): Int => 0,
   (state: Int, meta: ScheduleInput<unknown>): ScheduleDecision<Int, Int> => ({ kind: "Done", output: state })
 )
@@ -129,7 +129,7 @@ export const wide: Schedule<Millis> = scheduleFromStep(
     entries: ["main.eff"],
     run: `import { Schedule } from "effect";
 import { wide } from "./main.ts";
-const widest: Schedule.Schedule<number, unknown> = wide;
+const widest: Schedule.Schedule<number | string, unknown> = wide;
 void widest;
 `,
     prefix: "effektive-schedule-output-",

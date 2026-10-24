@@ -75,15 +75,14 @@ export function makeRandom(seed: number): () => number {
 // ------------------------------------------------------------------ fixed text
 
 /**
- * The alias declarations that rule R1 requires. Each generated module declares
- * them, because a primitive type can occur only inside a type declaration. The
- * aliases are transparent: `Int` is `int`, `Num` is `number`, `Text` is
- * `string`.
+ * The alias declarations that rule R1 requires. A primitive type can occur
+ * only inside a type declaration. Each name has identity, so `base.eff`
+ * declares each name once and every other module imports it.
  */
 const ALIAS_LINES: readonly string[] = [
-  `type Int = int`,
-  `type Num = number`,
-  `type Text = string`,
+  `export type Int = int`,
+  `export type Num = number`,
+  `export type Text = string`,
 ];
 
 const ALIASES = ALIAS_LINES.join("\n");
@@ -295,11 +294,11 @@ const TEMPLATES: readonly Template[] = [
   ],
   // A constant with an annotation.
   ({ n, rng }) => [`export const limit${n}: Int = ${pick(rng, 1, 9999)}`],
-  // A conditional and a brand widened to its base.
+  // A conditional and a brand converted to another identity.
   ({ n, rng }) => [
     `export const tier${n} = (n: Int): Text =>
   if (n > ${pick(rng, 1, 99)}) { "high" } else { "low" }`,
-    `export const raw${n} = (id: Id): Text => id`,
+    `export const raw${n} = (id: Id): Text => Text(id)`,
   ],
   // A record type with an optional field and an option field.
   ({ n }) => [
@@ -382,7 +381,7 @@ function prologue(
 
 function importsOf(index: number): string {
   const lines = [
-    `import { Declined, Gate, Id, Item, NotFound, Shape, Status, Store } from "./base.eff"`,
+    `import { Declined, Gate, Id, Int, Item, NotFound, Num, Shape, Status, Store, Text } from "./base.eff"`,
     `import { GateLive, StoreLive } from "host:providers"`,
   ];
   if (index > 0) {
@@ -429,7 +428,7 @@ export function generateProject(options: GenerateOptions): GeneratedProject {
     featureModules.push(name);
     sources.set(
       `${name}.eff`,
-      `${importsOf(index)}\n\n${ALIASES}\n\n${declarations.join("\n\n")}\n`,
+      `${importsOf(index)}\n\n${declarations.join("\n\n")}\n`,
     );
   }
 
@@ -437,11 +436,9 @@ export function generateProject(options: GenerateOptions): GeneratedProject {
   sources.set("base.eff", BASE);
   sources.set(
     "app.eff",
-    `import { Id, Item, NotFound } from "./base.eff"
+    `import { Id, Int, Item, NotFound, Text } from "./base.eff"
 import { StoreLive } from "host:providers"
 import { get${last}, link${moduleCount - 1} } from "./${last}.eff"
-
-${ALIASES}
 
 export const main = (raw: Text): Text
   fails NotFound =>
@@ -476,15 +473,13 @@ export function generateSize(size: SizeName, seed = 1): GeneratedProject {
 /**
  * The count of top-level declarations in the feature modules, from the text.
  * A declaration starts at the beginning of a line with `export`, `const`,
- * `type`, `error`, `service`, or `provider`. The alias lines that each module
- * holds for rule R1 are not feature declarations, so the count skips them.
+ * `type`, `error`, `service`, or `provider`.
  */
 export function countDeclarations(project: GeneratedProject): number {
   let count = 0;
   for (const name of project.featureModules) {
     const text = project.sources.get(`${name}.eff`) ?? "";
     for (const line of text.split("\n")) {
-      if (ALIAS_LINES.includes(line)) continue;
       if (/^(export |const |type |error |service |provider )/.test(line)) {
         count++;
       }

@@ -1,5 +1,5 @@
-import { Text, PlatformUnavailable, Platform, TextRules, Time } from "./platform.eff"
-import { Instant } from "./domain.eff"
+import { PlatformUnavailable, Platform, TextRules, Time } from "./platform.eff"
+import { Text, Instant } from "./domain.eff"
 import { Clock, Lexical } from "./ports.eff"
 import { ArticleJson, articleStoreLive } from "./storage.eff"
 import { PublishReceipt, PublishFailure, publishArticleFeature, publishAllFeature } from "./feature.eff"

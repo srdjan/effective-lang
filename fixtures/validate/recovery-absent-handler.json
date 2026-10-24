@@ -13,11 +13,11 @@
     },
     {
       "definition": {
-        "kind": "alias",
-        "type": {
+        "base": {
           "kind": "primitive",
           "name": "string"
-        }
+        },
+        "kind": "nominal"
       },
       "id": "type:users#UserId",
       "kind": "type",
@@ -30,11 +30,11 @@
     },
     {
       "definition": {
-        "kind": "alias",
-        "type": {
+        "base": {
           "kind": "primitive",
           "name": "string"
-        }
+        },
+        "kind": "nominal"
       },
       "id": "type:users#Name",
       "kind": "type",

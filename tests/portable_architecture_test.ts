@@ -80,7 +80,7 @@ Deno.test("public nominal values permit arithmetic, widening, and schema decodin
   const lowered = validated({
     ...CONFIG,
     "domain.eff": `
-export nominal Positive = int
+export nominal Positive = Int
 export type Int = int
 export const one: Positive = Positive(1)
 export const two: Positive = Positive(2)

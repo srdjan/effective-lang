@@ -2,4 +2,4 @@ export const shown = (): Int => 1
 
 const hidden = (): Int => 2
 
-type Int = int
+export type Int = int

@@ -58,7 +58,7 @@ export const nestedBlockPure = (o: Option<IntVal>): IntVal =>
     None => 0
   }
 export const brand = (s: StrVal): Id => Id(s)
-export const unb = (i: Id): StrVal => i
+export const unb = (i: Id): StrVal => StrVal(i)
 export const cbCall = (b: CbBox, x: IntVal): IntVal => b.run(x)
 export const mkBox = (): CbBox => ({ run: (n) => n + 1, label: "l" })
 

@@ -452,7 +452,7 @@ type Pair = { left: Id, right: string }
   });
 });
 
-Deno.test("brands are nominal in the table and widen to their base", () => {
+Deno.test("brands are nominal in the table, widen to their base, and take unnamed values", () => {
   const project = checkText(`
 nominal A = string
 nominal B = string
@@ -462,7 +462,8 @@ nominal B = string
   const b = table.named("type:m#B");
   assert(!table.isAssignable(a, b));
   assert(table.isAssignable(a, table.string));
-  assert(!table.isAssignable(table.string, a));
+  // An unnamed value fits an identity whose body it fits.
+  assert(table.isAssignable(table.string, a));
   const decl = project.modules.get("m")!.declarations.types[0];
   assertEquals(decl.definition, {
     kind: "nominal",

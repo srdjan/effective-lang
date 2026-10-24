@@ -274,11 +274,10 @@ class BodyChecker
     if (expected === undefined || this.assignable(found, expected)) {
       return true;
     }
+    const [foundText, expectedText] = this.table.showAll(found, expected);
     this.report(
       "type-mismatch/003",
-      `${what} has type ${this.show(found)}, but ${
-        this.show(expected)
-      } is expected`,
+      `${what} has type ${foundText}, but ${expectedText} is expected`,
       node,
     );
     return false;
@@ -800,7 +799,7 @@ class BodyChecker
         "type-mismatch/010",
         `\`${
           shortName(id)
-        }\` is a type alias, not a nominal type; only a nominal type can be used as a constructor`,
+        }\` has no identity; only a type with identity is a constructor`,
         node,
       );
       return this.finish(node, this.table.error, combine(infos));
@@ -1432,11 +1431,12 @@ class BodyChecker
       } else if (this.assignable(element, next)) {
         element = next;
       } else {
+        const [nextText, elementText] = table.showAll(next, element);
         this.report(
           "type-mismatch/012",
-          `list element ${i + 1} has type ${
-            this.show(next)
-          }, which has no common array element type with ${this.show(element)}`,
+          `list element ${
+            i + 1
+          } has type ${nextText}, which has no common array element type with ${elementText}`,
           elements[i],
         );
         element = table.error;
@@ -1753,11 +1753,10 @@ class BodyChecker
         node,
       );
     } else if (result.mismatch) {
+      const [leftText, rightText] = this.table.showAll(left.type, right.type);
       this.report(
         "type-mismatch/007",
-        `the operator \`${operator}\` does not accept operands of type ${
-          this.show(left.type)
-        } and ${this.show(right.type)}`,
+        `the operator \`${operator}\` does not accept operands of type ${leftText} and ${rightText}`,
         node,
       );
     }
@@ -2039,13 +2038,10 @@ class BodyChecker
       } else if (this.isNominalJoin(joined, type)) {
         joined = this.table.union([joined, type]);
       } else {
+        const [typeText, joinedText] = this.table.showAll(type, joined);
         this.report(
           "type-mismatch/009",
-          `this branch has type ${
-            this.show(type)
-          }, which has no common type with ${
-            this.show(joined)
-          } from the earlier branches`,
+          `this branch has type ${typeText}, which has no common type with ${joinedText} from the earlier branches`,
           branch.node,
         );
         joined = this.table.error;

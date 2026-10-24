@@ -2,11 +2,11 @@
   "declarations": [
     {
       "definition": {
-        "kind": "alias",
-        "type": {
+        "base": {
           "kind": "primitive",
           "name": "int"
-        }
+        },
+        "kind": "nominal"
       },
       "id": "type:pay#Cents",
       "kind": "type",
@@ -19,11 +19,11 @@
     },
     {
       "definition": {
-        "kind": "alias",
-        "type": {
+        "base": {
           "kind": "primitive",
           "name": "string"
-        }
+        },
+        "kind": "nominal"
       },
       "id": "type:pay#ChargeId",
       "kind": "type",

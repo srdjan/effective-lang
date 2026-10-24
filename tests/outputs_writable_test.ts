@@ -51,10 +51,10 @@ Deno.test("writableModules writes every module of a clean chain", () => {
   assertEquals(
     writable({
       "a.eff":
-        'import { b } from "./b.eff"\ntype I = int\nexport const a = (): I => b()\n',
+        'import { b } from "./b.eff"\nimport { I } from "./c.eff"\nexport const a = (): I => b()\n',
       "b.eff":
-        'import { c } from "./c.eff"\ntype I = int\nexport const b = (): I => c()\n',
-      "c.eff": "type I = int\nexport const c = (): I => 1\n",
+        'import { c, I } from "./c.eff"\nexport const b = (): I => c()\n',
+      "c.eff": "export type I = int\nexport const c = (): I => 1\n",
     }).sort(),
     ["a", "b", "c"],
   );

@@ -100,13 +100,12 @@ function blankSeparated(sections: readonly (readonly Doc[])[]): Doc {
 }
 
 /**
- * A `nominal` type with an untagged, non-opaque, non-record body has its identity
- * in the checker only. The emitter reads it as an alias of its base.
+ * A `nominal` type with an untagged, non-opaque body has its identity in the
+ * checker only. The emitter reads it as an alias of its base.
  */
 function erased<D extends Declaration | TypeDecl>(d: D): D {
   return d.kind === "type" && d.definition.kind === "nominal" &&
-      d.definition.tagged !== true && d.opaque !== true &&
-      d.definition.base.kind !== "record"
+      d.definition.tagged !== true && d.opaque !== true
     ? { ...d, definition: { kind: "alias", type: d.definition.base } }
     : d;
 }

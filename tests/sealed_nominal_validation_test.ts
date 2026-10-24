@@ -127,7 +127,7 @@ Deno.test("validator rejects a sealed flag on an alias", () => {
   assert(result?.ok);
   const forged = structuredClone(result.value);
   const imported = forged.imports.find((item) => item.module === "lib");
-  const alias = imported?.types.find((item) => item.name === "Int");
+  const alias = imported?.types.find((item) => item.name === "HiddenRecord");
   assert(alias?.definition.kind === "alias");
   const definition: unknown = alias.definition;
   assertMutable(definition);

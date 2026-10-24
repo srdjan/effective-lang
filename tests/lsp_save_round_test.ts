@@ -35,7 +35,7 @@ const USERS_PURE = (() => {
   const start = USERS_TEXT.indexOf("export const displayName");
   const end = USERS_TEXT.indexOf("\nexport", start + 10);
   return USERS_TEXT.slice(0, start) +
-    "export const displayName = (id: UserId): Name => id\n" +
+    "export const displayName = (id: UserId): Name => Name(id)\n" +
     (end < 0 ? "" : USERS_TEXT.slice(end));
 })();
 const USERS_BROKEN = USERS_TEXT.replace("Users.save(renamed)", "Users.save(1)");

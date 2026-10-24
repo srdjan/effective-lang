@@ -2,11 +2,11 @@
   "declarations": [
     {
       "definition": {
-        "kind": "alias",
-        "type": {
+        "base": {
           "kind": "primitive",
           "name": "int"
-        }
+        },
+        "kind": "nominal"
       },
       "id": "type:empty-effect#Int",
       "kind": "type",

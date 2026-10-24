@@ -148,7 +148,8 @@ const SLOTS: readonly Slot[] = [
 ];
 
 function lowerBase(): ModuleIR {
-  const source = "export type A = int\n";
+  // A bare name is a transparent alias, so `A` keeps an `alias` definition.
+  const source = "export type Base = int\nexport type A = Base\n";
   const checked = checkProject(
     memoryHost({ "effektive.json": "{}", "m.eff": source }),
     "",

@@ -578,9 +578,9 @@ Deno.test("build --validate accepts an inline record type 100 levels deep", asyn
     Deno.writeTextFileSync(`${dir}/effektive.json`, "{}");
     Deno.writeTextFileSync(
       `${dir}/m.eff`,
-      `export const f = (x: ${record("Num")}): Int => 1\n` +
-        `export const g = (y: ${record("Int")}): Int => f(y)\n` +
-        "\ntype Int = int\ntype Num = number\n",
+      `export const f = (x: ${record("Int")}): Int => 1\n` +
+        `export const g = (y: ${record("Same")}): Int => f(y)\n` +
+        "\ntype Int = int\ntype Same = Int\n",
     );
     const run = await effektive(["build", dir, "--validate"]);
     assertEquals(run.code, 0, run.stderr);
