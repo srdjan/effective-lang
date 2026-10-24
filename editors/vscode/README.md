@@ -17,6 +17,6 @@ Reload the window after changing a server setting.
 
 ## Build from source
 
-Run `deno task package` at the repository root with Deno 2.9.8 and Node 20 or later. This installs the pinned `vscode-languageclient` 10.1.2 closure using `npm ci` and creates `dist/effektive-vscode-0.5.2.vsix`. No publishing occurs. See `docs/installation.md` for the standalone CLI and isolated offline smoke test.
+Run `deno task package` at the repository root with Deno 2.9.8 and Node 20 or later. This installs the pinned `vscode-languageclient` 10.1.2 closure using `npm ci` and creates `dist/effektive-vscode-0.8.0.vsix`. No publishing occurs. See `docs/installation.md` for the standalone CLI and isolated offline smoke test.
 
 For checkout development, run `npm ci` in this directory, set `effektive.server.repository` to the repository root, and launch VS Code with `--extensionDevelopmentPath=<repo>/editors/vscode`. The development override uses the checkout's Deno configuration and server source.

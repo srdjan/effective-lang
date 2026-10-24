@@ -79,6 +79,7 @@ layout, the error fixture convention, and the format and lint scope.
 
 | Topic                                                          | Document                                                                     |
 | -------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Release notes                                                  | [CHANGELOG.md](CHANGELOG.md)                                                 |
 | Tasks, layout, fixture conventions, format and lint scope      | [docs/development.md](docs/development.md)                                   |
 | Design of the transpiler                                       | [docs/transpiler-design.md](docs/transpiler-design.md)                       |
 | Language rules that the implementation chose                   | [docs/language-rules.md](docs/language-rules.md)                             |

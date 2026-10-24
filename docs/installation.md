@@ -14,7 +14,7 @@ This runs `npm ci --ignore-scripts` against the extension lockfile, bundles the 
 
 - `dist/effektive.js`: standalone CLI JavaScript.
 - `dist/effektive-lsp.js`: standalone stdio language server.
-- `dist/effektive-vscode-0.5.2.vsix`: extension, bundled server, syntax assets, and the complete locked client runtime dependencies and licenses.
+- `dist/effektive-vscode-0.8.0.vsix`: extension, bundled server, syntax assets, and the complete locked client runtime dependencies and licenses.
 
 The build needs registry access or populated build caches. Installation and startup of these artifacts need no checkout, npm installation, registry, or populated Deno cache. The VSIX uses sorted entries and fixed ZIP timestamps; identical inputs produce identical bytes. Building does not publish artifacts.
 
@@ -39,7 +39,7 @@ Checking and emitting source work offline. Target checking with `--tsc` still ne
 Use VS Code's **Extensions: Install from VSIX...** command to select the VSIX, or run:
 
 ```sh
-code --install-extension dist/effektive-vscode-0.5.2.vsix --force
+code --install-extension dist/effektive-vscode-0.8.0.vsix --force
 ```
 
 Open an `.eff` or `.effi` file. The extension uses its own bundled server. If Deno is outside VS Code's `PATH`, set `effektive.server.deno` to its executable. `effektive.server.repository` is an explicit development override for a checkout; leave it empty for normal installation.
