@@ -2,6 +2,7 @@
   "name": "@srdjan/effektive-lang",
   "version": "0.8.0",
   "license": "MIT",
+  "links": ["https://effektive.timok.deno.net"],
   "exports": {
     ".": "./src/core/mod.ts",
     "./frontend": "./src/core/frontend.ts",
