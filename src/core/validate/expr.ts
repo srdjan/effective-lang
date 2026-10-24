@@ -958,7 +958,7 @@ export class BodyValidator implements ValidatorCore {
       this.add(
         AREA.types,
         path,
-        `a foreign module cannot retain the sealed nominal type ${sealed} after an update`,
+        `a foreign module cannot retain the sealed type ${sealed} after an update`,
         e.span,
       );
     }
@@ -996,7 +996,7 @@ export class BodyValidator implements ValidatorCore {
       this.add(
         AREA.identity,
         `${path}.nominal`,
-        `the nominal type ${e.nominal} is not a declared type`,
+        `the type ${e.nominal} is not a declared type`,
         e.span,
       );
       return checkedResult(combine([v]));
@@ -1005,7 +1005,7 @@ export class BodyValidator implements ValidatorCore {
       this.add(
         AREA.types,
         `${path}.nominal`,
-        `${e.nominal} is not a nominal type`,
+        `${e.nominal} is not a type with identity`,
         e.span,
       );
     } else if (decl.opaque === true) {
@@ -1022,7 +1022,7 @@ export class BodyValidator implements ValidatorCore {
       this.add(
         AREA.types,
         `${path}.nominal`,
-        `the module cannot construct the foreign sealed nominal type ${e.nominal}`,
+        `the module cannot construct the foreign sealed type ${e.nominal}`,
         e.span,
       );
     } else if (!fits(this.env, v.type, decl.definition.base)) {
@@ -1615,7 +1615,7 @@ export class BodyValidator implements ValidatorCore {
       this.add(
         AREA.types,
         path,
-        "arithmetic cannot use a foreign sealed nominal type",
+        "arithmetic cannot use a foreign sealed type",
         e.span,
       );
     }

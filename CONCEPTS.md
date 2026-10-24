@@ -61,27 +61,47 @@ The effect set that one pipeline stage adds by itself, without the effects of it
 
 A quiet value is pure and has no failure and no requirement. When the left value is not quiet, the checker checks the stage with a quiet value of the same type in its place. Lowering moves the left value into its own binding and copies the stage set onto the stage call. Lowering never derives a stage set, so each stage rule has one owner. So a stage handler must not read the effect sets or the mode of its left value.
 
-## Nominal types
+## Type identity
 
-### Nominal type
+### Type identity
 
-The type that a `nominal` declaration declares, such as `nominal UserId = string` or `nominal User = { id: UserId, name: Name }`. A `type` declaration is structural: types with equal structure are interchangeable.
+A `type` declaration has identity by name. It has none when its body is a union with a non-literal member or a bare name.
 
-A nominal type has its own identity. A program builds a value with the constructor, as in `UserId(s)` or `User(record)`. An open nominal value fits its base type, and a base value does not fit the nominal type. A sealed nominal type restricts base widening to its owner. A body that is a record after aliases unfold gives a nominal record with a runtime `_tag`. Any other body has its identity in the checker only: the emitted TypeScript is the schema and the type of the body.
-_Avoid: data type, brand type, record brand_
+Examples are `type UserId = string`, `type Cents = int`, `type Status = "pending" | "paid"`, and `type User = { id: UserId, name: Name }`. A literal-only union gives identity. The bodies `void`, `never`, `unknown`, and `null` give identity too.
 
-### Nominal domain
+Two different types with identity never mix. This holds when their bodies are equal and when they come from different modules. A value of a type with identity fits its own body. An unnamed value fits a type with identity when the value fits its body. An unnamed value is a literal, an operator result, or an inline record, array, or tuple literal. A value of another type with identity needs the constructor, as in `Text(key)`.
 
-The pattern domain of a `match` subject whose members are all nominal records or errors, after aliases are unfolded.
+The identity exists in the checker. The emitted TypeScript of an untagged type is the schema and the type of its body.
+_Avoid: nominal type, brand type, data type_
 
-Arms name the members, as in `Circle(c)`, and coverage needs one arm for each member or `_`. A record pattern does not apply to a nominal domain. A subject that mixes nominal and structural members has no domain, and the checker reports it.
+### Transparent alias
 
-### Sealed nominal type
+A `type` declaration whose body is a union with a non-literal member, or a bare name. Examples are `type Article = Draft | Published` and `type Alias = User`.
 
-A nominal type whose declaring module owns construction and operations that can invalidate its rules.
+A transparent alias is interchangeable with its body. It has no constructor and no identity.
 
-The declaration uses `sealed nominal Name = T`. Other modules can pass, compare, and read values. The owner exports conversions and decoders when needed.
+### Tagged record
+
+A record type with identity that a union alias of its own module lists. Every member of that union must be a record type with identity of the module, a tagged record of another module, or an error.
+
+A tagged record value carries a runtime `_tag` of the form `<module>#<Name>`. The emitter prints `Schema.TaggedStruct`. A record literal written at exactly the expected tagged type constructs the value with no call. A computed value needs `Name(value)`.
+
+A union in another module does not tag a record. When a later edit adds a record to such a union, the wire form of the record gains `_tag`. A union of records with a literal discriminator field is a different concept: it needs no runtime tag.
+_Avoid: nominal record, data record_
+
+### Tagged domain
+
+The pattern domain of a `match` subject whose members are all tagged records or errors, after transparent aliases unfold.
+
+Arms name the members, as in `Circle(c)`. Coverage needs one arm for each member or `_`. A record pattern does not apply to a tagged domain. A subject that mixes tagged members with other members has no domain, and the checker reports it.
+
+### Sealed type
+
+A type with identity whose declaring module owns construction and the operations that can invalidate its rules.
+
+The declaration uses `sealed type Name = T`. Other modules can pass, compare, and read values. The owner exports conversions and decoders when needed. `sealed` on a transparent alias gives `declaration/017`.
 The source restriction does not isolate generated TypeScript from unsound host code.
+_Avoid: sealed nominal type_
 
 ### Pure function type
 
@@ -93,7 +113,7 @@ The form is `pure (value: T) => U`. Empty effect sets alone do not establish pur
 
 The generated TypeScript module of a host interface file: `host.effi` gives `host.effi.ts`.
 
-It holds the types, nominal types, errors, and services of the interface, so the compiler owns each tag string. Source modules and the host module import those values from it. The host module supplies only the opaque types and the providers.
+It holds the types, types with identity, errors, and services of the interface, so the compiler owns each tag string. Source modules and the host module import those values from it. The host module supplies only the opaque types and the providers.
 _Avoid: interface module, host types module_
 
 ## Verification

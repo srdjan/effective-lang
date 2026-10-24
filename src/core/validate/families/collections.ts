@@ -78,7 +78,7 @@ export function validateAll(
     c.add(
       AREA.types,
       path,
-      "validateAll needs Effect jobs and a pure error-array wrapper returning a nominal error",
+      "validateAll needs Effect jobs and a pure error-array wrapper returning a declared error",
       e.span,
     );
     return c.poison();

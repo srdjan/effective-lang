@@ -37,7 +37,7 @@ export interface TypeEnv {
   readonly errors: ReadonlyMap<string, readonly Field[]>;
   /** Identities of opaque types. An opaque type does not widen to its base. */
   readonly opaque: ReadonlySet<string>;
-  /** Identities of sealed nominal types. */
+  /** Identities of sealed types. */
   readonly sealed: ReadonlySet<string>;
 }
 

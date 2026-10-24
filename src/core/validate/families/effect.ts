@@ -54,7 +54,7 @@ export function retrySchedule(
     c.add(
       AREA.types,
       `${path}.step`,
-      "retry schedule needs a nominal error parameter",
+      "retry schedule needs a declared error parameter",
       e.step.span,
     );
   }

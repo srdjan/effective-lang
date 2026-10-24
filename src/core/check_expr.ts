@@ -815,14 +815,14 @@ class BodyChecker
     if (!this.table.ownsSealed(this.module, id)) {
       this.report(
         "sealed/001",
-        `only the declaring module can construct the sealed nominal type \`${
+        `only the declaring module can construct the sealed type \`${
           shortName(id)
         }\``,
         node,
       );
     }
     this.fact(node, { kind: "brand-construction", brand: id });
-    return this.constructFrom(node, id, base, "nominal type", args);
+    return this.constructFrom(node, id, base, "type with identity", args);
   }
 
   private dataConstruction(
@@ -834,22 +834,22 @@ class BodyChecker
     if (!this.table.ownsSealed(this.module, id)) {
       this.report(
         "sealed/001",
-        `only the declaring module can construct the sealed nominal type \`${
+        `only the declaring module can construct the sealed type \`${
           shortName(id)
         }\``,
         node,
       );
     }
     this.fact(node, { kind: "data-construction", data: id });
-    return this.constructFrom(node, id, record, "nominal type", args);
+    return this.constructFrom(node, id, record, "tagged record", args);
   }
 
-  /** The single argument of a nominal constructor must fit the base type. */
+  /** The single argument of a constructor must fit the base type. */
   private constructFrom(
     node: NodeId,
     id: TypeId,
     base: TypeRef,
-    noun: "nominal type",
+    noun: "tagged record" | "type with identity",
     args: readonly Arg[],
   ): NodeInfo {
     if (args.length !== 1) {
@@ -1318,7 +1318,7 @@ class BodyChecker
     return record !== undefined && this.isError(record);
   }
 
-  /** The record fields of a type that is a record, a named error, or a nominal record. */
+  /** The record fields of a type that is a record, a named error, or a tagged record. */
   private recordFields(ref: TypeRef):
     | readonly {
       readonly name: string;
@@ -1337,7 +1337,7 @@ class BodyChecker
           : this.table.node(record);
         return recordNode?.kind === "record" ? recordNode.fields : undefined;
       }
-      // A nominal record has the fields of its base record.
+      // A tagged record has the fields of its base record.
       const base = this.table.dataRecordOf(node.id);
       if (base !== undefined) return this.recordFields(base);
     }
@@ -1729,7 +1729,7 @@ class BodyChecker
     if (sealed !== undefined && !this.table.ownsSealed(this.module, sealed)) {
       this.report(
         "sealed/002",
-        `only the declaring module can update the sealed nominal type \`${
+        `only the declaring module can update the sealed type \`${
           shortName(sealed)
         }\``,
         node,
@@ -1812,7 +1812,7 @@ class BodyChecker
     if (result.sealed !== undefined) {
       this.report(
         "sealed/003",
-        `only the declaring module can use arithmetic on the sealed nominal type \`${
+        `only the declaring module can use arithmetic on the sealed type \`${
           shortName(result.sealed)
         }\``,
         node,
@@ -2294,7 +2294,7 @@ class BodyChecker
         "pattern/004",
         `a match cannot take a value of type ${
           this.show(subject.type)
-        }; version 0 matches options, errors, nominal records, tagged records, literals, and primitives`,
+        }; version 0 matches options, errors, tagged records, records with a literal discriminator field, literals, and primitives`,
         subjectNode,
       );
     } else if (domain.kind === "mixed") {
@@ -2302,7 +2302,7 @@ class BodyChecker
         "pattern/004",
         `a match cannot take a value of type ${
           this.show(subject.type)
-        }, which mixes nominal records or errors with other types; a match over names needs nominal records or errors only`,
+        }, which mixes tagged records or errors with other types; a match over names needs tagged records or errors only`,
         subjectNode,
       );
     }

@@ -65,7 +65,7 @@ export function codecCall(
   ) {
     c.report(
       "sealed/004",
-      "only the declaring module can derive a Codec for a sealed nominal type",
+      "only the declaring module can derive a Codec for a sealed type",
       node,
     );
   }

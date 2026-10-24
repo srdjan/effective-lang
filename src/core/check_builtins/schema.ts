@@ -417,7 +417,7 @@ export function schemaCall(
   ) {
     c.report(
       "sealed/004",
-      "only the declaring module can derive a Schema that decodes to a sealed nominal type",
+      "only the declaring module can derive a Schema that decodes to a sealed type",
       node,
     );
   }
@@ -1016,7 +1016,7 @@ function schemaOperationCall(
       "sealed/004",
       `only the declaring module can run schema${
         op === "decode" ? "Decode" : "Make"
-      } for a sealed nominal type`,
+      } for a sealed type`,
       node,
     );
   }
@@ -1062,7 +1062,7 @@ function schemaTransformCall(c: SchemaContext, call: SchemaCall): NodeInfo {
   ) {
     c.report(
       "sealed/004",
-      "only the declaring module can pass a sealed nominal type to a schema transformation callback",
+      "only the declaring module can pass a sealed type to a schema transformation callback",
       node,
     );
   }
@@ -1159,7 +1159,7 @@ function optionalBridge(
   ) {
     c.report(
       "sealed/004",
-      `only the declaring module can pass a sealed nominal type to a ${name} callback`,
+      `only the declaring module can pass a sealed type to a ${name} callback`,
       node,
     );
   }

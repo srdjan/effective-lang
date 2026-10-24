@@ -2,7 +2,7 @@
 
 This file is the one place for the current project status. It holds the
 application stopping rule, the application dispositions (three gate applications
-and witnesses for nominal types and portability), the remaining and deferred gaps, and
+and witnesses for types with identity and portability), the remaining and deferred gaps, and
 the open items. Other documents link here and do not restate these facts.
 
 ## Stopping rule
@@ -14,7 +14,7 @@ precise contracts and pass failure, cancellation, and cleanup checks. The three
 applications are a service workflow, a scheduled worker, and a stream processor.
 Application orchestration stays in `.eff`. Typed host adapters may supply
 drivers and the runtime entry point. The order lifecycle application is a
-witness for nominal types. It is not one of the three gate applications.
+witness for types with identity and tagged records. It is not one of the three gate applications.
 
 All three application gates pass with existing language forms. The order
 lifecycle witness also passes. The portable publisher is an additional
@@ -59,7 +59,7 @@ the build and run commands.
 | [Service workflow](../fixtures/applications/service-workflow/README.md) | Passes with a registered atomic SQL adapter and fifteen compiled runtime cases. Source owns validation, catalog use, retry selection, and the exported contract. The adapter owns one atomic save and its connection lifecycle.                                            | Separate [HTTP/SQLite checks](integration.md) cover local persistence, rollback, cancellation and cleanup. Source-authored transaction callbacks, idempotency and exactly-once submission remain outside the witness. An ambiguous commit stays Permanent, because a retry could duplicate a committed write. The simulated COMMIT error proves no retry, not real ambiguous-commit behavior. Plan: [service workflow](archive/plans/2026-10-19-service-workflow-application.md#disposition-and-limits). |
 | [Scheduled worker](../fixtures/applications/scheduled-worker/README.md) | Passes with ten compiled runtime cases. A source-authored concrete policy owns repetition, transient retry, and resource release. The runtime entry point owns whole-worker interruption.                                                                                  | General opaque Schedule consumers remain an API gap. The native reference comparison covers the selected fixed policy, timing, and results only. A future application that needs opaque policies, richer scheduling, or an in-source shutdown protocol must supply its own blocker witness. Plan: [scheduled worker](archive/plans/2026-10-19-scheduled-worker-application.md#disposition-and-limits).                                                                                                   |
 | [Stream processor](../fixtures/applications/stream-processor/README.md) | Passes with ordered concurrent mapping, backpressure, selective fallback, and thirteen compiled runtime cases. Source owns the whole pipeline and the session lifetime.                                                                                                    | The application promises no rollback, no exactly-once delivery, no recovery of arbitrary mixed causes, and no global memory bound from one queue capacity. Native `catchTags` can hide an accompanying defect. Plan: [stream processor](archive/plans/2026-10-19-stream-processor-application.md#disposition-and-limits).                                                                                                                                                                                |
-| [Order lifecycle](../fixtures/applications/order-lifecycle/README.md)   | A witness for nominal types, not a gate application. Passes with nine compiled runtime cases. Four nominal record states cross a module boundary. A `match` by name covers each state. A recursive pricing rule tree uses a nominal record. Decoding keeps the module-qualified `_tag`. | The application has no service, no driver, and no concurrency. Percent pricing is not possible, because `/` gives `number`. Plan: [nominal examples](archive/plans/2026-10-23-nominal-examples.md).                                                                                                                                                                                                                                                                                                              |
+| [Order lifecycle](../fixtures/applications/order-lifecycle/README.md)   | A witness for types with identity and tagged records, not a gate application. Passes with nine compiled runtime cases. Four tagged record states cross a module boundary. A `match` by name covers each state. A recursive pricing rule tree uses a tagged record. Decoding keeps the module-qualified `_tag`. | The application has no service, no driver, and no concurrency. Percent pricing is not possible, because `/` gives `number`. Plan: [nominal examples](archive/plans/2026-10-23-nominal-examples.md), written before the type identity plan.                                                                                                                                                                                                                                                                                                              |
 | [Portable publisher](../fixtures/applications/portable-publisher/README.md) | An exploratory portability witness, not a gate application. Source owns publication, conflict policy, grants, and serial batching. Memory and SQLite pass one shared KV suite. | The checks cover local storage in one process, finite batch completion, interruption, and cleanup. A committed write with a simulated lost acknowledgement returns uncertainty without retry. No crash recovery, exactly-once delivery, or HTTP admission protocol is promised. [Plan](plans/2026-10-23-portable-applications.md); [gap assessment](plans/portable-applications-gaps.md). |
 
 ## Remaining and deferred gaps
@@ -81,7 +81,7 @@ The tables below are a record of gaps, not an implementation queue.
 | General Stream and Sink APIs        | Other operators, arbitrary source Sink constructors, chunk-cost throttling and unrestricted nested group streams need additional source and lifetime rules.                                                                                                     | Leftovers, transduction, aggregation and callback-owned keyed groups are implemented. Selected external interruption has a source composition. See the [investigation](archive/plans/2026-10-18-general-stream-schedule-design.md).                                    |
 | General Schedule APIs               | Opaque Schedule consumers for retry and repetition, composition with incomparable input types, other combinators and cron policies remain uncovered.                                                                                                            | RetrySchedule and a concrete source repetition policy meet the worker gate. General schedules support aggregation and selected comparable-input composition. See the [worker limits](archive/plans/2026-10-19-scheduled-worker-application.md#disposition-and-limits). |
 | Time control                        | A general source clock and time-control API remains a candidate without a demonstrated application blocker.                                                                                                                                                     | Primitive clock services and native virtual-time checks cover the selected applications. See the [accepted rule](plans/2026-10-19-application-acceptance-rule.md#feature-selection).                                                                                   |
-| Schema and recursion                | Recursive Option data in an alias, mutual recursion of aliases, arbitrary self-bearing transformations and general Schema AST construction remain unsupported. Nominal records support guarded and mutual recursion (see [nominal types](#nominal-types)). | Guarded recursion preserves separate decoded, encoded and make-input types through selected adapters. See the [recursive field contract](archive/plans/2026-10-19-schema-recursive-adapters-contract.md).                                                              |
+| Schema and recursion                | Recursive Option data in an alias, mutual recursion of aliases, arbitrary self-bearing transformations and general Schema AST construction remain unsupported. Tagged records support guarded and mutual recursion (see [type identity](#type-identity)). | Guarded recursion preserves separate decoded, encoded and make-input types through selected adapters. See the [recursive field contract](archive/plans/2026-10-19-schema-recursive-adapters-contract.md).                                                              |
 | General language extensions         | User-defined generics, effect-row polymorphism, source purity assertions, macros and early returns remain deferred language extensions.                                                                                                                         | Builtin generic types and concrete source compositions cover the accepted applications. The [specification](../../effektive/public/effektive-spec.html#examples) retains the broader language boundary.                                                                |
 
 Reopen an item only for a demonstrated application blocker or an explicit change
@@ -89,7 +89,7 @@ to the accepted target. On 2026-10-24 the user accepted one such change: a compi
 change that makes source more terse and elegant needs no application blocker. The
 [terse source plan](plans/2026-10-24-terse-source.md) records the first such
 changes: open contracts on local functions, named error sets, union joins of
-nominal records, expected types in builtin callbacks, and inlay hints. First check equivalent existing source compositions.
+tagged records, expected types in builtin callbacks, and inlay hints. First check equivalent existing source compositions.
 Record a minimal witness, intended contract, observed diagnostic or behavior,
 and the required failure, cancellation and cleanup semantics. No item has an
 automatic priority or implementation commitment.
@@ -107,6 +107,16 @@ records the supported route and its limits.
 
 A new application blocker does not revoke the explicit deferral of item 9. The
 user must change that instruction before broader interoperability work starts.
+
+### Deferred TypeScript content mapper integration
+
+Deferred by user on 2026-10-24. The
+[integration plan](plans/2026-10-24-typescript-content-mappers.md) preserves the
+TypeScript 7.1 content mapper analysis, a bounded experiment, acceptance checks,
+and unresolved mapping, import-identity and unsaved-project-state risks. The
+scope is integration with the existing compiler and language server. No
+experiment or adoption is authorized; resume only when the user explicitly
+reopens the work. Broader package interoperability remains deferred separately.
 
 ### Runtime behavior and evidence limits
 
@@ -128,40 +138,47 @@ and
 [stream processor](archive/plans/2026-10-19-stream-processor-application.md#disposition-and-limits)
 record these boundaries with compiled checks.
 
-### Nominal types
+### Type identity
 
-The `nominal` declaration is in place as of 2026-10-23
-([plan](archive/plans/2026-10-23-nominal-keyword.md)). It replaces the `data` declaration
-([earlier plan](archive/plans/2026-10-23-nominal-data-types.md)) and `Brand<T>`.
-The form is `nominal Name = <type>`, and `type` stays the structural form. A body
-that is a record after aliases unfold gives a nominal record with a runtime
-`_tag`. Any other body lowers to an Effect brand that the source does not name.
-`data` is an ordinary name, and `Brand` and `unbrand` are unknown names.
+A `type` declaration has identity by name as of 2026-10-24
+([plan](plans/2026-10-24-type-identity.md)). The `nominal` declaration word is
+deleted. It had been in place since 2026-10-23
+([plan](archive/plans/2026-10-23-nominal-keyword.md)), and it had replaced the
+`data` declaration ([earlier plan](archive/plans/2026-10-23-nominal-data-types.md))
+and `Brand<T>`. A body that is a union with a non-literal member, or a bare name,
+gives a transparent alias that has no identity. Every other body gives identity.
+A record identity is a tagged record, with a runtime `_tag`, when a union alias of
+its own module lists it. `nominal` is an ordinary name, `data` is an ordinary
+name, and `Brand` and `unbrand` are unknown names.
 
-An open nominal value fits its base type, so `unbrand` is removed. Sealed types restrict that conversion to their declaring module. A base value needs
-the constructor. Operators compare and combine nominal values by class:
-`id === "u1"` and `total > 0` are legal, `total * 2` gives `int`, and
-`cents + meters` is an error. A nominal body cannot hold a nominal record or a
-union with a record (`declaration/014`). A function, deferred, or opaque type in
-a body or field gives `declaration/015` or `declaration/016`.
+A value of a type with identity fits its body, so `unbrand` is removed. Sealed
+types restrict that conversion to their declaring module. A value of another type
+with identity needs the constructor. An unnamed value fits an untagged type with
+identity whose body it fits. Operators compare and combine values by class:
+`id === "u1"` and `total > 0` are legal, `total * 2` gives the type of `total`,
+and `cents + meters` is an error. A function, deferred, or opaque type in a tagged
+record or an error field gives `declaration/015` or `declaration/016`.
+`declaration/014` is deleted, and `declaration/017` rejects `sealed` on a
+transparent alias.
 
-A `match` selects nominal records and errors by name. A nominal record can be
+A `match` selects tagged records and errors by name. A tagged record can be
 recursive when every cycle has a base case. The IR has the version 5, with one
 definition kind and one construction node `nominal`. The editor, the TextMate
-grammar, and the playground highlighter know the word `nominal`. The website and
-the canonical specification describe nominal types from draft 0.60.
+grammar, and the playground highlighter no longer know the word `nominal`. The
+website and the canonical specification describe nominal types from draft 0.60.
+The type identity plan updates them in its website unit.
 
 Each `.effi` file has a generated companion module, such as `host.effi.ts`
 ([plan](archive/plans/2026-10-23-host-interface-companion.md)). It holds the
-types, nominal types, errors, and services of the interface. Source modules and
+types with identity, errors, and services of the interface. Source modules and
 host modules import them from it, so the compiler owns every tag string. So
-`.eff` code can construct an `.effi` nominal type, and a provider result of a
-nominal record is checked at run time.
+`.eff` code can construct an `.effi` type with identity, and a provider result of a
+tagged record is checked at run time.
 
-Nominal record values from unsound host code fail loudly at run time
+Tagged record values from unsound host code fail loudly at run time
 ([plan](archive/plans/2026-10-23-host-boundary-checks.md)). A `match` whose last arm is
 not `_` tests that arm and throws for a value outside its type. A host provider
-whose methods return nominal record values is wrapped, and each such result or stream
+whose methods return tagged record values is wrapped, and each such result or stream
 element goes through `Schema.is`. The language rules list the positions that
 stay trusted, under "Host provider checks".
 
@@ -181,9 +198,9 @@ application with real I/O is not measured.
 
 The user approved the [portable extensions](plans/2026-10-23-portable-extensions.md)
 after the publishing witness established its existing composition.
-Sealed nominal types restrict construction, updates, arithmetic, widening, and schema derivation to the declaring module.
+Sealed types restrict construction, updates, arithmetic, widening, and schema derivation to the declaring module.
 Pure function types require pure execution and empty effect sets. Optional import rules restrict direct dependency edges.
-Existing open nominal types, unmarked function types, and projects without import rules retain their behavior.
+Existing open types with identity, unmarked function types, and projects without import rules retain their behavior.
 
 The [extension worklog](plans/portable-extensions-worklog.md) records the compiler, validator, editor, and example checks.
 The sibling website includes paired source and TypeScript panels and a runnable project for all three controls.

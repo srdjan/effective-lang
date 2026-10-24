@@ -56,8 +56,8 @@ and grant cases. One suite runs ten KV cases on each platform. Five additional
 SQLite cases cover backend parity, cross-lease invalidation, opening failure,
 persistence, and simulated acknowledgement loss after an actual commit.
 
-Nominal types mark domain intent. Handwritten TypeScript can still construct
-nominal values, so the host boundary remains trusted.
+Types with identity mark domain intent. Handwritten TypeScript can still construct
+values of them, so the host boundary remains trusted.
 
 These checks cover one process and local storage. They establish no HTTP
 admission protocol, distributed transaction, crash recovery, or exactly-once

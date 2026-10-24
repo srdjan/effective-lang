@@ -70,7 +70,7 @@ export function codec(
     c.add(
       AREA.types,
       path,
-      "a foreign module cannot derive a Codec for a sealed nominal type",
+      "a foreign module cannot derive a Codec for a sealed type",
       e.span,
     );
   }

@@ -255,7 +255,7 @@ export function checkTypeIds(
       }
       case "retry-schedule":
         if (t.error.kind !== "named" || !t.error.id.startsWith("error:")) {
-          fail(at, "a retry schedule needs a nominal error type");
+          fail(at, "a retry schedule needs a declared error type");
         }
         return;
       case "schema":

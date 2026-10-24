@@ -212,7 +212,7 @@ export function validateAllCall(
     if (!c.isError(wrapped.result)) {
       c.report(
         "type-mismatch/010",
-        "`validateAll` error wrapper must return a nominal error",
+        "`validateAll` error wrapper must return a declared error",
         args[1].node,
       );
     }

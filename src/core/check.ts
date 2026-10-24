@@ -583,7 +583,7 @@ export class TypeLowerer {
         if (error.ir.kind !== "named" || !isErrorId(error.ir.id)) {
           lowerer.report(
             "type-mismatch/001",
-            "RetrySchedule needs a nominal error type",
+            "RetrySchedule needs a declared error type",
             lowerer.span(nodes[0]),
           );
         }
@@ -639,7 +639,7 @@ export class TypeLowerer {
           } else {
             lowerer.report(
               "type-mismatch/001",
-              "Fiber failure type needs nominal errors or never",
+              "Fiber failure type needs declared errors or never",
               lowerer.span(nodes[1]),
             );
           }

@@ -267,10 +267,10 @@ Deno.test("checkTypeIds orders a kind's own check against its children", () => {
       `validation/002 ${ROOT}: a pure function type must have empty failure and requirement rows`,
     ],
   );
-  // A retry schedule reports its child first, then the nominal error rule.
+  // A retry schedule reports its child first, then the declared error rule.
   assertEquals(lines({ kind: "retry-schedule", error: MISSING }), [
     `validation/001 ${ROOT}.error: ${missing}`,
-    `validation/001 ${ROOT}: a retry schedule needs a nominal error type`,
+    `validation/001 ${ROOT}: a retry schedule needs a declared error type`,
   ]);
   // A schema reports its children first, then data-only, then its requirements.
   assertEquals(

@@ -42,7 +42,8 @@ Decided by the user on 2026-10-16 and 2026-10-17. Each entry took the recommende
 | D29 R1 rollout (2026-10-17) | (a) Always on. One plan migrates the examples, fixtures, tests, bench generator, and golden files. |
 | D30 R1 code (2026-10-17) | (a) `declaration/013`. |
 | D31 Other type forms (2026-10-17) | (a) R1 checks only primitive leaves. `Effect<A>`, inline records, and inline unions with named parts stay legal. |
-| D32 Brand operators (2026-10-17) | (c2) `<`, `<=`, `>`, `>=`, `+`, and `-` accept two values of one numeric brand (base `int` or `number`). `+` and `-` give that brand. `*`, `/`, and string brands keep needing `unbrand`. Update, 2026-10-23: the nominal keyword plan replaced this rule with comparison classes and widening (see `docs/language-rules.md`, "Nominal operators"). `unbrand` is removed. |
+| D32 Brand operators (2026-10-17) | (c2) `<`, `<=`, `>`, `>=`, `+`, and `-` accept two values of one numeric brand (base `int` or `number`). `+` and `-` give that brand. `*`, `/`, and string brands keep needing `unbrand`. Update, 2026-10-23: the nominal keyword plan replaced this rule with comparison classes and widening (see `docs/language-rules.md`, "Identity operators"). `unbrand` is removed. |
+| TI Type identity (2026-10-24) | A `type` declaration has identity by name, with no new syntax (NI4). The `nominal` keyword is gone. A union with a non-literal member and a bare name give a transparent alias. A record identity is tagged when a union alias of its module lists it. An unnamed operand adopts the class of a named operand in `+`, `-`, and `*` (NI25 a). Primitive names are types with identity (NI22 a). A string `+` gives the unnamed `string` (TI0). See [the plan](plans/2026-10-24-type-identity.md). |
 
 Open: none.
 
@@ -514,7 +515,7 @@ each stage.
 | Index | Syntax tree | Declarations by name, export flags, header and body spans, header and body hashes | File |
 | Link | Indexes, host registry | Module graph, topological order, cycle diagnostics | Program |
 | Resolve | Module graph, imports | Name to `DeclarationId`; local scopes | Module |
-| Type lowering | Type syntax | Interned structural types; nominal types and errors by identity | Declaration |
+| Type lowering | Type syntax | Interned structural types; types with identity and errors by identity | Declaration |
 | Signature | Header, named declarations, mode | `FunctionType` with contract and execution | Declaration |
 | Check body | Body syntax, signatures, prelude | Side tables: type, effects, mode, resolved target per node; diagnostics | Declaration |
 | Mode groups | Call edges, body modes | Fixed-point modes per component | Component |
@@ -541,8 +542,8 @@ as trivia so that the tree round-trips to source. The tree has two extra node
 kinds: `error` for an unparsable region and `missing` for an expected token.
 
 Types: an intern table. Equal structural types share one integer id, so type
-equality is integer equality and type sets sort numerically. Nominal types and
-errors are nominal by `DeclarationId`. Serialization expands ids back to the
+equality is integer equality and type sets sort numerically. Types with identity and
+errors keep their identity by `DeclarationId`. Serialization expands ids back to the
 `typed-ir.ts` `Type` tree.
 
 Effect sets: sorted arrays of `ErrorId` and `CapabilityId` strings. Union,
@@ -636,49 +637,57 @@ Declarations check independently. One broken declaration never stops the
 others. Hover on a broken declaration shows the error type as "unknown (error)"
 rather than nothing.
 
-### 6.5 Nominal types
+### 6.5 Types with identity
 
-Update, 2026-10-23: the type table has three nominal kinds. A nominal type with a
-non-record body lowers to a brand. A brand is erased at run time, and its value
-is the base value. An error carries a `_tag` and is a class. A nominal type with
-a record body, called a nominal record, carries a `_tag` and is a plain object.
-A body is a record body when it is a record after aliases unfold.
+Update, 2026-10-24: a `type` declaration has identity by name unless its body is
+a union with a non-literal member or a bare name. Those two bodies give a
+transparent alias. The type table has four kinds: a transparent alias, an
+untagged type with identity, a tagged record, and an error. An untagged type with
+identity is erased at run time, and its value is the base value. A record type
+with identity is a tagged record when a union alias of its own module lists it
+(see `docs/language-rules.md`, "Tagged records"). A tagged record carries a
+`_tag` and is a plain object. An error carries a `_tag` and is a class.
 
-A `nominal` declaration has the form `nominal Name = <type>`. It has the id
-`type:<module>#<Name>`, the same prefix as an alias. The type table tells the
-kinds apart: `dataRecordOf(id)` gives the base record of a nominal record, and
-`brandBaseOf(id)` gives the base of a brand.
+A type with identity has the id `type:<module>#<Name>`, the same prefix as an
+alias. The type table tells the kinds apart: `dataRecordOf(id)` gives the base
+record of a tagged record, `brandBaseOf(id)` gives the base of an untagged type
+with identity, and `unfoldTransparent` stops at an identity. The `nominal`
+declaration word was deleted on 2026-10-24.
 
-The IR has a declaration with the definition kind `nominal` and a base type. It
-has an expression node `nominal` for a construction and a pattern kind `nominal`
-for a match arm. The checker facts for a construction are `brand-construction`
-and `data-construction`.
+The IR has a declaration with the definition kind `nominal`, a base type, and the
+flag `tagged` for a tagged record. It has an expression node `nominal` for a
+construction and a pattern kind `nominal` for a match arm. The checker facts for
+a construction are `brand-construction` and `data-construction`. The IR is at
+version 5.
 
 The emitter prints `Schema.TaggedStruct("<module>#<Name>", { fields })` and
-`typeof Name.Type` for a record body. An optional field uses
+`typeof Name.Type` for a tagged record. An optional field uses
 `Schema.optionalKey`. Construction prints `Name.make(value)`. The tag of a
-nominal record has the form of the tag of an error, `<module>#<Name>`. A body
-that is not a record prints `Schema.brand("<module>#<Name>")` over the schema of
-the body.
+tagged record has the form of the tag of an error, `<module>#<Name>`. An untagged
+type with identity prints as an alias of its body prints, with no brand.
 
-A nominal value fits its base type, and widening prints no code. So a widened
-record value keeps its `_tag` at run time. Construction of a nominal record
-prints `$untagged<T>(value)` for each argument that is not a record literal.
-The helper copies the own fields, except `_tag`, into an object with no
-prototype. `Schema.make` rejects a value that has the `_tag` of another nominal
-record, so the copy lets one nominal record take the fields of another.
+A value of a type with identity fits its body, and widening prints no code. So a
+widened record value keeps its `_tag` at run time. Construction of a tagged
+record prints `$untagged<T>(value)` for each argument that is not a record
+literal. The helper copies the own fields, except `_tag`, into an object with no
+prototype. `Schema.make` rejects a value that has the `_tag` of another tagged
+record, so the copy lets one tagged record take the fields of another.
 
-A recursive group of nominal records and aliases prints in an explicit form. Each
-nominal record gives `interface T`, `interface TEncoded`, and a `TaggedStruct` whose
-references to the group are `Schema.suspend((): Schema.Codec<T, TEncoded> => T)`.
+A recursive group of tagged records and aliases prints in an explicit form. Each
+tagged record gives `interface T`, `interface TEncoded`, and a `TaggedStruct`
+whose references to the group are `Schema.suspend((): Schema.Codec<T, TEncoded> => T)`.
 Each alias gives `type L`, `type LEncoded`, and an annotated `const`. The
 explicit types avoid the TypeScript errors TS7022 and TS2456 that
 `typeof L.Type` causes inside a cycle. The group is a strongly connected
 component of the type-level references.
 
-A match over nominal records and errors tests `_tag` against the tag of each arm. It
+A match over tagged records and errors tests `_tag` against the tag of each arm. It
 does not test the last arm. A host value with a wrong tag therefore takes the
 last arm.
+
+History, 2026-10-23: the type table had three nominal kinds. A `nominal`
+declaration with a non-record body lowered to a brand, and one with a record body
+lowered to a nominal record. The type identity plan replaced them.
 
 ## 7. Host language for the transpiler
 
@@ -827,7 +836,7 @@ the LSP. Recommended.
 (c) Option (a) by default with a `--specifier-extension js` switch.
 
 **D7. Identity encoding in tags, keys, and brand tokens (Q2).**
-Update, 2026-10-23: the tag of a nominal record uses the same `module#Name` form.
+Update, 2026-10-23: the tag of a record with a runtime tag uses the same `module#Name` form.
 (a) Short names as in the book targets.
 (b) Module-qualified strings such as `users#UserMissing`, module path relative
 to a configured root. Recommended, because the spec requires distinct

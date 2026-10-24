@@ -1,8 +1,8 @@
 // Error paths of the built-in type names in the declaration checker
 // (`TypeLowerer.named` in src/core/check.ts): a wrong number of type arguments
 // for Ref, RetrySchedule, the three Schedule helper types, Codec, and Fiber, a
-// RetrySchedule over a type that is not a nominal error, and a Fiber failure
-// type that is not a nominal error or never. Each case pins the code, the text
+// RetrySchedule over a type that is not a declared error, and a Fiber failure
+// type that is not a declared error or never. Each case pins the code, the text
 // of the node that carries the span, and the message.
 
 import { assert, assertEquals } from "@std/assert";
@@ -74,21 +74,21 @@ Deno.test("a wrong number of type arguments names the type and the counts", () =
   }
 });
 
-Deno.test("a RetrySchedule needs a nominal error type", () => {
+Deno.test("a RetrySchedule needs a declared error type", () => {
   assertEquals(reportsFor("RetrySchedule<E>"), []);
   assertEquals(reportsFor("RetrySchedule<Int>"), [
-    [ARITY, "Int", "RetrySchedule needs a nominal error type"],
+    [ARITY, "Int", "RetrySchedule needs a declared error type"],
   ]);
   assertEquals(reportsFor("RetrySchedule<Option<E>>"), [
-    [ARITY, "Option<E>", "RetrySchedule needs a nominal error type"],
+    [ARITY, "Option<E>", "RetrySchedule needs a declared error type"],
   ]);
 });
 
-Deno.test("a Fiber failure type is a nominal error, a union of them, or never", () => {
+Deno.test("a Fiber failure type is a declared error, a union of them, or never", () => {
   for (const ok of ["E", "E | F", "F | E", "never", "E | never"]) {
     assertEquals(reportsFor(`Fiber<Int, ${ok}>`), [], ok);
   }
-  const message = "Fiber failure type needs nominal errors or never";
+  const message = "Fiber failure type needs declared errors or never";
   // The report covers the whole failure type. A union with two bad members still
   // gives one diagnostic: the checker drops a second report with the same code
   // and span.

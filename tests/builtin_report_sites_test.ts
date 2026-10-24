@@ -99,7 +99,8 @@ const ROWS: readonly SiteRow[] = [
     valid: 'type UserId = string\nconst f = () => UserId("a")\n',
     invalid: 'type UserId = string\nconst f = () => UserId("a", "b")\n',
     code: "type-mismatch/004",
-    fragment: "the nominal type `UserId` takes one argument, but 2 are given",
+    fragment:
+      "the type with identity `UserId` takes one argument, but 2 are given",
   },
   {
     builtin: "retry",
@@ -150,7 +151,7 @@ const ROWS: readonly SiteRow[] = [
     invalid:
       `${INT}const a = retrySchedule((e: Int, attempt: Int): Option<Int> => None)\n`,
     code: "type-mismatch/010",
-    fragment: "the retry schedule callback needs a nominal error parameter",
+    fragment: "the retry schedule callback needs a declared error parameter",
   },
   {
     builtin: "retrySchedule",

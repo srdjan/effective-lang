@@ -136,7 +136,7 @@ function checkCallbackInputAuthority(
     c.add(
       AREA.types,
       call.path,
-      "a foreign module cannot pass a sealed nominal type to a schema transformation callback",
+      "a foreign module cannot pass a sealed type to a schema transformation callback",
       call.e.span,
     );
   }
@@ -267,7 +267,7 @@ export function schema(c: ValidatorCore, e: SchemaExpr, path: string): Comp {
     c.add(
       AREA.types,
       path,
-      "a foreign module cannot derive a Schema that decodes to a sealed nominal type",
+      "a foreign module cannot derive a Schema that decodes to a sealed type",
       e.span,
     );
   }
@@ -953,7 +953,7 @@ export function schemaOperation(
     c.add(
       AREA.types,
       path,
-      "a foreign module cannot decode or make a sealed nominal type",
+      "a foreign module cannot decode or make a sealed type",
       e.span,
     );
   }

@@ -170,7 +170,7 @@ export function retryScheduleCall(
   if (error.kind !== "named" || !isErrorId(error.id)) {
     c.report(
       "type-mismatch/010",
-      "the retry schedule callback needs a nominal error parameter",
+      "the retry schedule callback needs a declared error parameter",
       args[0].node,
     );
   }

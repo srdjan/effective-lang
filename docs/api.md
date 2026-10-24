@@ -134,7 +134,7 @@ fixtures/      Input files for the tests.
   emit/forms/    Extra programs for the emitter tests. They are not golden examples.
   host-boundary/ A wrong host module, captured deno check output, and manifest.json.
   ir/example/    The log example and its IR fixture.
-  applications/  The four application witnesses: service-workflow, scheduled-worker, stream-processor, and order-lifecycle. The first three are the gate applications. order-lifecycle is a witness for nominal types.
+  applications/  The four application witnesses: service-workflow, scheduled-worker, stream-processor, and order-lifecycle. The first three are the gate applications. order-lifecycle is a witness for types with identity.
   host-adapter-files/ A project with a typed host adapter for effect/FileSystem.
   lex/           snapshot.json: hashes of the lexer output for a fixed corpus.
   validate/      Mutated copies of lowered IR and manifest.json, which names the expected code of each.
@@ -217,7 +217,7 @@ decides the mode. The body checker supplies the map. Without an entry,
 `buildInterface` gives an error value. The declaration diagnostics do not depend
 on the map.
 
-Rule R1: a primitive type can occur only inside a type, nominal, or error
+Rule R1: a primitive type can occur only inside a type or error
 declaration. Each `string`, `int`, `number`, `boolean`, or literal type node
 elsewhere gives `declaration/013`, in `.eff` and `.effi` files.
 
@@ -251,15 +251,16 @@ fact such as `call`, `perform`, `error-construction`, `brand-construction`,
 bracket literal has a fact that selects array or tuple IR. A field read, an
 arrow, a block binding, a pattern, and a catch handler have facts too.
 
-A `nominal` declaration has any type as its body. A body that is a record after
-aliases unfold gives a nominal record. A field read and a record update see
-through a nominal record, and an update keeps the nominal record. A nominal body
-cannot hold a nominal record or a union with a record (`declaration/014`).
+A `type` declaration has identity unless its body is a union with a non-literal
+member or a bare name. A record identity that a union alias of its module lists
+is a tagged record. A field read and a record update see through a record
+identity, and an update keeps the identity. `sealed` on a transparent alias gives
+`declaration/017`.
 
 The facts `brand-construction` and `data-construction` name the two lowering
 forms. Lowering gives both the one IR node `nominal`. A constructor pattern for a
-nominal record has a `data` pattern fact, and a match over nominal records and
-errors uses a nominal domain.
+tagged record has a `data` pattern fact, and a match over tagged records and
+errors uses a tagged domain.
 
 A module constant needs a pure initializer with empty sets. The `initialization`
 value lists the constants in a safe order. It also lists the dependencies of
@@ -288,11 +289,12 @@ result to `emitProject` to get each generated module and each companion module.
 
 The IR has the `version` 5. A type declaration has the definition kind `alias`
 or `nominal`. A `nominal` definition has a `base` type. The flag `tagged` marks
-a nominal record, and its base is a record. An expression has the node
-`nominal` for a construction of a nominal type, and a match arm has the pattern
-kind `nominal`. The IR has no `unbrand` node, because a nominal value fits its
-base type. The emitter prints a `TaggedStruct` for a tagged definition. It prints any
-other nominal type as an alias of its base, with no brand.
+a tagged record, and its base is a record. An expression has the node
+`nominal` for a construction of a type with identity, and a match arm has the
+pattern kind `nominal`. The IR has no `unbrand` node, because a value of a type
+with identity fits its body. The emitter prints a `TaggedStruct` for a tagged
+definition. It prints any other type with identity as an alias of its body, with
+no brand.
 
 The IR holds the declarations in source order, the sorted export identities, and
 one `Import` for each import declaration. The `module` of an `Import` is the
@@ -368,12 +370,12 @@ An import of another module becomes a relative `.ts` specifier. An import of an
 `effektive.json`. A module that names an opaque type of a `.effi` file without a
 host module in `effektive.json` gives an `unsupported` error value. The emitter checks provider imports against the registry:
 `const UsersLive$host: Layer.Layer<Users> = UsersLive`. When a provided service
-method returns a nominal record value, the constant wraps the host Layer with run-time
+method returns a tagged record value, the constant wraps the host Layer with run-time
 checks ([host boundary checks](archive/plans/2026-10-23-host-boundary-checks.md)).
 The wrapped constant keeps the same declared type.
 
 The emitter also emits a companion module for each `.effi` file, such as
-`host.effi.ts`. It holds the types, nominal types, errors, and services of the
+`host.effi.ts`. It holds the types, types with identity, errors, and services of the
 interface, all exported, with the tags of the interface module. The TypeScript
 host module imports these from the companion module. It supplies only the
 opaque types and the providers
@@ -592,8 +594,8 @@ tool writes the configuration to a temporary directory and removes it after the
 run. It passes `--no-lock`, so the project directory gets no new file.
 
 The `fixtures/host-adapter-files/` project shows a typed `host:` adapter for
-`effect/FileSystem`. `files.eff` declares the `Files.read` operation and nominal
-`FileReadError`. `files-live.ts` validates the path, maps package failures to
+`effect/FileSystem`. `files.eff` declares the `Files.read` operation and the
+`FileReadError` error. `files-live.ts` validates the path, maps package failures to
 that error, and supplies the Node file system layer.
 `deno task effektive build fixtures/host-adapter-files --validate --tsc` checks
 the boundary. The slow CLI test runs a successful read and both missing and

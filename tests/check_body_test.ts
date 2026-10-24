@@ -604,7 +604,7 @@ const use = (): Int => partitionAll()
   assertEquals(codes(project), [], messages(project).join("\n"));
 });
 
-Deno.test("validateAll wraps accumulated failures in a nominal error", () => {
+Deno.test("validateAll wraps accumulated failures in a declared error", () => {
   const project = checkText(`
 type Int = int
 error Stop = { n: Int }
