@@ -182,6 +182,11 @@ export const DIAGNOSTIC_CODES = {
     category: "failure-contract",
     description: "A catch clause has two handlers for the same error.",
   },
+  "failure-contract/004": {
+    category: "failure-contract",
+    description:
+      "A fails clause names a type alias with a member that is not an error.",
+  },
   "requirement-contract/001": {
     category: "requirement-contract",
     description:

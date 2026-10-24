@@ -1074,12 +1074,44 @@ export class TypeLowerer {
   /** The error identities of a `fails` clause, sorted and unique. */
   failures(clause: NodeId | undefined): ErrorId[] {
     if (clause === undefined) return [];
+    const table = this.env.table;
     const ids: ErrorId[] = [];
     for (const name of this.kidsOfKind(clause, SyntaxKind.Name)) {
       const target = this.env.targets.get(name);
       if (target?.kind === "error") ids.push(target.id);
+      else if (target?.kind === "type") {
+        this.expandFailureAlias(name, table.named(target.id), ids, new Set());
+      }
     }
     return sortedUnique(ids);
+  }
+
+  /** Adds the errors of an alias body to `ids`. A member that is not an error gets a diagnostic. */
+  private expandFailureAlias(
+    nameNode: NodeId,
+    ref: TypeRef,
+    ids: ErrorId[],
+    seen: Set<TypeRef>,
+  ): void {
+    const table = this.env.table;
+    const unfolded = table.unfold(ref);
+    if (seen.has(unfolded)) return;
+    seen.add(unfolded);
+    const node = table.node(unfolded);
+    if (node.kind === "named" && isErrorId(node.id)) ids.push(node.id);
+    else if (node.kind === "union") {
+      for (const member of node.members) {
+        this.expandFailureAlias(nameNode, member, ids, seen);
+      }
+    } else if (node.kind !== "error") {
+      this.report(
+        "failure-contract/004",
+        `\`${
+          nodeText(this.tree, nameNode)
+        }\` has a member that is not an error: \`${table.show(ref)}\``,
+        this.span(nameNode),
+      );
+    }
   }
 
   /**

@@ -1,0 +1,12 @@
+error Missing = { id: Text }
+type Name = { text: Text }
+type Mixed = Missing | Name
+type Nested = Mixed | Missing
+
+// error: failure-contract/004
+const find = (id: Text): Text fails Mixed => fail(Missing({ id }))
+
+// error: failure-contract/004
+const again = (id: Text): Text fails Nested => fail(Missing({ id }))
+
+type Text = string

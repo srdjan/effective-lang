@@ -17,6 +17,6 @@ const c = (): Int uses User => 1
 type Bad = { s: Store }
 
 // error: unknown-name/004
-const d = (): Int fails User => 1
+const d = (): Int fails Store => 1
 
 type Int = int

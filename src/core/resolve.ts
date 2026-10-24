@@ -754,8 +754,8 @@ class Resolver {
     this.unknown(nameNode, name, "type");
   }
 
-  /** A name in `fails` or a catch handler. */
-  private errorRef(nameNode: NodeId): void {
+  /** A name in `fails` or a catch handler. Only `fails` accepts a type alias of errors. */
+  private errorRef(nameNode: NodeId, allowAlias = false): void {
     const name = nameTextOf(this.tree, nameNode);
     if (name === undefined) return;
     const binding = this.namespace.get(name);
@@ -769,7 +769,10 @@ class Resolver {
       return;
     }
     const t = binding.target;
-    if (t.kind === "error" || t.kind === "unresolved") {
+    if (
+      t.kind === "error" || t.kind === "unresolved" ||
+      (allowAlias && t.kind === "type")
+    ) {
       this.set(nameNode, t);
     } else {
       this.wrongKind(
@@ -1000,7 +1003,7 @@ class Resolver {
     if (kind === SyntaxKind.FailsClause) {
       for (const name of this.kidsOfKind(node, SyntaxKind.Name)) {
         if (nameTextOf(this.tree, name) === "never") continue;
-        this.errorRef(name);
+        this.errorRef(name, true);
       }
     } else if (kind === SyntaxKind.UsesClause) {
       for (const qn of this.kidsOfKind(node, SyntaxKind.QualifiedName)) {
