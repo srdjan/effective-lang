@@ -1,4 +1,3 @@
-import { TypeScriptOutputs } from "../core/typescript.ts";
 // Projects and the open-document overlay (plan 5.3 and 5.5). A project is a
 // directory with `effektive.json`. The set keeps one `Program` per project for
 // the life of the server. The text that the program sees is the disk text of
@@ -8,6 +7,7 @@ import { TypeScriptOutputs } from "../core/typescript.ts";
 // Nothing here throws on purpose. The server wraps each handler, and that
 // wrapper is the only exception boundary.
 
+import { TypeScriptOutputs } from "../core/typescript.ts";
 import type { CliFs } from "../host/io.ts";
 import { ownedByRoot, runSaveRound } from "../host/save_round.ts";
 import { isSourcePath, readWorkspace } from "../host/workspace.ts";

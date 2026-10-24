@@ -14,6 +14,11 @@ import {
   type SourceMapError,
   type SourceMapV3,
 } from "./emit/sourcemap.ts";
+import { type Doc, render } from "./emit/doc.ts";
+import { constantTypeDoc, functionHeaderDoc } from "./emit/decls.ts";
+import { EmitFailure, Scope } from "./emit/scope.ts";
+import { sourceHoverAt } from "./editor.ts";
+import type { Span } from "./source.ts";
 
 export type EmitProjectError =
   | EmitError
@@ -101,7 +106,7 @@ export class TypeScriptOutputs {
     const emitted = this.emitted(revision, name);
     if (entry === undefined || emitted === undefined) return undefined;
     if (entry.table === undefined) {
-      const names = new Map();
+      const names = new Map<string, Span>();
       for (const link of revision.moduleInfo(name)?.links ?? []) {
         if (!link.isHost) continue;
         for (const imported of link.entry.names) {
@@ -130,12 +135,6 @@ export class TypeScriptOutputs {
     return entry.map;
   }
 }
-
-import { type Doc, render } from "./emit/doc.ts";
-import { constantTypeDoc, functionHeaderDoc } from "./emit/decls.ts";
-import { EmitFailure, Scope } from "./emit/scope.ts";
-import { sourceHoverAt } from "./editor.ts";
-import type { Span } from "./source.ts";
 
 export type HoverBackend = { readonly tag: "type"; readonly text: string } | {
   readonly tag: "unavailable";

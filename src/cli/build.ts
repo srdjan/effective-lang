@@ -1,7 +1,7 @@
-import type { TypeScriptOutputs } from "../core/typescript.ts";
 // One build of a revision: print the diagnostics, and for `build` and `watch`
 // also validate the IR, write the generated files, and run `deno check`.
 
+import type { TypeScriptOutputs } from "../core/typescript.ts";
 import type {
   Diagnostic,
   LowerError,

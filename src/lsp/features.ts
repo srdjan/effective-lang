@@ -1,4 +1,3 @@
-import type { TypeScriptOutputs } from "../core/typescript.ts";
 // The request handlers of the language features (plan 5.6 to 5.9 and 5.11):
 // hover, definition, document symbols, generated TypeScript, save, and stats.
 // Each handler calls `ctx.projects.forRequest`, which flushes a dirty project
@@ -7,6 +6,7 @@ import type { TypeScriptOutputs } from "../core/typescript.ts";
 // This file imports only types from `server.ts`. The server imports the values
 // of this file, so a value import back would form a cycle.
 
+import type { TypeScriptOutputs } from "../core/typescript.ts";
 import {
   definitionAt,
   documentSymbols,

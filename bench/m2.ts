@@ -1,4 +1,3 @@
-import { TypeScriptOutputs } from "../src/core/typescript.ts";
 // Measurement M2: the whole-module recheck time per stage, and the incremental
 // path through `Program.update`.
 //
@@ -19,6 +18,7 @@ import { TypeScriptOutputs } from "../src/core/typescript.ts";
 // alone for the timing of the lexer. `parse` runs `parse`, which lexes again,
 // so its time includes `lex`. `total` is the sum of every stage except `lex`.
 
+import { TypeScriptOutputs } from "../src/core/typescript.ts";
 import { compareText, Program, type Revision } from "../src/core/mod.ts";
 import {
   checkAnalysis,

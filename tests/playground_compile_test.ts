@@ -1,8 +1,8 @@
-import { TypeScriptOutputs } from "../src/core/typescript.ts";
 // Tests for the playground compile facade: the examples, an edit with an error,
 // stale output and its repair, a cross-file edit, hover, a configuration error,
 // an internal error, and the clock.
 
+import { TypeScriptOutputs } from "../src/core/typescript.ts";
 import { assert, assertEquals, assertNotEquals } from "@std/assert";
 import { Program } from "../src/core/db.ts";
 import {

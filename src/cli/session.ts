@@ -1,9 +1,9 @@
-import { TypeScriptOutputs } from "../core/typescript.ts";
 // A session ties one project directory to one program. Each `sync` reads the
 // files of the directory, gives the program the difference, and returns the new
 // revision. The session keeps the file texts so that the output can show
 // one-based lines and columns.
 
+import { TypeScriptOutputs } from "../core/typescript.ts";
 import {
   describeConfigError,
   diffFiles,

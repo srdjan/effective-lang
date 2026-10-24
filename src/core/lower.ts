@@ -1,4 +1,3 @@
-import { PURE_EFFECTS } from "./tables.ts";
 // Lowering of a checked module to typed IR (plan part A4, design 6.1 and 6.3).
 //
 // The lowering reads the syntax tree and the side tables that body checking
@@ -10,6 +9,7 @@ import { PURE_EFFECTS } from "./tables.ts";
 // failures are error values. A violated internal invariant throws inside the
 // lowering and the entry point turns it into an `internal` error value.
 
+import { PURE_EFFECTS } from "./tables.ts";
 import {
   arrowBody,
   type BinaryOperator,

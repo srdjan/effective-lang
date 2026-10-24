@@ -1,4 +1,3 @@
-import type { TypeScriptOutputs } from "../core/typescript.ts";
 // The output step of a save round, shared by `build`, `watch`, and the
 // language server: remove the outputs of modules that left the project, then
 // write the outputs of every writable module that the project owns.
@@ -6,6 +5,7 @@ import type { TypeScriptOutputs } from "../core/typescript.ts";
 // The round is synchronous and prints and logs nothing. It returns one removal
 // record per module, so that each caller keeps its own messages and their order.
 
+import type { TypeScriptOutputs } from "../core/typescript.ts";
 import {
   CONFIG_FILE,
   type Diagnostic,
