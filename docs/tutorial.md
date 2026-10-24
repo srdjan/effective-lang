@@ -2,23 +2,40 @@
 
 This tutorial shows how to write an Effektive application and run it as Effect-TS. You build a book lending service in two source modules. Then you supply the services from TypeScript and run the program.
 
-The complete project is in [fixtures/tutorial/](../fixtures/tutorial/). A test checks that each code block in this tutorial is in that project. The test also builds and runs the project, so the code and the output in this tutorial are correct for this compiler version.
+The complete project is in [fixtures/tutorial/](../fixtures/tutorial/). Tests check the code blocks against that project, reproduce the Step 7 diagnostic, and build and run the completed program.
 
 ## Before you start
 
 You need Deno 2.9.8. The generated TypeScript uses Effect 4.0.5. The first `--tsc` build downloads Effect from npm, so it needs network access once.
 
-The commands use a checkout of this repository and `deno task effektive`. If you installed the command-line tool (see [installation.md](installation.md)), use `effektive` in place of `deno task effektive`.
+Run all shell commands from the repository root in the same shell. The commands use `deno task effektive`. If you installed the command-line tool (see [installation.md](installation.md)), use `effektive` in place of `deno task effektive`.
 
 ## Step 1: create the project
 
-A project is a directory with an `effektive.json` file. This project needs no settings:
+A project is a directory with an `effektive.json` file. Create a temporary directory for your work and print its path:
+
+```sh
+tutorial_dir=$(mktemp -d)
+echo "$tutorial_dir"
+```
+
+Create all tutorial files in this directory. Keep the shell open so later commands can use `$tutorial_dir`. The completed project will contain:
+
+```text
+effektive.json
+deno.json
+library.eff
+loans.eff
+main.ts
+```
+
+Create `$tutorial_dir/effektive.json`. This project needs no settings:
 
 ```json
 {}
 ```
 
-The generated modules are ordinary TypeScript files that import `effect`. Give the directory a `deno.json` file that maps `effect` to a fixed version. The compiler emits code for strict type checking, so keep the strict options:
+The generated modules are ordinary TypeScript files that import `effect`. Create `$tutorial_dir/deno.json` to map `effect` to a fixed version. The compiler emits code for strict type checking, so keep the strict options:
 
 ```json
 {
@@ -81,7 +98,7 @@ export const inStock = (books: Book[]): Title[] =>
     |> map(book => book.title)
 ```
 
-The `|>` operator gives the value on its left to the stage on its right. `filter` and `map` need pure callbacks. A pure callback has no failures and calls no services.
+The `|>` operator gives the value on its left to the stage on its right. `filter` and `map` need pure callbacks. A pure callback has no failures, calls no services, and performs no effectful operations. Empty `fails` and `uses` sets alone do not make a callback pure.
 
 The callback `book => book.copies > 0` has one parameter without parentheses. This form is correct for one parameter without a type annotation. The compiler gets the type of `book` from `filter`. A parameter with an annotation, or two or more parameters, needs parentheses, as in `(sum, amount) => sum + amount`.
 
@@ -126,7 +143,7 @@ Add a helper that is not exported, and a function that uses it:
 ```eff
 const takeCopy = (book: Book) => {
   const { id, copies } = book
-  if (copies === 0) { fail(NoCopies({ id })) } else {}
+  if (copies <= 0) { fail(NoCopies({ id })) } else {}
   { ...book, copies: copies - 1 }
 }
 
@@ -141,6 +158,8 @@ export const lend = (id: BookId): Book
 
 `takeCopy` is not exported, so it needs no result type, no `fails` clause, and no `uses` clause. The compiler infers that it returns a `Book` and can fail with `NoCopies`.
 
+`Count = int` permits negative values, so the guard rejects both zero and negative inventory.
+
 `const { id, copies } = book` reads two fields of `book` into two local names. This record destructuring is legal only inside a block. To use another local name, write `copies: left`.
 
 `{ ...book, copies: copies - 1 }` makes a copy of `book` with a new `copies` value. The last expression of a block is its result.
@@ -150,14 +169,14 @@ export const lend = (id: BookId): Book
 The compiler compares each contract with its body. To see this check, remove `Shelf.save` from the `uses` clause of `lend`, and check the project:
 
 ```sh
-deno task effektive check fixtures/tutorial
+deno task effektive check "$tutorial_dir"
 ```
 
 The compiler reports the operation that the clause does not list:
 
 ```text
 library.eff:49:22: error requirement-contract/001: the body requires Shelf.save, which the `uses` clause does not list
-2 modules, 1 diagnostic
+1 module, 1 diagnostic
 ```
 
 Put `Shelf.save` back before you continue.
@@ -202,7 +221,7 @@ A `using` expression has three parts:
 
 1. The acquisition after `=` opens the ledger. It returns a record of operations.
 2. The block after `)` uses the resource. The value of this block is the value of the `using` expression.
-3. The `finally` block releases the resource. It runs after success, after a failure, and after an interruption.
+3. Once acquisition succeeds, the `finally` block releases the resource when the use block succeeds, fails, or is interrupted. If acquisition fails, neither the use block nor the `finally` block runs.
 
 The name `ledger` is visible only in the use block and in the `finally` block. The compiler does not let the resource escape: the code cannot return it, store it, or give it to another function. The `finally` block is necessary, and the compiler does not infer a close operation.
 
@@ -225,7 +244,7 @@ export const checkout = (id: BookId): Book
 Build the project:
 
 ```sh
-deno task effektive build fixtures/tutorial --validate --tsc
+deno task effektive build "$tutorial_dir" --validate --tsc
 ```
 
 The build writes `library.ts` and `loans.ts` next to the sources, each with a source map. `--validate` checks the typed intermediate code with a second, independent validator. `--tsc` runs `deno check` on the generated TypeScript.
@@ -299,10 +318,11 @@ console.log(JSON.stringify(report));
 
 The tag of a generated error is `<module>#<Name>`, so the tag of `NoCopies` is `library#NoCopies`.
 
-Run the program:
+Type-check `main.ts`, then run the program. The earlier build's `--tsc` checks the generated modules; it does not check this standalone host entry point:
 
 ```sh
-deno run --config fixtures/tutorial/deno.json fixtures/tutorial/main.ts
+deno check --config "$tutorial_dir/deno.json" "$tutorial_dir/main.ts"
+deno run --config "$tutorial_dir/deno.json" "$tutorial_dir/main.ts"
 ```
 
 The output is:
@@ -313,12 +333,14 @@ The output is:
 
 The first checkout takes one copy of Dune and writes one ledger line. Then the ledger closes. The second checkout fails with `NoCopies` before it opens the ledger.
 
+This run demonstrates cleanup after a successful write. `Ledger` declares no typed failures, and this host implementation always succeeds. The `using` cleanup guarantee also covers failures and interruptions during use, but this run does not exercise them.
+
 ## Work in an editor
 
 `watch` builds the project again after each change to a source file:
 
 ```sh
-deno task effektive watch fixtures/tutorial --tsc
+deno task effektive watch "$tutorial_dir" --tsc
 ```
 
 The VS Code extension shows diagnostics, hover, references, rename, completion, and quick fixes for contracts. It writes the generated files when you save. [editor.md](editor.md) describes the extension, and [installation.md](installation.md) tells how to install it.

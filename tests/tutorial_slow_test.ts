@@ -1,7 +1,7 @@
 // Runs the tutorial commands on a copy of `fixtures/tutorial/`: build with
 // validation and target checking, type-check the entry point, and run it.
 
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertNotEquals } from "@std/assert";
 import { copyDirectory, FIXTURES } from "./helpers.ts";
 import { withTemporaryDirectory } from "./process_helpers.ts";
 
@@ -26,8 +26,15 @@ Deno.test("the tutorial project builds, type-checks, and prints the shown output
       ["task", "effektive", "build", dir, "--validate", "--tsc"],
       new URL("../", import.meta.url),
     );
-    await run(["check", "--no-lock", "main.ts"], dir);
-    const output = await run(["run", "--no-lock", "main.ts"], dir);
+    const root = new URL("../", import.meta.url);
+    const entry = [
+      "--config",
+      `${dir}/deno.json`,
+      "--no-lock",
+      `${dir}/main.ts`,
+    ];
+    await run(["check", ...entry], root);
+    const output = await run(["run", ...entry], root);
     const tutorial = Deno.readTextFileSync(
       new URL("../docs/tutorial.md", import.meta.url),
     );
@@ -36,5 +43,14 @@ Deno.test("the tutorial project builds, type-checks, and prints the shown output
       '{"dune":1,"emma":"no copies of b2","lines":["lent Dune","closed"]}',
     );
     assertEquals(tutorial.includes(`\`\`\`text\n${output}\`\`\``), true);
+
+    const host = Deno.readTextFileSync(`${dir}/main.ts`);
+    const negativeInventory = host.replace(
+      'title: "Emma", copies: 0',
+      'title: "Emma", copies: -1',
+    );
+    assertNotEquals(negativeInventory, host);
+    Deno.writeTextFileSync(`${dir}/main.ts`, negativeInventory);
+    assertEquals(await run(["run", ...entry], root), output);
   });
 });

@@ -40,7 +40,7 @@ export const titleOf = (id: BookId): Title
 
 const takeCopy = (book: Book) => {
   const { id, copies } = book
-  if (copies === 0) { fail(NoCopies({ id })) } else {}
+  if (copies <= 0) { fail(NoCopies({ id })) } else {}
   { ...book, copies: copies - 1 }
 }
 

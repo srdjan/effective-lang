@@ -3,7 +3,8 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { Program } from "../src/core/frontend.ts";
-import { formatDiagnostics } from "../src/cli/format.ts";
+import { main } from "../src/cli/main.ts";
+import { memoryIo, under } from "./cli_helpers.ts";
 
 const TUTORIAL = Deno.readTextFileSync(
   new URL("../docs/tutorial.md", import.meta.url),
@@ -43,16 +44,21 @@ Deno.test("the tutorial project checks without diagnostics", () => {
   assertEquals(check(sources()), []);
 });
 
-Deno.test("the tutorial shows the diagnostic of a missing Shelf.save", () => {
-  const files = sources();
-  const library = files["library.eff"]!;
+Deno.test("Step 7 shows the diagnostic before the second module exists", async () => {
+  const library = [
+    ...TUTORIAL.split("## Step 7:")[0]!.matchAll(/```eff\n([\s\S]*?)```/g),
+  ].map(([, body]) => body).join("\n");
+  assertEquals(library, FILES["library.eff"]);
   const broken = library.replace(
     "uses Shelf.find | Shelf.save => {",
     "uses Shelf.find => {",
   );
   assert(broken !== library);
-  files["library.eff"] = broken;
-  const lines = formatDiagnostics(check(files), (path) => files[path]);
-  assertEquals(lines.length, 1);
-  assert(TUTORIAL.includes(`${lines[0]}\n2 modules, 1 diagnostic\n`), lines[0]);
+  const io = memoryIo(under("/tutorial", {
+    "effektive.json": FILES["effektive.json"]!,
+    "library.eff": broken,
+  }));
+  assertEquals(await main(["check", "/tutorial"], io.io), 1);
+  const output = io.out.join("") + io.err.join("");
+  assert(TUTORIAL.includes(`\`\`\`text\n${output}\`\`\``), output);
 });
