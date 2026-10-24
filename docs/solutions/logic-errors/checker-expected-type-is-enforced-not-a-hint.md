@@ -115,3 +115,7 @@ branch.
 - Audit finding A7 (follow-ups G3 and G10), from the audit of the Codex Effect 4
   feature commits. The plan and the Astra review were kept outside the
   repository.
+
+Update 2026-10-24: TE4 of the terse source plan renamed `takeSinkHint` to `sinkHint` and
+`resultsInTakeSink` to `resultsInSink`. The hint now also gives an inline `sinkForEach`
+callback its input type.

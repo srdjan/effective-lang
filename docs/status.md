@@ -68,7 +68,10 @@ The tables below are a record of gaps, not an implementation queue.
 
 Reopen an item only for a demonstrated application blocker or an explicit change
 to the accepted target. On 2026-10-24 the user accepted one such change: a compiler or syntax
-change that makes source more terse and elegant needs no application blocker. First check equivalent existing source compositions.
+change that makes source more terse and elegant needs no application blocker. The
+[terse source plan](plans/2026-10-24-terse-source.md) records the first such
+changes: open contracts on local functions, named error sets, union joins of
+nominal records, expected types in builtin callbacks, and inlay hints. First check equivalent existing source compositions.
 Record a minimal witness, intended contract, observed diagnostic or behavior,
 and the required failure, cancellation and cleanup semantics. No item has an
 automatic priority or implementation commitment.

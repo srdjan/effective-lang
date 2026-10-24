@@ -260,8 +260,9 @@ fit an editor loop, where the closed world changes on every keystroke.
 ### 4.2 What the spec gives us: the interface firewall
 
 Observation ("Functions and blocks"): exported functions require parameter and
-result annotations. A result annotation creates a closed failure and
-requirement contract.
+result annotations. An exported function has a closed failure and requirement
+contract. Since TE2, a non-exported function closes only the sets whose
+clauses it writes.
 
 Observation ("Services and contracts"): a declared set may be wider than the
 body needs, and calls through that interface propagate the declared sets.
