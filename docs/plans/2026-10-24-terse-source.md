@@ -5,7 +5,7 @@ Date: 2026-10-24. Baseline: `7659f58`. TE identifies this plan's implementation 
 The user accepted a compiler or syntax change that makes source more terse and elegant without an application blocker.
 Such a change must keep source easy to read, keep closed contracts on exports, and keep explicit exported contracts.
 The user adopted decisions D1 (annotate exports, infer locals), D2 (named error sets), D3 (expected types into builtin callbacks), and D5 (union join of nominal records, and effect inference for recursive local functions).
-D4 (inlay hints for inferred contracts) is open. TE7 holds it until the user decides.
+The user also adopted D4 (inlay hints for inferred contracts), which TE7 implements.
 
 ## Evidence
 
@@ -101,10 +101,10 @@ Update `docs/language-rules.md`, `CONCEPTS.md` if a term changes, `docs/status.m
 Measure the corpus again with the same method as the evidence section, and record the before and after numbers in this plan.
 Run focused tests before the full gate. Run `deno task check` before each implementation commit.
 
-## TE7: inlay hints for inferred contracts (D4, open)
+## TE7: inlay hints for inferred contracts (D4)
 
 Show the inferred `fails` and `uses` of an unannotated local function as an inlay hint in the language server and the VS Code client.
-This unit waits for the user's decision.
+The hint text uses the same contract printer as hover. TE7 comes after TE2, because TE2 defines which local contracts are inferred.
 
 ## Order
 
