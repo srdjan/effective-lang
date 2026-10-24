@@ -351,7 +351,7 @@ export class TypeTable {
   private readonly guardedAliases = new Set<TypeId>();
   /** Alias ids with identity by name: no other identity mixes with them. */
   private readonly identities = new Set<TypeId>();
-  /** Identity records that carry a tag. Nothing marks one yet. */
+  /** Identity records that carry a tag. The checker marks them in `inferTags`. */
   private readonly tagged = new Set<TypeId>();
   private readonly brands = new Map<TypeId, TypeRef>();
   private readonly opaque = new Set<TypeId>();
