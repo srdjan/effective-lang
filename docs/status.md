@@ -41,7 +41,7 @@ and explicit `using`/`finally` expressions lower to existing IR operations.
 Exported contracts remain explicit and closed. All five application witnesses
 pass independent validation, strict target checks, and their runtime checks.
 The 20-file source corpus is 21,089 non-whitespace characters, down from 21,278
-(0.9%). The website specification is draft 0.63. The
+(0.9%). The website specification was then draft 0.63. The
 [completed plan](archive/plans/2026-10-24-compiler-boundaries-source-forms.md)
 records parity, performance, and editor evidence.
 
@@ -165,8 +165,7 @@ A `match` selects tagged records and errors by name. A tagged record can be
 recursive when every cycle has a base case. The IR has the version 5, with one
 definition kind and one construction node `nominal`. The editor, the TextMate
 grammar, and the playground highlighter no longer know the word `nominal`. The
-website and the canonical specification describe nominal types from draft 0.60.
-The type identity plan updates them in its website unit.
+website and the canonical specification describe type identity from draft 0.64.
 
 Each `.effi` file has a generated companion module, such as `host.effi.ts`
 ([plan](archive/plans/2026-10-23-host-interface-companion.md)). It holds the
