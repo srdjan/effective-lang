@@ -36,10 +36,8 @@ const publishDraft = (draft: Draft, token: SnapshotToken) =>
   }
 
 const checkedId = (raw: Text) =>
-  match articleId(raw, Lexical.isBlank(raw), Lexical.isWellFormed(raw)) {
-    Some(id) => id,
-    None => fail(InvalidArticle({ field: "id", reason: "must be nonblank, well-formed Unicode" }))
-  }
+  articleId(raw, Lexical.isBlank(raw), Lexical.isWellFormed(raw)) ??
+    fail(InvalidArticle({ field: "id", reason: "must be nonblank, well-formed Unicode" }))
 
 const publishWithStore = (id: ArticleId) =>
   match ArticleStore.load(id) {
@@ -58,4 +56,4 @@ export const publishArticleFeature = (rawId: Text): PublishReceipt
 export const publishAllFeature = (rawIds: Text[]): PublishReceipt[]
   fails PublishFailure
   uses Lexical.isBlank | Lexical.isWellFormed | Clock.now | ArticleStore.load | ArticleStore.publish =>
-  traverse(rawIds, (rawId) => publishWithStore(checkedId(rawId)), { concurrency: 1 })
+  traverse(rawIds, rawId => publishWithStore(checkedId(rawId)), { concurrency: 1 })

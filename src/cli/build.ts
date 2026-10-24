@@ -1,3 +1,4 @@
+import type { TypeScriptOutputs } from "../core/typescript.ts";
 // One build of a revision: print the diagnostics, and for `build` and `watch`
 // also validate the IR, write the generated files, and run `deno check`.
 
@@ -57,6 +58,7 @@ export async function buildRevision(
   textOf: TextOf,
   options: BuildOptions,
   previous: readonly string[],
+  outputCache: TypeScriptOutputs,
 ): Promise<BuildOutcome> {
   const notes: string[] = [];
   const diagnostics: Diagnostic[] = [...revision.diagnostics];
@@ -89,6 +91,7 @@ export async function buildRevision(
       fs: io.fs,
       root,
       revision,
+      outputs: outputCache,
       previous,
       removal: "forget",
       owns: (name) => ownedByRoot(io.fs, root, name),

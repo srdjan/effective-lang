@@ -47,7 +47,7 @@ const findOrder = (id: OrderId) =>
   Effect.gen(function* () {
     return yield* Option.match(yield* Orders.use(($s) => $s.find(id)), {
       onNone: () => Effect.fail(new OrderNotFound({ id })),
-      onSome: (order) => Effect.succeed(order),
+      onSome: ($option230) => Effect.succeed($option230),
     });
   });
 

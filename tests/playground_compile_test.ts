@@ -1,3 +1,4 @@
+import { TypeScriptOutputs } from "../src/core/typescript.ts";
 // Tests for the playground compile facade: the examples, an edit with an error,
 // stale output and its repair, a cross-file edit, hover, a configuration error,
 // an internal error, and the clock.
@@ -222,6 +223,8 @@ for (
     let calls = 0;
     const sets: ReadonlyMap<string, string>[] = [];
     const real = new Program("");
+    const outputs = new TypeScriptOutputs();
+    const emit = outputs.emitted.bind(outputs);
     const program: ProgramPort = {
       update(changes) {
         calls++;
@@ -232,14 +235,15 @@ for (
         if (calls === 2) {
           if (phase === "after update") throw new Error("boom");
           assert(result.ok);
-          result.value.emitted = () => {
+          outputs.emitted = () => {
+            outputs.emitted = emit;
             throw new Error("boom");
           };
         }
         return result;
       },
     };
-    const pg = createPlayground(FILES, { now: () => 0, program });
+    const pg = createPlayground(FILES, { now: () => 0, program, outputs });
     assert(pg.start().ok);
     const failed = pg.update("users.eff", BAD_USERS);
     assert(!failed.ok);

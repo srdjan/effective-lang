@@ -21,10 +21,7 @@ service Payments {
 }
 
 const findOrder = (id: OrderId) =>
-  match Orders.find(id) {
-    Some(order) => order,
-    None => fail(OrderNotFound({ id }))
-  }
+  Orders.find(id) ?? fail(OrderNotFound({ id }))
 
 const chargeOrder = (order: Order) => {
   retry(() => Payments.charge(order.totalCents), { times: 2 })

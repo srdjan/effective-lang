@@ -1,3 +1,4 @@
+import { TypeScriptOutputs } from "../core/typescript.ts";
 // Projects and the open-document overlay (plan 5.3 and 5.5). A project is a
 // directory with `effektive.json`. The set keeps one `Program` per project for
 // the life of the server. The text that the program sees is the disk text of
@@ -80,12 +81,14 @@ export class ProjectState {
   readonly publishedVersions = new Map<string, number>();
 
   readonly program: Program;
+  readonly outputs = new TypeScriptOutputs();
 
   /**
    * The disk program of the save round. It sees disk texts only. Created on the
    * first round, and only when `writeOnSave` is true.
    */
   diskProgram: Program | undefined;
+  diskOutputs: TypeScriptOutputs | undefined;
   /** The texts that the last round gave to `diskProgram`, whether or not that update succeeded. */
   diskInputs: ReadonlyMap<string, string> = new Map();
   /** The module names of the last successful round, plus names whose removal failed. */
@@ -448,6 +451,7 @@ export class ProjectSet {
       project.dirty = true;
     }
     const program = project.diskProgram ??= new Program(project.root);
+    const outputs = project.diskOutputs ??= new TypeScriptOutputs();
     const { set, remove } = diffFiles(project.diskInputs, workspace);
     const updated = program.update({ set, remove });
     project.diskInputs = workspace;
@@ -463,6 +467,7 @@ export class ProjectSet {
       fs,
       root: project.root,
       revision,
+      outputs,
       previous: project.diskModules,
       removal: "retry",
       owns,

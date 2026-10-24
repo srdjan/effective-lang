@@ -1,8 +1,10 @@
+import { TypeScriptOutputs } from "../src/core/typescript.ts";
+const outputs = new TypeScriptOutputs();
 // Tests for a type alias of errors in a `fails` clause.
 
 import { assert, assertEquals } from "@std/assert";
 import { Program } from "../src/core/db.ts";
-import { hoverAt } from "../src/core/editor.ts";
+import { hoverAt } from "../src/core/mod.ts";
 import { referencesAt } from "../src/core/editor_index.ts";
 import { checkModule } from "./helpers.ts";
 
@@ -35,7 +37,12 @@ function contractOf(
 ) {
   const revision = load(files);
   assertEquals(revision.diagnostics, []);
-  const hover = hoverAt(revision, file, files[file].indexOf(needle) + 1);
+  const hover = hoverAt(
+    revision,
+    file,
+    files[file].indexOf(needle) + 1,
+    outputs,
+  );
   assert(hover !== undefined);
   return hover.contract;
 }

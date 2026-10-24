@@ -46,6 +46,6 @@ export const activeNames = (): Name[]
   fails StoreUnavailable
   uses Users.all =>
   Users.all()
-    |> filter((user) => user.active)
-    |> map((user) => user.name)
+    |> filter(user => user.active)
+    |> map(user => user.name)
 

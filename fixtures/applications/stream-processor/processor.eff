@@ -8,37 +8,37 @@ const convert = (item: Item) =>
   }
 
 const process = (input: Int, output: Int) => {
-  const incoming = bufferStream(unfold(0, (index) => Input.next(input, index)), { capacity: 2 })
-  const converted = mapEffect(incoming, (item) => convert(item), { concurrency: 2 })
+  const incoming = bufferStream(unfold(0, index => Input.next(input, index)), { capacity: 2 })
+  const converted = mapEffect(incoming, item => convert(item), { concurrency: 2 })
   const batches = transduceStream(converted, takeSink(2))
-  runStream(batches, sinkForEach((batch) =>
+  runStream(batches, sinkForEach(batch =>
     if ((batch |> fold(0, (count, _item) => count + 1)) > 0) { Output.write(output, batch) } else {}))
 }
 
 const withOutput = (input: Int) =>
-  withResource(
-    () => {
+  using (consumer = {
       const output = Output.open()
       {
         run: () => process(input, output),
         close: () => Output.close(output)
       }
-    },
-    (consumer) => consumer.run(),
-    (consumer) => consumer.close()
-  )
+    }) {
+      consumer.run()
+    } finally {
+      consumer.close()
+    }
 
 export const runProcessor = (): void
   fails InputFailure | TransformFailure | OutputFailure
   uses Input.open | Input.next | Input.close | Transform.apply | Output.open | Output.write | Output.close =>
-  withResource(
-    () => {
+  using (source = {
       const input = Input.open()
       {
         run: () => withOutput(input),
         close: () => Input.close(input)
       }
-    },
-    (source) => source.run(),
-    (source) => source.close()
-  )
+    }) {
+      source.run()
+    } finally {
+      source.close()
+    }

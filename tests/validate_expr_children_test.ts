@@ -8,6 +8,7 @@ import { assert, assertEquals } from "@std/assert";
 import { checkProject, lowerProject, memoryHost } from "../src/core/mod.ts";
 import type {
   Annotation,
+  ClosureExpr,
   Expr,
   ModuleIR,
   Parameter,
@@ -284,11 +285,9 @@ function syntheticNodes(): Record<Expr["kind"], Expr> {
     "with-resource": {
       ...a,
       kind: "with-resource",
-      acquire: leaf(),
-      use: leaf(),
-      release: leaf(),
-      useBinding: "local:u",
-      releaseBinding: "local:r",
+      acquire: closureLeaf(),
+      use: closureLeaf(),
+      release: closureLeaf(),
     },
     unfold: { ...a, kind: "unfold", seed: leaf(), next: leaf() },
     "map-effect": {
@@ -308,10 +307,9 @@ function syntheticNodes(): Record<Expr["kind"], Expr> {
       ...a,
       kind: "map-groups",
       stream: leaf(),
-      key: leaf(),
-      use: leaf(),
+      key: closureLeaf(),
+      use: closureLeaf(),
       bufferSize: 1,
-      groupBinding: "local:g",
     },
     "scan-stream": {
       ...a,
@@ -601,8 +599,7 @@ function syntheticNodes(): Record<Expr["kind"], Expr> {
       ...a,
       kind: "with-fiber",
       job: leaf(),
-      use: leaf(),
-      useBinding: "local:f",
+      use: closureLeaf(),
     },
     "join-fiber": { ...a, kind: "join-fiber", fiber: leaf() },
     "interrupt-fiber": { ...a, kind: "interrupt-fiber", fiber: leaf() },
@@ -664,6 +661,11 @@ function syntheticNodes(): Record<Expr["kind"], Expr> {
 // ------------------------------------------------------------------ tests
 
 const MODULES = fixtureModules();
+
+function closureLeaf(): ClosureExpr {
+  const body = leaf();
+  return { ...body, kind: "closure", parameters: [], body };
+}
 
 Deno.test("exprChildren equals a reflective walk on every node of every fixture IR", () => {
   assert(MODULES.length > 20, `${MODULES.length} fixture modules lowered`);

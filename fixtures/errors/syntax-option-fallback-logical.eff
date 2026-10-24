@@ -1,0 +1,2 @@
+// error: syntax/015
+const invalid = () => Some(true) ?? false || true

@@ -24,7 +24,7 @@ export function withFiber(
   if (
     effect.kind !== "effect" || e.use.kind !== "closure" ||
     fn === undefined || fn.parameters.length !== 1 ||
-    e.use.parameters[0]?.id !== e.useBinding
+    e.use.parameters.length !== 1
   ) {
     c.add(
       AREA.control,
@@ -55,7 +55,7 @@ export function withFiber(
       e.use.span,
     );
   }
-  fiberReferences(c, e.use.body, e.useBinding, `${path}.use.body`);
+  fiberReferences(c, e.use.body, e.use.parameters[0].id, `${path}.use.body`);
   return derivedResult(
     fn.result,
     combine([

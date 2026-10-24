@@ -5,6 +5,11 @@ import type { Result, Span } from "./ir.ts";
 
 export type { Result, Span };
 
+export interface SourceEdit {
+  readonly span: Span;
+  readonly text: string;
+}
+
 export type ReadError =
   | { readonly tag: "not-found"; readonly path: string }
   | {

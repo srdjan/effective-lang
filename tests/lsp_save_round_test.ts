@@ -1,3 +1,5 @@
+import { TypeScriptOutputs } from "../src/core/typescript.ts";
+const outputCache = new TypeScriptOutputs();
 // Fast tests of the save round (plan SV, units SV3 and SV4). Each test drives
 // the round through `didSave` on the in-memory file system of the harness, and
 // compares the generated files with an oracle: a fresh `Program` over the same
@@ -76,8 +78,8 @@ function oracle(h: Harness, skip = ""): Map<string, string> {
   const outputs = new Map<string, string>();
   for (const name of writableModules(revision)) {
     if (skip !== "" && name.startsWith(skip)) continue;
-    const emitted = revision.emitted(name);
-    const map = revision.sourceMap(name);
+    const emitted = outputCache.emitted(revision, name);
+    const map = outputCache.sourceMap(revision, name);
     assert(emitted?.ok && map?.ok, name);
     outputs.set(emitted.value.path, emitted.value.text);
     outputs.set(`${emitted.value.path}.map`, serializeSourceMap(map.value));

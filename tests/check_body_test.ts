@@ -1,3 +1,5 @@
+import { TypeScriptOutputs } from "../src/core/typescript.ts";
+const outputs = new TypeScriptOutputs();
 // Tests for part A3b: expression checking, effects, modes, contracts, patterns,
 // the initialization graph, and the hover text of a checked node. Each test runs through the public entry
 // `checkProject`.
@@ -8,7 +10,7 @@ import {
   checkProject,
 } from "../src/core/check_project.ts";
 import { Program } from "../src/core/db.ts";
-import { hoverAt } from "../src/core/editor.ts";
+import { hoverAt } from "../src/core/mod.ts";
 import {
   buildInterface,
   buildTypeGraph,
@@ -47,7 +49,7 @@ function hoverContract(text: string, offset: number): string | undefined {
     set: { "effektive.json": "{}", "m.eff": text },
   });
   assert(result.ok, JSON.stringify(result));
-  return hoverAt(result.value, "m.eff", offset)?.contract;
+  return hoverAt(result.value, "m.eff", offset, outputs)?.contract;
 }
 
 function examples(): CheckedProject {

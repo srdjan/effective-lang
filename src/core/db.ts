@@ -2,8 +2,8 @@
 // memoized queries and an early cutoff at module level (design D4, section 4.4).
 //
 // `update` starts a new revision from a set of file changes. The revision then
-// answers one query per module: the checked module, its diagnostics, its IR, its
-// emitted TypeScript, its span table, and its source map.
+// answers frontend queries: checked modules, diagnostics, and lazy typed IR.
+// TypeScriptOutputs owns output queries separately.
 //
 // Memoization has three levels.
 //
@@ -15,9 +15,8 @@
 //    interface are reused.
 // 3. Lowering memo. The lowering key holds the hash of the full interface
 //    payload of every reached module, spans included (see the note on spans
-//    below). A module with an unchanged lowering key also reuses its IR, emitted
-//    text, span table, and source map. These are computed on first demand and
-//    stored on the memo entry of the module.
+//    below). A module with an unchanged lowering key reuses its IR. Outputs
+//    use the lowering result as their cache key in TypeScriptOutputs.
 //
 // The program checks the modules in the order and with the inputs of
 // `checkAnalysis`, and it calls the same per-module step, `checkModuleStep`, so
@@ -46,21 +45,6 @@ import {
   reachedModules,
 } from "./check_project.ts";
 import { type Diagnostic, normalizeDiagnostics } from "./diagnostics.ts";
-import {
-  buildSourceMap,
-  type SourceMapError,
-  type SourceMapV3,
-} from "./emit/sourcemap.ts";
-import {
-  emitModule,
-  type EmitProjectError,
-  type EmittedModule,
-} from "./emit/emit.ts";
-import {
-  buildSpanTable,
-  hostImportSpans,
-  type SpanTable,
-} from "./emit/spans.ts";
 import { fnv1a64 } from "./hash.ts";
 import { moduleOfId, nameOfId } from "./ids.ts";
 import type { DeclEntry } from "./index.ts";
@@ -108,8 +92,6 @@ export interface QueryCounts {
   readonly checks: number;
   /** Lowerings that `Revision.lowered` computed on demand. */
   readonly lowerings: number;
-  /** Emissions that `Revision.emitted` computed on demand. */
-  readonly emits: number;
 }
 
 /** The mutable counters that a program shares with its revisions. */
@@ -131,9 +113,6 @@ interface Entry {
   /** The payload hashes of the reached modules when this entry was lowered. */
   readonly lowerKey: string;
   lowered?: Result<ModuleIR, LowerError>;
-  emitted?: Result<EmittedModule, EmitProjectError>;
-  table?: Result<SpanTable, EmitProjectError>;
-  map?: Result<SourceMapV3, EmitProjectError | SourceMapError>;
 }
 
 function configKey(config: ProjectConfig): string {
@@ -293,55 +272,6 @@ export class Revision {
     }
     return entry.lowered;
   }
-
-  /** The emitted TypeScript of a module: its generated file. */
-  emitted(name: string): Result<EmittedModule, EmitProjectError> | undefined {
-    const entry = this.entries.get(name);
-    const lowered = this.lowered(name);
-    if (entry === undefined || lowered === undefined) return undefined;
-    if (entry.emitted === undefined) {
-      this.counters.emits++;
-      entry.emitted = lowered.ok
-        ? emitModule(lowered.value, { config: this.project.config })
-        : {
-          ok: false,
-          error: { tag: "lowering", module: name, error: lowered.error },
-        };
-    }
-    return entry.emitted;
-  }
-
-  /** The span table of the emitted module. */
-  spanTable(name: string): Result<SpanTable, EmitProjectError> | undefined {
-    const entry = this.entries.get(name);
-    const emitted = this.emitted(name);
-    if (entry === undefined || emitted === undefined) return undefined;
-    if (entry.table === undefined) {
-      entry.table = emitted.ok
-        ? {
-          ok: true,
-          value: buildSpanTable(
-            emitted.value,
-            hostImportSpans(this.project).get(name),
-          ),
-        }
-        : emitted;
-    }
-    return entry.table;
-  }
-
-  /** The version 3 source map of the emitted module. */
-  sourceMap(
-    name: string,
-  ): Result<SourceMapV3, EmitProjectError | SourceMapError> | undefined {
-    const entry = this.entries.get(name);
-    const table = this.spanTable(name);
-    if (entry === undefined || table === undefined) return undefined;
-    if (entry.map === undefined) {
-      entry.map = table.ok ? buildSourceMap(table.value, this.texts) : table;
-    }
-    return entry.map;
-  }
 }
 
 // ------------------------------------------------------------------ the program
@@ -360,7 +290,6 @@ export class Program {
     parses: 0,
     checks: 0,
     lowerings: 0,
-    emits: 0,
   };
 
   /** `root` is the project directory that diagnostics and error values name. */

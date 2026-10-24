@@ -1,3 +1,5 @@
+import { TypeScriptOutputs } from "../src/core/typescript.ts";
+const outputs = new TypeScriptOutputs();
 import { assert, assertEquals } from "@std/assert";
 import {
   checkProject,
@@ -315,7 +317,8 @@ Deno.test("editor tooling classifies, completes, and describes sealed nominal ty
     "keyword",
   );
   assertEquals(
-    hoverAt(loaded.value, "main.eff", text.indexOf("Positive") + 1)?.contract,
+    hoverAt(loaded.value, "main.eff", text.indexOf("Positive") + 1, outputs)
+      ?.contract,
     "sealed nominal Positive",
   );
 
@@ -357,7 +360,7 @@ export const keep = (value: Positive): Positive => value
   assert(imported.ok);
   const use = importedText.lastIndexOf("Positive");
   assertEquals(
-    hoverAt(imported.value, "main.eff", use + 1)?.contract,
+    hoverAt(imported.value, "main.eff", use + 1, outputs)?.contract,
     "sealed nominal Positive",
   );
 });

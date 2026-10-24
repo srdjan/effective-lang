@@ -27,6 +27,24 @@ remains deferred by user instruction. Release acceptance (editor behavior,
 packaging, performance, external integration) is separate work. The full rule is
 in the linked plan.
 
+## Compiler boundaries and concise source
+
+Completed 2026-10-24: the frontend and TypeScript backend have separate package
+entry points. `TypeScriptOutputs` owns lazy generated output; source hover does
+not lower or emit. IR v4 makes scoped closure parameters own their identities
+and rejects earlier wire versions without conversion. The
+[migration guide](api.md#migrating-the-frontend-and-typescript-apis) gives the API
+and IR replacements.
+
+Bare single-parameter arrows, lazy Option `??`, flat block-local record bindings,
+and explicit `using`/`finally` expressions lower to existing IR operations.
+Exported contracts remain explicit and closed. All five application witnesses
+pass independent validation, strict target checks, and their runtime checks.
+The 20-file source corpus is 21,089 non-whitespace characters, down from 21,278
+(0.9%). The website specification is draft 0.63. The
+[completed plan](archive/plans/2026-10-24-compiler-boundaries-source-forms.md)
+records parity, performance, and editor evidence.
+
 ## Application dispositions
 
 Each application uses existing Effektive forms. No compiler, IR, builtin, or
@@ -128,7 +146,7 @@ union with a record (`declaration/014`). A function, deferred, or opaque type in
 a body or field gives `declaration/015` or `declaration/016`.
 
 A `match` selects nominal records and errors by name. A nominal record can be
-recursive when every cycle has a base case. The IR has the version 3, with one
+recursive when every cycle has a base case. The IR has the version 4, with one
 definition kind and one construction node `nominal`. The editor, the TextMate
 grammar, and the playground highlighter know the word `nominal`. The website and
 the canonical specification describe nominal types from draft 0.60.

@@ -1,3 +1,4 @@
+import { PURE_EFFECTS } from "./tables.ts";
 // Lowering of a checked module to typed IR (plan part A4, design 6.1 and 6.3).
 //
 // The lowering reads the syntax tree and the side tables that body checking
@@ -29,6 +30,7 @@ import type {
 import type {
   Annotation,
   Arm,
+  ClosureExpr,
   Declaration,
   DeclarationId,
   Effects,
@@ -219,7 +221,9 @@ type SpecialKind =
   | "arrow"
   | "binding"
   | "pattern"
-  | "handler";
+  | "handler"
+  | "option-fallback"
+  | "record-binding";
 
 /** The fact kinds whose node moves positional arguments into named fields. */
 type PositionalKind = Exclude<FactKind, SpecialKind>;
@@ -233,11 +237,8 @@ type FactOf<K extends FactKind> = NodeFact extends infer F
   : never;
 
 /** The node members that have a kind in `K`, without their annotation. */
-type BodyOf<K extends PositionalKind> = Expr extends infer E
-  ? E extends { readonly kind: infer EK }
-    ? [Extract<K, EK>] extends [never] ? never
-    : Omit<E, keyof Annotation>
-  : never
+type BodyOf<K extends PositionalKind> = Extract<Expr, { kind: K }> extends
+  infer E ? E extends Expr ? Omit<E, keyof Annotation> : never
   : never;
 
 /**
@@ -652,12 +653,16 @@ class BodyLowerer {
       }
       case SyntaxKind.ArrowExpr:
         return this.closure(node);
+      case SyntaxKind.UsingExpr:
+        return this.using(node);
       case SyntaxKind.CallExpr:
         return this.call(node);
       case SyntaxKind.FieldExpr:
         return this.field(node);
       case SyntaxKind.BinaryExpr:
         return this.binary(node);
+      case SyntaxKind.OptionFallbackExpr:
+        return this.optionFallback(node);
       case SyntaxKind.PipeExpr:
         return this.pipeline(node);
       case SyntaxKind.RecordExpr:
@@ -686,13 +691,17 @@ class BodyLowerer {
     }
   }
 
+  private readonly resourceBindings = new Map<LocalId, LocalId>();
+
   private valueTarget(nameNode: NodeId): LocalId | ValueId {
     const target = this.ctx.targets.get(nameNode);
     if (
       target?.kind === "local" || target?.kind === "value" ||
       target?.kind === "provider"
     ) {
-      return target.id;
+      return target.kind === "local"
+        ? this.resourceBindings.get(target.id) ?? target.id
+        : target.id;
     }
     throw internal(
       `the name at ${this.describe(nameNode)} does not refer to a value`,
@@ -706,6 +715,50 @@ class BodyLowerer {
     return {
       kind: "reference",
       target: this.valueTarget(node),
+      ...this.annotation(node),
+    };
+  }
+
+  private using(node: NodeId): Expr {
+    const parts = this.kids(node);
+    const region = (kind: SyntaxKind): ClosureExpr => {
+      const region = this.required(
+        parts.find((k) => kindOf(this.ctx.tree, k) === kind),
+        "resource region",
+        node,
+      );
+      const fact = this.fact(region);
+      if (fact?.kind !== "arrow") {
+        throw internal("missing implicit resource callback");
+      }
+      const source = fact.parameters[0];
+      const id: LocalId = `local:${this.body.declaration}/$using${region}`;
+      const parameters = source === undefined
+        ? []
+        : [this.parameter(id, source.name, source.type, this.span(parts[0]))];
+      const previous = source?.id === undefined
+        ? undefined
+        : this.resourceBindings.get(source.id);
+      if (source?.id !== undefined) this.resourceBindings.set(source.id, id);
+      try {
+        return {
+          kind: "closure",
+          parameters,
+          body: this.expr(this.kids(region)[0]),
+          ...this.annotation(region),
+        };
+      } finally {
+        if (source?.id !== undefined) {
+          if (previous === undefined) this.resourceBindings.delete(source.id);
+          else this.resourceBindings.set(source.id, previous);
+        }
+      }
+    };
+    return {
+      kind: "with-resource",
+      acquire: region(SyntaxKind.ResourceAcquire),
+      use: region(SyntaxKind.ResourceUse),
+      release: region(SyntaxKind.ResourceRelease),
       ...this.annotation(node),
     };
   }
@@ -889,7 +942,6 @@ class BodyLowerer {
           kind: "with-fiber",
           job,
           use,
-          useBinding: use.parameters[0].id,
           ...annotation,
         };
       }
@@ -898,7 +950,8 @@ class BodyLowerer {
         const use = arg(1);
         const release = arg(2);
         if (
-          use.kind !== "closure" || release.kind !== "closure" ||
+          acquire.kind !== "closure" || use.kind !== "closure" ||
+          release.kind !== "closure" ||
           use.parameters[0] === undefined || release.parameters[0] === undefined
         ) {
           throw internal("withResource needs inline scoped closures");
@@ -908,8 +961,6 @@ class BodyLowerer {
           acquire,
           use,
           release,
-          useBinding: use.parameters[0].id,
-          releaseBinding: release.parameters[0].id,
           ...annotation,
         };
       }
@@ -917,7 +968,10 @@ class BodyLowerer {
         const stream = arg(0);
         const key = arg(1);
         const use = arg(2);
-        if (use.kind !== "closure" || use.parameters[1] === undefined) {
+        if (
+          key.kind !== "closure" || use.kind !== "closure" ||
+          use.parameters[1] === undefined
+        ) {
           throw internal("mapGroups needs an inline use callback");
         }
         return {
@@ -930,7 +984,6 @@ class BodyLowerer {
             "the group capacity",
             node,
           ),
-          groupBinding: use.parameters[1].id,
           ...annotation,
         };
       }
@@ -974,6 +1027,8 @@ class BodyLowerer {
       case "binding":
       case "pattern":
       case "handler":
+      case "option-fallback":
+      case "record-binding":
         throw internal(
           `the fact ${fact.kind} is no call at ${this.describe(node)}`,
         );
@@ -1257,7 +1312,9 @@ class BodyLowerer {
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       if (kindOf(this.ctx.tree, item) === SyntaxKind.ConstDecl) {
-        steps.push(this.binding(item));
+        if (this.fact(item)?.kind === "record-binding") {
+          steps.push(...this.recordBinding(item));
+        } else steps.push(this.binding(item));
       } else if (i === items.length - 1) {
         result = this.expr(item);
       } else {
@@ -1278,6 +1335,43 @@ class BodyLowerer {
       },
       ...this.annotation(node),
     };
+  }
+
+  private recordBinding(node: NodeId): Step[] {
+    const fact = this.fact(node);
+    if (fact?.kind !== "record-binding") {
+      throw internal("missing record binding fact");
+    }
+    const init = this.kids(node).at(-1)!;
+    const captured = this.parameter(
+      fact.captured.id,
+      fact.captured.name,
+      fact.captured.type,
+      this.span(init),
+    );
+    const reference: Expr = {
+      kind: "reference",
+      target: captured.id,
+      ...this.annotationWith(fact.captured.type, PURE_EFFECTS, this.span(init)),
+    };
+    return [
+      { kind: "bind", binding: captured, value: this.expr(init) },
+      ...fact.fields.map(({ name, binding, label, local }): Step => ({
+        kind: "bind",
+        binding: this.parameter(
+          binding.id,
+          binding.name,
+          binding.type,
+          this.span(local),
+        ),
+        value: {
+          kind: "get",
+          record: reference,
+          field: name,
+          ...this.annotationWith(binding.type, PURE_EFFECTS, this.span(label)),
+        },
+      })),
+    ];
   }
 
   /** A `const` in a block. The binding span covers the name and its annotation. */
@@ -1316,6 +1410,41 @@ class BodyLowerer {
       condition: part(0, "the condition"),
       then: part(1, "the then branch"),
       else: part(2, "the else branch"),
+      ...this.annotation(node),
+    };
+  }
+
+  private optionFallback(node: NodeId): Expr {
+    const [left, right] = this.kids(node);
+    const fact = this.fact(node);
+    if (fact?.kind !== "option-fallback") {
+      throw internal("missing Option fallback fact");
+    }
+    const span = this.span(node);
+    const binding = this.parameter(
+      fact.binding.id,
+      fact.binding.name,
+      fact.binding.type,
+      this.span(left),
+    );
+    return {
+      kind: "match",
+      subject: this.expr(left),
+      arms: [
+        {
+          pattern: { kind: "some", binding, span },
+          body: {
+            kind: "reference",
+            target: binding.id,
+            ...this.annotationWith(
+              fact.binding.type,
+              PURE_EFFECTS,
+              this.span(left),
+            ),
+          },
+        },
+        { pattern: { kind: "none", span }, body: this.expr(right) },
+      ],
       ...this.annotation(node),
     };
   }
@@ -1679,7 +1808,7 @@ export function lowerModule(
       ok: true,
       value: {
         format: "light-functional-ir",
-        version: 3,
+        version: 4,
         module,
         sources: [checkedModule.path],
         imports: prelude === undefined

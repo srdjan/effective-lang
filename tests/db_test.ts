@@ -1,10 +1,12 @@
+import { TypeScriptOutputs } from "../src/core/typescript.ts";
+const outputs = new TypeScriptOutputs();
 // Tests for the program of part A7: the memo, the module cutoff, and the
 // differential check against a run from scratch.
 
 import { assert, assertEquals, assertNotEquals } from "@std/assert";
 import { checkProject } from "../src/core/check_project.ts";
 import { Program, type Revision, revisionDelta } from "../src/core/db.ts";
-import { emitProject } from "../src/core/emit/emit.ts";
+import { emitProject } from "../src/core/typescript.ts";
 import {
   buildSourceMap,
   serializeSourceMap,
@@ -50,11 +52,11 @@ function fromProgram(revision: Revision): unknown {
   const modules: Record<string, unknown> = {};
   for (const name of revision.moduleNames()) {
     const result = revision.lowered(name);
-    const out = revision.emitted(name);
+    const out = outputs.emitted(revision, name);
     if (result === undefined) continue;
     const ir = result.ok ? serializeModule(result.value) : result;
     const text = out?.ok ? out.value.text : out;
-    const map = revision.sourceMap(name);
+    const map = outputs.sourceMap(revision, name);
     modules[name] = {
       ir,
       text,
@@ -157,7 +159,7 @@ Deno.test("an update with no change rechecks nothing and keeps every tree", () =
   }
   // The lazy queries return the same objects.
   assert(first.lowered("main") === second.lowered("main"));
-  assert(first.emitted("main") === second.emitted("main"));
+  assert(outputs.emitted(first, "main") === outputs.emitted(second, "main"));
 });
 
 Deno.test("a changed file gets a new tree, and the other files keep theirs", () => {
@@ -191,7 +193,7 @@ Deno.test("a body edit in users.eff that keeps its interface does not recheck ma
   assertEquals(second.rechecked, ["users"]);
   // main.eff keeps its checked module, its IR, and its emitted text.
   assert(first.checkedModule("main") === second.checkedModule("main"));
-  assert(first.emitted("main") === second.emitted("main"));
+  assert(outputs.emitted(first, "main") === outputs.emitted(second, "main"));
 });
 
 Deno.test("a body edit that changes the length of users.eff below its types rechecks only users", () => {
@@ -367,7 +369,6 @@ Deno.test("counts: a cold update parses and checks every module and lowers nothi
     parses: 0,
     checks: 0,
     lowerings: 0,
-    emits: 0,
   });
   updated(program, exampleFiles());
   // Five .eff files and the .effi file that main.eff imports.
@@ -375,7 +376,6 @@ Deno.test("counts: a cold update parses and checks every module and lowers nothi
     parses: 6,
     checks: 6,
     lowerings: 0,
-    emits: 0,
   });
 });
 
@@ -393,7 +393,6 @@ Deno.test("counts: a body edit parses and checks one module, an interface edit c
     parses: 7,
     checks: 7,
     lowerings: 0,
-    emits: 0,
   });
   const iface = body.replace(
     "fails StoreUnavailable\n  uses Users.all",
@@ -405,7 +404,6 @@ Deno.test("counts: a body edit parses and checks one module, an interface edit c
     parses: 8,
     checks: 10,
     lowerings: 0,
-    emits: 0,
   });
   // An update with no change adds nothing.
   updated(program);
@@ -413,34 +411,34 @@ Deno.test("counts: a body edit parses and checks one module, an interface edit c
     parses: 8,
     checks: 10,
     lowerings: 0,
-    emits: 0,
   });
 });
 
 Deno.test("counts: lowerings and emits count once per module and revision, and not on a memo hit", () => {
+  const outputs = new TypeScriptOutputs();
   const program = new Program("");
   const first = updated(program, exampleFiles());
   first.lowered("main");
   first.lowered("main");
   assertEquals(program.counts.lowerings, 1);
-  assertEquals(program.counts.emits, 0);
-  first.emitted("main");
-  first.emitted("main");
-  first.emitted("pay");
+  assertEquals(outputs.counts.emits, 0);
+  outputs.emitted(first, "main");
+  outputs.emitted(first, "main");
+  outputs.emitted(first, "pay");
   assertEquals(program.counts.lowerings, 2);
-  assertEquals(program.counts.emits, 2);
+  assertEquals(outputs.counts.emits, 2);
   // The next revision reuses the memo entries of both modules.
   const second = updated(program);
   second.lowered("main");
-  second.emitted("main");
-  second.emitted("pay");
+  outputs.emitted(second, "main");
+  outputs.emitted(second, "pay");
   assertEquals(program.counts.lowerings, 2);
-  assertEquals(program.counts.emits, 2);
+  assertEquals(outputs.counts.emits, 2);
   // The counts are a snapshot: an earlier value does not change.
-  const before = program.counts;
-  second.emitted("log");
+  const before = outputs.counts;
+  outputs.emitted(second, "log");
   assertEquals(before.emits, 2);
-  assertEquals(program.counts.emits, 3);
+  assertEquals(outputs.counts.emits, 3);
 });
 
 // ------------------------------------------------------------------ revision delta

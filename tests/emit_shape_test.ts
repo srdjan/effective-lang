@@ -128,9 +128,14 @@ const PARAMETER: Parameter = {
 };
 
 Deno.test("evaluatedChildren omits the deferred children of a leaf", () => {
-  const [a, b, c] = [lit(1), lit(2), lit(3)];
+  const [a, b, c] = [1, 2, 3].map((value) => ({
+    ...A,
+    kind: "closure" as const,
+    parameters: [],
+    body: lit(value),
+  }));
   const cases: readonly [Expr, readonly Expr[], readonly Expr[]][] = [
-    [{ ...A, kind: "with-fiber", job: a, use: b, useBinding: "local:u" }, [a], [
+    [{ ...A, kind: "with-fiber", job: a, use: b }, [a], [
       a,
       b,
     ]],
@@ -148,8 +153,6 @@ Deno.test("evaluatedChildren omits the deferred children of a leaf", () => {
         acquire: a,
         use: b,
         release: c,
-        useBinding: "local:u",
-        releaseBinding: "local:r",
       },
       [],
       [a, b, c],

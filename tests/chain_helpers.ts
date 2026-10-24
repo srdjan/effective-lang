@@ -1,3 +1,5 @@
+import { TypeScriptOutputs } from "../src/core/typescript.ts";
+const outputs = new TypeScriptOutputs();
 // Builds long left-deep chains and runs them through every compiler pass.
 
 import { Program } from "../src/core/mod.ts";
@@ -70,11 +72,11 @@ export function runAllPasses(source: string): string[] {
   if (validated === undefined || validated.length > 0) {
     throw new Error(JSON.stringify(validated));
   }
-  const emitted = revision.value.emitted("main");
+  const emitted = outputs.emitted(revision.value, "main");
   if (emitted === undefined || !emitted.ok) {
     throw new Error(JSON.stringify(emitted));
   }
-  const map = revision.value.sourceMap("main");
+  const map = outputs.sourceMap(revision.value, "main");
   if (map === undefined || !map.ok) throw new Error(JSON.stringify(map));
   return codes;
 }

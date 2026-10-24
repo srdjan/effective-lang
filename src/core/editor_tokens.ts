@@ -39,6 +39,7 @@ const contextualKeywords = new Set([
   "provides",
   "borrow",
   "pure",
+  "using",
 ]);
 
 function resolvedKind(
@@ -123,6 +124,7 @@ export function semanticClassifications(
       output.push({ span, type: "number", modifiers: [] });
     } else if (
       kind >= TokenKind.KwImport && kind <= TokenKind.KwNull ||
+      kind === TokenKind.KwFinally ||
       kind === TokenKind.Ident &&
         contextualKeywords.has(text.slice(span.start, span.end))
     ) output.push({ span, type: "keyword", modifiers: [] });

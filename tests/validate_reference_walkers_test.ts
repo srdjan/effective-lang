@@ -209,7 +209,7 @@ type Int = int
     base,
     "borrowed fiber may only be joined or interrupted directly",
     join,
-    run.body.useBinding,
+    run.body.use.parameters[0].id,
     (ir, body) => {
       const declaration = ir.declarations[index];
       assert(declaration.kind === "function");
@@ -344,7 +344,7 @@ export const load = (): Text uses Files.open | Files.read | Files.close =>
     base,
     "borrowed handle may only pass to a borrow-qualified method",
     call,
-    load.body.useBinding,
+    load.body.use.parameters[0].id,
     (ir, body) => {
       const declaration = ir.declarations[index];
       assert(declaration.kind === "function");
@@ -489,7 +489,7 @@ const grouped = (source: Stream<Int, Stop, Work.value>): Stream<Int[], Stop, Wor
     base,
     "a borrowed group permits at most one direct terminal use",
     collect,
-    grouped.body.groupBinding,
+    grouped.body.use.parameters[1].id,
     (ir, body) => {
       const declaration = ir.declarations[index];
       assert(declaration.kind === "function");

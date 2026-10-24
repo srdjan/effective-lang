@@ -1,3 +1,4 @@
+import { TypeScriptOutputs } from "../core/typescript.ts";
 // A session ties one project directory to one program. Each `sync` reads the
 // files of the directory, gives the program the difference, and returns the new
 // revision. The session keeps the file texts so that the output can show
@@ -30,6 +31,7 @@ export type SyncResult =
 
 export class Session {
   private readonly program: Program;
+  private readonly outputs = new TypeScriptOutputs();
   private known = new Map<string, string>();
   private started = false;
   private targetInputs = new Map<string, string>();
@@ -93,6 +95,7 @@ export class Session {
       this.textOf,
       options,
       previous,
+      this.outputs,
     );
   }
 }

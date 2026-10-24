@@ -1,10 +1,12 @@
+import { TypeScriptOutputs } from "../src/core/typescript.ts";
+const outputs = new TypeScriptOutputs();
 // Tests for the editor queries: hover, definition, and document symbols. They
 // run over the five examples, loaded into a `Program`, and over small projects
 // in memory.
 
 import { assert, assertEquals } from "@std/assert";
 import { Program, type Revision } from "../src/core/db.ts";
-import { definitionAt, documentSymbols, hoverAt } from "../src/core/editor.ts";
+import { definitionAt, documentSymbols, hoverAt } from "../src/core/mod.ts";
 import type { Span } from "../src/core/source.ts";
 import { exampleFiles, FIXTURES } from "./helpers.ts";
 
@@ -49,14 +51,24 @@ const USER_TYPE_SPAN: Span = (() => {
 // ------------------------------------------------------------------ hover: contract
 
 Deno.test("hover on a function name prints parameter types, failures, and requirements", () => {
-  const hover = hoverAt(examples, USERS, offsetOf(USERS_TEXT, "rename", 2));
+  const hover = hoverAt(
+    examples,
+    USERS,
+    offsetOf(USERS_TEXT, "rename", 2),
+    outputs,
+  );
   assert(hover !== undefined);
   assertEquals(
     hover.contract,
     "rename(id: UserId, name: Name): User fails StoreUnavailable | UserMissing uses Users.find | Users.save",
   );
   assertEquals(hover.span, spanOf(USERS, "rename"));
-  const getUser = hoverAt(examples, USERS, offsetOf(USERS_TEXT, "getUser", 1));
+  const getUser = hoverAt(
+    examples,
+    USERS,
+    offsetOf(USERS_TEXT, "getUser", 1),
+    outputs,
+  );
   assert(getUser !== undefined);
   assertEquals(
     getUser.contract,
@@ -66,6 +78,7 @@ Deno.test("hover on a function name prints parameter types, failures, and requir
     examples,
     "collections.eff",
     offsetOf(FILES["collections.eff"], "total", 1),
+    outputs,
   );
   assert(pure !== undefined);
   assertEquals(pure.contract, "total(amounts: Amount[]): Amount");
@@ -74,7 +87,7 @@ Deno.test("hover on a function name prints parameter types, failures, and requir
 Deno.test("hover on a constant name prints name: type", () => {
   const text = "export const limit: Int = 3\n\ntype Int = int\n";
   const revision = loadModule(text);
-  const hover = hoverAt(revision, "m.eff", offsetOf(text, "limit", 1));
+  const hover = hoverAt(revision, "m.eff", offsetOf(text, "limit", 1), outputs);
   assert(hover !== undefined);
   assertEquals(hover.contract, "limit: Int");
   assertEquals(hover.span, { source: "m.eff", start: 13, end: 18 });
@@ -83,7 +96,7 @@ Deno.test("hover on a constant name prints name: type", () => {
 
 Deno.test("hover on an expression prints its type and sets, and has no backend", () => {
   const call = offsetOf(USERS_TEXT, "getUser(id)\n  const renamed");
-  const callee = hoverAt(examples, USERS, call + 2);
+  const callee = hoverAt(examples, USERS, call + 2, outputs);
   assert(callee !== undefined);
   assertEquals(
     callee.contract,
@@ -91,18 +104,18 @@ Deno.test("hover on an expression prints its type and sets, and has no backend",
   );
   assertEquals(callee.backend, undefined);
   assertEquals(callee.span, { source: USERS, start: call, end: call + 7 });
-  const argument = hoverAt(examples, USERS, call + 9);
+  const argument = hoverAt(examples, USERS, call + 9, outputs);
   assert(argument !== undefined);
   assertEquals(argument.contract, "UserId");
-  assertEquals(hoverAt(examples, USERS, 0), undefined);
-  assertEquals(hoverAt(examples, "nowhere.eff", 0), undefined);
+  assertEquals(hoverAt(examples, USERS, 0, outputs), undefined);
+  assertEquals(hoverAt(examples, "nowhere.eff", 0, outputs), undefined);
 });
 
 Deno.test("hover prints unknown (error) where the checker prints <error>", () => {
   const text = "export const g = (): Int => nope\n\ntype Int = int\n";
   const revision = loadModule(text);
   assert(revision.diagnostics.length > 0);
-  const hover = hoverAt(revision, "m.eff", offsetOf(text, "nope", 1));
+  const hover = hoverAt(revision, "m.eff", offsetOf(text, "nope", 1), outputs);
   assert(hover !== undefined);
   assertEquals(hover.contract, "unknown (error)");
   assertEquals(hover.backend, undefined);
@@ -113,12 +126,17 @@ Deno.test("hover prints unknown (error) where the checker prints <error>", () =>
 
 Deno.test("the cursor just after a name selects that name", () => {
   const end = offsetOf(USERS_TEXT, "rename") + "rename".length;
-  const hover = hoverAt(examples, USERS, end);
+  const hover = hoverAt(examples, USERS, end, outputs);
   assert(hover !== undefined);
   assertEquals(hover.span, spanOf(USERS, "rename"));
   assert(hover.contract.startsWith("rename("));
   // A range that starts at the offset wins over a range that ends there.
-  const start = hoverAt(examples, USERS, offsetOf(USERS_TEXT, "rename"));
+  const start = hoverAt(
+    examples,
+    USERS,
+    offsetOf(USERS_TEXT, "rename"),
+    outputs,
+  );
   assert(start !== undefined);
   assertEquals(start.span, spanOf(USERS, "rename"));
 });
@@ -150,7 +168,12 @@ Deno.test("the backend line of each explicit-contract function in users.eff equa
     new URL("golden/users.ts", FIXTURES),
   );
   for (const name of ["getUser", "rename", "displayName", "activeNames"]) {
-    const hover = hoverAt(examples, USERS, offsetOf(USERS_TEXT, name, 1));
+    const hover = hoverAt(
+      examples,
+      USERS,
+      offsetOf(USERS_TEXT, name, 1),
+      outputs,
+    );
     assert(hover !== undefined, name);
     assert(hover.backend !== undefined, name);
     assertEquals(hover.backend.tag, "type", name);
@@ -160,7 +183,12 @@ Deno.test("the backend line of each explicit-contract function in users.eff equa
 });
 
 Deno.test("the backend header of rename has the parameter names and the Effect type", () => {
-  const hover = hoverAt(examples, USERS, offsetOf(USERS_TEXT, "rename", 1));
+  const hover = hoverAt(
+    examples,
+    USERS,
+    offsetOf(USERS_TEXT, "rename", 1),
+    outputs,
+  );
   assertEquals(hover?.backend, {
     tag: "type",
     text:
@@ -173,6 +201,7 @@ Deno.test("the backend type of a pure function is its plain result type", () => 
     examples,
     "collections.eff",
     offsetOf(FILES["collections.eff"], "total", 1),
+    outputs,
   );
   assertEquals(hover?.backend, {
     tag: "type",
@@ -184,7 +213,7 @@ Deno.test("an inferred contract prints its backend header from the lowered type"
   const text = "const bump = (n: Int) => n + 1\n\ntype Int = int\n";
   const revision = loadModule(text);
   assertEquals(revision.diagnostics, []);
-  const hover = hoverAt(revision, "m.eff", offsetOf(text, "bump", 1));
+  const hover = hoverAt(revision, "m.eff", offsetOf(text, "bump", 1), outputs);
   assertEquals(hover?.contract, "bump(n: Int): int");
   assertEquals(hover?.backend, {
     tag: "type",
@@ -195,7 +224,7 @@ Deno.test("an inferred contract prints its backend header from the lowered type"
 Deno.test("the backend type is unavailable when the module has an error", () => {
   const text = "export const g = (): Int => nope\n\ntype Int = int\n";
   const revision = loadModule(text);
-  const hover = hoverAt(revision, "m.eff", offsetOf(text, "g ="));
+  const hover = hoverAt(revision, "m.eff", offsetOf(text, "g ="), outputs);
   assert(hover !== undefined);
   assert(hover.contract.startsWith("g()"));
   assertEquals(hover.backend, { tag: "unavailable" });

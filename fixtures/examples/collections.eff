@@ -5,8 +5,8 @@ type User = { name: string, active: boolean }
 
 export const activeNames = (users: User[]): Name[] =>
   users
-    |> filter((user) => user.active)
-    |> map((user) => user.name)
+    |> filter(user => user.active)
+    |> map(user => user.name)
 
 export const total = (amounts: Amount[]): Amount =>
   amounts |> fold(0, (sum, amount) => sum + amount)

@@ -1,3 +1,4 @@
+import { TypeScriptOutputs } from "../../src/core/typescript.ts";
 // The compile facade of the playground (plan 5.1). It keeps one `Program`
 // across edits and turns a revision into plain data for the page: diagnostics
 // per file, generated TypeScript per `.eff` file, and the time of the update.
@@ -36,6 +37,7 @@ interface PlaygroundPorts {
   readonly now: () => number;
   /** The program. The default is `new Program("")`. */
   readonly program?: ProgramPort;
+  readonly outputs?: TypeScriptOutputs;
 }
 
 /** One diagnostic of one file. Offsets are UTF-16 code units, `to` exclusive. */
@@ -125,6 +127,7 @@ export function createPlayground(
   files: Readonly<Record<string, string>>,
   ports: PlaygroundPorts,
 ): Playground {
+  const outputCache = ports.outputs ?? new TypeScriptOutputs();
   const program: ProgramPort = ports.program ?? new Program("");
   const texts = new Map<string, string>(Object.entries(files));
   /** The text of the newest emit that succeeded, by source path. */
@@ -152,7 +155,7 @@ export function createPlayground(
       const revision = updated.value;
       const outputs: Record<string, PlaygroundOutput | null> = {};
       for (const [path, name] of effModulesOf(revision)) {
-        const emitted = revision.emitted(name);
+        const emitted = outputCache.emitted(revision, name);
         if (emitted !== undefined && emitted.ok) {
           lastGoodText.set(path, emitted.value.text);
           outputs[path] = { text: emitted.value.text, stale: false };
@@ -184,7 +187,7 @@ export function createPlayground(
     },
     hover(path, offset) {
       if (lastGood === undefined) return undefined;
-      const hit = hoverAt(lastGood, path, offset);
+      const hit = hoverAt(lastGood, path, offset, outputCache);
       if (hit === undefined) return undefined;
       const backend = hit.backend === undefined
         ? undefined

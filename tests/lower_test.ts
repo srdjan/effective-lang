@@ -256,7 +256,7 @@ Deno.test("the activeNames pipeline of users lowers to bindings and calls", () =
   assertEquals(textOf(source, first.binding.span), "Users.all()");
   assertEquals(
     textOf(source, second.binding.span),
-    "Users.all()\n    |> filter((user) => user.active)",
+    "Users.all()\n    |> filter(user => user.active)",
   );
   assertEquals(first.value.kind, "perform");
   assertEquals(textOf(source, first.value.span), "Users.all()");
@@ -265,10 +265,10 @@ Deno.test("the activeNames pipeline of users lowers to bindings and calls", () =
   assert(second.value.kind === "call");
   assertEquals(
     textOf(source, second.value.span),
-    "filter((user) => user.active)",
+    "filter(user => user.active)",
   );
   assert(body.result.kind === "call");
-  assertEquals(textOf(source, body.result.span), "map((user) => user.name)");
+  assertEquals(textOf(source, body.result.span), "map(user => user.name)");
 
   // A reference to a generated binding uses the same span as the binding.
   const [filterInput] = second.value.arguments;
@@ -422,7 +422,7 @@ type Int = int
 const COLLECTIONS = `
 type User = { name: string, active: boolean }
 const names = (users: User[]): Text[] =>
-  users |> map((user) => user.name)
+  users |> map(user => user.name)
 const moreNames = (people: User[]): Text[] =>
   people |> map((p) => p.name)
 const flags = (users: User[]): Bool[] =>
@@ -688,7 +688,7 @@ Deno.test("serialization is canonical JSON with a trailing newline", () => {
   assert(
     text.startsWith('{\n  "declarations": [\n    {\n      "definition": {'),
   );
-  assert(text.endsWith('  "version": 3\n}\n'));
+  assert(text.endsWith('  "version": 4\n}\n'));
   assert(text.includes('"imports": []'));
   // Keys are sorted at every level.
   const reparsed = JSON.parse(text);

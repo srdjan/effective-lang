@@ -115,15 +115,20 @@ const latent = () => mapGroups(unfold(0, (n) => { forkScoped(defer(() => Work.ru
 `);
   assertEquals(validateModule(ir, sources), []);
   const root = ir.declarations[decl(ir, "grouped")];
-  const groupId = at(root, "body.groupBinding");
+  const groupId = at(root, "body.use.parameters[1].id");
   for (
     const [name, path, value, code] of [
       ["grouped", "body.bufferSize", 0, "validation/006"],
       ["grouped", "body.bufferSize", 1.5, "validation/006"],
-      ["grouped", "body.groupBinding", "local:forged", "validation/006"],
       [
         "grouped",
-        "body.groupBinding",
+        "body.use.parameters[1].id",
+        "local:forged",
+        "validation/001",
+      ],
+      [
+        "grouped",
+        "body.use.parameters[1].id",
         at(root, "body.use.parameters[0].id"),
         "validation/006",
       ],
@@ -593,8 +598,8 @@ type Text = string
   const wrongId = copy(lowered.ir);
   const one = wrongId.declarations.find((d) => d.name === "load");
   assert(one?.kind === "function" && one.body.kind === "with-resource");
-  (one.body as { useBinding: string }).useBinding = "local:m#missing";
-  assert(codesOf(wrongId, lowered.sources).includes("validation/006"));
+  (one.body.use.parameters[0] as { id: string }).id = "local:m#missing";
+  assert(codesOf(wrongId, lowered.sources).includes("validation/001"));
 
   const escaped = copy(lowered.ir);
   const two = escaped.declarations.find((d) => d.name === "load");
@@ -1530,22 +1535,24 @@ function codesOf(ir: unknown, sources: ReadonlyMap<string, string>): string[] {
   ].sort();
 }
 
-Deno.test("version 1 IR is rejected with the required wire version", () => {
-  const lowered = lowerText("type Count = int\nconst one = (): Count => 1");
-  const previous = copy(lowered.ir) as unknown as { version: number };
-  previous.version = 1;
-  const diagnostics = validateModule(
-    previous as unknown as ModuleIR,
-    lowered.sources,
-  );
-  assert(
-    diagnostics.some((diagnostic) =>
-      diagnostic.code === "validation/008" &&
-      diagnostic.message.includes("light-functional-ir version 3") &&
-      diagnostic.message.includes("version 1")
-    ),
-  );
-});
+for (const version of [1, 2, 3]) {
+  Deno.test(`version ${version} IR is rejected with the required wire version`, () => {
+    const lowered = lowerText("type Count = int\nconst one = (): Count => 1");
+    const previous = copy(lowered.ir) as unknown as { version: number };
+    previous.version = version;
+    const diagnostics = validateModule(
+      previous as unknown as ModuleIR,
+      lowered.sources,
+    );
+    assert(
+      diagnostics.some((diagnostic) =>
+        diagnostic.code === "validation/008" &&
+        diagnostic.message.includes("light-functional-ir version 4") &&
+        diagnostic.message.includes(`version ${version}`)
+      ),
+    );
+  });
+}
 
 /** The index of a declaration by name. */
 function decl(ir: unknown, name: string): number {
@@ -1891,10 +1898,10 @@ type Int = int
   assert(run.kind === "function" && run.body.kind === "with-fiber");
   setAt(
     wrong,
-    `declarations[${decl(wrong, "run")}].body.useBinding`,
+    `declarations[${decl(wrong, "run")}].body.use.parameters[0].id`,
     "local:m#unknown",
   );
-  assert(codesOf(wrong, sources).includes("validation/006"));
+  assert(codesOf(wrong, sources).includes("validation/001"));
 });
 
 Deno.test("scoped fiber validation checks the reserved scope requirement", () => {
@@ -3492,4 +3499,29 @@ Deno.test("show prints a Schema make input after the requirement sets", () => {
     }),
     "SchemaOptional<string, string, cap:Read.next | cap:Read.more, cap:Write.previous>",
   );
+});
+
+Deno.test("IR v4 scoped callbacks validate runtime shape, parameter arity and types", () => {
+  const { ir, sources } = lowerText(`type Int = int
+service Jobs { open(): { read: () => Int, close: () => void } }
+const run = (): Int uses Jobs.open => withResource(() => Jobs.open(), (job) => job.read(), (job) => job.close())
+`);
+  const index = decl(ir, "run");
+  for (
+    const [path, value, code] of [
+      ["acquire.kind", "literal", "validation/006"],
+      ["use.parameters", [], "validation/006"],
+      ["release.parameters", [], "validation/006"],
+      [
+        "use.parameters[0].type",
+        { kind: "primitive", name: "int" },
+        "validation/002",
+      ],
+      ["release.parameters[0].id", "local:missing", "validation/001"],
+    ] as const
+  ) {
+    const wrong = copy(ir);
+    setAt(wrong, `declarations[${index}].body.${path}`, value);
+    assert(codesOf(wrong, sources).includes(code), path);
+  }
 });

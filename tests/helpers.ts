@@ -20,7 +20,7 @@ import {
   type CheckedProject,
   checkProject,
 } from "../src/core/check_project.ts";
-import { emitProject, type EmittedModule } from "../src/core/emit/emit.ts";
+import { emitProject, type EmittedModule } from "../src/core/typescript.ts";
 import { lowerProject } from "../src/core/lower.ts";
 import type { Project } from "../src/core/project.ts";
 import type { ModeMap } from "../src/core/check.ts";

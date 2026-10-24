@@ -119,9 +119,7 @@ export function scheduleStructural(
       ]);
     }
     default: {
-      // `schedule-concat` shares an IR member with `schedule-max` and
-      // `schedule-min`, and it prints through OPERAND_CALLS.
-      const rest: "schedule-concat" = e.kind;
+      const rest: never = e;
       throw internal(`unhandled schedule kind ${rest}`);
     }
   }

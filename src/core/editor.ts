@@ -8,11 +8,7 @@
 import type { CheckedModule, FunctionBody } from "./check_project.ts";
 import { effectText } from "./check_project.ts";
 import type { Revision } from "./db.ts";
-import { type Doc, render } from "./emit/doc.ts";
-import { constantTypeDoc, functionHeaderDoc } from "./emit/decls.ts";
-import { EmitFailure, Scope } from "./emit/scope.ts";
 import { methodOfCapability, serviceOfCapability, shortName } from "./ids.ts";
-import type { ModuleIR } from "./ir.ts";
 import type { DeclEntry, FileIndex } from "./index.ts";
 import { symbolIndex } from "./editor_index.ts";
 import { parseFileFresh } from "./project.ts";
@@ -43,18 +39,11 @@ const PASSES: readonly boolean[] = [false, true];
 
 // ------------------------------------------------------------------ hover
 
-/** The backend type of a declaration, or the reason that it is missing. */
-export type HoverBackend =
-  | { readonly tag: "type"; readonly text: string }
-  | { readonly tag: "unavailable" };
-
-export interface Hover {
-  /** The name span on a name, else the span of the innermost node. */
+export interface SourceHover {
   readonly span: Span;
-  /** The source contract text. */
   readonly contract: string;
-  /** Only on the name of a module-level function or constant. */
-  readonly backend: HoverBackend | undefined;
+  /** Only on a module-level function or constant name. */
+  readonly declaration: string | undefined;
 }
 
 /** Replaces the checker text for an error type by the hover text. */
@@ -76,46 +65,6 @@ function functionContract(
       effectText(fn.failures, fn.requirements)
     }`,
   );
-}
-
-/** One line, as the emitter prints the declaration header, without the width limit. */
-const FLAT_WIDTH = 1_000_000;
-
-function renderDoc(doc: Doc): string {
-  return render(doc, FLAT_WIDTH).text;
-}
-
-function backendOf(
-  revision: Revision,
-  module: CheckedModule,
-  id: string,
-): HoverBackend {
-  const unavailable: HoverBackend = { tag: "unavailable" };
-  if (!revision.emitted(module.module)?.ok) return unavailable;
-  const lowered = revision.lowered(module.module);
-  if (lowered === undefined || !lowered.ok) return unavailable;
-  const ir: ModuleIR = lowered.value;
-  const declaration = ir.declarations.find((d) => d.id === id);
-  if (declaration === undefined) return unavailable;
-  try {
-    const scope = new Scope(ir, revision.config);
-    if (declaration.kind === "function") {
-      return {
-        tag: "type",
-        text: renderDoc(functionHeaderDoc(scope, declaration, "always")),
-      };
-    }
-    if (declaration.kind === "constant") {
-      return {
-        tag: "type",
-        text: renderDoc(constantTypeDoc(scope, declaration)),
-      };
-    }
-    return unavailable;
-  } catch (error) {
-    if (error instanceof EmitFailure) return unavailable;
-    throw error;
-  }
 }
 
 /**
@@ -163,7 +112,7 @@ function hoverPass(
   module: CheckedModule,
   offset: number,
   afterEnd: boolean,
-): Hover | undefined {
+): SourceHover | undefined {
   const table = revision.types;
   for (const fn of module.functions.values()) {
     const span = fn.signature.nameSpan;
@@ -171,7 +120,7 @@ function hoverPass(
     return {
       span,
       contract: functionContract(revision, fn),
-      backend: backendOf(revision, module, fn.signature.id),
+      declaration: fn.signature.id,
     };
   }
   for (const constant of module.constants.values()) {
@@ -182,7 +131,7 @@ function hoverPass(
       contract: cleanErrors(
         `${constant.signature.name}: ${table.show(constant.type)}`,
       ),
-      backend: backendOf(revision, module, constant.signature.id),
+      declaration: constant.signature.id,
     };
   }
   for (
@@ -196,7 +145,7 @@ function hoverPass(
     return {
       span: occurrence.span,
       contract: `sealed nominal ${shortName(occurrence.target.id)}`,
-      backend: undefined,
+      declaration: undefined,
     };
   }
   const tables = [
@@ -218,7 +167,7 @@ function hoverPass(
     contract: cleanErrors(
       `${table.show(info.type)}${effectText(info.failures, info.requirements)}`,
     ),
-    backend: undefined,
+    declaration: undefined,
   };
 }
 
@@ -227,11 +176,11 @@ function hoverPass(
  * name of a module-level function or constant. Returns undefined when no checked
  * node covers the offset.
  */
-export function hoverAt(
+export function sourceHoverAt(
   revision: Revision,
   path: string,
   offset: number,
-): Hover | undefined {
+): SourceHover | undefined {
   const module = revision.checkedModuleAt(path);
   if (module === undefined) return undefined;
   for (const afterEnd of PASSES) {

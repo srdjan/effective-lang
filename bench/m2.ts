@@ -1,3 +1,4 @@
+import { TypeScriptOutputs } from "../src/core/typescript.ts";
 // Measurement M2: the whole-module recheck time per stage, and the incremental
 // path through `Program.update`.
 //
@@ -30,7 +31,7 @@ import {
   type Diagnostic,
   normalizeDiagnostics,
 } from "../src/core/diagnostics.ts";
-import { emitProject, type EmittedModule } from "../src/core/emit/emit.ts";
+import { emitProject, type EmittedModule } from "../src/core/typescript.ts";
 import { lowerProject } from "../src/core/lower.ts";
 import { parse } from "../src/core/parse.ts";
 import {
@@ -445,13 +446,17 @@ interface StepSample {
 /** One program and the current text of the edited module. */
 interface Side {
   readonly program: Program;
+  readonly outputs: TypeScriptOutputs;
   text: string;
 }
 
-function emitAll(revision: Revision): Result<string, M2Error> {
+function emitAll(
+  revision: Revision,
+  outputs: TypeScriptOutputs,
+): Result<string, M2Error> {
   const parts: string[] = [];
   for (const name of revision.moduleNames()) {
-    const emitted = revision.emitted(name);
+    const emitted = outputs.emitted(revision, name);
     if (emitted === undefined) continue;
     if (!emitted.ok) {
       return {
@@ -498,7 +503,7 @@ function step(
     };
   }
   const emitStart = performance.now();
-  const text = emitAll(revision);
+  const text = emitAll(revision, side.outputs);
   const emit = performance.now() - emitStart;
   if (!text.ok) return text;
   return {
@@ -539,10 +544,12 @@ function measureSteps(
     const sides: [Side, Side] = [
       {
         program: new Program(""),
+        outputs: new TypeScriptOutputs(),
         text: project.sources.get(project.edit.path) ?? "",
       },
       {
         program: new Program(""),
+        outputs: new TypeScriptOutputs(),
         text: project.sources.get(project.edit.path) ?? "",
       },
     ];

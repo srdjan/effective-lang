@@ -8,7 +8,7 @@ import {
 import { Program, type Revision } from "./db.ts";
 import { diagnosticDelta } from "./diagnostic_delta.ts";
 import { lex, TokenKind } from "./lex.ts";
-import type { Result, Span } from "./source.ts";
+import type { Result, SourceEdit, Span } from "./source.ts";
 import {
   occurrenceAt,
   sameSpan,
@@ -16,10 +16,7 @@ import {
   type SymbolOccurrence,
 } from "./editor_index.ts";
 
-export interface SourceEdit {
-  readonly span: Span;
-  readonly text: string;
-}
+export type { SourceEdit } from "./source.ts";
 export interface RenameTarget {
   readonly span: Span;
   readonly name: string;
@@ -168,7 +165,7 @@ export function renameAt(
         current.declaration !== undefined || current.identity !== old.identity
       ) return { ok: false, error: "The rename would capture another name." };
     } else if (
-      !sameSpan(movedSpan(old.declaration, edits, false), current.declaration)
+      !sameSpan(movedSpan(old.declaration, edits, true), current.declaration)
     ) {
       return {
         ok: false,

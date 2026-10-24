@@ -30,6 +30,12 @@ The second checker that recomputes every annotation of the typed IR without shar
 It acts as a differential oracle: a program that the checker accepts and the validator rejects shows a defect in one of the two. A disagreement is repaired so that both derive the same annotation, not by weakening the validator.
 _Avoid: IR checker, second pass_
 
+### TypeScript outputs
+
+The per-program `TypeScriptOutputs` cache of emitted text, span tables, and source maps.
+
+The frontend owns checking and lazy lowering. Output queries take a revision explicitly and reuse its lowering-result object as a weak cache key. Source hover needs neither lowering nor output; combined hover takes this cache to add the backend declaration.
+
 ### Type table
 
 The project-wide store in which the checker interns each type once and refers to it by a reference number.

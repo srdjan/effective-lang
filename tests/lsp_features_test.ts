@@ -1,3 +1,5 @@
+import { TypeScriptOutputs } from "../src/core/typescript.ts";
+const outputs = new TypeScriptOutputs();
 // Fast tests of the language features (plan L3b), driven in process through the
 // harness on the examples: hover, definition, document symbols, generated
 // TypeScript, save, and stats.
@@ -447,7 +449,7 @@ function freshOutput(h: Harness, name: string): string {
   }
   const updated = new Program(ROOT).update({ set });
   assert(updated.ok);
-  const emitted = updated.value.emitted(name);
+  const emitted = outputs.emitted(updated.value, name);
   assert(emitted?.ok);
   return emitted.value.text;
 }

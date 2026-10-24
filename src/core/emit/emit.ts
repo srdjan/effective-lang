@@ -4,7 +4,6 @@ import { fieldHelperDeclarations } from "./fields.ts";
 // the project configuration. It is synchronous and pure: the caller writes files.
 
 import type { ModuleIR, Result } from "../ir.ts";
-import type { LowerError } from "../lower.ts";
 import type { ProjectConfig } from "../project.ts";
 import type { Span } from "../ir.ts";
 import {
@@ -71,14 +70,6 @@ export type EmitError =
     readonly tag: "internal";
     readonly module: string;
     readonly message: string;
-  };
-
-export type EmitProjectError =
-  | EmitError
-  | {
-    readonly tag: "lowering";
-    readonly module: string;
-    readonly error: LowerError;
   };
 
 function importLine(group: ImportGroup): Doc {
@@ -228,26 +219,4 @@ export function emitModule(
     }
     throw e;
   }
-}
-
-/**
- * Emits every lowered module of a project, in the order of `lowered`. A module
- * whose lowering failed gives a `lowering` error and no text.
- */
-export function emitProject(
-  lowered: ReadonlyMap<string, Result<ModuleIR, LowerError>>,
-  context: EmitContext,
-): ReadonlyMap<string, Result<EmittedModule, EmitProjectError>> {
-  const results = new Map<string, Result<EmittedModule, EmitProjectError>>();
-  for (const [name, result] of lowered) {
-    if (!result.ok) {
-      results.set(name, {
-        ok: false,
-        error: { tag: "lowering", module: name, error: result.error },
-      });
-      continue;
-    }
-    results.set(name, emitModule(result.value, context));
-  }
-  return results;
 }

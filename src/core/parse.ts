@@ -79,7 +79,8 @@ const DECL_WORDS: ReadonlySet<string> = new Set([
 ]);
 
 function isKeywordKind(k: TokenKind): boolean {
-  return k >= TokenKind.KwImport && k <= TokenKind.KwNull;
+  return k >= TokenKind.KwImport && k <= TokenKind.KwNull ||
+    k === TokenKind.KwFinally;
 }
 
 function binaryPrecedence(k: TokenKind): number {
@@ -776,7 +777,9 @@ class Parser {
       );
     }
     this.tok(); // const
-    this.parseName("binding");
+    if (!topLevel && this.kind() === TokenKind.LBrace) {
+      this.parseRecordBinding();
+    } else this.parseName("binding");
     if (this.kind() === TokenKind.Colon) {
       this.tok();
       this.skipNl();
@@ -789,6 +792,24 @@ class Parser {
       this.missing("`=`");
     }
     this.parseExpr();
+  }
+
+  private parseRecordBinding(): void {
+    this.begin();
+    let fields = 0;
+    this.parseDelimited(TokenKind.RBrace, () => {
+      fields++;
+      this.begin();
+      this.parseName("binding");
+      if (this.kind() === TokenKind.Colon) {
+        this.tok();
+        this.skipNl();
+        this.parseName("binding");
+        this.end(SyntaxKind.BindingField);
+      } else this.end(SyntaxKind.ShorthandBinding);
+    });
+    if (fields === 0) this.expectedAt("at least one record binding field");
+    this.end(SyntaxKind.RecordBinding);
   }
 
   private parseTypeBody(): void {
@@ -1200,7 +1221,7 @@ class Parser {
 
   private parseExprInner(): void {
     const cp = this.checkpoint();
-    this.parseBinary(1);
+    this.parseFallback();
     let links = 0;
     while (this.la() === TokenKind.PipeGt) {
       if (!this.enterLink()) break;
@@ -1219,6 +1240,45 @@ class Parser {
       this.wrap(cp, SyntaxKind.PipeExpr);
     }
     this.leaveLinks(links);
+  }
+
+  /** Between logical expressions and pipelines; the fallback associates to the right. */
+  private parseFallback(): void {
+    const cp = this.checkpoint();
+    this.parseBinary(1);
+    if (this.kind() === TokenKind.QuestionQuestion) {
+      if (!this.enterLink()) return;
+      this.tok();
+      this.skipNl();
+      this.parseFallback();
+      const node = this.wrap(cp, SyntaxKind.OptionFallbackExpr);
+      for (
+        const operand of this.flat.slice(
+          this.nodeChildStart[node],
+          this.nodeChildEnd[node],
+        )
+      ) {
+        if (this.nodeKinds[operand] !== SyntaxKind.BinaryExpr) continue;
+        const logical = this.flat.slice(
+          this.nodeChildStart[operand],
+          this.nodeChildEnd[operand],
+        ).some((child) =>
+          this.nodeKinds[child] === SyntaxKind.Token &&
+          [TokenKind.AmpAmp, TokenKind.PipePipe].includes(
+            this.kinds[this.nodeTokens[child]],
+          )
+        );
+        if (logical) {
+          this.report(
+            "syntax/015",
+            "parenthesize logical operands when mixing `??` with `&&` or `||`",
+            this.nodeStarts[operand],
+            this.nodeEnds[operand],
+          );
+        }
+      }
+      this.leaveLinks(1);
+    }
   }
 
   private parseBinary(minPrecedence: number): void {
@@ -1284,7 +1344,22 @@ class Parser {
         this.tok();
         this.end(SyntaxKind.LiteralExpr);
         return;
-      case TokenKind.Ident:
+      case TokenKind.Ident: {
+        if (
+          this.isWordAt(this.pos, "using") &&
+          this.kinds[this.pos + 1] === TokenKind.LParen &&
+          this.kinds[this.pos + 2] === TokenKind.Ident &&
+          this.kinds[this.pos + 3] === TokenKind.Eq
+        ) {
+          this.parseUsing();
+          return;
+        }
+        let next = this.pos + 1;
+        while (this.kinds[next] === TokenKind.Newline) next++;
+        if (this.kinds[next] === TokenKind.Arrow) {
+          this.parseArrow();
+          return;
+        }
         this.begin();
         if (this.isWordAt(this.pos, "void")) {
           this.report(
@@ -1297,6 +1372,7 @@ class Parser {
         this.tok();
         this.end(SyntaxKind.NameExpr);
         return;
+      }
       case TokenKind.LParen:
         if (this.parenFollowedBy(this.pos, true)) {
           this.parseArrow();
@@ -1351,9 +1427,43 @@ class Parser {
     }
   }
 
+  private parseUsing(): void {
+    this.begin();
+    this.tok(); // contextual using
+    const group = this.open("free");
+    this.parseName("binding");
+    this.expect(TokenKind.Eq, "`=`");
+    this.skipNl();
+    this.begin();
+    this.parseBody();
+    this.end(SyntaxKind.ResourceAcquire);
+    this.close(group, TokenKind.RParen, "`)`");
+    this.skipNl();
+    this.begin();
+    this.parseBlockExpected();
+    this.end(SyntaxKind.ResourceUse);
+    if (this.la() === TokenKind.KwFinally) {
+      this.skipNl();
+      this.tok();
+    } else this.missing("`finally`");
+    this.skipNl();
+    this.begin();
+    this.parseBlockExpected();
+    this.end(SyntaxKind.ResourceRelease);
+    this.end(SyntaxKind.UsingExpr);
+  }
+
   private parseArrow(): void {
     this.begin();
-    this.parseParamList();
+    if (this.kind() === TokenKind.Ident) {
+      this.begin(); // A bare parameter has the same structure, without invented tokens.
+      this.begin();
+      this.parseName("binding");
+      this.end(SyntaxKind.Param);
+      this.end(SyntaxKind.ParamList);
+    } else {
+      this.parseParamList();
+    }
     if (this.la() === TokenKind.Colon) {
       this.skipNl();
       this.tok();

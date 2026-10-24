@@ -12,8 +12,8 @@ const clockLive = layer(Clock, () => {
 const lexicalLive = layer(Lexical, () => {
   const lexical = TextRules.acquire()
   ({
-    isBlank: (value) => lexical.isBlank(value),
-    isWellFormed: (value) => lexical.isWellFormed(value)
+    isBlank: value => lexical.isBlank(value),
+    isWellFormed: value => lexical.isWellFormed(value)
   })
 })
 

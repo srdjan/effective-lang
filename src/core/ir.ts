@@ -116,6 +116,8 @@ export type Step =
   | { readonly kind: "bind"; readonly binding: Parameter; readonly value: Expr }
   | { readonly kind: "evaluate"; readonly value: Expr };
 
+export type ClosureExpr = Node<{ kind: "closure"; parameters: readonly Parameter[]; body: Expr }>;
+
 /** Calls and capability operations remain distinct after resolution. */
 export type Expr =
   // A null value in the original literal node represents unit, emitted as undefined.
@@ -132,7 +134,7 @@ export type Expr =
   | Node<{ kind: "some"; value: Expr }>
   | Node<{ kind: "none" }>
   | Node<{ kind: "error"; error: ErrorId; fields: readonly { readonly name: string; readonly value: Expr }[] }>
-  | Node<{ kind: "closure"; parameters: readonly Parameter[]; body: Expr }>
+  | ClosureExpr
   | Node<{ kind: "call"; callee: Expr; arguments: readonly Expr[] }>
   | Node<{ kind: "defer"; job: Expr }>
   | Node<{ kind: "run"; value: Expr }>
@@ -142,11 +144,11 @@ export type Expr =
   | Node<{ kind: "provide-scope"; owner: Expr; job: Expr }>
   | Node<{ kind: "add-scope-finalizer"; owner: Expr; job: Expr }>
   | Node<{ kind: "close-scope"; owner: Expr }>
-  | Node<{ kind: "with-resource"; acquire: Expr; use: Expr; release: Expr; useBinding: LocalId; releaseBinding: LocalId }>
+  | Node<{ kind: "with-resource"; acquire: ClosureExpr; use: ClosureExpr; release: ClosureExpr }>
   | Node<{ kind: "unfold"; seed: Expr; next: Expr }>
   | Node<{ kind: "map-effect"; stream: Expr; transform: Expr; concurrency: number | "unbounded" | undefined }>
   | Node<{ kind: "map-stream"; stream: Expr; transform: Expr }>
-  | Node<{ kind: "map-groups"; stream: Expr; key: Expr; use: Expr; bufferSize: number; groupBinding: LocalId }>
+  | Node<{ kind: "map-groups"; stream: Expr; key: ClosureExpr; use: ClosureExpr; bufferSize: number }>
   | Node<{ kind: "scan-stream"; stream: Expr; seed: Expr; update: Expr }>
   | Node<{ kind: "map-accum-stream"; stream: Expr; seed: Expr; update: Expr }>
   | Node<{ kind: "fold-stream"; stream: Expr; seed: Expr; update: Expr }>
@@ -183,7 +185,9 @@ export type Expr =
   | Node<{ kind: "schedule-recurs"; times: Expr }>
   | Node<{ kind: "schedule-spaced"; delayMillis: Expr }>
   | Node<{ kind: "schedule-map"; schedule: Expr; transform: Expr }>
-  | Node<{ kind: "schedule-max" | "schedule-min" | "schedule-concat"; left: Expr; right: Expr }>
+  | Node<{ kind: "schedule-max"; left: Expr; right: Expr }>
+  | Node<{ kind: "schedule-min"; left: Expr; right: Expr }>
+  | Node<{ kind: "schedule-concat"; left: Expr; right: Expr }>
   | Node<{ kind: "run-stream"; stream: Expr; sink: Expr }>
   | Node<{ kind: "buffer-stream"; stream: Expr; capacity: number }>
   | Node<{ kind: "merge-streams"; left: Expr; right: Expr }>
@@ -200,10 +204,12 @@ export type Expr =
   | Node<{ kind: "retry-with-schedule"; job: Expr; options: Expr }>
   | Node<{ kind: "codec"; decode: Expr; encode: Expr }>
   | Node<{ kind: "schema"; op: "identity" | "array" | "struct" | "optional-key" | "null-to-missing-key" | "option-from-optional-key" | "default-key" | "constructor-default" | "default-null-key" | "default-encoded-key" | "optional-transform" | "optional-from-required" | "union" | "transform" | "recursive" | "invalid" | "at" | "both"; arguments: readonly Expr[] }>
-  | Node<{ kind: "schema-decode" | "schema-encode" | "schema-make"; schema: Expr; input: Expr }>
+  | Node<{ kind: "schema-decode"; schema: Expr; input: Expr }>
+  | Node<{ kind: "schema-encode"; schema: Expr; input: Expr }>
+  | Node<{ kind: "schema-make"; schema: Expr; input: Expr }>
   | Node<{ kind: "decode"; codec: Expr; input: Expr }>
   | Node<{ kind: "encode"; codec: Expr; input: Expr }>
-  | Node<{ kind: "with-fiber"; job: Expr; use: Expr; useBinding: LocalId }>
+  | Node<{ kind: "with-fiber"; job: Expr; use: ClosureExpr }>
   | Node<{ kind: "join-fiber"; fiber: Expr }>
   | Node<{ kind: "interrupt-fiber"; fiber: Expr }>
   | Node<{ kind: "perform"; capability: CapabilityId; arguments: readonly Expr[] }>
@@ -301,7 +307,7 @@ export interface Import {
 
 export interface ModuleIR {
   readonly format: "light-functional-ir";
-  readonly version: 3;
+  readonly version: 4;
   readonly module: string;
   /** A validator also receives immutable source texts keyed by these identifiers. */
   readonly sources: readonly string[];

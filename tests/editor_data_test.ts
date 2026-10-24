@@ -1,10 +1,12 @@
+import { TypeScriptOutputs } from "../src/core/typescript.ts";
+const outputs = new TypeScriptOutputs();
 // Editor queries over a data type: tokens, symbols, definition, hover,
 // completion, and rename, for its declaration, its constructor calls, and its
 // constructor patterns.
 
 import { assert, assertEquals } from "@std/assert";
 import { Program, type Revision } from "../src/core/db.ts";
-import { definitionAt, documentSymbols, hoverAt } from "../src/core/editor.ts";
+import { definitionAt, documentSymbols, hoverAt } from "../src/core/mod.ts";
 import { completionsAt } from "../src/core/editor_completion.ts";
 import { applySourceEdits, renameAt } from "../src/core/editor_rename.ts";
 import { semanticClassifications } from "../src/core/editor_tokens.ts";
@@ -96,7 +98,7 @@ Deno.test("definition leads from a constructor call, a pattern, and an annotatio
 });
 
 Deno.test("hover on a constructor call shows the data type", () => {
-  const hover = hoverAt(revision, "m.eff", CALL + 2);
+  const hover = hoverAt(revision, "m.eff", CALL + 2, outputs);
   assertEquals(hover?.contract, "Circle");
 });
 

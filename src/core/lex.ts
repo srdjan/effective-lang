@@ -52,6 +52,8 @@ export enum TokenKind {
   Bang,
   /** A character or sequence that the language does not use. The lexer reported it. */
   Unknown,
+  QuestionQuestion,
+  KwFinally,
 }
 
 export enum TriviaKind {
@@ -96,6 +98,7 @@ export const KEYWORDS: ReadonlyMap<string, TokenKind> = new Map([
   ["true", TokenKind.KwTrue],
   ["false", TokenKind.KwFalse],
   ["null", TokenKind.KwNull],
+  ["finally", TokenKind.KwFinally],
 ]);
 
 /**
@@ -115,7 +118,6 @@ const RESERVED_WORDS: ReadonlySet<string> = new Set([
   "do",
   "enum",
   "extends",
-  "finally",
   "for",
   "function",
   "in",
@@ -164,6 +166,8 @@ const TOKEN_NAMES: Readonly<Record<TokenKind, string>> = {
   [TokenKind.Dot]: "`.`",
   [TokenKind.DotDotDot]: "`...`",
   [TokenKind.Question]: "`?`",
+  [TokenKind.QuestionQuestion]: "`??`",
+  [TokenKind.KwFinally]: "`finally`",
   [TokenKind.Eq]: "`=`",
   [TokenKind.Arrow]: "`=>`",
   [TokenKind.EqEqEq]: "`===`",
@@ -252,7 +256,6 @@ for (
     [",", TokenKind.Comma],
     [":", TokenKind.Colon],
     [";", TokenKind.Semicolon],
-    ["?", TokenKind.Question],
     ["+", TokenKind.Plus],
     ["-", TokenKind.Minus],
     ["*", TokenKind.Star],
@@ -510,6 +513,9 @@ export function lex(source: string, text: string): Lexed {
     const next2 = i + 2 < n ? text.charCodeAt(i + 2) : -1;
 
     switch (c) {
+      case 0x3f: // ?
+        i = pair(i, 0x3f, TokenKind.QuestionQuestion, TokenKind.Question);
+        continue;
       case 0x2f: // /
         if (next === 0x2f) {
           let j = i + 2;

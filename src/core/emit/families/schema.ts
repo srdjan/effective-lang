@@ -442,7 +442,7 @@ export function schemaLeaf(
     }
     default: {
       // The three kinds share one IR member, so `e` does not narrow to `never`.
-      const unreachable: never = e.kind;
+      const unreachable: never = e;
       return unreachable;
     }
   }

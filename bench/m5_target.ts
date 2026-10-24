@@ -1,3 +1,5 @@
+import { TypeScriptOutputs } from "../src/core/typescript.ts";
+const outputs = new TypeScriptOutputs();
 // The inputs of the M5 measurement: the emitted examples and the emitted
 // synthetic projects, as maps of TypeScript files, and the error values of the
 // measurement. Nothing here runs a type check.
@@ -85,7 +87,7 @@ export function emitSources(
   }
   const generated = new Map<string, string>();
   for (const name of revision.moduleNames()) {
-    const emitted = revision.emitted(name);
+    const emitted = outputs.emitted(revision, name);
     if (emitted === undefined || !emitted.ok) {
       return {
         ok: false,

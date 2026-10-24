@@ -3,16 +3,36 @@
   "name": "Effektive",
   "scopeName": "source.effektive",
   "patterns": [
-    { "include": "#comments" },
-    { "include": "#strings" },
-    { "include": "#numbers" },
-    { "include": "#keywords" },
-    { "include": "#declaration-words" },
-    { "include": "#constants" },
-    { "include": "#builtin-types" },
-    { "include": "#builtin-functions" },
-    { "include": "#operators" },
-    { "include": "#types" }
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#declaration-words"
+    },
+    {
+      "include": "#constants"
+    },
+    {
+      "include": "#builtin-types"
+    },
+    {
+      "include": "#builtin-functions"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#types"
+    }
   ],
   "repository": {
     "comments": {
@@ -56,6 +76,10 @@
         {
           "name": "storage.type.effektive",
           "match": "\\bconst\\b"
+        },
+        {
+          "name": "keyword.control.resource.effektive",
+          "match": "\\b(?:finally|using(?=\\s*\\(\\s*[A-Za-z_$][A-Za-z0-9_$]*\\s*=))\\b"
         }
       ]
     },
@@ -105,6 +129,10 @@
     },
     "operators": {
       "patterns": [
+        {
+          "name": "keyword.operator.option.effektive",
+          "match": "\\?\\?"
+        },
         {
           "name": "keyword.operator.pipe.effektive",
           "match": "\\|>"

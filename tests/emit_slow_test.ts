@@ -4,7 +4,7 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { checkProject } from "../src/core/check_project.ts";
-import { emitProject, type EmittedModule } from "../src/core/emit/emit.ts";
+import { emitProject, type EmittedModule } from "../src/core/typescript.ts";
 import { buildSpanTable, hostImportSpans } from "../src/core/emit/spans.ts";
 import {
   hostModulePaths,

@@ -118,6 +118,17 @@ export interface ArrowParameterFact {
 
 /** What a node means, for lowering. The key is the syntax node id. */
 export type NodeFact =
+  | {
+    readonly kind: "record-binding";
+    readonly captured: ArrowParameterFact;
+    readonly fields: readonly {
+      readonly name: string;
+      readonly binding: ArrowParameterFact;
+      readonly label: NodeId;
+      readonly local: NodeId;
+    }[];
+  }
+  | { readonly kind: "option-fallback"; readonly binding: ArrowParameterFact }
   /** An ordinary call of a function value. Also a pipeline stage that calls one. */
   | { readonly kind: "call" }
   /** A service operation: `S.m(args)` or a stage `x |> S.m`. */

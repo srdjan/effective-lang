@@ -249,3 +249,59 @@ Deno.test("the boundary scan skips comments, string literals, templates, and reg
     1,
   );
 });
+
+Deno.test("the frontend and source queries cannot reach TypeScript output or host adapters", async () => {
+  const visited = new Set<string>();
+  async function visit(file: URL): Promise<void> {
+    if (
+      visited.has(file.href) || HOOK_PATHS.some((p) => file.href.endsWith(p))
+    ) return;
+    visited.add(file.href);
+    assertEquals(
+      /\/(?:emit|host)\/|\/typescript\.ts$/.test(file.pathname),
+      false,
+      file.pathname,
+    );
+    const { specifiers } = scanCode(await Deno.readTextFile(file));
+    for (const specifier of specifiers) await visit(new URL(specifier, file));
+  }
+  await visit(new URL("src/core/frontend.ts", ROOT));
+  assertEquals(visited.size > 30, true);
+  const files: string[] = [];
+  await sourceFiles("src/core/", files);
+  for (const path of files.filter((p) => /\/editor[^/]*\.ts$/.test(p))) {
+    for (
+      const specifier of scanCode(await Deno.readTextFile(new URL(path, ROOT)))
+        .specifiers
+    ) {
+      assertEquals(
+        /emit\/|typescript\.ts|mod\.ts/.test(specifier),
+        false,
+        `${path}: ${specifier}`,
+      );
+    }
+  }
+});
+
+Deno.test("host, CLI, LSP and playground adapters use public core entry points", async () => {
+  const files: string[] = [];
+  for (
+    const directory of ["src/host/", "src/cli/", "src/lsp/", "playground/src/"]
+  ) await sourceFiles(directory, files);
+  let checked = 0;
+  for (const path of files) {
+    for (
+      const specifier of scanCode(await Deno.readTextFile(new URL(path, ROOT)))
+        .specifiers
+    ) {
+      if (!specifier.includes("core/")) continue;
+      checked++;
+      assertEquals(
+        /core\/(?:frontend|typescript|mod)\.ts$/.test(specifier),
+        true,
+        `${path}: ${specifier}`,
+      );
+    }
+  }
+  assertEquals(checked > 20, true);
+});

@@ -1076,6 +1076,9 @@ class Resolver {
       case SyntaxKind.NameExpr:
         this.valueRef(node, nodeText(this.tree, node), position);
         return;
+      case SyntaxKind.UsingExpr:
+        this.using(node);
+        return;
       case SyntaxKind.ArrowExpr:
         this.arrow(node);
         return;
@@ -1147,6 +1150,7 @@ class Resolver {
         return;
       case SyntaxKind.ParenExpr:
       case SyntaxKind.BinaryExpr:
+      case SyntaxKind.OptionFallbackExpr:
       case SyntaxKind.ArgList:
       case SyntaxKind.ListExpr:
       case SyntaxKind.IfExpr:
@@ -1210,6 +1214,33 @@ class Resolver {
     }
   }
 
+  private using(node: NodeId): void {
+    const parts = this.kids(node);
+    const name = parts.find((k) => kindOf(this.tree, k) === SyntaxKind.Name);
+    const acquire = parts.find((k) =>
+      kindOf(this.tree, k) === SyntaxKind.ResourceAcquire
+    );
+    const outer = this.scope;
+    if (acquire !== undefined) {
+      this.scope = new Scope(outer);
+      for (const body of this.kids(acquire)) this.expr(body, "value");
+    }
+    const scope = new Scope(outer);
+    this.scope = scope;
+    if (name !== undefined) this.declareLocal(name, false);
+    for (
+      const region of parts.filter((k) =>
+        [SyntaxKind.ResourceUse, SyntaxKind.ResourceRelease].includes(
+          kindOf(this.tree, k),
+        )
+      )
+    ) {
+      this.scope = new Scope(scope);
+      for (const body of this.kids(region)) this.expr(body, "value");
+    }
+    this.scope = outer;
+  }
+
   private arrow(node: NodeId): void {
     const outer = this.scope;
     const scope = new Scope(outer);
@@ -1257,6 +1288,30 @@ class Resolver {
 
   private blockConst(node: NodeId): void {
     const kids = this.kids(node);
+    const record = kids.find((k) =>
+      kindOf(this.tree, k) === SyntaxKind.RecordBinding
+    );
+    if (record !== undefined) {
+      const bindings: LocalBinding[] = [];
+      for (const field of this.kids(record)) {
+        const names = this.kidsOfKind(field, SyntaxKind.Name);
+        if (
+          kindOf(this.tree, field) === SyntaxKind.BindingField &&
+          names[0] !== undefined
+        ) this.fieldLabel(names[0]);
+        const name = names.at(-1);
+        if (name !== undefined) {
+          const binding = this.declareLocal(name, true);
+          if (binding !== undefined) bindings.push(binding);
+        }
+      }
+      for (const part of kids.filter((k) => k !== record)) {
+        if (isTypeKind(kindOf(this.tree, part))) this.resolveType(part);
+        else this.expr(part, "value");
+      }
+      for (const binding of bindings) binding.pending = false;
+      return;
+    }
     const nameNode = kids.find((k) => kindOf(this.tree, k) === SyntaxKind.Name);
     if (nameNode === undefined) return;
     const rest = kids.filter((k) => k !== nameNode);

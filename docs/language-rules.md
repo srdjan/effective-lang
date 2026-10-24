@@ -894,3 +894,44 @@ These rules concern the stages after checking. They do not change what a program
 | Watch and `--tsc` | `watch --tsc` runs `deno check` after each build without errors | [cli_test.ts](../tests/cli_test.ts) |
 | Public API | `src/core/mod.ts` re-exports the IR types with `export type *`. The explicit `Diagnostic` of the core wins over the one in `ir.ts` | [mod.ts](../src/core/mod.ts) |
 | Error path in messages | A malformed `effektive.json` is named `effektive.json`, as `parseConfig` reports it. A missing or unreadable one is named with the root | [project.ts](../src/core/project.ts) |
+
+## Concise source forms
+
+A single unannotated lambda parameter can omit parentheses: `user => user.name`.
+It is the same arrow as `(user) => user.name`, including contextual parameter
+inference, scope, effects and newline continuation before `=>`. Parameter
+annotations, multiple parameters, and explicit result contracts require the
+parenthesized form. Inference still needs an expected function type; exported
+contracts remain explicit. Both spellings support the same editor queries.
+
+`option ?? fallback` is lazy Option unwrapping: `Some` returns its payload;
+`None` evaluates the fallback. It evaluates the subject once, unfolds aliases,
+and uses match branch joins and contextual result types, including `None` and
+`never` branches. It does not unwrap null or typed failures. `??` associates to
+the right, below logical operators and above pipelines. Parenthesize operands
+when mixing `??` with `&&` or `||` at one expression level (`syntax/015`).
+The checker records the synthesized binding and annotations; lowering produces
+ordinary `match` IR. Generated names do not enter editor symbol lists.
+
+Inside a block, `const { id, revision: expectedRevision } = article` captures
+`article` once, then reads fields in written order. An optional whole-subject
+annotation is allowed after `}`. Bindings are flat and nonempty; duplicate
+fields/names, nested/default/rest/tuple patterns, and module-level destructuring
+are rejected. Reads use ordinary field typing, including nominal/sealed records,
+common union fields, optional `Option<T>` fields, and own-field behavior. The
+ordinary scoped-operation borrow rules also apply: destructuring cannot extract
+an operation as a first-class function. Labels are fields and bound names are
+locals; renaming shorthand expands it to `id: articleId`. Field completion omits
+fields already selected. Bound names become visible after the initializer.
+
+`using (job = openJob()) { job.execute() } finally { job.close() }` is an
+expression equivalent to three explicit `withResource` callbacks. `finally` is
+mandatory; no close method is inferred. Acquisition accepts the arrow-body
+grammar, including a block. The resource binding is visible only in the use and
+finalization blocks; use-block locals are unavailable to finalization. The
+expression returns the use result; finalization returns void. All failures and
+requirements remain in the enclosing contract, and empty-channel execution
+remains effectful. Acquisition shape, data-only results, borrowing and capture
+restrictions are unchanged. Each region is an implicit callback, so nested
+resource expressions cannot capture outer borrowed resources. Ordinary function
+calls named `using` remain valid; only the binding syntax selects this form.

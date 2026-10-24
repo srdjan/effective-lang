@@ -2,7 +2,7 @@ import { isErrorId, isTypeId } from "./ids.ts";
 import { TokenKind } from "./lex.ts";
 import type { Revision } from "./db.ts";
 import { declarationOf, occurrenceAt, symbolIndex } from "./editor_index.ts";
-import { isTypeKind } from "./syntax_queries.ts";
+import { isTypeKind, kidsOf, nameTextOf } from "./syntax_queries.ts";
 import {
   BUILTIN_TYPE_NAMES,
   EFFECT_ERROR_IDS,
@@ -114,6 +114,36 @@ export function completionsAt(
     values.filter((v) => v.label.startsWith(prefix)).sort((a, b) =>
       a.label.localeCompare(b.label)
     );
+  let bindingNode = containingNode(tree, offset);
+  while (
+    bindingNode >= 0 && kindOf(tree, bindingNode) !== SyntaxKind.RecordBinding
+  ) bindingNode = tree.parents[bindingNode];
+  if (bindingNode >= 0) {
+    const declaration = tree.parents[bindingNode];
+    const selected = new Set(
+      kidsOf(tree, bindingNode).flatMap((field) => {
+        const label = kidsOf(tree, field)[0];
+        return label === undefined || tree.starts[label] === start
+          ? []
+          : [nameTextOf(tree, label)];
+      }),
+    );
+    const checked = revision.checkedModule(info.name);
+    const tables = [
+      ...(checked?.functions.values() ?? []),
+      ...(checked?.constants.values() ?? []),
+    ].map((value) => value.table);
+    for (const table of tables) {
+      const fact = table.facts.get(declaration);
+      if (fact?.kind !== "record-binding") continue;
+      return filter(
+        recordFields(revision, fact.captured.type).filter((name) =>
+          !selected.has(name)
+        ).map((name) => make(name, "property")),
+      );
+    }
+    return [];
+  }
   let previousToken = -1;
   for (let i = 0; i < lexed.count; i++) {
     if (

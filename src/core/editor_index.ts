@@ -5,6 +5,7 @@ import { methodOfCapability, serviceOfCapability } from "./ids.ts";
 import { type Target, targetText } from "./resolve.ts";
 import type { Span } from "./source.ts";
 import {
+  childrenOf,
   kindOf,
   type NodeId,
   nodeSpan,
@@ -65,10 +66,17 @@ function localScope(
   identity: string,
 ): LocalScope {
   let parent = tree.parents[node];
+  const binding = parent >= 0 &&
+      [SyntaxKind.BindingField, SyntaxKind.ShorthandBinding].includes(
+        kindOf(tree, parent),
+      )
+    ? tree.parents[tree.parents[parent]]
+    : -1;
   const parameter = parent >= 0 && kindOf(tree, parent) === SyntaxKind.Param;
   while (
     parent >= 0 &&
     ![
+      SyntaxKind.UsingExpr,
       SyntaxKind.ArrowExpr,
       SyntaxKind.Block,
       SyntaxKind.MatchArm,
@@ -79,7 +87,12 @@ function localScope(
     identity,
     name: tree.text.slice(tree.starts[node], tree.ends[node]),
     declaration: nodeSpan(tree, node),
-    scope: parent >= 0 ? nodeSpan(tree, parent) : nodeSpan(tree, tree.root),
+    scope: parent >= 0
+      ? {
+        ...nodeSpan(tree, parent),
+        start: binding >= 0 ? tree.ends[binding] : tree.starts[parent],
+      }
+      : nodeSpan(tree, tree.root),
     parameter,
   };
 }
@@ -122,7 +135,9 @@ export function symbolIndex(revision: Revision): SymbolIndex {
         isDeclaration,
         node,
         shorthand: parent >= 0 &&
-          kindOf(tree, parent) === SyntaxKind.ShorthandField,
+          [SyntaxKind.ShorthandField, SyntaxKind.ShorthandBinding].includes(
+            kindOf(tree, parent),
+          ),
       };
       occurrences.push(occurrence);
       file.push(occurrence);
@@ -130,7 +145,22 @@ export function symbolIndex(revision: Revision): SymbolIndex {
       group.push(occurrence);
       byIdentity.set(identity, group);
       if (isDeclaration && target.kind === "local") {
-        scopes.push(localScope(tree, node, identity));
+        const local = localScope(tree, node, identity);
+        if (parent >= 0 && kindOf(tree, parent) === SyntaxKind.UsingExpr) {
+          for (const region of childrenOf(tree, parent)) {
+            if (
+              [SyntaxKind.ResourceUse, SyntaxKind.ResourceRelease].includes(
+                kindOf(tree, region),
+              )
+            ) {
+              scopes.push({
+                ...local,
+                scope: nodeSpan(tree, region),
+                parameter: true,
+              });
+            }
+          }
+        } else scopes.push(local);
       }
     }
     file.sort((a, b) => a.span.start - b.span.start || a.span.end - b.span.end);

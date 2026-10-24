@@ -1,3 +1,4 @@
+import type { TypeScriptOutputs } from "../core/typescript.ts";
 // The output step of a save round, shared by `build`, `watch`, and the
 // language server: remove the outputs of modules that left the project, then
 // write the outputs of every writable module that the project owns.
@@ -31,6 +32,7 @@ export interface SaveRoundInput {
   readonly fs: CliFs;
   readonly root: string;
   readonly revision: Revision;
+  readonly outputs: TypeScriptOutputs;
   /** The `modules` of the previous round. `build` passes `[]` and removes nothing. */
   readonly previous: readonly string[];
   readonly removal: RemovalRule;
@@ -87,7 +89,7 @@ export function runSaveRound(input: SaveRoundInput): SaveRound {
   const outputs = writeGenerated(
     fs,
     root,
-    generationSource(revision),
+    generationSource(revision, input.outputs),
     writable.filter(owns),
     input.write,
   );

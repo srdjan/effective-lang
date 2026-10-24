@@ -4,7 +4,7 @@
 // moves through the edits. The message is not part of the key, because a
 // rename changes names in messages.
 import type { Diagnostic } from "./diagnostics.ts";
-import type { SourceEdit } from "./editor_rename.ts";
+import type { SourceEdit } from "./source.ts";
 
 /** The diagnostics that an edit adds and removes, by code, source, and moved span. */
 export interface DiagnosticDelta {

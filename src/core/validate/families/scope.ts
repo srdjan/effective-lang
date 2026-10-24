@@ -201,9 +201,8 @@ export function withResource(
   }
   if (
     a.parameters.length !== 0 || u.parameters.length !== 1 ||
-    r.parameters.length !== 1 ||
-    e.use.parameters[0]?.id !== e.useBinding ||
-    e.release.parameters[0]?.id !== e.releaseBinding
+    r.parameters.length !== 1 || e.acquire.parameters.length !== 0 ||
+    e.use.parameters.length !== 1 || e.release.parameters.length !== 1
   ) {
     c.add(
       AREA.control,
@@ -252,19 +251,24 @@ export function withResource(
     );
   }
   if (opaque) {
-    borrowedReferences(c, e.use.body, e.useBinding, `${path}.use.body`);
+    borrowedReferences(
+      c,
+      e.use.body,
+      e.use.parameters[0].id,
+      `${path}.use.body`,
+    );
     borrowedReferences(
       c,
       e.release.body,
-      e.releaseBinding,
+      e.release.parameters[0].id,
       `${path}.release.body`,
     );
   } else {
-    scopedReferences(c, e.use.body, e.useBinding, `${path}.use.body`);
+    scopedReferences(c, e.use.body, e.use.parameters[0].id, `${path}.use.body`);
     scopedReferences(
       c,
       e.release.body,
-      e.releaseBinding,
+      e.release.parameters[0].id,
       `${path}.release.body`,
     );
   }

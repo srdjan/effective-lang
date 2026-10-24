@@ -1,7 +1,7 @@
 // Contract edits come from checked body effect sets, never diagnostic prose.
 import { Program, type Revision } from "./db.ts";
 import { diagnosticDelta } from "./diagnostic_delta.ts";
-import type { SourceEdit } from "./editor_rename.ts";
+import type { SourceEdit } from "./source.ts";
 import { applySourceEdits } from "./editor_rename.ts";
 import { EFFECT_ERROR_IDS } from "./resolve.ts";
 import { childrenOf, kindOf, SyntaxKind } from "./syntax.ts";

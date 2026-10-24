@@ -47,8 +47,8 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
   initialization.ts Eager dependency graph of module constants.
   interface.ts   Module interfaces, their hashes, and the reachable modules.
   analyze.ts     Public entry: load a project, resolve it, collect diagnostics.
-  db.ts          Program: revisions, parse memo, check memo with module cutoff, lazy IR, text, and maps.
-  editor.ts      hoverAt, definitionAt, and documentSymbols over a revision.
+  db.ts          Program: revisions, parse memo, check memo with module cutoff, and lazy IR.
+  editor.ts      sourceHoverAt, definitionAt, and documentSymbols over a revision.
   editor_index.ts Revision-scoped resolver identities, occurrences and lexical scopes.
   editor_rename.ts References, prepare-rename and re-resolved rename edits.
   diagnostic_delta.ts Diagnostics that an edit adds and removes, by code, source, and moved span.
@@ -57,7 +57,9 @@ src/core/      The core library. It is synchronous and does no I/O. Program memo
   editor_actions.ts Validated missing fails/uses actions from checked body effects.
   ids.ts         Parts of a declaration identity: module, name, and method.
   util.ts        Small pure helpers of the front end and the edges: compareText, errorMessage, and isRecord.
-  mod.ts         The public API of the core: a list of re-exports.
+  frontend.ts    Checking, IR, and source editor queries, with no backend dependency.
+  typescript.ts  TypeScript output caches, emission, backend hover, maps, diagnostic mapping.
+  mod.ts         Aggregate public API.
   sha256.ts      Synchronous SHA-256 over the UTF-8 bytes of a string.
   lower.ts       Checked modules to typed IR: pipelines, builtin specialization, imports.
   serialize.ts   Canonical JSON of a module IR, with the set and number checks.
@@ -263,7 +265,7 @@ A module constant needs a pure initializer with empty sets. The `initialization`
 value lists the constants in a safe order. It also lists the dependencies of
 each constant and every dependency cycle.
 
-`hoverAt(revision, path, offset)` returns text for the innermost checked node at
+`sourceHoverAt(revision, path, offset)` returns source contract text for the innermost checked node at
 an offset. A function name gives its signature, for example
 `getUser(id: UserId): User fails StoreUnavailable | UserMissing uses Users.find`.
 Any other node gives its type and its sets. Sets print in sorted identity order.
@@ -284,7 +286,7 @@ declarations, and its IR exports each of them. Its providers are not lowered.
 `lowerProject(checked)` does this for every `.eff` and `.effi` module. Pass the
 result to `emitProject` to get each generated module and each companion module.
 
-The IR has the `version` 3. A type declaration has the definition kind `alias`
+The IR has the `version` 4. A type declaration has the definition kind `alias`
 or `nominal`. A `nominal` definition has a `base` type, and a record base is a
 nominal record. An expression has the node `nominal` for a construction of a
 nominal type, and a match arm has the pattern kind `nominal`. The IR has no
@@ -470,8 +472,9 @@ The program reads its files only from these calls, so it needs no `SourceHost`.
 Every `.eff` file in the set is an entry. The call returns a `Result`. A missing
 or invalid `effektive.json` is an error value, and no revision starts.
 
-A `Revision` answers one query for each module name: `checkedModule`, `lowered`,
-`emitted`, `spanTable`, and `sourceMap`. It also holds `diagnostics`,
+A `Revision` answers frontend queries for each module name: `checkedModule` and
+`lowered`. `TypeScriptOutputs` separately answers `emitted(revision, name)`,
+`spanTable(revision, name)`, and `sourceMap(revision, name)`. The revision also holds `diagnostics`,
 `interfaceHash`, and `rechecked`. The `rechecked` list names the modules that
 this revision checked again, in topological order. It includes the host
 interface modules.
@@ -492,8 +495,9 @@ same objects as in the revision before.
 
 The program has three memos. The parse memo keeps the syntax tree of a file
 whose text is equal. The check memo keeps a checked module when its key is
-equal. The lowering memo keeps the IR and the emitted values when the lowering
-key is equal.
+equal. The lowering memo keeps the IR when the lowering key is equal.
+The output cache uses the reused lowering-result object as a weak key, keeping
+text and maps reusable without retaining old revisions.
 
 The check key holds five items: the text of the module, its path, the project
 configuration, and the analysis diagnostics of its file. The fifth item is the
@@ -841,3 +845,68 @@ a manual review.
 The [builtin-change checklist](builtin-changes.md) traces recognition, source
 checking, facts, lowering, independent validation, emission and verification for
 one builtin change.
+
+## Migrating the frontend and TypeScript APIs
+
+The package exposes `@srdjan/effektive-lang/frontend` and
+`@srdjan/effektive-lang/typescript`; the root export aggregates both.
+Source-only tools can import the frontend without loading the TypeScript emitter.
+
+Replace `revision.emitted(name)` with `outputs.emitted(revision, name)` (and
+likewise for `spanTable` and `sourceMap`). Create `const outputs = new
+TypeScriptOutputs()` once per program or session, rather than per query.
+The CLI, playground and LSP each own their caches; the LSP disk program owns a
+separate cache created on its first save round. `program.counts` contains parses,
+checks and lowerings; `outputs.counts` contains emits. LSP statistics compose both.
+
+`sourceHoverAt(revision, path, offset)` returns `{ span, contract, declaration }`
+without lowering or emission. `declaration` is optional declaration identity on
+module function/constant names. For the existing combined source/backend result,
+call `hoverAt(revision, path, offset, outputs)`. Its backend type remains unavailable
+when the module cannot emit. `emitModule(ir, context)` remains the standalone IR
+consumer; `emitProject` lives in the TypeScript entry point. `SourceEdit` now
+belongs to source data and retains its public export.
+
+```ts
+import { Program, sourceHoverAt } from "@srdjan/effektive-lang/frontend";
+import { hoverAt, TypeScriptOutputs } from "@srdjan/effektive-lang/typescript";
+
+const program = new Program();
+const outputs = new TypeScriptOutputs();
+const updated = program.update({ set: files });
+if (updated.ok) {
+  const revision = updated.value;
+  sourceHoverAt(revision, "main.eff", offset);
+  outputs.emitted(revision, "main");
+  hoverAt(revision, "main.eff", offset, outputs);
+}
+```
+
+Here `files` contains project texts and `offset` is a UTF-16 source offset.
+
+IR v4 removes `with-resource.useBinding`, `with-resource.releaseBinding`,
+`with-fiber.useBinding`, and `map-groups.groupBinding`. Read the identity from
+`use.parameters[0].id`, `release.parameters[0].id`, or, for grouped streams,
+`use.parameters[1].id`. These slots use the exported `ClosureExpr` type; runtime
+validation still checks closure shape, arity, parameter types, references and
+borrowed uses. Older wire versions receive `validation/008`; there is no automatic
+conversion. Schedule compositions and schema decode/encode/make now discriminate
+as individual TypeScript union members, with the same serialized node shapes.
+
+Bare single-parameter lambdas use the existing `ArrowExpr`, `ParamList`, and
+`Param` source nodes. Their lossless tree contains only the tokens that were
+written; the omitted parentheses are not synthesized.
+
+`OptionFallbackExpr` represents source `??`. Checking records its result,
+effects, and hygienic Some binding. Lowering emits ordinary `match` with a
+single subject and lazy None arm, so standalone IR consumers need no new node.
+
+Block-local `RecordBinding` nodes contain `BindingField` aliases or
+`ShorthandBinding` fields. Checking records ordinary field reads and a hygienic
+subject capture; lowering expands into existing block binds and `get` nodes.
+
+`UsingExpr` contains one source binding and three `ResourceAcquire`,
+`ResourceUse`, and `ResourceRelease` regions. They share the existing callback
+body checker and resource rules. Editor references and rename use one identity
+across use/finalization; completion exposes it only in those regions. Lowering
+remaps references to separate closure parameters and emits `with-resource` IR.

@@ -564,6 +564,15 @@ Diagnostics: the `typed-ir.ts` `Diagnostic` extended with `category`,
 
 ### 6.3 Reuse of typed-ir.ts
 
+Update, 2026-10-24: the compiler emits `light-functional-ir` version 4.
+Versions 1 to 3 fail independent validation with `validation/008`.
+Scoped callbacks use `ClosureExpr`; their parameters own the identities that
+previously also appeared in `useBinding`, `releaseBinding`, and `groupBinding`.
+The frontend owns lazy IR. `TypeScriptOutputs` separately owns emitted text,
+span tables, maps, and emission counts, keyed weakly by lowering results.
+Bare arrows, Option fallback, record bindings, and `using`/`finally` lower to
+existing operations. See the [migration guide](api.md#migrating-the-frontend-and-typescript-apis).
+
 Update, 2026-10-23: the compiler now emits `light-functional-ir` version 3.
 Version 1 and version 2 payloads fail independent validation with
 `validation/008`. Version 2 had one definition kind for a brand and one for a

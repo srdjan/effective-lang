@@ -99,6 +99,7 @@ import type { SchemaContext } from "./check_builtins/schema.ts";
 import {
   checkBorrowedParameter,
   type ScopeContext,
+  withResourceCall,
 } from "./check_builtins/scope.ts";
 import type { StreamContext } from "./check_builtins/stream.ts";
 
@@ -427,6 +428,17 @@ class BodyChecker
         const info = this.expr(inner, expected);
         return this.finish(node, info.type, info);
       }
+      case SyntaxKind.UsingExpr: {
+        const args = this.kids(node).filter((k) =>
+          [
+            SyntaxKind.ResourceAcquire,
+            SyntaxKind.ResourceUse,
+            SyntaxKind.ResourceRelease,
+          ].includes(kindOf(this.tree, k))
+        ).map((node) => ({ node }));
+        if (args.length !== 3) return this.errorInfo(node);
+        return withResourceCall(this, node, args, expected);
+      }
       case SyntaxKind.ArrowExpr:
         return this.arrow(node, this.contextOf(expected));
       case SyntaxKind.CallExpr:
@@ -435,6 +447,8 @@ class BodyChecker
         return this.fieldExpr(node);
       case SyntaxKind.BinaryExpr:
         return this.binary(node);
+      case SyntaxKind.OptionFallbackExpr:
+        return this.optionFallback(node, expected);
       case SyntaxKind.PipeExpr:
         return this.pipe(node, expected);
       case SyntaxKind.RecordExpr:
@@ -1069,7 +1083,18 @@ class BodyChecker
         uses.push({ node, parent, grandparent, nested });
       }
       for (const child of this.kids(node)) {
-        visit(child, node, parent, nested || kind === SyntaxKind.ArrowExpr);
+        visit(
+          child,
+          node,
+          parent,
+          nested ||
+            [
+              SyntaxKind.ArrowExpr,
+              SyntaxKind.ResourceAcquire,
+              SyntaxKind.ResourceUse,
+              SyntaxKind.ResourceRelease,
+            ].includes(kind),
+        );
       }
     };
     visit(body, undefined, undefined, false);
@@ -1110,8 +1135,15 @@ class BodyChecker
     resultHint: TypeRef | undefined,
     allowEffects = false,
   ): { readonly info: NodeInfo; readonly result: TypeRef } {
+    const kind = kindOf(this.tree, arg.node);
     const info = arg.pre === undefined &&
-        kindOf(this.tree, arg.node) === SyntaxKind.ArrowExpr
+        [
+          SyntaxKind.ResourceAcquire,
+          SyntaxKind.ResourceUse,
+          SyntaxKind.ResourceRelease,
+        ].includes(kind)
+      ? this.implicitArrow(arg.node, parameters, resultHint)
+      : arg.pre === undefined && kind === SyntaxKind.ArrowExpr
       ? this.arrow(arg.node, { parameters, result: resultHint })
       : this.argInfo(arg);
     if (this.isError(info.type)) return { info, result: this.table.error };
@@ -1795,7 +1827,61 @@ class BodyChecker
         ? undefined
         : this.lowerer.requirements(usesNode),
     };
-    const run = this.checkBody(bodyNode, contract, context?.result);
+    return this.callbackBody(
+      node,
+      parameterFacts,
+      bodyNode,
+      contract,
+      context?.result,
+      {
+        result: resultNode !== undefined,
+        fails: failsNode !== undefined,
+        uses: usesNode !== undefined,
+      },
+    );
+  }
+
+  private implicitArrow(
+    node: NodeId,
+    parameters: readonly TypeRef[],
+    hint: TypeRef | undefined,
+  ): NodeInfo {
+    const parent = this.tree.parents[node];
+    const nameNode = this.kids(parent).find((k) =>
+      kindOf(this.tree, k) === SyntaxKind.Name
+    );
+    const facts: ArrowParameterFact[] = [];
+    if (parameters.length > 0 && nameNode !== undefined) {
+      const target = this.targets.get(nameNode);
+      const id = target?.kind === "local" ? target.id : undefined;
+      const type = parameters[0];
+      if (id !== undefined) this.body.locals.set(id, type);
+      this.finish(nameNode, type, PURE_EFFECTS);
+      facts.push({ id, name: nameTextOf(this.tree, nameNode) ?? "", type });
+    }
+    return this.callbackBody(
+      node,
+      facts,
+      this.kids(node)[0],
+      { result: undefined, failures: undefined, requirements: undefined },
+      hint,
+      { result: false, fails: false, uses: false },
+    );
+  }
+
+  private callbackBody(
+    node: NodeId,
+    parameterFacts: readonly ArrowParameterFact[],
+    bodyNode: NodeId | undefined,
+    contract: Contract,
+    hint: TypeRef | undefined,
+    written: {
+      readonly result: boolean;
+      readonly fails: boolean;
+      readonly uses: boolean;
+    },
+  ): NodeInfo {
+    const run = this.checkBody(bodyNode, contract, hint);
     const type = this.table.function({
       execution: run.mode,
       parameters: parameterFacts.map((p) => p.type),
@@ -1803,15 +1889,7 @@ class BodyChecker
       failures: run.failures,
       requirements: run.requirements,
     });
-    this.fact(node, {
-      kind: "arrow",
-      parameters: parameterFacts,
-      written: {
-        result: resultNode !== undefined,
-        fails: failsNode !== undefined,
-        uses: usesNode !== undefined,
-      },
-    });
+    this.fact(node, { kind: "arrow", parameters: parameterFacts, written });
     return this.finish(node, type, PURE_EFFECTS);
   }
 
@@ -1837,6 +1915,10 @@ class BodyChecker
 
   private blockConst(node: NodeId): NodeInfo {
     const parts = this.kids(node);
+    const record = parts.find((k) =>
+      kindOf(this.tree, k) === SyntaxKind.RecordBinding
+    );
+    if (record !== undefined) return this.recordBinding(node, record);
     const nameNode = parts.find((k) =>
       kindOf(this.tree, k) === SyntaxKind.Name
     );
@@ -1871,6 +1953,60 @@ class BodyChecker
     if (id !== undefined) this.body.locals.set(id, type);
     this.fact(node, { kind: "binding", id, type });
     return this.finish(node, type, info ?? PURE_EFFECTS);
+  }
+
+  private recordBinding(node: NodeId, record: NodeId): NodeInfo {
+    const parts = this.kids(node);
+    const typeNode = parts.find((k) => isTypeKind(kindOf(this.tree, k)));
+    const init = parts.at(-1);
+    if (init === undefined || init === record || init === typeNode) {
+      return this.errorInfo(node);
+    }
+    const annotation = typeNode === undefined
+      ? undefined
+      : this.lowerer.lower(typeNode).ref;
+    const subject = this.expr(init, annotation);
+    this.fits(init, subject.type, annotation, "the value");
+    const type = annotation ?? this.widen(subject.type);
+    let name = `$record${node}`;
+    while (this.tree.text.includes(name)) name += "$";
+    const captured = {
+      id: `local:${this.body.declaration}/${name}` as LocalId,
+      name,
+      type,
+    };
+    const seen = new Set<string>();
+    const fields = [];
+    for (const field of this.kids(record)) {
+      const names = this.kids(field);
+      const label = names[0], local = names.at(-1);
+      if (label === undefined || local === undefined) continue;
+      const name = nameTextOf(this.tree, label);
+      const bindingName = nameTextOf(this.tree, local);
+      if (name === undefined || bindingName === undefined) continue;
+      if (seen.has(name)) {
+        this.report(
+          "declaration/001",
+          `duplicate record binding field \`${name}\``,
+          label,
+        );
+      }
+      seen.add(name);
+      const read = this.readField(type, name, label);
+      const target = this.targets.get(local);
+      const id = target?.kind === "local" ? target.id : undefined;
+      if (id !== undefined) this.body.locals.set(id, read.type);
+      this.finish(label, read.type, PURE_EFFECTS);
+      this.finish(local, read.type, PURE_EFFECTS);
+      fields.push({
+        name,
+        binding: { id, name: bindingName, type: read.type },
+        label,
+        local,
+      });
+    }
+    this.fact(node, { kind: "record-binding", captured, fields });
+    return this.finish(node, this.table.unit, subject);
   }
 
   /**
@@ -2046,6 +2182,39 @@ class BodyChecker
       type,
       combine([remaining, ...handlerInfos, EFFECT_ONLY]),
     );
+  }
+
+  private optionFallback(
+    node: NodeId,
+    expected: TypeRef | undefined,
+  ): NodeInfo {
+    const [left, right] = this.kids(node);
+    if (left === undefined || right === undefined) return this.errorInfo(node);
+    const subject = this.expr(left);
+    const element = this.optionElement(subject.type);
+    const fallback = this.expr(right, expected);
+    if (element === undefined) {
+      if (!this.isError(subject.type)) {
+        this.report(
+          "type-mismatch/010",
+          "the left operand of `??` must be an Option",
+          left,
+        );
+      }
+      return this.errorInfo(node);
+    }
+    let name = `$option${node}`;
+    while (this.tree.text.includes(name)) name += "$";
+    const id: LocalId = `local:${this.body.declaration}/${name}`;
+    this.fact(node, {
+      kind: "option-fallback",
+      binding: { id, name, type: element },
+    });
+    const type = this.joinResults([{ node: left, type: element }, {
+      node: right,
+      type: fallback.type,
+    }], expected);
+    return this.finish(node, type, combine([subject, fallback]));
   }
 
   // -------------------------------------------------------------- match

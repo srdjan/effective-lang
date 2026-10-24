@@ -1,3 +1,4 @@
+import type { TypeScriptOutputs } from "../core/typescript.ts";
 // The request handlers of the language features (plan 5.6 to 5.9 and 5.11):
 // hover, definition, document symbols, generated TypeScript, save, and stats.
 // Each handler calls `ctx.projects.forRequest`, which flushes a dirty project
@@ -90,7 +91,12 @@ export function hoverRequest(
   const cursor = cursorOf(params, ctx);
   if (cursor === undefined) return answer(null);
   const { revision } = cursor;
-  const hit = hoverAt(revision, cursor.path, cursor.offset);
+  const hit = hoverAt(
+    revision,
+    cursor.path,
+    cursor.offset,
+    cursor.project.outputs,
+  );
   if (hit === undefined) return answer(null);
   const range = rangeOfSpan(revision, hit.span);
   if (range === undefined) return answer(null);
@@ -211,9 +217,12 @@ export class GeneratedTexts {
     revision: Revision,
     path: string,
     entry: GeneratedEntry,
+    outputs: TypeScriptOutputs,
   ): GeneratedTypeScriptResult | null {
     const name = effModuleOf(revision, path);
-    const emitted = name === undefined ? undefined : revision.emitted(name);
+    const emitted = name === undefined
+      ? undefined
+      : outputs.emitted(revision, name);
     if (emitted !== undefined && emitted.ok) {
       entry.lastGood = emitted.value.text;
       return { text: emitted.value.text, stale: false };
@@ -239,7 +248,7 @@ export class GeneratedTexts {
     entry.uri = uri;
     const revision = project.lastGood;
     if (revision === undefined) return null;
-    const result = this.#current(revision, path, entry);
+    const result = this.#current(revision, path, entry, project.outputs);
     if (result !== null) entry.received = result;
     return result;
   }
@@ -253,7 +262,7 @@ export class GeneratedTexts {
     const entries = this.#entries.get(project);
     if (entries === undefined) return;
     for (const [path, entry] of entries) {
-      const result = this.#current(revision, path, entry);
+      const result = this.#current(revision, path, entry, project.outputs);
       if (result === null) continue;
       const before = entry.received;
       if (
@@ -304,7 +313,8 @@ export function statsRequest(
   if (found === undefined) return answer(null);
   const { project } = found;
   const revision = project.lastGood;
-  const { parses, checks, lowerings, emits } = project.program.counts;
+  const { parses, checks, lowerings } = project.program.counts;
+  const { emits } = project.outputs.counts;
   const result: StatsResult = {
     revision: revision?.number ?? 0,
     rechecked: revision === undefined ? [] : [...revision.rechecked],

@@ -108,6 +108,11 @@ export const DIAGNOSTIC_CODES = {
     description:
       "A name resolves to a declaration of the wrong kind for its position, or a builtin appears outside a call.",
   },
+  "syntax/015": {
+    category: "syntax",
+    description:
+      "Logical operands mixed with Option fallback need parentheses.",
+  },
   "type-mismatch/001": {
     category: "type-mismatch",
     description:

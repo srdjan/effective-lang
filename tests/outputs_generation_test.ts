@@ -1,9 +1,10 @@
+import { TypeScriptOutputs } from "../src/core/typescript.ts";
+const outputs = new TypeScriptOutputs();
 import { assert, assertEquals } from "@std/assert";
 import { buildSpanTable, Program } from "../src/core/mod.ts";
 import type {
   EmittedModule,
   LowerError,
-  Revision,
   SourceMapV3,
 } from "../src/core/mod.ts";
 import { generationSource } from "../src/host/generation.ts";
@@ -40,20 +41,20 @@ Deno.test("generationSource adapts real revisions, unknown modules and source er
     },
   });
   assert(updated.ok);
-  const input = generationSource(updated.value);
+  const input = generationSource(updated.value, outputs);
   assertEquals(input.generated("absent"), { kind: "skip" });
   assertEquals(input.generated("bad"), { kind: "skip" });
   const good = input.generated("m");
   assert(good.kind === "ready");
-  const existing = updated.value.emitted("m");
+  const existing = outputs.emitted(updated.value, "m");
   assert(existing?.ok);
   assertEquals(good.emitted, existing.value);
 });
 
 Deno.test("generationSource retains query order and classifies emit, map and absent results", () => {
   type Queries = Pick<
-    Revision,
-    "lowered" | "emitted" | "spanTable" | "sourceMap"
+    TypeScriptOutputs,
+    "emitted" | "spanTable" | "sourceMap"
   >;
   for (
     const broken of ["emitted", "spanTable", "sourceMap", "absent"] as const
@@ -67,10 +68,6 @@ Deno.test("generationSource retains query order and classifies emit, map and abs
     });
     assert(lower.ok);
     const queries: Queries = {
-      lowered: (name) => {
-        calls.push("lower");
-        return lower.value.lowered(name);
-      },
       emitted: () => {
         calls.push("emit");
         return broken === "emitted"
@@ -99,10 +96,10 @@ Deno.test("generationSource retains query order and classifies emit, map and abs
       },
     };
     assertEquals(
-      generationSource(queries).generated("m").kind,
+      generationSource(lower.value, queries).generated("m").kind,
       broken === "emitted" ? "emit" : broken === "absent" ? "skip" : "map",
     );
-    assertEquals(calls, ["lower", "emit", "table", "map"]);
+    assertEquals(calls, ["emit", "table", "map"]);
   }
 });
 
@@ -223,8 +220,10 @@ Deno.test("generationSource stops after a lowering failure and keeps diagnostics
     const unexpected = (): never => {
       throw new Error("queried after lowering failed");
     };
-    const result = generationSource({
-      lowered: () => ({ ok: false, error }),
+    const revision = new Program().update({ set: { "effektive.json": "{}" } });
+    assert(revision.ok);
+    revision.value.lowered = () => ({ ok: false, error });
+    const result = generationSource(revision.value, {
       emitted: unexpected,
       spanTable: unexpected,
       sourceMap: unexpected,

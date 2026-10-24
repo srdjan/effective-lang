@@ -51,6 +51,7 @@ const CLAUSE_WORDS: ReadonlySet<string> = new Set([
 
 const OPERATORS: ReadonlySet<TokenKind> = new Set([
   TokenKind.Eq,
+  TokenKind.QuestionQuestion,
   TokenKind.Arrow,
   TokenKind.EqEqEq,
   TokenKind.BangEqEq,
@@ -134,7 +135,12 @@ export function highlightTokens(text: string): HighlightRange[] {
       const afterSealed = previousWord === "sealed" &&
         (beforePrevious === undefined || beforePrevious === TokenKind.Newline ||
           beforePrevious === TokenKind.KwExport);
-      if (CLAUSE_WORDS.has(word)) result = "keyword";
+      if (
+        word === "using" && lexed.kinds[i + 1] === TokenKind.LParen &&
+        lexed.kinds[i + 2] === TokenKind.Ident &&
+        lexed.kinds[i + 3] === TokenKind.Eq
+      ) result = "keyword";
+      else if (CLAUSE_WORDS.has(word)) result = "keyword";
       else if (
         word === "sealed" && startsDeclaration &&
         text.slice(lexed.starts[i + 1], lexed.ends[i + 1]) === "nominal"

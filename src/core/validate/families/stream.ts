@@ -731,8 +731,8 @@ export function mapGroups(
     e.use.kind !== "closure" ||
     classifier === undefined || consumer === undefined ||
     classifier.parameters.length !== 1 || consumer.parameters.length !== 2 ||
-    e.use.parameters[1]?.id !== e.groupBinding ||
-    e.use.parameters[0]?.id === e.groupBinding
+    e.key.parameters.length !== 1 || e.use.parameters.length !== 2 ||
+    e.use.parameters[0]?.id === e.use.parameters[1]?.id
   ) {
     c.add(
       AREA.control,
@@ -777,7 +777,7 @@ export function mapGroups(
       e.key.span,
     );
   }
-  groupReferences(c, e.use.body, e.groupBinding, `${path}.use.body`);
+  groupReferences(c, e.use.body, e.use.parameters[1].id, `${path}.use.body`);
   return derivedResult({
     kind: "stream",
     element: consumer.result,

@@ -158,7 +158,12 @@ export function withResourceCall(
   for (const arg of args) {
     if (
       arg.pre !== undefined ||
-      kindOf(c.tree, arg.node) !== SyntaxKind.ArrowExpr
+      ![
+        SyntaxKind.ArrowExpr,
+        SyntaxKind.ResourceAcquire,
+        SyntaxKind.ResourceUse,
+        SyntaxKind.ResourceRelease,
+      ].includes(kindOf(c.tree, arg.node))
     ) {
       c.report(
         "type-mismatch/010",

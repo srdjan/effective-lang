@@ -171,6 +171,8 @@ Deno.test("at an open parenthesis the parser chooses an arrow or a grouping", ()
     ["(a)", SyntaxKind.ParenExpr],
     ["((a))", SyntaxKind.ParenExpr],
     ["(a) => a", SyntaxKind.ArrowExpr],
+    ["a => a", SyntaxKind.ArrowExpr],
+    ["a\n => a", SyntaxKind.ArrowExpr],
     ["() => a", SyntaxKind.ArrowExpr],
     ["(a, b) => a", SyntaxKind.ArrowExpr],
     ["(a: int): int => a", SyntaxKind.ArrowExpr],

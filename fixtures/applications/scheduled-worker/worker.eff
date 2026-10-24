@@ -9,17 +9,17 @@ export const retryPolicy = (policy: Policy): RetrySchedule<JobFailure> =>
     } else { None })
 
 const attempt = () =>
-  withResource(
-    () => {
+  using (job = {
       const id = Jobs.open()
       {
         execute: () => Jobs.execute(id),
         close: () => Jobs.close(id)
       }
-    },
-    (job) => job.execute(),
-    (job) => job.close()
-  )
+    }) {
+      job.execute()
+    } finally {
+      job.close()
+    }
 
 const cycle = (policy: Policy, completed: Int, last: Option<Int>): Report =>
   if (completed >= policy.runs) {

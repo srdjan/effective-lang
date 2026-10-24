@@ -86,6 +86,14 @@ export enum SyntaxKind {
   RecordPattern,
   PatternField,
   SpreadPattern,
+  OptionFallbackExpr,
+  RecordBinding,
+  BindingField,
+  ShorthandBinding,
+  UsingExpr,
+  ResourceAcquire,
+  ResourceUse,
+  ResourceRelease,
 }
 
 /** The key and constructor options that one Schema type word selects. */

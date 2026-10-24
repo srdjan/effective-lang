@@ -39,43 +39,41 @@ const readEntry = (store: KeyValue, id: ArticleId) => {
   }
 
 const decodeStored = (serializer: ArticleCodec, key: Key, payload: Payload) =>
-  match serializer.decode(payload) {
-    Some(article) => article,
-    None => fail(Corrupt({ key, reason: "invalid article payload" }))
-  }
+  serializer.decode(payload) ?? fail(Corrupt({ key, reason: "invalid article payload" }))
 
 const toArticle = (lexical: LexicalOps, key: Key, expectedId: ArticleId, stored: StoredArticle) => {
-    if (lexical.isBlank(stored.id)) {
+    const { id, revision, kind, title, body, publishedAt: publicationTime } = stored
+    if (lexical.isBlank(id)) {
       fail(Corrupt({ key, reason: "blank article id" }))
-    } else if (stored.id !== expectedId) {
+    } else if (id !== expectedId) {
       fail(Corrupt({ key, reason: "article identity mismatch" }))
-    } else if (stored.revision < 0) {
+    } else if (revision < 0) {
       fail(Corrupt({ key, reason: "negative article revision" }))
     } else {
-      match stored.kind {
-        "draft" => match stored.publishedAt {
+      match kind {
+        "draft" => match publicationTime {
           Some(_instant) => fail(Corrupt({ key, reason: "draft has publication time" })),
           None => Draft({
-            id: ArticleId(stored.id),
-            revision: Revision(stored.revision),
-            title: stored.title,
-            body: stored.body
+            id: ArticleId(id),
+            revision: Revision(revision),
+            title: title,
+            body: body
           })
         },
-        "published" => match stored.publishedAt {
+        "published" => match publicationTime {
           Some(publishedAt) =>
-            if (lexical.isBlank(stored.title)) {
+            if (lexical.isBlank(title)) {
               fail(Corrupt({ key, reason: "blank published title" }))
-            } else if (lexical.isBlank(stored.body)) {
+            } else if (lexical.isBlank(body)) {
               fail(Corrupt({ key, reason: "blank published body" }))
             } else if (publishedAt < 0) {
               fail(Corrupt({ key, reason: "negative publication time" }))
             } else {
               Published({
-                id: ArticleId(stored.id),
-                revision: Revision(stored.revision),
-                title: NonBlankText(stored.title),
-                body: NonBlankText(stored.body),
+                id: ArticleId(id),
+                revision: Revision(revision),
+                title: NonBlankText(title),
+                body: NonBlankText(body),
                 publishedAt: Instant(publishedAt)
               })
             },
@@ -124,7 +122,7 @@ export const articleStoreLive: Layer<ArticleStore, PlatformUnavailable, Platform
   const serializer = ArticleJson.acquire()
   const lexical = TextRules.acquire()
   ({
-    load: (id) => load(store, serializer, lexical, id),
+    load: id => load(store, serializer, lexical, id),
     publish: (plan, token) => write(store, serializer, plan, token)
   })
 })
