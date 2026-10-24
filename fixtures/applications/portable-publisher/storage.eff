@@ -33,26 +33,26 @@ const readEntry = (store: KeyValue, id: ArticleId) => {
         None => None
       }
     } catch {
-      InvalidKey(error) => fail(Corrupt({ key, reason: "invalid storage key" })),
+      InvalidKey(error) => fail(Corrupt({ key: Text(key), reason: "invalid storage key" })),
       PlatformUnavailable(error) => fail(unavailable(error.cause))
     }
   }
 
 const decodeStored = (serializer: ArticleCodec, key: Key, payload: Payload) =>
-  serializer.decode(payload) ?? fail(Corrupt({ key, reason: "invalid article payload" }))
+  serializer.decode(payload) ?? fail(Corrupt({ key: Text(key), reason: "invalid article payload" }))
 
 const toArticle = (lexical: LexicalOps, key: Key, expectedId: ArticleId, stored: StoredArticle) => {
     const { id, revision, kind, title, body, publishedAt: publicationTime } = stored
     if (lexical.isBlank(id)) {
-      fail(Corrupt({ key, reason: "blank article id" }))
+      fail(Corrupt({ key: Text(key), reason: "blank article id" }))
     } else if (ArticleId(id) !== expectedId) {
-      fail(Corrupt({ key, reason: "article identity mismatch" }))
+      fail(Corrupt({ key: Text(key), reason: "article identity mismatch" }))
     } else if (revision < 0) {
-      fail(Corrupt({ key, reason: "negative article revision" }))
+      fail(Corrupt({ key: Text(key), reason: "negative article revision" }))
     } else {
       match kind {
         "draft" => match publicationTime {
-          Some(_instant) => fail(Corrupt({ key, reason: "draft has publication time" })),
+          Some(_instant) => fail(Corrupt({ key: Text(key), reason: "draft has publication time" })),
           None => Draft({
             id: ArticleId(id),
             revision: Revision(revision),
@@ -63,11 +63,11 @@ const toArticle = (lexical: LexicalOps, key: Key, expectedId: ArticleId, stored:
         "published" => match publicationTime {
           Some(publishedAt) =>
             if (lexical.isBlank(title)) {
-              fail(Corrupt({ key, reason: "blank published title" }))
+              fail(Corrupt({ key: Text(key), reason: "blank published title" }))
             } else if (lexical.isBlank(body)) {
-              fail(Corrupt({ key, reason: "blank published body" }))
+              fail(Corrupt({ key: Text(key), reason: "blank published body" }))
             } else if (publishedAt < 0) {
-              fail(Corrupt({ key, reason: "negative publication time" }))
+              fail(Corrupt({ key: Text(key), reason: "negative publication time" }))
             } else {
               Published({
                 id: ArticleId(id),
@@ -77,7 +77,7 @@ const toArticle = (lexical: LexicalOps, key: Key, expectedId: ArticleId, stored:
                 publishedAt: Instant(publishedAt)
               })
             },
-          None => fail(Corrupt({ key, reason: "missing publication time" }))
+          None => fail(Corrupt({ key: Text(key), reason: "missing publication time" }))
         }
       }
     }
@@ -85,7 +85,7 @@ const toArticle = (lexical: LexicalOps, key: Key, expectedId: ArticleId, stored:
 
 const load = (store: KeyValue, serializer: ArticleCodec, lexical: LexicalOps, id: ArticleId) =>
   if (lexical.isBlank(Text(id))) {
-    fail(Corrupt({ key: keyOf(id), reason: "blank article id" }))
+    fail(Corrupt({ key: Text(keyOf(id)), reason: "blank article id" }))
   } else { match readEntry(store, id) {
     Some(found) => {
       const stored = decodeStored(serializer, found.key, found.entry.payload)
@@ -109,8 +109,8 @@ const write = (store: KeyValue, serializer: ArticleCodec, plan: PublishPlan, tok
     try {
       const _version = store.set(key, payload, Some(Version(token)))
     } catch {
-      InvalidKey(error) => fail(Corrupt({ key, reason: "invalid storage key" })),
-      InvalidPayload(error) => fail(Corrupt({ key, reason: "invalid storage payload" })),
+      InvalidKey(error) => fail(Corrupt({ key: Text(key), reason: "invalid storage key" })),
+      InvalidPayload(error) => fail(Corrupt({ key: Text(key), reason: "invalid storage payload" })),
       PlatformUnavailable(error) => fail(unavailable(error.cause)),
       CompareConflict(error) => fail(ArticleConflict({ id: plan.next.id })),
       WriteUncertain(error) => fail(StorageUncertain({ cause: error.cause }))
