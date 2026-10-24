@@ -1,5 +1,5 @@
 import { Key, Payload, Version, KeyValue, LexicalOps, InvalidKey, InvalidPayload, PlatformUnavailable, CompareConflict, WriteUncertain, Platform, TextRules } from "./platform.eff"
-import { Text, ArticleId, Revision, NonBlankText, Instant, Draft, Published, PublishPlan } from "./domain.eff"
+import { Text, ArticleId, NonBlankText, Draft, Published, PublishPlan } from "./domain.eff"
 import { SnapshotToken, Corrupt, StorageUnavailable, StorageUncertain, ArticleConflict, ArticleStore } from "./ports.eff"
 
 export type StoredArticle = {
@@ -55,7 +55,7 @@ const toArticle = (lexical: LexicalOps, key: Key, expectedId: ArticleId, stored:
           Some(_instant) => fail(Corrupt({ key: Text(key), reason: "draft has publication time" })),
           None => Draft({
             id: ArticleId(id),
-            revision: Revision(revision),
+            revision,
             title: title,
             body: body
           })
@@ -71,10 +71,10 @@ const toArticle = (lexical: LexicalOps, key: Key, expectedId: ArticleId, stored:
             } else {
               Published({
                 id: ArticleId(id),
-                revision: Revision(revision),
+                revision,
                 title: NonBlankText(title),
                 body: NonBlankText(body),
-                publishedAt: Instant(publishedAt)
+                publishedAt
               })
             },
           None => fail(Corrupt({ key: Text(key), reason: "missing publication time" }))

@@ -65,10 +65,10 @@ export const assessDraft = (draft: Draft, titleBlank: Bool, bodyBlank: Bool): Dr
 export const planPublication = (ready: ReadyDraft, now: Instant): PublishPlan => {
   const next = Published({
       id: ready.id,
-      revision: Revision(ready.revision + 1),
+      revision: ready.revision + 1,
       title: ready.title,
       body: ready.body,
       publishedAt: now
     })
-  PublishPlan({ expectedRevision: ready.revision, next })
+  { expectedRevision: ready.revision, next }
 }

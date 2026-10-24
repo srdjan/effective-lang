@@ -64,15 +64,15 @@ const min = (left: Cents, right: Cents) =>
 export const price = (rule: Rule, base: Cents): Cents =>
   match rule {
     Fixed(f) => f.amount,
-    Times(t) => Cents(base * Cents(t.factor)),
+    Times(t) => base * Cents(t.factor),
     Capped(c) => min(price(c.rule, base), c.cap),
-    Sum(s) => s.parts |> fold(Cents(0), (acc, part) => acc + price(part, base))
+    Sum(s) => s.parts |> fold(0, (acc, part) => acc + price(part, base))
   }
 
 export const total = (order: Pending, rule: Rule): Cents =>
   order.total + price(rule, order.total)
 
 export const sampleRule: Rule = Capped({
-  rule: Sum({ parts: [Fixed({ amount: Cents(50) }), Times({ factor: 3 })] }),
-  cap: Cents(2500)
+  rule: Sum({ parts: [Fixed({ amount: 50 }), Times({ factor: 3 })] }),
+  cap: 2500
 })
